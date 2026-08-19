@@ -8,12 +8,19 @@ import CustomerModal from './CustomerModal'
 // el botó "+ Nou client" (obre CustomerModal). Internament carrega customers.list().
 const MONO = 'IBM Plex Mono, monospace'
 const selectStyle = {
-  width: '100%', padding: '8px 10px', borderRadius: 4, border: '0.5px solid var(--gray-l)',
-  fontFamily: MONO, fontSize: 'var(--fs-body)', background: 'var(--white)', boxSizing: 'border-box',
+  // §8c · control de la casa: vora `--line`, radi 6. Anava amb `--gray-l` —un àlies de
+  // FARCIMENT fent de vora, en gris fred— i un radi de 4 que no és cap dels tres.
+  width: '100%', padding: '8px 10px', borderRadius: 'var(--r-ctrl)', border: '1px solid var(--line)',
+  fontFamily: MONO, fontSize: 'var(--fs-body)', background: 'var(--panel)', boxSizing: 'border-box',
 }
 const ghostBtn = {
-  background: 'var(--white)', color: 'var(--warn)', border: '0.5px solid var(--warn)',
-  borderRadius: 6, padding: '6px 14px', fontSize: 'var(--fs-body)', cursor: 'pointer', fontFamily: MONO,
+  // §5.2 · «+ Nou client» és una acció de la casa que NO completa la feina d'aquesta pantalla:
+  // secundària (blanc + vora `--gold-border`). Anava amb `--warn` de tinta I de vora — el
+  // TARONJA DEL SEMÀFOR fent de botó, quan la §1 el reserva a la dada.
+  background: 'var(--panel)', color: 'var(--text-main)', borderWidth: 1, borderStyle: 'solid',
+  borderColor: 'var(--gold-border)',
+  borderRadius: 'var(--r-ctrl)', padding: '8px 16px', fontSize: 'var(--fs-body)', fontWeight: 500,
+  cursor: 'pointer', fontFamily: MONO,
 }
 
 export default function CustomerSelector({ value, onChange, allowCreate = false, onError }) {

@@ -5,8 +5,11 @@ import useAuthStore from '../store/auth'
 import { commerce, suppliers as suppliersApi } from '../api/endpoints'
 import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
+import { EstatBadge } from '../components/commercial/estats'
+import PageMenu from '../components/ui/PageMenu'
+import { camp, forceBarra } from '../components/llista/ChromLlista'
 import Badge from '../components/ui/Badge'
-import { selS, primaryBtn } from '../components/ui/buttons'
+import { botoPri, botoSec, apagat } from '../components/ui/buttons'
 import { DocumentHeader, LineTable, RowBtn } from '../components/commercial'
 import { WOStatusBadge, WOKindBadge } from './WorkOrders'
 import { formatMinutes } from '../utils/format'
@@ -15,14 +18,12 @@ import { formatMinutes } from '../utils/format'
 // InProgress/Paused); el COMERCIAL revisa després en preu de venda (bloc Revisió, si CLOSED).
 // A més: bloc Despeses (línies externes amb proveïdor i marge).
 const MONO = 'IBM Plex Mono, monospace'
-const smallBtn = {
-  background: 'none', border: '0.5px solid var(--gray-l)', borderRadius: 6, cursor: 'pointer',
-  padding: '4px 9px', fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)',
-}
-const inp = { ...selS, minWidth: 0 }
-const TASK_STATUS_VARIANT = { Done: 'ok', InProgress: 'gold', Paused: 'warn', Pending: 'gray' }
+// §5.2 · el botó petit d'aquesta fitxa, amb la família de la casa. Anava amb `0.5px --gray-l`,
+// que no és cap amplada ni cap token del sistema.
+const smallBtn = { ...botoSec, padding: '5px 10px' }
+const inp = { ...camp, minWidth: 0 }
 const sectionTitle = {
-  fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontWeight: 500,
+  fontSize: 'var(--fs-label)', color: 'var(--text-soft)', fontWeight: 500,
   textTransform: 'uppercase', letterSpacing: '0.04em', margin: '18px 0 8px',
 }
 const money = (v) => `${Number(v ?? 0).toFixed(2)} €`
@@ -199,15 +200,21 @@ export default function WorkOrderDetail() {
       </span>
     ) },
     { key: 'status', label: t('workorders.task_status'),
-      render: tk => <Badge variant={TASK_STATUS_VARIANT[tk.status] || 'gray'}>{t(`workorders.status_task_${tk.status}`, { defaultValue: tk.status })}</Badge> },
+      // Era una de les DUES còpies de `ModelTask.status` al client (l'altra, a `OrderDetail`,
+      // amb un mapa de color divergent). El color viu ara a `components/commercial/estats`.
+      render: tk => (
+        <EstatBadge clau="estats_tasca" codi={tk.status}>
+          {t(`workorders.status_task_${tk.status}`, { defaultValue: tk.status })}
+        </EstatBadge>
+      ) },
     { key: 'minutes', label: t('workorders.task_minutes'), align: 'right',
-      render: tk => <span style={{ fontFamily: MONO, color: 'var(--text-muted)' }}>{formatMinutes(tk.minutes ?? 0)}</span> },
+      render: tk => <span style={{ fontFamily: MONO, color: 'var(--text-soft)' }}>{formatMinutes(tk.minutes ?? 0)}</span> },
   ]
 
   const expColumns = [
     { key: 'product', label: t('workorders.exp_product'), render: ex => ex.product_name },
     { key: 'supplier', label: t('workorders.exp_supplier'), render: ex => ex.supplier_name },
-    { key: 'cost', label: t('workorders.exp_cost'), align: 'right', render: ex => <span style={{ fontFamily: MONO, color: 'var(--text-muted)' }}>{money(ex.cost_price)}</span> },
+    { key: 'cost', label: t('workorders.exp_cost'), align: 'right', render: ex => <span style={{ fontFamily: MONO, color: 'var(--text-soft)' }}>{money(ex.cost_price)}</span> },
     { key: 'sale', label: t('workorders.exp_sale'), align: 'right', render: ex => <span style={{ fontFamily: MONO }}>{money(ex.sale_price)}</span> },
     { key: 'qty', label: t('workorders.exp_qty'), align: 'right', render: ex => <span style={{ fontFamily: MONO }}>{Number(ex.quantity ?? 0)}</span> },
   ]
@@ -217,7 +224,7 @@ export default function WorkOrderDetail() {
 
   const reviewColumns = [
     { key: 'item', label: t('workorders.review_item'), render: r => (
-      <>{r.label}{r.minutes != null && <span style={{ marginLeft: 8, fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontFamily: MONO }}>{formatMinutes(r.minutes)}</span>}</>
+      <>{r.label}{r.minutes != null && <span style={{ marginLeft: 8, fontSize: 'var(--fs-label)', color: 'var(--text-soft)', fontFamily: MONO }}>{formatMinutes(r.minutes)}</span>}</>
     ) },
     { key: 'kind', label: t('workorders.review_kind'), render: r => {
       const v = review[r.mt] || { kind: r.isDeduction ? 'DEDUCTION' : 'EXTRA_BILL', amount: '0' }
@@ -241,10 +248,16 @@ export default function WorkOrderDetail() {
   const reviewTableRows = reviewRows.map(r => ({ ...r, id: r.mt }))
 
   return (
-    <div style={{ minWidth: 0, maxWidth: 900 }}>
-      <button onClick={() => navigate('/comercial/encarrecs')} style={{ ...smallBtn, marginBottom: 12 }}>
-        <i className="ti ti-arrow-left" style={{ fontSize: 14 }} /> {t('workorders.back')}
-      </button>
+    <>
+      {/* §8b.2 · MENÚ DE PANTALLA. El botó-fletxa solt de sobre el títol se'n va: la fletxa té
+          UN lloc a tot el producte, i és aquest. El destí és EXPLÍCIT — mai `history.back()`,
+          que no pot garantir on porta si s'hi ha arribat per enllaç, per recàrrega o per una
+          pestanya nova. */}
+      <div style={forceBarra}>
+        <PageMenu backTo="/comercial/encarrecs" backTitle={t('workorders.back')} />
+      </div>
+
+      <div style={{ minWidth: 0, maxWidth: 900 }}>
 
       <DocumentHeader
         reference={wo.number}
@@ -252,13 +265,13 @@ export default function WorkOrderDetail() {
         customer={`${wo.customer_nom} · ${wo.kind === 'COLLECTOR' ? wo.period : (wo.model_codi || '—')}`}
         actions={<>
           {canClose && isOpen && (
-            <button onClick={() => doClose()} disabled={busy} style={{ ...primaryBtn, marginLeft: 0 }}>
+            <button onClick={() => doClose()} disabled={busy} style={botoPri}>
               <i className="ti ti-lock" style={{ fontSize: 14, marginRight: 6 }} /> {t('workorders.close_action')}
             </button>
           )}
           {/* B4c — generar albarà: WO tancat i encara no albaranat. Si ja ho està, enllaç a l'albarà. */}
           {isClosed && canConfigure && !wo.delivery_note && (
-            <button onClick={openDnModal} disabled={busy} style={{ ...primaryBtn, marginLeft: 0 }}>
+            <button onClick={openDnModal} disabled={busy} style={botoPri}>
               <i className="ti ti-file-invoice" style={{ fontSize: 14, marginRight: 6 }} /> {t('workorders.dn_generate')}
             </button>
           )}
@@ -276,8 +289,8 @@ export default function WorkOrderDetail() {
 
       {/* Tasques */}
       <div style={sectionTitle}>{t('workorders.tasks')}</div>
-      {tasks.length === 0 ? <p style={{ color: 'var(--text-muted)' }}>{t('workorders.tasks_empty')}</p> : (
-        <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 10, overflow: 'hidden' }}>
+      {tasks.length === 0 ? <p style={{ color: 'var(--text-soft)' }}>{t('workorders.tasks_empty')}</p> : (
+        <div style={{ borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)', borderRadius: 'var(--r-card)', overflow: 'hidden' }}>
           <LineTable columns={taskColumns} rows={tasks}
             rowStyle={tk => ({ borderLeft: tk.off_recipe ? '3px solid var(--err)' : '3px solid transparent' })} />
         </div>
@@ -286,7 +299,7 @@ export default function WorkOrderDetail() {
       {/* Despeses (línies externes) */}
       <div style={sectionTitle}>{t('workorders.expenses')}</div>
       {expenses.length > 0 && (
-        <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 10, overflow: 'hidden', marginBottom: 10 }}>
+        <div style={{ borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)', borderRadius: 'var(--r-card)', overflow: 'hidden', marginBottom: 10 }}>
           <LineTable columns={expColumns} rows={expenses} renderActions={expActions} />
         </div>
       )}
@@ -306,13 +319,13 @@ export default function WorkOrderDetail() {
             onChange={e => setNewExp({ ...newExp, sale_price: e.target.value })} style={{ ...inp, width: 90 }} />
           <input type="number" step="0.01" placeholder={t('workorders.exp_qty')} value={newExp.quantity}
             onChange={e => setNewExp({ ...newExp, quantity: e.target.value })} style={{ ...inp, width: 70 }} />
-          <button onClick={addExpense} disabled={busy || !newExp.product || !newExp.supplier} style={{ ...primaryBtn }}>
+          <button onClick={addExpense} disabled={busy || !newExp.product || !newExp.supplier} style={botoPri}>
             <i className="ti ti-plus" style={{ fontSize: 14, marginRight: 4 }} />{t('workorders.exp_add')}
           </button>
         </div>
       )}
       {canConfigure && prodSuppliers.length > 0 && (
-        <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginBottom: 8 }}>
+        <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)', marginBottom: 8 }}>
           {t('workorders.exp_suppliers_compare')}: {prodSuppliers.map(s => `${s.supplier_name} ${money(s.cost_price)}${s.is_default ? ' ★' : ''}`).join(' · ')}
         </div>
       )}
@@ -321,11 +334,11 @@ export default function WorkOrderDetail() {
       {isClosed && reviewRows.length > 0 && (
         <>
           <div style={sectionTitle}>{t('workorders.review')}</div>
-          <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 10, overflow: 'hidden' }}>
+          <div style={{ borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)', borderRadius: 'var(--r-card)', overflow: 'hidden' }}>
             <LineTable columns={reviewColumns} rows={reviewTableRows} />
           </div>
           {canConfigure && (
-            <button onClick={saveReview} disabled={busy} style={{ ...primaryBtn, marginTop: 8 }}>
+            <button type="button" onClick={saveReview} disabled={busy} style={{ ...botoPri, marginTop: 8, ...(busy ? apagat : null) }}>
               <i className="ti ti-device-floppy" style={{ fontSize: 14, marginRight: 6 }} />{t('workorders.review_save')}
             </button>
           )}
@@ -339,9 +352,9 @@ export default function WorkOrderDetail() {
           alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16,
         }}>
           <div onClick={e => e.stopPropagation()} style={{
-            background: 'var(--white)', borderRadius: 12, padding: '1.2rem 1.4rem',
+            background: 'var(--panel)', borderRadius: 'var(--r-card)', padding: '1.2rem 1.4rem',
             maxWidth: 520, width: '100%', maxHeight: '80vh', overflowY: 'auto',
-            border: '0.5px solid var(--gray-l)',
+            borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)',
           }}>
             <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginBottom: 10, fontFamily: MONO }}>
               {t('workorders.close_title')}
@@ -360,13 +373,13 @@ export default function WorkOrderDetail() {
               <div style={{ marginBottom: 12 }}>
                 <div style={{ fontWeight: 600, marginBottom: 6 }}>{t('workorders.pending_title')}</div>
                 {pending.map((p, i) => (
-                  <div key={i} style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>· {p.task_type}</div>
+                  <div key={i} style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>· {p.task_type}</div>
                 ))}
               </div>
             )}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
               {hardBlockers.length === 0 && (
-                <button onClick={() => doClose({ cancel_pending: pending.length > 0 })} disabled={busy} style={{ ...primaryBtn }}>
+                <button onClick={() => doClose({ cancel_pending: pending.length > 0 })} disabled={busy} style={botoPri}>
                   {pending.length > 0 ? t('workorders.close_deduct') : t('workorders.close_confirm')}
                 </button>
               )}
@@ -383,14 +396,14 @@ export default function WorkOrderDetail() {
           alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16,
         }}>
           <div onClick={e => e.stopPropagation()} style={{
-            background: 'var(--white)', borderRadius: 12, padding: '1.2rem 1.4rem',
+            background: 'var(--panel)', borderRadius: 'var(--r-card)', padding: '1.2rem 1.4rem',
             maxWidth: 520, width: '100%', maxHeight: '80vh', overflowY: 'auto',
-            border: '0.5px solid var(--gray-l)',
+            borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)',
           }}>
             <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginBottom: 10, fontFamily: MONO }}>
               {t('workorders.dn_title')}
             </h2>
-            <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 12 }}>
+            <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', marginBottom: 12 }}>
               {t('workorders.dn_help')}
             </p>
             <div style={{ marginBottom: 10 }}>
@@ -399,12 +412,12 @@ export default function WorkOrderDetail() {
               </div>
               {otherWos.length > 0 && (
                 <>
-                  <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', margin: '8px 0 4px' }}>{t('workorders.dn_others')}</div>
+                  <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)', margin: '8px 0 4px' }}>{t('workorders.dn_others')}</div>
                   {otherWos.map(w => (
                     <label key={w.id} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '3px 0', cursor: 'pointer' }}>
                       <input type="checkbox" checked={selectedWos.includes(w.id)} onChange={() => toggleWo(w.id)} />
                       <span style={{ fontFamily: MONO, fontWeight: 600 }}>{w.number}</span>
-                      <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>
+                      <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)' }}>
                         {w.kind === 'COLLECTOR' ? w.period : (w.model_codi || '—')}
                       </span>
                     </label>
@@ -418,18 +431,19 @@ export default function WorkOrderDetail() {
                 {genErrors.map((m, i) => (
                   <div key={i} style={{ fontSize: 'var(--fs-body)', color: 'var(--err)' }}>· {m}</div>
                 ))}
-                <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 6 }}>
+                <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)', marginTop: 6 }}>
                   {t('workorders.dn_blocked_help')}
                 </div>
               </div>
             )}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
-              <button onClick={doGenerate} disabled={busy} style={{ ...primaryBtn }}>{t('workorders.dn_confirm')}</button>
+              <button onClick={doGenerate} disabled={busy} style={botoPri}>{t('workorders.dn_confirm')}</button>
               <button onClick={() => setDnModal(false)} disabled={busy} style={smallBtn}>{t('workorders.dn_cancel')}</button>
             </div>
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   )
 }

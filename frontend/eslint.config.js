@@ -67,4 +67,12 @@ export default defineConfig([
       }],
     },
   },
+  {
+    // `api/jwt.js` cau a `Buffer` NOMÉS quan no hi ha `atob` —o sigui, a Node, als tests— i el
+    // seu test hi entra a posta. És codi de Node legítim dins d'un projecte de navegador. Se li
+    // declaren els globals de Node només a aquests dos fitxers, en comptes d'apagar `no-undef`:
+    // aquella regla és la porta que W4/T5 va pagar amb una pantalla trencada, i no es toca.
+    files: ['src/api/jwt.js', 'src/api/*.test.js'],
+    languageOptions: { globals: { ...globals.browser, ...globals.node } },
+  },
 ])

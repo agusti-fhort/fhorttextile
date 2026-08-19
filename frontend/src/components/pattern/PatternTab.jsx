@@ -212,13 +212,19 @@ export default function PatternTab({ modelId }) {
 
   // ── render ───────────────────────────────────────────────────────────────
   if (carregant) {
-    return <p style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>
+    return <p style={{ color: 'var(--text-soft)', fontSize: 'var(--fs-body)' }}>
       {t('pattern.loading')}
     </p>
   }
 
+  // ÀNCORA DE MESURA (§8d). Un tab del ModelSheet no es distingeix d'un altre des de fora: amb
+  // `?tab=` desconegut la pantalla cau al tab per defecte **sense dir res**, i una auditoria que
+  // hi entri mesura una altra pantalla i la reporta amb aquest nom. Verificat: `?tab=Patró` i
+  // `?tab=Inventat` donaven el MATEIX comptatge d'`aside`/`header`, o sigui que no hi havia cap
+  // senyal estructural per separar-los. Aquest atribut és el senyal, i no és text —un literal
+  // traduïble deixaria de casar el dia que es tradueixi— ni una posició, que es pot moure.
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+    <div data-ftt-screen="patro-tab" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
       {error && <ErrorParse error={error} onTanca={() => setError(null)} />}
 
       {!actual ? (
@@ -382,7 +388,7 @@ function CampsPujada({ t, pujant, dxf, rul, setDxf, setRul, onTria, compacte = f
           onClick={onTria}
           disabled={pujant || !dxf}
           style={{
-            background: 'var(--gold)', color: 'var(--white)', border: 'none',
+            background: 'var(--accio)', color: 'var(--white)', border: 'none',
             borderRadius: 6, padding: '0.5rem 1.1rem',
             cursor: pujant ? 'wait' : (!dxf ? 'not-allowed' : 'pointer'),
             opacity: (!dxf && !pujant) ? 0.45 : 1,
@@ -393,7 +399,7 @@ function CampsPujada({ t, pujant, dxf, rul, setDxf, setRul, onTria, compacte = f
           {pujant ? t('pattern.uploading') : t('pattern.upload')}
         </button>
         {!dxf && !pujant && (
-          <span style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-caption)' }}>
+          <span style={{ color: 'var(--text-soft)', fontSize: 'var(--fs-caption)' }}>
             {t('pattern.need_dxf')}
           </span>
         )}
@@ -405,15 +411,15 @@ function CampsPujada({ t, pujant, dxf, rul, setDxf, setRul, onTria, compacte = f
 function ZonaBuida({ t, pujant, dxf, rul, setDxf, setRul, onTria }) {
   return (
     <div style={{
-      border: '1px dashed var(--border)', borderRadius: 8, padding: '2rem',
-      textAlign: 'center', background: 'var(--bg-card)',
+      border: '1px dashed var(--line)', borderRadius: 8, padding: '2rem',
+      textAlign: 'center', background: 'var(--panel)',
     }}>
       <i className="ti ti-vector-triangle"
-         style={{ fontSize: 32, color: 'var(--text-muted)' }} />
+         style={{ fontSize: 32, color: 'var(--text-soft)' }} />
       <h3 style={{ fontSize: 'var(--fs-h3)', margin: '0.5rem 0 0.25rem' }}>
         {t('pattern.empty_title')}
       </h3>
-      <p style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)', margin: '0 0 1rem' }}>
+      <p style={{ color: 'var(--text-soft)', fontSize: 'var(--fs-body)', margin: '0 0 1rem' }}>
         {t('pattern.empty_hint')}
       </p>
       <div style={{ display: 'flex', justifyContent: 'center' }}>
@@ -431,7 +437,7 @@ function Capcalera({ t, fp, cadena, onCanviaVersio, pujant, dxf, rul, setDxf, se
 
   return (
     <div style={{
-      background: 'var(--bg-card)', border: '1px solid var(--border)',
+      background: 'var(--panel)', border: '1px solid var(--line)',
       borderRadius: 8, padding: '0.9rem 1rem',
       display: 'flex', flexDirection: 'column', gap: '0.75rem',
     }}>
@@ -456,7 +462,7 @@ function Capcalera({ t, fp, cadena, onCanviaVersio, pujant, dxf, rul, setDxf, se
               onChange={e => onCanviaVersio(parseInt(e.target.value))}
               style={{
                 fontSize: 'var(--fs-body)', padding: '2px 4px',
-                border: '1px solid var(--border)', borderRadius: 4,
+                border: '1px solid var(--line)', borderRadius: 4,
               }}
             >
               {cadena.map(v => (
@@ -483,8 +489,8 @@ function Capcalera({ t, fp, cadena, onCanviaVersio, pujant, dxf, rul, setDxf, se
                 title={base ? t('pattern.base_size') : undefined}
                 style={{
                   fontSize: 'var(--fs-caption)', padding: '2px 7px', borderRadius: 10,
-                  border: `1px solid ${base ? 'var(--gold)' : 'var(--border)'}`,
-                  background: base ? 'var(--gold-pale)' : 'var(--white)',
+                  border: `1px solid ${base ? 'var(--gold)' : 'var(--line)'}`,
+                  background: base ? 'var(--sel)' : 'var(--panel)',
                   fontWeight: base ? 700 : 400,
                 }}
               >
@@ -514,16 +520,20 @@ function Capcalera({ t, fp, cadena, onCanviaVersio, pujant, dxf, rul, setDxf, se
 
       <div style={{
         display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center',
-        borderTop: '1px solid var(--border)', paddingTop: '0.6rem',
+        borderTop: '1px solid var(--line)', paddingTop: '0.6rem',
       }}>
-        {/* L'acció primària de la porta: obrir el patró al TALLER, que és on hi ha les
-            eines i on el rellotge de la tasca corre. Aquí només es consulta. */}
+        {/* Obrir el patró al TALLER, que és on hi ha les eines i on el rellotge de la tasca
+            corre. Aquí només es consulta.
+            C2 · és una PORTA, i el §5.3 diu que les portes es pinten com la SECUNDÀRIA i mai
+            blaves: «anar a un altre lloc no compromet res, i per això no pot cridar més que
+            l'acció que sí que compromet». Era daurat ple i el comentari en deia «primària»:
+            les dues coses queden desfetes alhora, perquè el color venia del nom. */}
         <button
           onClick={onTaller}
           style={{
             display: 'flex', alignItems: 'center', gap: '0.35rem',
-            fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--white)',
-            border: 'none', borderRadius: 4, background: 'var(--gold)',
+            fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-main)',
+            borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--gold-border)', borderRadius: 4, background: 'var(--panel)',
             padding: '0.35rem 0.9rem', cursor: 'pointer',
           }}
         >
@@ -569,7 +579,7 @@ function Dada({ t, clau, valor }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
       <span style={{
         fontSize: 'var(--fs-label)', fontWeight: 600, textTransform: 'uppercase',
-        letterSpacing: '0.03em', color: 'var(--text-muted)',
+        letterSpacing: '0.03em', color: 'var(--text-soft)',
       }}>
         {t(clau)}
       </span>
@@ -581,7 +591,7 @@ function Dada({ t, clau, valor }) {
 function Avis({ tipus, text }) {
   const colors = tipus === 'warn'
     ? { fg: 'var(--warn)', bg: 'var(--warn-bg)', icona: 'ti-alert-triangle' }
-    : { fg: 'var(--text-muted)', bg: 'var(--bg-muted)', icona: 'ti-info-circle' }
+    : { fg: 'var(--text-soft)', bg: 'var(--bg-muted)', icona: 'ti-info-circle' }
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: '0.4rem',
@@ -628,8 +638,8 @@ function BotoDescarrega({ fpId, quin, icona, text, t }) {
       style={{
         display: 'flex', alignItems: 'center', gap: '0.35rem',
         fontSize: 'var(--fs-body)', color: err ? 'var(--err)' : 'var(--text-main)',
-        border: `1px solid ${err ? 'var(--err)' : 'var(--border)'}`, borderRadius: 4,
-        padding: '0.3rem 0.7rem', background: 'var(--white)',
+        border: `1px solid ${err ? 'var(--err)' : 'var(--line)'}`, borderRadius: 4,
+        padding: '0.3rem 0.7rem', background: 'var(--panel)',
         cursor: demanant ? 'wait' : 'pointer',
       }}
     >
@@ -652,7 +662,7 @@ function CapcaleraVisor({ t, vista, onCanviaVista, pecaSel, onTot }) {
         <button
           onClick={onTot}
           style={{
-            background: 'none', border: '1px solid var(--border)', borderRadius: 4,
+            background: 'none', border: '1px solid var(--line)', borderRadius: 4,
             padding: '0.2rem 0.6rem', cursor: 'pointer', fontSize: 'var(--fs-caption)',
             display: 'flex', alignItems: 'center', gap: '0.3rem',
           }}
@@ -667,7 +677,7 @@ function CapcaleraVisor({ t, vista, onCanviaVista, pecaSel, onTot }) {
       <button
         onClick={() => onCanviaVista(vista === 'konva' ? 'svg' : 'konva')}
         style={{
-          background: 'var(--white)', border: '1px solid var(--border)', borderRadius: 4,
+          background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 4,
           padding: '0.2rem 0.6rem', cursor: 'pointer', fontSize: 'var(--fs-caption)',
           display: 'flex', alignItems: 'center', gap: '0.3rem',
         }}
@@ -682,9 +692,9 @@ function CapcaleraVisor({ t, vista, onCanviaVista, pecaSel, onTot }) {
 function CaixaBuida({ t, text }) {
   return (
     <div style={{
-      border: '1px solid var(--border)', borderRadius: 8, background: 'var(--white)',
+      border: '1px solid var(--line)', borderRadius: 8, background: 'var(--panel)',
       minHeight: 320, display: 'flex', alignItems: 'center', justifyContent: 'center',
-      color: 'var(--text-muted)', fontSize: 'var(--fs-body)',
+      color: 'var(--text-soft)', fontSize: 'var(--fs-body)',
     }}>
       {text}
     </div>
@@ -694,14 +704,14 @@ function CaixaBuida({ t, text }) {
 function Visor({ t, svgUrl, carregant, pecaSel }) {
   return (
     <div style={{
-      border: '1px solid var(--border)', borderRadius: 8, background: 'var(--white)',
+      border: '1px solid var(--line)', borderRadius: 8, background: 'var(--panel)',
       padding: '0.5rem', minHeight: 320,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
-      {carregant && <span style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>
+      {carregant && <span style={{ color: 'var(--text-soft)', fontSize: 'var(--fs-body)' }}>
         {t('pattern.viewer_loading')}
       </span>}
-      {!carregant && !svgUrl && <span style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>
+      {!carregant && !svgUrl && <span style={{ color: 'var(--text-soft)', fontSize: 'var(--fs-body)' }}>
         {t('pattern.viewer_error')}
       </span>}
       {!carregant && svgUrl && (

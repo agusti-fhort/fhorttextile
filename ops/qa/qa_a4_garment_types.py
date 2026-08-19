@@ -1,0 +1,103 @@
+"""A4 · captures de GARMENT TYPES contra el SERVEI VIU (bundle del disc + API real).
+
+Mateix arnès que `qa_f22_vocabulari_captures.py`, i pel mateix motiu: el que s'ha de veure és
+que la llista, els règims i les capes de relació surten del que el BACKEND DESPLEGAT contesta.
+Amb fixtures la foto sortiria bé fins i tot amb el gunicorn vell.
+
+  · el bundle (`/`, `/assets/*`) surt de `frontend/dist` — cal `npm run build` abans;
+  · tota crida a `/api/` es reenvia a `http://127.0.0.1:8001` amb el `Host` del tenant.
+
+EL TOKEN NECESSITA EL CLAIM `tenant_schema` i no s'imprimeix mai.
+
+    FTT_QA_TOKEN=... venv/bin/python ops/qa/qa_a4_garment_types.py
+
+⚠️ **LES ICONES SURTEN BUIDES A LES CAPTURES I NO ÉS UN DEFECTE DE LA PANTALLA.** Tabler entra
+per webfont des d'un CDN (`frontend/index.html:8`) i aquest arnès intercepta `**/*`: tot el que
+no és `/api/` el serveix del disc de `frontend/dist`, i la petició al CDN no hi troba fitxer i
+rep l'`index.html`. Al navegador de debò les icones hi són. Qui llegeixi una caixa de 32px buida
+al lloc de la fletxa del `PageMenu`, que ho llegeixi així.
+"""
+import mimetypes
+import os
+import pathlib
+import sys
+
+import requests
+from playwright.sync_api import sync_playwright
+
+REPO = pathlib.Path(__file__).resolve().parents[2]
+DIST = REPO / 'frontend' / 'dist'
+OUT = pathlib.Path(__file__).resolve().parent / 'captures'
+BASE = 'https://staging.fhorttextile.tech'
+VIU = 'http://127.0.0.1:8001'
+HOST_TENANT = os.environ.get('FTT_QA_HOST', 'fhorttextile.tech')
+TOKEN = os.environ.get('FTT_QA_TOKEN', '')
+
+#: UN ESTAT PER CAPTURA. El tenant `fhort` té 21 famílies (17 actives) i el catàleg va en
+#: ANGLÈS: els gestos han de clicar el nom REAL de la llista, no un de suposat.
+PANTALLES = [
+    ('01_llista', '/garment-types', 'menu de pantalla + comptador amb cerca + mestre-detall', []),
+    ('02_detall', '/garment-types', 'fitxa del tipus: seleccio de la casa, cards d\'item, portes', [('click', 'text=Buttoned Tops')]),
+    ('03_inactives', '/garment-types', 'la vista Inactives des del menu de pantalla', [('click', 'button:has-text("Inactiu")')]),
+]
+
+
+def main():
+    if not TOKEN:
+        sys.exit('Falta FTT_QA_TOKEN (passa\'l per entorn; no s\'imprimeix enlloc).')
+    if not DIST.exists():
+        sys.exit(f'No hi ha bundle a {DIST} — cal `npm run build`.')
+    OUT.mkdir(exist_ok=True)
+    sess = requests.Session()
+
+    def handler(route, request):
+        url = request.url
+        cami = url.split(BASE, 1)[-1].split('?')[0] if url.startswith(BASE) else url
+        if cami.startswith('/api/'):
+            try:
+                r = sess.request(
+                    request.method, VIU + url.split(BASE, 1)[-1],
+                    headers={'Host': HOST_TENANT, 'Authorization': f'Bearer {TOKEN}',
+                             'Content-Type': request.header_value('content-type') or 'application/json'},
+                    data=request.post_data_buffer, timeout=30)
+                route.fulfill(status=r.status_code, body=r.content,
+                              headers={'content-type': r.headers.get('content-type', 'application/json')})
+            except Exception as e:
+                route.fulfill(status=502, body=f'{{"error": "{e}"}}',
+                              headers={'content-type': 'application/json'})
+            return
+        rel = cami.lstrip('/')
+        f = DIST / rel
+        if not f.is_file():
+            f = DIST / 'index.html'
+        route.fulfill(status=200, body=f.read_bytes(),
+                      headers={'content-type': mimetypes.guess_type(f.name)[0] or 'text/html'})
+
+    with sync_playwright() as p:
+        nav = p.chromium.launch()
+        ctx = nav.new_context(viewport={'width': 1600, 'height': 1000})
+        pag = ctx.new_page()
+        pag.route('**/*', handler)
+        pag.goto(BASE + '/', wait_until='domcontentloaded')
+        pag.evaluate("([t]) => { localStorage.setItem('access_token', t);"
+                     " localStorage.setItem('fhort.lang', 'ca') }", [TOKEN])
+        for nom, ruta, què, accions in PANTALLES:
+            pag.goto(BASE + ruta, wait_until='networkidle')
+            pag.wait_for_timeout(1500)
+            for gest in accions:
+                try:
+                    if gest[0] == 'click':
+                        pag.locator(gest[1]).first.click()
+                    elif gest[0] == 'fill':
+                        pag.locator(gest[1]).first.fill(gest[2])
+                    pag.wait_for_timeout(900)
+                except Exception as e:
+                    print(f'  ⚠️  {nom}: {gest[0]} {gest[1]} no ha anat ({e})')
+            desti = OUT / f'a4_{nom}.png'
+            pag.screenshot(path=str(desti), full_page=True)
+            print(f'✓ {desti.name:34} {ruta:16} {què}')
+        nav.close()
+
+
+if __name__ == '__main__':
+    main()

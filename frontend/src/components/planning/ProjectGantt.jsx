@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { plan, companyCalendar } from '../../api/endpoints'
 import Center from '../ui/Center'
+import { useEnumeracio } from '../../utils/vocabulariDominiFont'
 import { IconPackage, IconUser, IconFlag } from '@tabler/icons-react'
 
 // Calendari-Gantt de projecte (LECTURA): UNA barra per model, eix=DIES. Consumeix GET plan/gantt/.
@@ -14,7 +15,10 @@ const PX_PER_DAY = 44   // prou ample per encabir "dd/mm" a cada dia sense solap
 const ROW_H = 50
 const BAR_H = 24
 const AXIS_H = 26
-const DEFAULT_COLOR = 'var(--gray)'
+// El color d'una barra sense fase coneguda. Va amb la PALETA de data-viz (literal, com
+// `FASE_COLORS`) i no amb un àlies legacy: `--gray` és #868685, que dona 3.64:1 i no és cap
+// tinta de la norma. El neutre de la paleta és el mateix que ja fa servir `Pending`.
+const DEFAULT_COLOR = '#9aa0a6'
 
 const parseISO = (s) => new Date(s + 'T00:00:00')
 const dayDiff = (a, b) => Math.round((b - a) / 86400000)
@@ -25,9 +29,15 @@ const fmtDM = (d) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMont
 const DOW = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
 const dowKey = (d) => DOW[(d.getDay() + 6) % 7]
 const isoLocal = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-const FASE_ORDER = ['Pending', 'Dev', 'Proto', 'SizeSet', 'PP', 'TOP']
-// Paleta categòrica per a "pintar per" (data-viz; mateix criteri que els colors fixos de
-// PlanningCalendar). El color de tècnic ve del backend (responsable_color).
+// L'ORDRE de les fases ve de `/vocabulari/` (`fases_model`), que les emet en la seqüència que
+// el model declara. Aquí només se'n fa servir per ordenar files, i per això la degradació és
+// benigna: sense vocabulari tots els `indexOf` donen -1, l'ordre per fase empata i les files
+// cauen al desempat que ja hi havia (data de lliurament).
+//
+// FASE_COLORS ES QUEDA i no és una còpia de l'enumeració: és una PALETA —crom de data-viz,
+// mateix criteri que els colors fixos de PlanningCalendar— indexada pel codi. Que les seves
+// claus coincideixin amb les fases no la converteix en vocabulari; una fase nova hi entraria
+// sense color i el codi ja té la via de fallback. El color de tècnic ve del backend.
 const FASE_COLORS = {
   Pending: '#9aa0a6', Dev: '#3a7ca5', Proto: '#7e57c2', SizeSet: '#2a9d8f', PP: '#e07b39', TOP: '#3c9a5f',
 }
@@ -46,6 +56,7 @@ function nextFita(m, today) {
 
 export default function ProjectGantt({ t, mine = false }) {
   const navigate = useNavigate()
+  const { codis: fasesModel } = useEnumeracio('fases_model')
   const [models, setModels] = useState([])
   const [today, setToday] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -112,18 +123,19 @@ export default function ProjectGantt({ t, mine = false }) {
       (filterTechs.size === 0 || filterTechs.has(m.responsable_id)) &&
       (!filterColleccio || m.collection === filterColleccio) &&
       (!filterTemporada || m.temporada === filterTemporada))
+    const ordreFases = fasesModel || []
     const cmp = {
       // C4 — 'pla' = l'ordre del backend (pla materialitzat); el lector NO reordena. Les altres
       // vistes queden com a alternatives EXPLÍCITES que l'usuari tria al selector.
       pla: null,
       lliurament: (a, b) => a.end.localeCompare(b.end) || a.codi.localeCompare(b.codi),
       fita: (a, b) => nextFita(a, today).localeCompare(nextFita(b, today)) || a.codi.localeCompare(b.codi),
-      fase: (a, b) => (FASE_ORDER.indexOf(a.fase) - FASE_ORDER.indexOf(b.fase)) || a.end.localeCompare(b.end),
+      fase: (a, b) => (ordreFases.indexOf(a.fase) - ordreFases.indexOf(b.fase)) || a.end.localeCompare(b.end),
     }[order]
     if (cmp) list.sort(cmp)
     if (riskFirst) list.sort((a, b) => (b.en_risc === a.en_risc ? 0 : b.en_risc ? 1 : -1))
     return list
-  }, [models, onlyRisk, order, riskFirst, today, filterTechs, filterColleccio, filterTemporada])
+  }, [models, onlyRisk, order, riskFirst, today, filterTechs, filterColleccio, filterTemporada, fasesModel])
 
   // Rang temporal global: min(primera data, avui) i max(última data, avui), amb 60 dies de
   // marge a banda i banda → AVUI sempre dins el rang i prou aire perquè l'scroll horitzontal
@@ -176,7 +188,7 @@ export default function ProjectGantt({ t, mine = false }) {
 
   if (loading) return <Center>{t('planning.loading')}</Center>
   if (!range || !models.length) {
-    return <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)', border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)' }}>{t('planning.gantt.empty')}</div>
+    return <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-soft)', fontSize: 'var(--fs-body)', border: '1px solid var(--line)', borderRadius: 'var(--r-card)', background: 'var(--panel)' }}>{t('planning.gantt.empty')}</div>
   }
 
   const trackW = range.days * PX_PER_DAY
@@ -218,22 +230,22 @@ export default function ProjectGantt({ t, mine = false }) {
           border: '1px solid var(--gold)', background: 'transparent', color: 'var(--gold)',
           fontSize: 'var(--fs-label)', fontFamily: MONO,
         }}>
-          <i className="ti ti-calendar-event" style={{ fontSize: 14 }} /> {t('planning.gantt.legend_today')}
+          <i className="ti ti-calendar-event" aria-hidden="true" style={{ fontSize: 14, color: 'currentColor' }} /> {t('planning.gantt.legend_today')}
         </button>
       </div>
-      <div ref={scrollRef} style={{ maxHeight: 'calc(100vh - 220px)', overflowY: 'auto', overflowX: 'auto', border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)' }}>
+      <div ref={scrollRef} style={{ maxHeight: 'calc(100vh - 220px)', overflowY: 'auto', overflowX: 'auto', border: '1px solid var(--line)', borderRadius: 'var(--r-card)', background: 'var(--panel)' }}>
         <div style={{ minWidth: LABEL_W + trackW }}>
           {/* Eix de dies */}
           {/* PEÇA 3 — header sticky-top z=8 (per sobre de les pills z=6 en scroll-Y); cantonada z=9 (màxim) */}
-          <div style={{ display: 'flex', position: 'sticky', top: 0, zIndex: 8, background: 'var(--bg-muted)', borderBottom: '0.5px solid var(--gray-l)' }}>
-            <div style={{ width: LABEL_W, flexShrink: 0, position: 'sticky', left: 0, background: 'var(--bg-muted)', zIndex: 9, borderRight: '0.5px solid var(--gray-l)' }} />
+          <div style={{ display: 'flex', position: 'sticky', top: 0, zIndex: 8, background: 'var(--panel)', borderBottom: '1px solid var(--line)' }}>
+            <div style={{ width: LABEL_W, flexShrink: 0, position: 'sticky', left: 0, background: 'var(--panel)', zIndex: 9, borderRight: '1px solid var(--line)' }} />
             <div style={{ position: 'relative', width: trackW, height: AXIS_H }}>
               {ticks.map(tk => {
                 // PEÇA 2 — AVUI es distingeix NOMÉS per color daurat (sense pes extra); la resta de
                 // dates van en pes normal.
                 const isToday = today && isoLocal(tk.d) === today
                 return (
-                  <div key={tk.i} style={{ position: 'absolute', left: tk.i * PX_PER_DAY, top: 0, height: AXIS_H, borderLeft: '0.5px solid var(--gray-l)' }}>
+                  <div key={tk.i} style={{ position: 'absolute', left: tk.i * PX_PER_DAY, top: 0, height: AXIS_H, borderLeft: '1px solid var(--line)' }}>
                     {/* data centrada al MIG de la franja del dia (step=1 → PX_PER_DAY/2) */}
                     <span style={{ position: 'absolute', left: (step * PX_PER_DAY) / 2, top: '50%', transform: 'translate(-50%, -50%)',
                                    fontSize: 'var(--fs-body)', fontFamily: MONO, fontWeight: 400,
@@ -246,7 +258,7 @@ export default function ProjectGantt({ t, mine = false }) {
 
           {/* Files de models */}
           {displayed.length === 0 ? (
-            <div style={{ padding: '1.25rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>{t('planning.gantt.empty')}</div>
+            <div style={{ padding: '1.25rem', textAlign: 'center', color: 'var(--text-soft)', fontSize: 'var(--fs-body)' }}>{t('planning.gantt.empty')}</div>
           ) : displayed.map(m => (
             <GanttRow key={m.model_id} m={m} color={colorOf(m)} trackW={trackW} x={x}
                       ticks={ticks} order={order} nonWorkCols={nonWorkCols}
@@ -262,17 +274,24 @@ export default function ProjectGantt({ t, mine = false }) {
 function GanttControls({ t, order, setOrder, riskFirst, setRiskFirst, onlyRisk, setOnlyRisk }) {
   const selS = {
     fontFamily: MONO, fontSize: 'var(--fs-label)', padding: '4px 8px',
-    border: '0.5px solid var(--gray-l)', borderRadius: 6, background: 'var(--white)', cursor: 'pointer',
+    border: '1px solid var(--line)', borderRadius: 'var(--r-ctrl)', background: 'var(--panel)', cursor: 'pointer',
   }
+  // §1 · «INCLÒS en la definició» (multi-selecció) = VERD: fons --ok-bg, tinta i vora --ok.
+  // Aquí el xip triat s'omplia de `--err` PLE amb tinta blanca — vermell ple, que la §5.5
+  // reserva a la confirmació d'una acció destructiva, fent de marca de filtre. Que el filtre
+  // parli DE risc no vol dir que el control hagi de cridar com un botó d'esborrar; el vermell
+  // el porta la DADA (el filet de la fila en risc, que es queda). Mateixa forma que les
+  // pastilles de capa d'A2/A3 i que `GroupPills`.
   const chip = (active) => ({
     display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer',
-    fontFamily: MONO, fontSize: 'var(--fs-label)', padding: '4px 10px', borderRadius: 6,
-    border: `0.5px solid ${active ? 'var(--err)' : 'var(--gray-l)'}`,
-    background: active ? 'var(--err)' : 'none', color: active ? 'var(--white)' : 'var(--text-main)',
+    fontFamily: MONO, fontSize: 'var(--fs-label)', padding: '4px 10px', borderRadius: 'var(--r-pill)',
+    borderWidth: 1, borderStyle: 'solid', borderColor: active ? 'var(--ok)' : 'var(--line)',
+    background: active ? 'var(--ok-bg)' : 'var(--panel)',
+    color: active ? 'var(--ok)' : 'var(--text-main)', fontWeight: active ? 600 : 400,
   })
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
-      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontFamily: MONO }}>
+      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-label)', color: 'var(--text-soft)', fontFamily: MONO }}>
         {t('planning.gantt.order.label')}
         <select value={order} onChange={e => setOrder(e.target.value)} style={selS}>
           <option value="pla">{t('planning.gantt.order.pla')}</option>
@@ -282,10 +301,10 @@ function GanttControls({ t, order, setOrder, riskFirst, setRiskFirst, onlyRisk, 
         </select>
       </label>
       <button type="button" onClick={() => setRiskFirst(v => !v)} style={chip(riskFirst)}>
-        <i className="ti ti-flag" style={{ fontSize: 13 }} />{t('planning.gantt.risk_first')}
+        <i className="ti ti-flag" aria-hidden="true" style={{ fontSize: 14, color: 'currentColor' }} />{t('planning.gantt.risk_first')}
       </button>
       <button type="button" onClick={() => setOnlyRisk(v => !v)} style={chip(onlyRisk)}>
-        <i className="ti ti-alert-triangle" style={{ fontSize: 13 }} />{t('planning.gantt.only_risk')}
+        <i className="ti ti-alert-triangle" aria-hidden="true" style={{ fontSize: 14, color: 'currentColor' }} />{t('planning.gantt.only_risk')}
       </button>
     </div>
   )
@@ -296,12 +315,12 @@ function ColorFilterControls({ t, colorBy, setColorBy, opts, filterTechs, setFil
                                filterColleccio, setFilterColleccio, filterTemporada, setFilterTemporada }) {
   const selS = {
     fontFamily: MONO, fontSize: 'var(--fs-label)', padding: '4px 8px',
-    border: '0.5px solid var(--gray-l)', borderRadius: 6, background: 'var(--white)', cursor: 'pointer',
+    border: '1px solid var(--line)', borderRadius: 'var(--r-ctrl)', background: 'var(--panel)', cursor: 'pointer',
   }
   const toggleTech = (id) => setFilterTechs(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
-      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontFamily: MONO }}>
+      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-label)', color: 'var(--text-soft)', fontFamily: MONO }}>
         {t('planning.gantt.color.label')}
         <select value={colorBy} onChange={e => setColorBy(e.target.value)} style={selS}>
           <option value="tecnic">{t('planning.gantt.color.tecnic')}</option>
@@ -327,15 +346,15 @@ function ColorFilterControls({ t, colorBy, setColorBy, opts, filterTechs, setFil
       {/* multi-select de tècnics (chips); buit = tots */}
       {opts.techs.length > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontFamily: MONO }}>{t('planning.gantt.filter.techs')}</span>
+          <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)', fontFamily: MONO }}>{t('planning.gantt.filter.techs')}</span>
           {opts.techs.map(tech => {
             const on = filterTechs.has(tech.id)
             return (
               <button key={tech.id} type="button" onClick={() => toggleTech(tech.id)} title={tech.nom} style={{
                 display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer',
                 fontFamily: MONO, fontSize: 'var(--fs-label)', padding: '3px 9px', borderRadius: 12,
-                border: `0.5px solid ${on ? 'var(--text-main)' : 'var(--gray-l)'}`,
-                background: on ? 'var(--bg-muted)' : 'none', opacity: (filterTechs.size === 0 || on) ? 1 : 0.5,
+                borderWidth: 1, borderStyle: 'solid', borderColor: on ? 'var(--ok)' : 'var(--line)',
+                background: on ? 'var(--ok-bg)' : 'var(--panel)',
               }}>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: tech.color || DEFAULT_COLOR }} />
                 {tech.nom || `#${tech.id}`}
@@ -365,23 +384,23 @@ function GanttRow({ m, color, trackW, x, ticks, order, nonWorkCols, onClick, t }
 
   return (
     <div onClick={onClick} title={`${m.codi} · ${m.nom || ''}`} style={{
-      display: 'flex', height: ROW_H, cursor: 'pointer', borderBottom: '0.5px solid var(--base-hairline, var(--gray-l))',
+      display: 'flex', height: ROW_H, cursor: 'pointer', borderBottom: '1px solid var(--line-soft)',
     }}>
       {/* PEÇA 1 — label en 2 LÍNIES (ordre definitiu Agus): línia 1 = codi (gris petit); línia 2 en flow
           horitzontal = nom (negre) · col·lecció · temporada (grisos petits). Tokens d'escala, sense px
           literals. z=7 (sticky-left per sobre de les pills del track z=6 en scroll-X; fons opac). */}
-      <div style={{ width: LABEL_W, flexShrink: 0, position: 'sticky', left: 0, background: 'var(--white)', zIndex: 7,
-                    borderRight: '0.5px solid var(--gray-l)', borderLeft: m.en_risc ? '2px solid var(--err)' : '2px solid transparent',
+      <div style={{ width: LABEL_W, flexShrink: 0, position: 'sticky', left: 0, background: 'var(--panel)', zIndex: 7,
+                    borderRight: '1px solid var(--line)', borderLeft: m.en_risc ? '2px solid var(--err)' : '2px solid transparent',
                     padding: '8px 14px', overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 2 }}>
-        <div style={{ fontSize: 'var(--fs-label)', fontFamily: MONO, color: 'var(--text-muted)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+        <div style={{ fontSize: 'var(--fs-label)', fontFamily: MONO, color: 'var(--text-soft)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
           {m.en_risc && <i className="ti ti-flag" title={t('planning.gantt.risk_flag')} style={{ fontSize: 'var(--fs-label)', color: 'var(--err)', marginRight: 4 }} />}
           {m.reanchored_by_start && <i className="ti ti-plus" title={t('planning.gantt.reanchored')} style={{ fontSize: 'var(--fs-label)', color: 'var(--gold)', marginRight: 4 }} />}
           {m.codi}
         </div>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, overflow: 'hidden' }}>
           <span style={{ fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-main)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', flexShrink: 1, minWidth: 0 }}>{m.nom || '—'}</span>
-          {m.collection && <span style={{ fontSize: 'var(--fs-label)', fontFamily: MONO, color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>· {m.collection}</span>}
-          {m.temporada && <span style={{ fontSize: 'var(--fs-label)', fontFamily: MONO, color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>· {m.temporada}</span>}
+          {m.collection && <span style={{ fontSize: 'var(--fs-label)', fontFamily: MONO, color: 'var(--text-soft)', whiteSpace: 'nowrap', flexShrink: 0 }}>· {m.collection}</span>}
+          {m.temporada && <span style={{ fontSize: 'var(--fs-label)', fontFamily: MONO, color: 'var(--text-soft)', whiteSpace: 'nowrap', flexShrink: 0 }}>· {m.temporada}</span>}
         </div>
       </div>
 
@@ -395,7 +414,7 @@ function GanttRow({ m, color, trackW, x, ticks, order, nonWorkCols, onClick, t }
         ))}
         {/* graella vertical */}
         {ticks.map(tk => (
-          <div key={tk.i} style={{ position: 'absolute', left: tk.i * PX_PER_DAY, top: 0, bottom: 0, borderLeft: '0.5px solid var(--bg-muted)' }} />
+          <div key={tk.i} style={{ position: 'absolute', left: tk.i * PX_PER_DAY, top: 0, bottom: 0, borderLeft: '1px solid var(--line-soft)' }} />
         ))}
         {/* PEÇA 2 — sense línia AVUI a la graella: el dia actual es marca només a la capçalera (daurada). */}
         {/* línia DATA OBJECTIU (vermella discontínua) */}
@@ -405,7 +424,7 @@ function GanttRow({ m, color, trackW, x, ticks, order, nonWorkCols, onClick, t }
         {objX != null && order === 'lliurament' && (
           <div title={t('planning.gantt.legend_objectiu')} style={{
             position: 'absolute', left: objX, top: 2, transform: 'translateX(-50%)', zIndex: 6,
-            display: 'flex', alignItems: 'center', gap: 2, padding: '1px 4px', background: 'var(--white)',
+            display: 'flex', alignItems: 'center', gap: 2, padding: '1px 4px', background: 'var(--panel)',
             border: '1px solid var(--err)', borderRadius: 8,
           }}>
             <IconFlag size={11} color="var(--err)" stroke={1.75} />
@@ -436,9 +455,9 @@ function GanttRow({ m, color, trackW, x, ticks, order, nonWorkCols, onClick, t }
         {esperes.map((w, i) => (
           <div key={`w${i}`} title={t('planning.gantt.legend_wait')} style={{
             position: 'absolute', left: w.l, width: Math.max(2, w.r - w.l), top: ROW_H / 2,
-            borderTop: '1px solid var(--text-muted)', zIndex: 1,
+            borderTop: '1px solid var(--text-soft)', zIndex: 1,
           }}>
-            <span style={{ position: 'absolute', right: -2, top: -6, fontSize: 9, lineHeight: 1, color: 'var(--text-muted)' }}>▶</span>
+            <span style={{ position: 'absolute', right: -2, top: -6, fontSize: 'var(--fs-caption)', lineHeight: 1, color: 'var(--text-soft)' }}>▶</span>
           </div>
         ))}
 
@@ -450,10 +469,10 @@ function GanttRow({ m, color, trackW, x, ticks, order, nonWorkCols, onClick, t }
             <div key={i} title={`${t(`planning.gantt.legend_${f.tipus}`)} · ${f.data}`} style={{
               position: 'absolute', left: x(f.data) + PX_PER_DAY / 2, top: (ROW_H - 18) / 2, transform: 'translateX(-50%)',
               height: 18, display: 'flex', alignItems: 'center', gap: 4, padding: '2px 6px', zIndex: 6,
-              background: 'var(--white)', border: '1px solid var(--gray-l)', borderRadius: 10,
+              background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 'var(--r-ctrl)',
             }}>
               <Icon size={12} color={col} stroke={1.75} />
-              <span style={{ fontSize: 'var(--fs-caption)', fontFamily: MONO, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{fmtDM(parseISO(f.data))}</span>
+              <span style={{ fontSize: 'var(--fs-caption)', fontFamily: MONO, color: 'var(--text-soft)', whiteSpace: 'nowrap' }}>{fmtDM(parseISO(f.data))}</span>
             </div>
           )
         })}
@@ -464,9 +483,9 @@ function GanttRow({ m, color, trackW, x, ticks, order, nonWorkCols, onClick, t }
 
 function Legend({ t }) {
   const item = (icon, color, label) => (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontFamily: MONO }}>
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 'var(--fs-label)', color: 'var(--text-soft)', fontFamily: MONO }}>
       {icon === 'line' ? <span style={{ width: 12, borderTop: `1.5px dashed ${color}`, display: 'inline-block' }} />
-        : <i className={`ti ti-${icon}`} style={{ fontSize: 13, color }} />}
+        : <i className={`ti ti-${icon}`} aria-hidden="true" style={{ fontSize: 14, color }} />}
       {label}
     </span>
   )

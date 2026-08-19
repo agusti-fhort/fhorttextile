@@ -1,13 +1,22 @@
 import { selS } from './ui/buttons'
+import { useCodisEstat } from './commercial/estats'
 
 // Formulari compartit de Customer (identitat + fiscal/comercial). Extret de CustomerModal (M2)
 // perquè el reutilitzin TANT el modal de creació ràpida COM la fitxa /clients/:id (tab Dades),
 // sense duplicar els camps (llei: unificar el ja construït). Controlat: rep `form` + `set`.
 const MONO = 'IBM Plex Mono, monospace'
-export const REGIMES = ['DOMESTIC', 'INTRA_EU', 'EXPORT', 'EXEMPT']
-export const METHODS = ['TRANSFER', 'DIRECT_DEBIT', 'CONFIRMING', 'CASH']
-// Idioma per defecte dels PDF comercials. Mirall de Customer.LANGUAGE_CHOICES (tasks/models.py).
-// El buit és un valor legítim: «sense preselecció», i l'operador tria en emetre.
+
+// `REGIMES` i `METHODS` vivien aquí com a dues llistes escrites a mà —mirall de
+// `Customer.TAX_REGIME_CHOICES` i `PAYMENT_METHOD_CHOICES`— i els DOS selects que les consumeixen
+// **ESCRIUEN**. Ara vénen de `/vocabulari/` (`regims_fiscals_client`, `metodes_pagament_client`).
+//
+// 🛑 **`LANGUAGES` NO, i el motiu és diferent del de les altres — BLOQUEJAT-PER-S1.**
+// És mirall de `Customer.LANGUAGE_CHOICES` i **no és a les 23 llistes publicades**. Es queda
+// viva i censada (la llei prohibeix inventar-ne de NOVES; aquesta ja hi era), amb un matís que
+// val la pena escriure: **el BUIT és un valor legítim** aquí —«sense preselecció», i l'operador
+// tria en emetre—, i per tant no és cap membre de l'enumeració sinó la seva absència. El dia que
+// es publiqui, el buit **no** ha de venir de l'endpoint: l'ha de posar la UI, com fa
+// `veredictes_fitting` amb la cel·la sense decidir.
 export const LANGUAGES = ['ca', 'en', 'es']
 
 export function initCustomerForm(c = {}) {
@@ -53,7 +62,7 @@ export function Row({ children }) {
 export function Field({ label, children }) {
   return (
     <div style={{ marginBottom: 14, flex: 1 }}>
-      <label style={{ fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>{label}</label>
+      <label style={{ fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-soft)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>{label}</label>
       {children}
     </div>
   )
@@ -61,6 +70,10 @@ export function Field({ label, children }) {
 
 // section: 'dades' | 'comercial' | 'all'. `terms` = opcions de PaymentTerms.
 export default function CustomerForm({ form, set, terms = [], t, section = 'all' }) {
+  // Les dues enumeracions fiscals, de l'endpoint. Mentre no han arribat els selects no ofereixen
+  // res: oferir un valor endevinat seria deixar escriure un règim que potser no existeix.
+  const { codis: regims } = useCodisEstat('regims_fiscals_client')
+  const { codis: metodes } = useCodisEstat('metodes_pagament_client')
   const showDades = section === 'all' || section === 'dades'
   const showCom = section === 'all' || section === 'comercial'
   return (
@@ -107,7 +120,7 @@ export default function CustomerForm({ form, set, terms = [], t, section = 'all'
         <Row>
           <Field label={t('clients.tax_regime')}>
             <select value={form.tax_regime} onChange={e => set('tax_regime', e.target.value)} style={{ ...selS, width: '100%' }}>
-              {REGIMES.map(r => <option key={r} value={r}>{t(`clients.tax_regime_${r}`)}</option>)}
+              {(regims || []).map(r => <option key={r} value={r}>{t(`clients.tax_regime_${r}`)}</option>)}
             </select>
           </Field>
           <Field label={t('clients.vat_number')}>
@@ -117,7 +130,7 @@ export default function CustomerForm({ form, set, terms = [], t, section = 'all'
         <Row>
           <Field label={t('clients.payment_method')}>
             <select value={form.payment_method} onChange={e => set('payment_method', e.target.value)} style={{ ...selS, width: '100%' }}>
-              {METHODS.map(m => <option key={m} value={m}>{t(`clients.payment_method_${m}`)}</option>)}
+              {(metodes || []).map(m => <option key={m} value={m}>{t(`clients.payment_method_${m}`)}</option>)}
             </select>
           </Field>
           <Field label={t('clients.payment_terms')}>

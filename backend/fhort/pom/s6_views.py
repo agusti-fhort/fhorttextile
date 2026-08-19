@@ -83,19 +83,18 @@ def base_measurements_with_units_view(request, model_id):
     try:
         from fhort.models_app.models import BaseMeasurement
 
-        # C2/Onada 1 — àncora EXTERIOR explícita: la resposta és una llista plana on cada
-        # element s'identifica per `pom_id`, i qui la consumeix hi indexa. Amb dues capes
-        # servides alhora, dos elements portarien el mateix `pom_id` i el consumidor en
-        # perdria un en silenci. La capa entra al contracte a C4, no aquí.
-        # FASE_2/C1-ins — i la INSTÀNCIA ÚNICA, pel mateix argument exacte: l'àncora de capa
-        # tapava la capa i NO la instància, o sigui que la sisa dreta i l'esquerra tornarien
-        # a xocar sobre el mateix `pom_id`. Els dos eixos entren al contracte junts, a C4-ins.
-        from fhort.pom.models import MeasurementLayer
+        # C4 — L'ÀNCORA SE'N VA I ELS DOS EIXOS ENTREN AL CONTRACTE, que és exactament el que
+        # l'acta anterior deia que passaria aquí: «la capa entra al contracte a C4, no aquí».
+        #
+        # El que hi havia: la resposta és una llista plana on cada element s'identificava per
+        # `pom_id`, i qui la consumeix hi indexa. Amb dues germanes servides alhora, dos
+        # elements portarien el mateix `pom_id` i el consumidor en perdria un en silenci.
+        # Ara cada element porta `capa` i `instancia`, o sigui que ja no hi ha col·lisió a
+        # indexar i el filtre només serviria per amagar-ne un.
         bms = BaseMeasurement.objects.filter(
-            model_id=model_id, is_active=True,
-            capa=MeasurementLayer.SLUG_DEFECTE, instancia=''
+            model_id=model_id, is_active=True
         ).select_related('pom', 'pom__pom_global', 'pom__categoria').order_by(
-            'pom__categoria__display_order', 'pom__codi_client'
+            'pom__categoria__display_order', 'pom__codi_client', 'capa', 'instancia'
         )
 
         data = []
@@ -107,6 +106,10 @@ def base_measurements_with_units_view(request, model_id):
             data.append({
                 'id': bm.id,
                 'pom_id': bm.pom_id,
+                # C4 — els dos eixos al contracte: `pom_id` ja no és únic dins de `results`,
+                # i `id` (la PK de la fila) segueix sent l'àncora forta de cada element.
+                'capa': bm.capa,
+                'instancia': bm.instancia,
                 'codi_client': pom.codi_client if pom else '',
                 'nom_client': pom.nom_client if pom else '',
                 'nom_en': pom.pom_global.nom_en if (pom and pom.pom_global_id) else '',
@@ -141,7 +144,6 @@ def graded_specs_with_units_view(request, sf_id):
         from fhort.fitting.models import SizeFitting
         from fhort.fitting.models import GradedSpec
         from fhort.fitting.services import vigent_grading_version
-        from fhort.pom.models import MeasurementLayer
 
         sf = SizeFitting.objects.get(pk=sf_id)
 
@@ -165,32 +167,41 @@ def graded_specs_with_units_view(request, sf_id):
                 'results': [],
             })
 
-        # FASE_2/C1-ins — àncora EXTERIOR + INSTÀNCIA ÚNICA, i aquí les DUES arriben alhora
-        # perquè aquest lector no havia crescut ni a `(pom, capa)`. El `pom_dict` de sota
-        # s'indexa per `spec.pom_id` pelat i ÉS el contracte de la resposta: dos specs del
-        # mateix POM —altra capa o altra instància— es fondrien a la mateixa entrada i
-        # l'últim llegit guanyaria talla a talla. És el germà de
-        # `base_measurements_with_units_view`, que ja porta l'àncora: van junts o no van.
+        # C4 — L'ÀNCORA SE'N VA I L'ENTRADA CREIX A LA IDENTITAT SENCERA.
+        #
+        # L'àncora existia perquè `pom_dict` s'indexava per `spec.pom_id` pelat i ÉS el
+        # contracte de la resposta: dos specs del mateix POM es fondrien a la mateixa entrada i
+        # l'últim llegit guanyaria talla a talla. Ara la clau és `(pom_id, capa, instancia)` i
+        # l'entrada publica els dos eixos, o sigui que el filtre ja no conté res — només
+        # deixaria la germana fora de la llista, i qui la consumeix no tindria com saber-ho.
+        #
+        # Segueix sent el germà de `base_measurements_with_units_view`: van junts o no van, i
+        # per això els dos entren al mateix commit.
         specs = GradedSpec.objects.filter(
-            grading_version=gv, is_active=True,
-            capa=MeasurementLayer.SLUG_DEFECTE, instancia=''
+            grading_version=gv, is_active=True
         ).select_related(
             'pom', 'pom__pom_global', 'pom__categoria'
         ).order_by(
-            'pom__categoria__display_order', 'pom__codi_client', 'size_label'
+            'pom__categoria__display_order', 'pom__codi_client', 'capa', 'instancia',
+            'garment', 'size_label'
         )
 
         pom_dict = {}
         talles = []
         for spec in specs:
-            pid = spec.pom_id
+            # SET-2/T6a — la PEÇA: sense ella les dues files graduades del mateix POM es
+            # fonen en una entrada i les cel·les de la segona sobreescriuen les de la primera.
+            ident = (spec.pom_id, spec.capa, spec.instancia, spec.garment)
             pom = spec.pom
-            if pid not in pom_dict:
+            if ident not in pom_dict:
                 categoria_nom = ''
                 if pom and pom.categoria_id:
                     categoria_nom = pom.categoria.nom_ca or pom.categoria.nom_en or ''
-                pom_dict[pid] = {
-                    'pom_id': pid,
+                pom_dict[ident] = {
+                    'pom_id': spec.pom_id,
+                    # C4 — els dos eixos al contracte: `pom_id` ja no és únic dins de `results`.
+                    'capa': spec.capa,
+                    'instancia': spec.instancia,
                     'codi_client': pom.codi_client if pom else '',
                     'nom_client': pom.nom_client if pom else '',
                     'nom_en': pom.pom_global.nom_en if (pom and pom.pom_global_id) else '',
@@ -198,7 +209,7 @@ def graded_specs_with_units_view(request, sf_id):
                     'is_key': pom.is_key_measure if pom else False,
                     'values': {},
                 }
-            pom_dict[pid]['values'][spec.size_label] = {
+            pom_dict[ident]['values'][spec.size_label] = {
                 'cm': float(spec.graded_value_cm) if spec.graded_value_cm is not None else None,
                 'display': cv(spec.graded_value_cm, unit),
             }

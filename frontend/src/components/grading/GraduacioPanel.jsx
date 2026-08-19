@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next'
 
 import { gradingRuleSets, garmentGroups, sizingProfiles } from '../../api/endpoints'
 import RuleSetPicker from './RuleSetPicker'
-import { availableFitsStrict, FITS } from './gradingAxes'
+import { availableFitsStrict } from './gradingAxes'
+import { useEixos } from './eixosFont'
 import { Chip, Field, MONO, ReadChip } from './wizardUI'
 
 // EL PAS DE GRADUACIÓ, en UN sol component per als DOS llocs que l'ensenyen (31/07).
@@ -78,10 +79,12 @@ export default function GraduacioPanel({
   }), [target, construction, garmentGroupCodi, garmentTypeId, garmentTypeItemId])
 
   const ssId = sizing?.size_system_id ?? null
-  // Fits que porten a una graduació REAL per a la combinació fixada (matching estricte).
+  // Fits que porten a una graduació REAL per a la combinació fixada (matching estricte). El
+  // catàleg de fits ve de `/fit-types/` i entra per paràmetre: `availableFitsStrict` és pura.
+  const { fits: catFits } = useEixos()
   const fitOptions = useMemo(
-    () => availableFitsStrict(ruleSets, nodeAxes, ggCodiById, ssId),
-    [ruleSets, nodeAxes, ggCodiById, ssId])
+    () => availableFitsStrict(ruleSets, nodeAxes, ggCodiById, ssId, catFits),
+    [ruleSets, nodeAxes, ggCodiById, ssId, catFits])
   // El matching estricte el fa el PICKER amb aquests mateixos eixos (`strict`): calcular-lo
   // també aquí seria fer-lo dues vegades i obrir la porta que divergissin.
   const gradingAxes = useMemo(() => ({ ...nodeAxes, fit }), [nodeAxes, fit])
@@ -130,7 +133,7 @@ export default function GraduacioPanel({
               </p>
             )}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {FITS.map(f => {
+              {(catFits || []).map(f => {
                 const ambGraduacio = fitOptions.some(o => o.codi === f.codi)
                 return (
                   <Chip key={f.codi} active={fit === f.codi}

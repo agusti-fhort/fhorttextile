@@ -1,11 +1,19 @@
 """Serializers del mestre d'articles (B1). Read-only nested als satèl·lits a la fitxa;
 escriptura dels satèl·lits via els seus ViewSets propis (filtrats per ?product=).
 Els guards de domini de model.clean() es repliquen a validate() perquè apliquin via API.
+
+PODA ECONÒMICA (2026-08-14): els camps de diner d'aquest mòdul viatgen NOMÉS a qui té la
+capacitat COMERCIAL. Cada serializer declara els seus a `CAMPS_ECONOMICS`; la mecànica és
+única i viu a `accounts/capabilities.py` (`PodaEconomicaMixin`), perquè la comparteixen
+serializers de fora d'aquest fitxer (TenantConfig, Customer). El motiu de podar en comptes
+de tallar amb 403: hi ha pantalles TÈCNIQUES que depenen d'aquests endpoints i no pinten
+cap import — vegeu el docstring del mixin.
 """
 from decimal import Decimal
 
 from rest_framework import serializers
 
+from fhort.accounts.capabilities import PodaEconomicaMixin
 from fhort.i18n_content.serializers import TranslationsSerializerMixin
 
 from .models import (
@@ -35,7 +43,9 @@ class ProductRecipeSerializer(serializers.ModelSerializer):
         return data
 
 
-class ProductSupplierSerializer(serializers.ModelSerializer):
+class ProductSupplierSerializer(PodaEconomicaMixin, serializers.ModelSerializer):
+    CAMPS_ECONOMICS = ('cost_price',)
+
     supplier_name = serializers.CharField(source='supplier.name', read_only=True)
 
     class Meta:
@@ -63,7 +73,9 @@ class ProductComponentSerializer(serializers.ModelSerializer):
         return data
 
 
-class ProductPriceGTISerializer(serializers.ModelSerializer):
+class ProductPriceGTISerializer(PodaEconomicaMixin, serializers.ModelSerializer):
+    CAMPS_ECONOMICS = ('price',)
+
     gti_code = serializers.CharField(source='garment_type_item.code', read_only=True)
     gti_name = serializers.CharField(source='garment_type_item.name', read_only=True)
 
@@ -72,10 +84,11 @@ class ProductPriceGTISerializer(serializers.ModelSerializer):
         fields = ['id', 'product', 'garment_type_item', 'gti_code', 'gti_name', 'price']
 
 
-class ProductSerializer(TranslationsSerializerMixin, serializers.ModelSerializer):
+class ProductSerializer(PodaEconomicaMixin, TranslationsSerializerMixin, serializers.ModelSerializer):
     """Llista/creació/edició dels camps NUCLI de l'article. Els satèl·lits es llegeixen
     a la fitxa (camps *_detail) i s'editen pels seus endpoints propis. `name`/`description`
     guarden l'EN canònic; els idiomes addicionals viuen a `translations` (patró híbrid)."""
+    CAMPS_ECONOMICS = ('base_price', 'sale_rate', 'markup_pct', 'tax_rate')
     unit_code = serializers.CharField(source='unit.code', read_only=True)
     recipe_lines = ProductRecipeSerializer(many=True, read_only=True)
     suppliers = ProductSupplierSerializer(many=True, read_only=True)
@@ -173,10 +186,11 @@ def guard_issued_at_editable(serializer, value, live_statuses):
 
 # ── Documents comercials — Quote (B2) ──────────────────────────────────────────────────
 
-class QuoteLineSerializer(serializers.ModelSerializer):
+class QuoteLineSerializer(PodaEconomicaMixin, serializers.ModelSerializer):
     """Línia d'oferta. `line_total` és calculat (read-only); `unit_price` és editable mentre
     l'oferta és DRAFT (guard replicat del model, patró B1). Preu congelat: en crear la línia
     sense unit_price s'hi copia el base_price del Product."""
+    CAMPS_ECONOMICS = ('unit_price', 'line_total')
     product_code = serializers.CharField(source='product.code', read_only=True)
     product_name = serializers.CharField(source='product.name', read_only=True)
     # Vincle preparatori (E6): intencions de model d'aquesta línia, read-only nested (s'editen pel
@@ -207,9 +221,10 @@ class QuoteLineSerializer(serializers.ModelSerializer):
         return data
 
 
-class QuoteSerializer(serializers.ModelSerializer):
+class QuoteSerializer(PodaEconomicaMixin, serializers.ModelSerializer):
     """Capçalera d'oferta amb línies nested (read-only, s'editen pel QuoteLineViewSet, ?quote=).
     Numeració, totals i estat són calculats/gestionats pel backend (read-only)."""
+    CAMPS_ECONOMICS = ('subtotal', 'tax_amount', 'total', 'tax_breakdown')
     customer_nom = serializers.CharField(source='customer.nom', read_only=True)
     # Default del selector d'idioma del PDF (Customer.language). '' = sense preselecció.
     customer_language = serializers.CharField(source='customer.language', read_only=True, default='')
@@ -266,9 +281,14 @@ class QuoteLineModelIntentSerializer(serializers.ModelSerializer):
 
 # ── Documents comercials — SalesOrder (comanda, B3b) ───────────────────────────────────
 
-class SalesOrderLineSerializer(serializers.ModelSerializer):
+class SalesOrderLineSerializer(PodaEconomicaMixin, serializers.ModelSerializer):
     """Línia de comanda. IRREVERSIBILITAT (B3b): preu/quantitat CONGELATS un cop creada (neixen
-    de la conversió); l'ÚNIC camp mutable per API és `qty_allocated` (imputació de cartera)."""
+    de la conversió); l'ÚNIC camp mutable per API és `qty_allocated` (imputació de cartera).
+
+    ⚠️ `quantity` i `qty_allocated` NO es poden podar: són la cartera, i el selector
+    d'assignació de la fitxa del model els fa servir per saber quantes unitats queden lliures
+    (`ActionsMenu.jsx:392-395`). No són diner."""
+    CAMPS_ECONOMICS = ('unit_price', 'line_total')
     product_code = serializers.CharField(source='product.code', read_only=True)
     product_name = serializers.CharField(source='product.name', read_only=True)
 
@@ -291,18 +311,21 @@ class SalesOrderLineSerializer(serializers.ModelSerializer):
         return value
 
 
-class DocumentDueDateSerializer(serializers.ModelSerializer):
+class DocumentDueDateSerializer(PodaEconomicaMixin, serializers.ModelSerializer):
     """Venciment materialitzat (read-only) per a la fitxa de comanda/oferta."""
+    CAMPS_ECONOMICS = ('amount',)
+
     class Meta:
         model = DocumentDueDate
         fields = ['id', 'due_date', 'amount', 'percentage', 'position']
 
 
-class SalesOrderSerializer(serializers.ModelSerializer):
+class SalesOrderSerializer(PodaEconomicaMixin, serializers.ModelSerializer):
     """Capçalera de comanda amb línies i venciments nested (read-only). Tot calculat/congelat;
     els únics camps editables per API són `status` (OPEN/COMPLETED/CANCELLED) i la data
     d'emissió, corregible mentre la comanda és OPEN. La irreversibilitat de B3b es manté
     sencera: preus, quantitats i línies segueixen intocables."""
+    CAMPS_ECONOMICS = ('subtotal', 'tax_amount', 'total', 'tax_breakdown')
     customer_nom = serializers.CharField(source='customer.nom', read_only=True)
     # Default del selector d'idioma del PDF (Customer.language). '' = sense preselecció.
     customer_language = serializers.CharField(source='customer.language', read_only=True, default='')
@@ -326,8 +349,10 @@ class SalesOrderSerializer(serializers.ModelSerializer):
         return guard_issued_at_editable(self, value, ('OPEN',))
 
 
-class WorkOrderAdjustmentSerializer(serializers.ModelSerializer):
+class WorkOrderAdjustmentSerializer(PodaEconomicaMixin, serializers.ModelSerializer):
     """Ajust d'un encàrrec (B4a): extra facturat/absorbit o deducció. L'albarà (B4c) el llegirà."""
+    CAMPS_ECONOMICS = ('amount',)
+
     class Meta:
         model = WorkOrderAdjustment
         fields = ['id', 'work_order', 'model_task', 'kind', 'description', 'amount',
@@ -335,9 +360,15 @@ class WorkOrderAdjustmentSerializer(serializers.ModelSerializer):
         read_only_fields = ['resolved_at']
 
 
-class WorkOrderSerializer(serializers.ModelSerializer):
+class WorkOrderSerializer(PodaEconomicaMixin, serializers.ModelSerializer):
     """Encàrrec / ordre de treball (B4a). Lectura amb detall de tasques (estat + minuts de timer
-    agregats) i adjustments. El detall de tasques s'omet a la llista (evita N+1)."""
+    agregats) i adjustments. El detall de tasques s'omet a la llista (evita N+1).
+
+    ⚠️ Aquest serializer VIATJA A LA FITXA DEL MODEL: `ProductionTab.jsx:75` el demana per
+    `?model=` per pintar la cadena comanda→encàrrec→albarà. `price_snapshot` és el preu de
+    venda contractat congelat, i allà no hi pinta res: es poda. Els `adjustments` niats es
+    poden sols pel seu propi serializer."""
+    CAMPS_ECONOMICS = ('price_snapshot',)
     customer_nom = serializers.CharField(source='customer.nom', read_only=True)
     model_codi = serializers.CharField(source='model.codi_intern', read_only=True, default=None)
     # v2 albarà — traçabilitat de la cadena comanda→WO→albarà (números de document, read-only).
@@ -375,8 +406,9 @@ class WorkOrderSerializer(serializers.ModelSerializer):
         return rows
 
 
-class ExpenseSerializer(serializers.ModelSerializer):
+class ExpenseSerializer(PodaEconomicaMixin, serializers.ModelSerializer):
     """Despesa d'un encàrrec (B4b): línia externa amb cost real i preu de venda (marge propi)."""
+    CAMPS_ECONOMICS = ('cost_price', 'sale_price')
     product_name = serializers.CharField(source='product.name', read_only=True)
     product_nature = serializers.CharField(source='product.nature', read_only=True)
     supplier_name = serializers.CharField(source='supplier.name', read_only=True)
@@ -403,10 +435,18 @@ class ExpenseSerializer(serializers.ModelSerializer):
 
 # ── Documents comercials — DeliveryNote (albarà, B4c) ──────────────────────────────────
 
-class DeliveryNoteLineSerializer(serializers.ModelSerializer):
+class DeliveryNoteLineSerializer(PodaEconomicaMixin, serializers.ModelSerializer):
     """Línia d'albarà. En DRAFT el comercial edita NOMÉS `unit_price`/`description`/`notes`; els
     camps de traçabilitat (FK), `quantity`, `line_kind` i `line_total` són read-only. El guard
-    DRAFT viu al model i es replica aquí per a un 400 net (patró QuoteLine)."""
+    DRAFT viu al model i es replica aquí per a un 400 net (patró QuoteLine).
+
+    ⚠️ AQUEST ÉS EL CAS QUE VA OBRIR LA PEÇA. `ProductionTab.jsx:76` demana aquestes línies
+    per `?model=` des de la fitxa del model i només en pinta `dn_number`/`dn_status`, però
+    rebia `unit_price`, `line_total` i sobretot `internal_cost` — el COST INTERN, minuts ×
+    tarifa/hora. Es podava sola quan `hourly_rate` era `null`; el dia que s'omplís a PROD,
+    hauria començat a viatjar de debò (diagnosi 2026-08-14 §3.2). `internal_minutes` NO es
+    poda: són minuts de feina, no diner, i són patrimoni del tècnic que els ha fet."""
+    CAMPS_ECONOMICS = ('unit_price', 'line_total', 'internal_cost')
     product_code = serializers.CharField(source='product.code', read_only=True, default=None)
     product_name = serializers.CharField(source='product.name', read_only=True, default=None)
     # v2 — capçalera de bloc-model (agrupació al detall/PDF); read-only, per compondre els blocs.
@@ -477,10 +517,11 @@ class DeliveryNoteLineSerializer(serializers.ModelSerializer):
         return data
 
 
-class DeliveryNoteSerializer(serializers.ModelSerializer):
+class DeliveryNoteSerializer(PodaEconomicaMixin, serializers.ModelSerializer):
     """Capçalera d'albarà amb línies nested (read-only, s'editen pel DeliveryNoteLineViewSet,
     ?delivery_note=). Numeració/totals/estat calculats o gestionats pel backend (read-only);
     `notes` editable en DRAFT. `work_orders_included` = els WO agregats (traçabilitat)."""
+    CAMPS_ECONOMICS = ('subtotal', 'tax_amount', 'total', 'tax_breakdown')
     customer_nom = serializers.CharField(source='customer.nom', read_only=True)
     # Default del selector d'idioma del PDF (Customer.language). '' = sense preselecció.
     customer_language = serializers.CharField(source='customer.language', read_only=True, default='')

@@ -1,9 +1,10 @@
 import { useMemo, useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  TARGETS, nomLocal,
+  nomLocal,
   availableTargetCodes, availableConstructions, availableFits,
 } from '../grading/gradingAxes'
+import { useEixos } from '../grading/eixosFont'
 import TargetLabel from '../grading/TargetLabel'
 import { useGarmentCatalog } from '../grading/garmentCatalog'
 import { garmentTypeItems } from '../../api/endpoints'
@@ -69,9 +70,15 @@ function SingleCascade({
   const maxIdx = lvl(maxLevel)
   const inRange = (name) => { const i = lvl(name); return i >= minIdx && i <= maxIdx }
 
+  // Els tres eixos surten del catàleg de la BD (`/targets/`, `/construction-types/`,
+  // `/fit-types/`), no d'una llista escrita al client. `availableX` segueixen sent pures: el
+  // catàleg hi entra per paràmetre.
+  const { targets: catTargets, constructions: catConstructions, fits: catFits } = useEixos()
   const targetCodes = useMemo(() => availableTargetCodes(ruleSets), [ruleSets])
-  const constructions = useMemo(() => availableConstructions(ruleSets, vTarget), [ruleSets, vTarget])
-  const fits = useMemo(() => availableFits(ruleSets, vTarget, construction), [ruleSets, vTarget, construction])
+  const constructions = useMemo(
+    () => availableConstructions(ruleSets, vTarget, catConstructions), [ruleSets, vTarget, catConstructions])
+  const fits = useMemo(
+    () => availableFits(ruleSets, vTarget, construction, catFits), [ruleSets, vTarget, construction, catFits])
 
   const { groups, familiesOf } = useGarmentCatalog(catalogTarget, compat)
   const families = familiesOf(garmentGroup)
@@ -111,7 +118,7 @@ function SingleCascade({
       {inRange('target') && (
         <StepSection number={1} title={t('grading.step_target')}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {TARGETS.map(tg => (
+            {(catTargets || []).map(tg => (
               <TargetCard
                 key={tg.codi}
                 target={tg}

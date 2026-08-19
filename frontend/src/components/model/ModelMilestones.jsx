@@ -14,8 +14,8 @@ const MILESTONE_ICON = { tasca: 'ti-subtask', confeccio: 'ti-building-factory', 
 // a DashboardTab.jsx): filet --border, radius 8, padding, fons --bg-card. La capçalera
 // (sectionTitle) va a FORA de la capsa, igual que fan ON SÓC / QUÈ TINC FET / AVISOS.
 const box = {
-  border: '0.5px solid var(--border)', borderRadius: 8, padding: '1rem 1.1rem',
-  background: 'var(--bg-card)',
+  border: '1px solid var(--line)', borderRadius: 'var(--r-card)', padding: '1rem 1.1rem',
+  background: 'var(--panel)',
 }
 
 // Data local YYYY-MM-DD (no UTC) per acotar el rang de l'endpoint.
@@ -77,18 +77,18 @@ export default function ModelMilestones({ modelId, navigate, onOpenTab, sectionT
       <div style={sectionTitle}>{t('model_sheet.dashboard.milestones.section')}</div>
       <div style={box}>
       {loading ? (
-        <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)', fontFamily: MONO }}>
+        <div style={{ color: 'var(--text-soft)', fontSize: 'var(--fs-body)', fontFamily: MONO }}>
           {t('model_sheet.loading')}
         </div>
       ) : groups.length === 0 ? (
-        <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)', fontStyle: 'italic' }}>
+        <div style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)', fontStyle: 'italic' }}>
           {t('model_sheet.dashboard.milestones.empty')}
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {groups.map(g => (
             <div key={g.day}>
-              <div style={{ fontSize: 'var(--fs-label)', fontFamily: MONO, color: 'var(--text-muted)',
+              <div style={{ fontSize: 'var(--fs-label)', fontFamily: MONO, color: 'var(--text-soft)',
                             textTransform: 'capitalize', marginBottom: 4 }}>
                 {fmtDay(g.day)}
               </div>
@@ -100,9 +100,9 @@ export default function ModelMilestones({ modelId, navigate, onOpenTab, sectionT
                     display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-main)',
                   }}>
                     <i className={`ti ${MILESTONE_ICON[ev.tipus] || 'ti-point'}`}
-                       style={{ fontSize: 15, color: ev.color || 'var(--gray)' }} />
+                       style={{ fontSize: 15, color: ev.color || 'var(--text-soft)' }} />
                     <span style={{ flex: 1, fontSize: 'var(--fs-body)' }}>{ev.titol}</span>
-                    <span style={{ fontSize: 'var(--fs-label)', fontFamily: MONO, color: 'var(--text-muted)' }}>
+                    <span style={{ fontSize: 'var(--fs-label)', fontFamily: MONO, color: 'var(--text-soft)' }}>
                       {t(`model_sheet.dashboard.milestones.type.${ev.tipus}`, ev.tipus)}
                     </span>
                     {ev.en_risc && (

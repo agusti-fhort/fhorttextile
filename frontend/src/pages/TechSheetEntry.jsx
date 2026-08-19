@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { models as modelsApi } from '../api/endpoints'
 import AssetNavigator from '../components/assets/AssetNavigator'
+import PageMenu from '../components/ui/PageMenu'
+import { botoSec } from '../components/ui/buttons'
 
 // D10 — porta-menú de la fitxa tècnica (S03b · P6).
 //
@@ -20,8 +22,6 @@ import AssetNavigator from '../components/assets/AssetNavigator'
 // pàgina sencera. La cerca, les facetes Client▸Any▸Temporada i el debounce ara viuen al
 // navegador, que és el mateix que fa servir l'editor — una sola superfície de navegació d'actius.
 // `obrir` i `obrirConsulta` no s'han tocat: el navegador retorna un model i prou.
-
-const MONO = 'IBM Plex Mono, monospace'
 
 export default function TechSheetEntry() {
   const navigate = useNavigate()
@@ -68,44 +68,53 @@ export default function TechSheetEntry() {
   }
 
   return (
-    <div style={{ padding: '1.5rem', maxWidth: 860 }}>
-      <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, marginBottom: 4 }}>
+    <>
+      {/* §8b · MENÚ DE PANTALLA. Aquesta porta no en tenia i, com que és una PORTA, era la
+          pantalla del producte on més falta feia: qui hi entra i decideix no obrir cap fitxa no
+          tenia cap manera de sortir-ne que no fos el menú lateral. Sense seccions ni acció, la
+          barra queda amb només la fletxa (§8b.2). El padding arrel de 24px sobrava: el `<main>`
+          ja el dona (§3), i aquí anaven a sobre l'un de l'altre. */}
+      <div style={{ margin: '-1.5rem -1.5rem 0' }}>
+        <PageMenu backTo="/" backTitle={t('tech_sheet_entry.back_title')} />
+      </div>
+
+    <div style={{ paddingTop: 16, maxWidth: 860 }}>
+      {/* §8b.3 · identitat sobre el fons de pàgina. El subtítol baixa a caption i a `--text-soft`
+          (`--text-muted` és DEPRECAT per la §1b(c) i dona 3.64:1). */}
+      <h1 style={{ fontSize: 'var(--fs-h1)', lineHeight: '28px', fontWeight: 500,
+                   color: 'var(--text-main)', marginBottom: 4 }}>
         {t('tech_sheet_entry.title')}
       </h1>
-      <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 20 }}>
+      <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', marginBottom: 20 }}>
         {t('tech_sheet_entry.subtitle')}
       </p>
 
       {error && (
         <div role="alert" style={{
-          marginBottom: 12, padding: '10px 12px', borderRadius: 4,
-          border: '0.5px solid var(--err)', color: 'var(--err)',
+          marginBottom: 12, padding: 12, borderRadius: 'var(--r-ctrl)',
+          border: '1px solid var(--err)', background: 'var(--err-bg)', color: 'var(--err)',
           fontSize: 'var(--fs-body)',
         }}>
-          <i className="ti ti-alert-circle" aria-hidden="true" style={{ marginRight: 6 }} />
+          <i className="ti ti-alert-circle" aria-hidden="true" style={{ marginRight: 6, fontSize: 14, color: 'currentColor' }} />
           {error}
         </div>
       )}
 
       {consultaModel && (
         <div role="alert" style={{
-          marginBottom: 12, padding: '12px', borderRadius: 4,
-          border: '0.5px solid var(--gold)', fontSize: 'var(--fs-body)',
+          marginBottom: 12, padding: 12, borderRadius: 'var(--r-ctrl)',
+          border: '1px solid var(--gold-border)', background: 'var(--panel)',
+          fontSize: 'var(--fs-body)',
         }}>
           <div style={{ marginBottom: 8 }}>
-            <i className="ti ti-lock" aria-hidden="true" style={{ marginRight: 6, color: 'var(--gold)' }} />
+            <i className="ti ti-lock" aria-hidden="true" style={{ marginRight: 6, fontSize: 14, color: 'var(--text-soft)' }} />
             {t('tech_sheet_entry.not_allowed', { codi: consultaModel.codi_intern })}
           </div>
           <button
             type="button"
             onClick={() => obrirConsulta(consultaModel.id)}
-            style={{
-              background: 'var(--white)', color: 'var(--gold)',
-              border: '0.5px solid var(--gold)', borderRadius: 6,
-              padding: '6px 14px', fontSize: 'var(--fs-body)',
-              cursor: 'pointer', fontFamily: MONO,
-            }}>
-            <i className="ti ti-eye" aria-hidden="true" style={{ marginRight: 6 }} />
+            style={botoSec}>
+            <i className="ti ti-eye" aria-hidden="true" style={{ fontSize: 14, color: 'currentColor' }} />
             {t('tech_sheet_entry.open_readonly')}
           </button>
         </div>
@@ -120,5 +129,6 @@ export default function TechSheetEntry() {
         actionLabel={busyId ? t('app.loading') : t('tech_sheet_entry.open')}
       />
     </div>
+    </>
   )
 }

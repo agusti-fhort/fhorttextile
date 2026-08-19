@@ -17,7 +17,7 @@ S'alcen TRES taules i no una, i cadascuna per un motiu propi:
   · `fitting_gradedspec`              — és ON HA D'ATERRAR el resultat: sense alçar-la, el
                                         motor calcularia bé i Postgres refusaria l'escriptura.
 
-Quan C4/C4-ins retirin les comportes, el `with comportes_alcades(...)` sobra i els asserts es
+C4/G1-G4 (04/08) JA les ha retirades: el `with comportes_alcades(...)` és un no-op i els asserts es
 queden tal com estan.
 
 Convenció del repo: `python manage.py test fhort.pom` (el projecte NO fa servir pytest).
@@ -52,9 +52,11 @@ def comportes_alcades(*taules, eixos=('capa_gate_c1',)):
         with connection.cursor() as cur:
             for taula in taules:
                 for sufix in eixos:
+                    # `IF EXISTS` — C4/G1-G4 (04/08) han retirat les 40 comportes: alçar-ne
+                    # una que ja no hi és és el mateix estat, i el `finally` retorna igual.
                     cur.execute(
                         f'ALTER TABLE "{connection.schema_name}"."{taula}" '
-                        f'DROP CONSTRAINT "{taula}_{sufix}"'
+                        f'DROP CONSTRAINT IF EXISTS "{taula}_{sufix}"'
                     )
         yield
     finally:
@@ -166,9 +168,16 @@ class DuesGermanesC3BTest(TenantTestCase):
 
             bases = _load_base_measurements(self.model.pk)
 
+            # SET-2/T4 (2026-08-10) — LA CLAU TÉ UN TRAM MÉS: el `garment`, darrere de la
+            # instància. Aquest assert ha caigut a posta en fer créixer la identitat, que és
+            # justament la feina que se li havia encarregat: pinar la FORMA de la clau perquè
+            # el dia que creixi es vegi caure aquí. Els VALORS no s'han mogut ni un decimal
+            # —100.0 i 98.0, les mateixes dues files—; només s'hi ha afegit el tram nou, i el
+            # seu valor és el buit perquè aquestes dues germanes són de la peça mare.
+            # Re-verificable: `_load_base_measurements` a `pom/services.py`.
             self.assertEqual(bases, {
-                (self.pom.pk, EXTERIOR, ''): 100.0,
-                (self.pom.pk, FOLRE, ''): 98.0,
+                (self.pom.pk, EXTERIOR, '', ''): 100.0,
+                (self.pom.pk, FOLRE, '', ''): 98.0,
             }, 'la clau és la identitat sencera; abans això era {pom_id: 98.0}')
 
     def test_el_preview_diu_el_mateix_que_el_generador_amb_germanes(self):
@@ -181,7 +190,10 @@ class DuesGermanesC3BTest(TenantTestCase):
             generat = self._specs()
 
             aplanat = {(capa, ins, talla): val
-                       for (_pom, capa, ins), fila in preview.items()
+                       # SET-2/T6a — quatre trams a la clau del preview; l'aplanat
+                       # segueix comparant (capa, instància, talla) i el resultat és
+                       # cel·la a cel·la EL MATEIX que abans.
+                       for (_pom, capa, ins, _garment), fila in preview.items()
                        for talla, val in fila.items()}
             self.assertEqual(aplanat, generat,
                              'preview i generador han de coincidir cel·la a cel·la')
@@ -192,9 +204,14 @@ class DuesGermanesC3BTest(TenantTestCase):
         """`extraction_views` li passa JSON `{pom_id: valor}`, que no pot dir tuples."""
         preview = preview_graded_specs(self.model, {self.pom.pk: 100.0})
 
-        self.assertEqual(preview, {(self.pom.pk, EXTERIOR, ''): {'S': 99.0, 'M': 100.0,
-                                                                 'L': 101.0}},
-                         "una clau escalar és la mesura única del POM: ('exterior', '')")
+        # SET-2/T6a (2026-08-11) — LA CLAU DE SORTIDA DEL PREVIEW TÉ UN TRAM MÉS: el
+        # `garment`, darrere de la instància, igual que la d'ENTRADA i igual que la del
+        # generador. Pin de FORMA i era el seu ofici caure avui: els VALORS no s'han
+        # mogut ni un decimal (la mateixa fila, les mateixes talles) — només la clau.
+        self.assertEqual(preview, {(self.pom.pk, EXTERIOR, '', ''): {'S': 99.0,
+                                                                     'M': 100.0,
+                                                                     'L': 101.0}},
+                         "una clau escalar és la mesura única del POM a la peça MARE")
 
     def test_la_clau_escalar_i_la_completa_donen_el_MATEIX(self):
         escalar = preview_graded_specs(self.model, {self.pom.pk: 100.0})
@@ -216,14 +233,25 @@ class DuesGermanesC3BTest(TenantTestCase):
             (EXTERIOR, '', 'L'): 101.0,
         })
 
-    def test_les_comportes_tornen_a_estar_vives(self):
-        with connection.cursor() as cur:
-            cur.execute(
-                "SELECT count(*) FROM pg_constraint c "
-                "JOIN pg_class t ON t.oid = c.conrelid "
-                "JOIN pg_namespace n ON n.oid = t.relnamespace "
-                "WHERE n.nspname = %s AND c.conname LIKE ANY (ARRAY["
-                "  '%%_capa_gate_c1', '%%_instancia_gate_cins'])",
-                [connection.schema_name])
-            # 9 taules × 2 eixos = 18 comportes a la cadena de mesura.
-            self.assertEqual(cur.fetchone()[0], 18)
+    def test_el_harness_no_deixa_rastre(self):
+        """Deia «18 comportes a la cadena de mesura» (9 taules × 2 eixos). C4/G1-G4 les han
+        retirades i el 18 va quedar ranci — és una de les dues xifres fixes que han mossegat
+        avui. El que segueix sent cert i es vigila: el harness deixa l'esquema EXACTAMENT com
+        el va trobar, i cap comporta no ha sobreviscut."""
+        def noms_de_check():
+            with connection.cursor() as cur:
+                cur.execute(
+                    "SELECT conname FROM pg_constraint c "
+                    "JOIN pg_namespace n ON n.oid = c.connamespace "
+                    "WHERE n.nspname = %s AND c.contype = 'c'",
+                    [connection.schema_name])
+                return {row[0] for row in cur.fetchall()}
+
+        abans = noms_de_check()
+        with comportes_alcades(*TAULES_DEL_CAMI):
+            pass
+
+        self.assertEqual(noms_de_check(), abans, 'el harness ha canviat l\'esquema')
+        self.assertEqual(
+            {c for c in abans if c.endswith(('_capa_gate_c1', '_instancia_gate_cins'))},
+            set(), 'una comporta ha sobreviscut a C4')

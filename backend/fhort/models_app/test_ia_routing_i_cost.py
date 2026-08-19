@@ -118,13 +118,18 @@ class CribratgeDeterministaTest(SimpleTestCase):
         wb.save(buf)
         return buf.getvalue()
 
-    def _model(self):
-        from types import SimpleNamespace
-        return SimpleNamespace(size_run_model='XS·S·M·L', base_size_label='S')
+    #: LES PISTES amb què el parser ancora les columnes de talla. **SET-2/T8 (12/08/2026) —
+    #: abans això era un `SimpleNamespace` fent-se passar per un Model**, perquè la funció
+    #: rebia el model sencer i n'extreia aquests dos camps. Ara els rep directament: amb un
+    #: import per prenda les pistes han de poder ser les EFECTIVES de la peça de destí
+    #: (`services_garment.valor_efectiu`), i passar-hi el model obligava la funció a resoldre
+    #: una herència que no és feina seva. El fals model se'n va amb la dependència.
+    BASE_HINT = 'S'
+    RUN_HINT = 'XS·S·M·L'
 
     def test_un_xlsx_llegible_no_crida_la_IA(self):
         from fhort.models_app.extraction_views import _cribratge_determinista
-        r = _cribratge_determinista('fitxa.xlsx', self._xlsx(), self._model())
+        r = _cribratge_determinista('fitxa.xlsx', self._xlsx(), self.BASE_HINT, self.RUN_HINT)
         self.assertIsNotNone(r, 'un xlsx llegible NO hauria de caure a Opus')
         self.assertEqual(r['origen'], 'parser_determinista')
         self.assertEqual(r['num_models'], 1)
@@ -135,15 +140,18 @@ class CribratgeDeterministaTest(SimpleTestCase):
         """Porta d'abdicació: poques files coherents → val més pagar Opus que endevinar."""
         from fhort.models_app.extraction_views import _cribratge_determinista
         self.assertIsNone(
-            _cribratge_determinista('fitxa.xlsx', self._xlsx(files=1), self._model()))
+            _cribratge_determinista('fitxa.xlsx', self._xlsx(files=1),
+                                     self.BASE_HINT, self.RUN_HINT))
 
     def test_un_pdf_segueix_anant_a_la_IA(self):
         from fhort.models_app.extraction_views import _cribratge_determinista
         self.assertIsNone(
-            _cribratge_determinista('fitxa.pdf', b'%PDF-1.4 ...', self._model()))
+            _cribratge_determinista('fitxa.pdf', b'%PDF-1.4 ...',
+                                     self.BASE_HINT, self.RUN_HINT))
 
     def test_uns_bytes_corruptes_cauen_a_la_IA_sense_petar(self):
         """Que el parser peti compta com abdicar: davant del dubte, IA."""
         from fhort.models_app.extraction_views import _cribratge_determinista
         self.assertIsNone(
-            _cribratge_determinista('fitxa.xlsx', b'aixo no es un xlsx', self._model()))
+            _cribratge_determinista('fitxa.xlsx', b'aixo no es un xlsx',
+                                     self.BASE_HINT, self.RUN_HINT))

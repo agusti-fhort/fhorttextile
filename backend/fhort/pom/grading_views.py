@@ -53,7 +53,7 @@ def regenerate_sizes_view(request, sf_id):
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-def clau_ordre_taula(pom, capa, instancia=''):
+def clau_ordre_taula(pom, capa, instancia='', garment=''):
     """L'ordre de la taula de mesures, decidit i TOTAL (Agus, 2026-08-01).
 
     Ordre del catàleg → capa (exterior primer) → instància (la única primer) → codi del POM.
@@ -71,9 +71,26 @@ def clau_ordre_taula(pom, capa, instancia=''):
     Els últims trams són desempats que no es veuen però fan la clau total: el `slug` de la
     capa (entre dues que no són l'exterior), el de la instància, i l'`id` del POM (perquè el
     codi tampoc no és únic — dos POMMaster del tenant poden compartir `codi_client`).
+
+    SET-2/T6a (2026-08-11) — la PEÇA hi entra, i entra AL DAVANT DE TOT. Els dos motius són
+    diferents i tots dos calen:
+
+      · TOTALITAT, que és la raó de ser d'aquesta funció: amb dues peces del mateix POM a la
+        mateixa capa i instància, tots els trams anteriors empataven i el desempat tornava a
+        ser l'ordre del pla de Postgres — exactament el bug que aquesta clau existeix per
+        matar, un eix més tard.
+      · JERARQUIA: aquí sí que mana, al revés que als trams de `clau_mesura`. La llei de T9
+        és «la prenda a fora, la secció a dins», o sigui que les files d'una peça van
+        JUNTES i no intercalades amb les d'una altra. Per això el `garment` va davant del
+        `display_order` del catàleg i no darrere.
+
+    La mare primer (`0`), la resta per codi: mateix idioma que la capa per defecte i que la
+    instància única, i no depèn de cap dada externa per ordenar.
     """
     from fhort.pom.models import MeasurementLayer
     return (
+        0 if not garment else 1,
+        garment or '',
         pom.display_order,
         0 if capa == MeasurementLayer.SLUG_DEFECTE else 1,
         capa or '',
@@ -118,42 +135,55 @@ def measurements_table_view(request, sf_id):
         poms_seen = set()
         ordre_pom = {}
 
-        # C2/Onada 1 — ÀNCORA EXTERIOR EXPLÍCITA a les DUES branques de sota (specs graduats i
-        # base), perquè totes dues omplen els MATEIXOS `cells`/`poms_seen`: ancorar-ne una i
-        # deixar l'altra oberta faria una taula mig d'una capa i mig de l'altra.
-        # No pot ser clau composta: `cells` es serialitza tal qual a la resposta
-        # (`{str(k): v}`) i `poms_info` porta l'`id` del POM — la clau ÉS el contracte, i el
-        # contracte no es toca fins a C4.
-        # FASE_2/C1-ins — l'àncora es duplica als DOS eixos a les DUES branques, per la
-        # mateixa raó al quadrat: `cells`, `poms_seen` i `ordre_pom` són tres diccionaris
-        # per `pom_id` pelat, i una segona instància del mateix POM se'ls repartiria entre
-        # les dues branques exactament com ho hauria fet una segona capa.
-        from fhort.pom.models import MeasurementLayer
+        # C4 — LES DUES ÀNCORES SE'N VAN I LA CLAU DE `cells` CREIX A LA IDENTITAT SENCERA.
+        #
+        # L'acta anterior deia: «No pot ser clau composta: `cells` es serialitza tal qual a la
+        # resposta (`{str(k): v}`) i `poms_info` porta l'`id` del POM — la clau ÉS el
+        # contracte, i el contracte no es toca fins a C4». Doncs això és C4, i el contracte es
+        # toca: la clau passa a ser la de `pom.identitat.clau_mesura` —`{pom}|{capa}|{inst}`—,
+        # que és la mateixa forma que fa servir `models_app.views.deltes`, l'altre lector que
+        # publica la mesura com a clau d'objecte JSON.
+        #
+        # `poms_info` conserva `id` (el POM, per a qui hi busqui nomenclatura) i hi afegeix
+        # `clau`, `capa` i `instancia`: `clau` és el que enllaça amb `cells`, i és el camp que
+        # el front ha de fer servir per creuar les dues llistes.
+        #
+        # Les dues branques (specs graduats i mesures base) segueixen havent d'anar juntes:
+        # omplen els MATEIXOS `cells`/`poms_seen`, i desancorar-ne una sola faria una taula mig
+        # d'una capa i mig de l'altra — que és el defecte que l'àncora evitava.
+        from fhort.pom.identitat import clau_mesura
 
         if grading_version:
             specs = GradedSpec.objects.filter(
                 grading_version=grading_version, is_active=True,
-                capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
             ).select_related(
                 'pom', 'pom__pom_global', 'pom__categoria'
-            ).order_by('pom__categoria__display_order', 'size_label')
+            ).order_by('pom__categoria__display_order', 'capa', 'instancia', 'size_label')
 
             for spec in specs:
-                pom_id = spec.pom_id
-                if pom_id not in poms_seen:
-                    poms_seen.add(pom_id)
-                    ordre_pom[pom_id] = clau_ordre_taula(spec.pom, spec.capa, spec.instancia)
+                clau = clau_mesura(spec.pom_id, spec.capa, spec.instancia, spec.garment)
+                if clau not in poms_seen:
+                    poms_seen.add(clau)
+                    ordre_pom[clau] = clau_ordre_taula(
+                        spec.pom, spec.capa, spec.instancia, spec.garment)
                     poms_info.append({
-                        'id': pom_id,
+                        'id': spec.pom_id,
+                        'clau': clau,
+                        'capa': spec.capa,
+                        'instancia': spec.instancia,
+                        # SET-2/T6a — L'EIX DE LA FILA al contracte, com ja hi són els dos de
+                        # germanor. És dada FACTUAL de la fila (de quina peça és), no una
+                        # definició resolta contra el model: v. l'acta de `graded_spec_views`.
+                        'garment': spec.garment,
                         'codi': spec.pom.pom_code,
                         'nom_cat': spec.pom.name_cat,
                         'nom_en': spec.pom.name_en,
                         'display_order': spec.pom.display_order,
                         'is_key_measure': spec.pom.is_key_measure,
                     })
-                if pom_id not in cells:
-                    cells[pom_id] = {}
-                cells[pom_id][spec.size_label] = {
+                if clau not in cells:
+                    cells[clau] = {}
+                cells[clau][spec.size_label] = {
                     'value': spec.graded_value_cm,
                     'type': spec.grading_type_applied,
                     'increment': spec.increment_applied_cm,
@@ -164,25 +194,29 @@ def measurements_table_view(request, sf_id):
             try:
                 from fhort.models_app.models import BaseMeasurement
                 base_ms = BaseMeasurement.objects.filter(
-                    model=model, is_active=True,
-                    capa=MeasurementLayer.SLUG_DEFECTE, instancia=''
+                    model=model, is_active=True
                 ).select_related('pom', 'pom__pom_global', 'pom__categoria')
                 for bm in base_ms:
-                    pom_id = bm.pom_id
-                    if pom_id not in poms_seen:
-                        poms_seen.add(pom_id)
-                        ordre_pom[pom_id] = clau_ordre_taula(bm.pom, bm.capa, bm.instancia)
+                    clau = clau_mesura(bm.pom_id, bm.capa, bm.instancia, bm.garment)
+                    if clau not in poms_seen:
+                        poms_seen.add(clau)
+                        ordre_pom[clau] = clau_ordre_taula(
+                            bm.pom, bm.capa, bm.instancia, bm.garment)
                         poms_info.append({
-                            'id': pom_id,
+                            'id': bm.pom_id,
+                            'clau': clau,
+                            'capa': bm.capa,
+                            'instancia': bm.instancia,
+                            'garment': bm.garment,
                             'codi': bm.pom.pom_code,
                             'nom_cat': bm.pom.name_cat,
                             'nom_en': bm.pom.name_en,
                             'display_order': bm.pom.display_order,
                             'is_key_measure': bm.pom.is_key_measure,
                         })
-                    if pom_id not in cells:
-                        cells[pom_id] = {}
-                    cells[pom_id][model.base_size_label] = {
+                    if clau not in cells:
+                        cells[clau] = {}
+                    cells[clau][model.base_size_label] = {
                         'value': bm.base_value_cm,
                         'type': 'BASE',
                         'increment': 0,
@@ -190,11 +224,11 @@ def measurements_table_view(request, sf_id):
             except Exception:
                 pass
 
-        poms_info.sort(key=lambda x: ordre_pom[x['id']])
+        poms_info.sort(key=lambda x: ordre_pom[x['clau']])
         # Les cel·les segueixen l'ordre dels POMs. `cells` és un objecte JSON i el seu ordre
         # de claus és el d'inserció: deixar-lo com sortia de la consulta feia que la taula i
         # les seves cel·les anessin per camins diferents (i que el payload es mogués sol).
-        cells = {p['id']: cells[p['id']] for p in poms_info if p['id'] in cells}
+        cells = {p['clau']: cells[p['clau']] for p in poms_info if p['clau'] in cells}
 
         return Response({
             'sf_id': sf_id,

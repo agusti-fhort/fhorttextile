@@ -19,9 +19,9 @@ export default function SegmentEditor({
   const { t } = useTranslation()
 
   const chip = (actiu) => ({
-    background: actiu ? 'var(--gold)' : 'var(--white)',
-    color: actiu ? 'var(--white)' : 'var(--text-main)',
-    border: `1px solid ${actiu ? 'var(--gold)' : 'var(--border)'}`,
+    background: actiu ? 'var(--gold)' : 'var(--panel)',
+    color: actiu ? 'var(--text-main)' : 'var(--text-main)',
+    border: `1px solid ${actiu ? 'var(--gold)' : 'var(--line)'}`,
     borderRadius: 4, padding: '0.25rem 0.6rem', cursor: 'pointer',
     fontSize: 'var(--fs-caption)',
   })
@@ -61,7 +61,7 @@ export default function SegmentEditor({
           style={{
             flex: 1, minWidth: 120, maxWidth: 240,
             fontSize: 'var(--fs-caption)', padding: '0.2rem 0.4rem',
-            border: '1px solid var(--border)', borderRadius: 4,
+            border: '1px solid var(--line)', borderRadius: 4,
           }}
         />
       </label>

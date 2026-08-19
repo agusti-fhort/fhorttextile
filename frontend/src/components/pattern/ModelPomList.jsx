@@ -31,7 +31,7 @@ export default function ModelPomList({ files, pomActiu, onColocar, onAfegirFora,
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       {files.length === 0 ? (
-        <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', margin: 0 }}>
+        <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', margin: 0 }}>
           {t('pattern.taller.model_poms_empty')}
         </p>
       ) : files.map(f => (
@@ -51,9 +51,9 @@ export default function ModelPomList({ files, pomActiu, onColocar, onAfegirFora,
         onClick={onAfegirFora}
         style={{
           marginTop: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.35rem',
-          background: 'none', border: '1.5px dashed var(--border)', borderRadius: 4,
+          background: 'none', border: '1.5px dashed var(--line)', borderRadius: 4,
           padding: '0.35rem 0.6rem', cursor: 'pointer',
-          fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
+          fontSize: 'var(--fs-caption)', color: 'var(--text-soft)',
         }}
       >
         <i className="ti ti-plus" />
@@ -97,9 +97,9 @@ function Fila({ t, lang, f, actiu, onColocar, unit, obert, onInfo, onTanca }) {
     <div
       style={{
         position: 'relative',
-        background: actiu ? 'var(--gold-pale)' : 'var(--bg-card)',
-        border: `1px solid ${actiu ? 'var(--gold)' : 'var(--border)'}`,
-        borderLeft: `3px solid ${colocat ? 'var(--ok)' : actiu ? 'var(--gold)' : 'var(--border)'}`,
+        background: actiu ? 'var(--sel)' : 'var(--panel)',
+        border: `1px solid ${actiu ? 'var(--gold)' : 'var(--line)'}`,
+        borderLeft: `3px solid ${colocat ? 'var(--ok)' : actiu ? 'var(--gold)' : 'var(--line)'}`,
         borderRadius: 4,
         display: 'flex', alignItems: 'center',
       }}
@@ -122,7 +122,7 @@ function Fila({ t, lang, f, actiu, onColocar, unit, obert, onInfo, onTanca }) {
       >
         <i
           className={`ti ${colocat ? 'ti-circle-check' : actiu ? 'ti-crosshair' : 'ti-circle-dashed'}`}
-          style={{ color: colocat ? 'var(--ok)' : actiu ? 'var(--gold)' : 'var(--text-muted)',
+          style={{ color: colocat ? 'var(--ok)' : actiu ? 'var(--gold)' : 'var(--text-soft)',
                    flexShrink: 0 }}
         />
 
@@ -142,8 +142,8 @@ function Fila({ t, lang, f, actiu, onColocar, unit, obert, onInfo, onTanca }) {
                 dibuix, i per això va al costat del codi i no amagada al detall. */}
             {f.nom_fitxa && (
               <span style={{
-                fontSize: 'var(--fs-caption)', fontWeight: 400, color: 'var(--text-muted)',
-                border: '1px solid var(--border)', borderRadius: 8, padding: '0 5px',
+                fontSize: 'var(--fs-caption)', fontWeight: 400, color: 'var(--text-soft)',
+                border: '1px solid var(--line)', borderRadius: 8, padding: '0 5px',
                 flexShrink: 0,
               }}>
                 {f.nom_fitxa}
@@ -155,7 +155,7 @@ function Fila({ t, lang, f, actiu, onColocar, unit, obert, onInfo, onTanca }) {
               vegada i bé. Va gris i petita perquè no competeix amb el nom — s'hi recorre. */}
           {descripcio && (
             <div style={{
-              fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
+              fontSize: 'var(--fs-caption)', color: 'var(--text-soft)',
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>
               {descripcio}
@@ -166,7 +166,7 @@ function Fila({ t, lang, f, actiu, onColocar, unit, obert, onInfo, onTanca }) {
               el servidor calla si n'hi ha dos, i aquí no se n'hi posa cap de recanvi. */}
           {alias?.description_local && (
             <div style={{
-              fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
+              fontSize: 'var(--fs-caption)', color: 'var(--text-soft)',
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               fontStyle: 'italic',
             }}>
@@ -175,7 +175,7 @@ function Fila({ t, lang, f, actiu, onColocar, unit, obert, onInfo, onTanca }) {
           )}
 
           {colocat && f.peca && (
-            <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>
+            <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)' }}>
               {f.peca}
             </div>
           )}
@@ -209,7 +209,7 @@ function Fila({ t, lang, f, actiu, onColocar, unit, obert, onInfo, onTanca }) {
               </span>
               {colocat && f.valor_mesurat_cm != null && (
                 <>
-                  <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>→</span>
+                  <span style={{ color: 'var(--text-soft)', fontWeight: 400 }}>→</span>
                   <span style={{
                     color: 'var(--text-main)', fontWeight: 600, fontSize: 'var(--fs-body)',
                   }}>
@@ -218,7 +218,7 @@ function Fila({ t, lang, f, actiu, onColocar, unit, obert, onInfo, onTanca }) {
                 </>
               )}
             </div>
-            <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>
+            <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)' }}>
               {colocat && f.valor_mesurat_cm != null
                 ? `${t('pattern.taller.value_sheet_t')} → ${t('pattern.taller.value_pattern_t')}`
                 : t('pattern.taller.value_sheet_t')}
@@ -254,8 +254,8 @@ function XipVeredicte({ t, estat, delta, unit }) {
     // Sense tolerància no hi ha veredicte: es dona la xifra i no es jutja.
     return (
       <span style={{
-        fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
-        border: '1px solid var(--border)', borderRadius: 10, padding: '1px 6px',
+        fontSize: 'var(--fs-caption)', color: 'var(--text-soft)',
+        border: '1px solid var(--line)', borderRadius: 10, padding: '1px 6px',
         whiteSpace: 'nowrap',
       }}>
         Δ {formatDelta(delta, unit)}
@@ -328,7 +328,7 @@ function BotoInfo({ t, lang, f, obert, onInfo, onTanca }) {
         title={t('pattern.taller.pom_info', { codi: f.codi_client })}
         style={{
           background: 'none', border: 'none', cursor: 'pointer',
-          padding: '0.3rem 0.45rem', color: obert ? 'var(--gold)' : 'var(--text-muted)',
+          padding: '0.3rem 0.45rem', color: obert ? 'var(--gold)' : 'var(--text-soft)',
           display: 'flex', alignItems: 'center',
         }}
       >
@@ -343,7 +343,7 @@ function BotoInfo({ t, lang, f, obert, onInfo, onTanca }) {
             // Per sobre del canvas (lliçó D3): un popover que cau sota una capa no existeix.
             zIndex: 3000,
             minWidth: 240, maxWidth: 320,
-            background: 'var(--bg-card)', border: '1px solid var(--border)',
+            background: 'var(--panel)', border: '1px solid var(--line)',
             borderRadius: 6, padding: '0.6rem 0.7rem',
             boxShadow: '0 6px 20px rgba(0,0,0,0.18)',
             textAlign: 'left', cursor: 'default',
@@ -357,7 +357,7 @@ function BotoInfo({ t, lang, f, obert, onInfo, onTanca }) {
             {f.codi_global && (
               <span style={{
                 fontSize: 'var(--fs-caption)', fontWeight: 400,
-                color: 'var(--text-muted)', marginLeft: '0.4rem',
+                color: 'var(--text-soft)', marginLeft: '0.4rem',
               }}>
                 {f.codi_global}
               </span>
@@ -366,7 +366,7 @@ function BotoInfo({ t, lang, f, obert, onInfo, onTanca }) {
 
           {linies.length === 0 ? (
             <p style={{
-              margin: 0, fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
+              margin: 0, fontSize: 'var(--fs-caption)', color: 'var(--text-soft)',
             }}>
               {t('pattern.taller.pom_info_empty')}
             </p>
@@ -375,7 +375,7 @@ function BotoInfo({ t, lang, f, obert, onInfo, onTanca }) {
               {linies.map(([etiqueta, valor]) => (
                 <div key={etiqueta} style={{ display: 'contents' }}>
                   <dt style={{
-                    fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
+                    fontSize: 'var(--fs-caption)', color: 'var(--text-soft)',
                     whiteSpace: 'nowrap',
                   }}>
                     {etiqueta}

@@ -69,11 +69,16 @@ from rest_framework.views import APIView
 
 from fhort.models_app.models import BaseMeasurement, MeasurementChangeLog, Model
 
-from .models import PieceFitting, PieceFittingLine
+from .esdeveniments import peces_amb_contingut
+from .models import PieceFittingLine
 
 # Contextos de `MeasurementChangeLog` que són algú MESURANT una peça. La resta (import,
 # standard, calculated, item_standard, copied, federat) són moviments de dades, no preses.
 CONTEXTOS_DE_FITTING = ('fitting', 'checked', 'manual')
+
+#: L'id de la columna d'ENTRADA DE POMs. String i amb prefix, com les claus d'etapa: els ids de
+#: sessió són enters i la columna d'origen no és cap sessió — que no ho sembli mai.
+COL_ENTRADA = 'entrada'
 
 
 def _ordena_talles(labels, size_run_model):
@@ -109,13 +114,14 @@ def _notes_de_check(model_id):
     fora = {}
     for l in (SizeCheckLine.objects
               .filter(size_check__model_id=model_id)
-              .only('size_check_id', 'pom_id', 'capa', 'instancia', 'decisio', 'nota')):
+              .only('size_check_id', 'pom_id', 'capa', 'instancia', 'garment',
+                    'decisio', 'nota')):
         text = ' · '.join(filter(None, [
             etiquetes.get(l.decisio) if l.decisio else None,
             (l.nota or '').strip() or None,
         ]))
         if text:
-            fora[(l.size_check_id, l.pom_id, l.capa, l.instancia)] = text
+            fora[(l.size_check_id, l.pom_id, l.capa, l.instancia, l.garment)] = text
     return fora
 
 
@@ -125,12 +131,28 @@ def _check_id_del_motiu(motiu):
     return int(m.group(1)) if m else None
 
 
+def _sessio_del_motiu(motiu):
+    """`'Fitting · sessió 152 · peça 37'` → 152. Qualsevol altra cosa → None (mai llança).
+
+    B2 — LA COLUMNA DUPLICADA. Un fitting fet amb l'eina escriu DUES vegades: les seves línies
+    (`PieceFittingLine`, que fan la columna de sessió) i el retorn a la taula de mesures
+    (`MeasurementChangeLog` amb `context='fitting'`, que feia una columna d'etapa). El mateix
+    acte sortia dos cops, amb els mateixos números i la mateixa data.
+
+    El pont és EXACTE i no per rellotge: el `motiu` del log ja diu de quina sessió ve
+    (`services_fitting`), igual que el de check ja deia de quin check venia. Una etapa la
+    sessió de la qual ja té columna no s'ensenya: no és un segon fitting.
+    """
+    m = re.search(r'sessi[óo]\s+(\d+)', motiu or '')
+    return int(m.group(1)) if m else None
+
+
 def _etapes_de_fitting(model_id):
     """Esdeveniments de fitting escrits a la TAULA DE MESURES.
 
     Retorna `(etapes, celles)`:
       · etapes  → [{key, context, at}] en ordre cronològic
-      · celles → {key: {pom_id: {'valor_real', 'nota'}}}
+      · celles → {key: {(pom_id, capa, instancia): {'valor_real', 'nota'}}}   ← C4
 
     NO hi ha carry-forward, a diferència de `base_stages_view`. Allà cada columna és un
     SNAPSHOT de la fitxa sencera en aquell moment (per això arrossega); aquí cada columna és
@@ -144,16 +166,19 @@ def _etapes_de_fitting(model_id):
     """
     notes = _notes_de_check(model_id)
 
-    # FASE_2/C1-ins — ÀNCORA als dos eixos: `celles[clau]` s'indexa per `c.pom_id` pelat i
-    # ÉS el payload (`_fila`, més avall, hi entra pel mateix `pom_id`). Dues instàncies del
-    # mateix POM mesurades el mateix segon es fondrien a la mateixa cel·la i l'última llegida
-    # guanyaria. El Repàs, fins a C4-ins, és el de l'exterior i de la instància única — igual
-    # que els quatre mapes de nomenclatura d'aquesta mateixa vista.
-    from fhort.pom.models import MeasurementLayer
+    # C4 — L'ÀNCORA SE'N VA I LA CEL·LA S'INDEXA PER LA IDENTITAT SENCERA.
+    #
+    # L'àncora existia perquè `celles[clau]` s'indexava per `c.pom_id` pelat i és el que `_fila`
+    # consulta: dues germanes mesurades el mateix segon es fondrien a la mateixa cel·la. Ara la
+    # clau és `(pom_id, capa, instancia)` a les dues bandes —aquí i a `_fila`—, o sigui que el
+    # filtre ja no protegeix res: només amagaria la presa de la germana d'una etapa on SÍ que
+    # es va prendre, i la columna sortiria buida com si ningú no l'hagués mesurada.
+    #
+    # El `MeasurementChangeLog` porta els dos eixos des del signal F1 (`signals.py:335-341`), o
+    # sigui que la clau completa surt de la fila mateixa: no cal endevinar-la ni fer cap join.
     logs = (MeasurementChangeLog.objects
             .filter(model_id=model_id,
                     context__in=CONTEXTOS_DE_FITTING,
-                    capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
                     valor_anterior__isnull=False)   # re-mesura, no alta inicial
             .order_by('created_at', 'id'))
 
@@ -164,14 +189,56 @@ def _etapes_de_fitting(model_id):
         clau = f"etapa:{c.context}@{c.created_at.replace(microsecond=0).isoformat()}"
         if clau not in vistes:
             vistes.add(clau)
-            etapes.append({'key': clau, 'context': c.context, 'at': c.created_at})
+            # `sessions` = les sessions que aquesta etapa cita al `motiu`. Amb elles, la vista
+            # pot descartar l'etapa que només és el retorn d'un fitting que ja té columna.
+            etapes.append({'key': clau, 'context': c.context, 'at': c.created_at,
+                           'sessions': set()})
             celles[clau] = {}
+        sid = _sessio_del_motiu(c.motiu)
+        if sid is not None:
+            next(e for e in etapes if e['key'] == clau)['sessions'].add(sid)
         check_id = _check_id_del_motiu(c.motiu)
-        celles[clau][c.pom_id] = {
+        celles[clau][(c.pom_id, c.capa, c.instancia, c.garment)] = {
             'valor_real': float(c.valor_nou),
-            'nota': notes.get((check_id, c.pom_id, c.capa, c.instancia), '') if check_id else '',
+            'nota': notes.get((check_id, c.pom_id, c.capa, c.instancia, c.garment), '')
+                    if check_id else '',
         }
     return etapes, celles
+
+
+def _entrada_de_poms(model_id):
+    """LA PRIMERA COLUMNA: la base d'origen, tal com va entrar (ordre d'Agus, 10/08).
+
+    El Repàs començava per la primera sessió de fitting, o sigui que la taula ensenyava contra
+    què s'havia mesurat sense ensenyar mai d'on es partia: els canvis es llegien uns contra els
+    altres i el primer no es llegia contra res.
+
+    D'ON SURT. `MeasurementChangeLog` és append-only i la primera fila de cada mesura és
+    l'entrada de POMs (`motiu='gravar_pom'`, `context='manual'`, `valor_anterior` NUL —el
+    criteri que aquest mòdul ja fa servir per separar l'alta inicial de la re-mesura). Es
+    llegeix `valor_anterior` si hi és i, si no, `valor_nou`: si la primera fila d'una mesura
+    resulta ser una modificació, el valor d'entrada és el que hi havia ABANS.
+
+    Una mesura sense cap fila de log (sembrada sense història) cau a la seva base vigent: és
+    l'única cosa certa que se'n pot dir, i callar deixaria la columna d'origen amb un forat que
+    es llegiria com «no es va entrar mai».
+    """
+    entrada = {}
+    for c in (MeasurementChangeLog.objects
+              .filter(model_id=model_id)
+              .order_by('-created_at', '-id')):     # descendent: l'última assignació guanya
+        if c.valor_anterior is not None:
+            entrada[(c.pom_id, c.capa, c.instancia, c.garment)] = float(c.valor_anterior)
+        elif c.valor_nou is not None:
+            entrada[(c.pom_id, c.capa, c.instancia, c.garment)] = float(c.valor_nou)
+    for pom_id, capa, instancia, garment, valor in (
+            BaseMeasurement.objects
+            .filter(model_id=model_id, is_active=True, base_value_cm__isnull=False)
+            .values_list('pom_id', 'capa', 'instancia', 'garment', 'base_value_cm')):
+        entrada.setdefault((pom_id, capa, instancia, garment), valor)
+    # Un model on ningú no ha entrat cap valor no té columna d'origen: `{}` la fa desaparèixer
+    # sencera. Una columna de guionets diria que l'entrada existeix i és buida, que és mentida.
+    return entrada
 
 
 class FittingRepasView(APIView):
@@ -182,14 +249,14 @@ class FittingRepasView(APIView):
 
         # Peces d'aquest model, en ordre CRONOLÒGIC de sessió (data; id com a desempat
         # estable per a dues sessions el mateix dia).
-        peces = list(
-            PieceFitting.objects
-            .filter(model_id=model.id)
-            .exclude(session__estat='Anullada')
-            .select_related('session', 'session__responsable')
-            .order_by('session__data', 'session__id')
-        )
-        peca_per_sessio = {p.session_id: p for p in peces}
+        #
+        # B2 — I NOMÉS LES QUE TENEN CONTINGUT (ordre d'Agus, 10/08: «fora les columnes
+        # duplicades sense contingut»). Al 1320 hi havia dues columnes «DEV @09/08»: el fitting
+        # 152, que es va fer, i la graella de la sessió 153, que algú va obrir i no va tocar
+        # —`valor_real == valor_teoric` a les 28 files, cap veredicte, cap nota. El predicat viu
+        # a `esdeveniments.py` i el comparteix la Comprovació: què és un fitting que ha passat
+        # no pot tenir dues respostes.
+        peces = peces_amb_contingut(model.id)
 
         # Totes les línies de cop (sense N+1). Les talles disponibles surten d'aquí: són les
         # que realment s'han pres, no les que el run del model promet.
@@ -203,8 +270,14 @@ class FittingRepasView(APIView):
         # sessió l'hagi tocada mai: si no, un model amb només etapes no tindria on pintar-les.
         etapes, etapa_celles = _etapes_de_fitting(model.id)
         base = (model.base_size_label or '').strip()
+        # L'ENTRADA DE POMs, resolta abans de triar la talla: com les etapes, viu NOMÉS a la
+        # base, i per tant la base ha de ser una talla oferible encara que cap sessió l'hagi
+        # tocada mai. Sense això, un model amb mesures entrades i CAP fitting es quedava sense
+        # cap talla —i per tant sense cap columna—, i el Repàs deia «cap fitting fet» amagant
+        # justament la columna d'origen que havia d'ensenyar.
+        entrada_de_poms = _entrada_de_poms(model.id)
         labels = {l.size_label for l in linies}
-        if etapes and base:
+        if (etapes or entrada_de_poms) and base:
             labels.add(base)
         talles = _ordena_talles(labels, model.size_run_model)
 
@@ -233,6 +306,16 @@ class FittingRepasView(APIView):
             '_ordre': (p.session.data, p.session_id),
         } for p in peces]
 
+        # B2 — L'ETAPA QUE NOMÉS ÉS EL RETORN D'UN FITTING NO FA COLUMNA. Un fitting fet amb
+        # l'eina escriu a les seves línies I a la taula de mesures; la segona escriptura sortia
+        # com una columna pròpia, amb la mateixa data i els mateixos números que la sessió del
+        # costat. El pont és el `motiu` del log, que diu de quina sessió ve: exacte, no per
+        # rellotge. Les etapes escrites A MÀ (sense sessió) es queden: són la decisió d'Agus del
+        # 28/07 —un fitting no és sempre una FittingSession— i no dupliquen res.
+        sessions_amb_columna = {p.session_id for p in peces}
+        etapes = [e for e in etapes if not (e['sessions'] & sessions_amb_columna)]
+        etapa_celles = {e['key']: etapa_celles[e['key']] for e in etapes}
+
         # Columnes d'etapa: MATEIXA forma que les de sessió (id/data/fase/estat/notes…),
         # perquè el front les pinti amb el mateix camí i no calgui una segona anatomia de
         # taula. `origen` és el que les distingeix, i és el que el front tradueix.
@@ -259,80 +342,174 @@ class FittingRepasView(APIView):
         for c in sessions:
             c.pop('_ordre')
 
+        # …I DAVANT DE TOT, L'ENTRADA DE POMs (ordre d'Agus, 10/08). No és un esdeveniment de
+        # fitting: és d'on es parteix. Va amb la mateixa forma que les altres columnes perquè el
+        # front no n'hagi d'estrenar cap camí, i amb `origen='ENTRADA'`, que és el que la
+        # distingeix. Només a la talla BASE: la columna d'origen és `BaseMeasurement`, i a una
+        # altra talla ensenyar-la seria mentir sobre quina talla es va entrar.
+        entrada_celles = entrada_de_poms if talla == base else {}
+        if entrada_celles:
+            sessions.insert(0, {
+                'id': COL_ENTRADA, 'origen': 'ENTRADA', 'piece_fitting_id': None,
+                'data': None, 'fase': None, 'estat': None, 'responsable': None,
+                'notes': '', 'gate': None, 'gate_motiu': '',
+            })
+
         # Nomenclatura i ordre de fitxa: BaseMeasurement del model, el mateix camí que
         # l'editor G1 i la taula de mesures (una query, tres mapes).
         # R1 (31/07) — el BATEIG hi viatja també: és del MODEL, com `ordre` i `nom_fitxa`, i
         # sense ell la taula fitting_history de la fitxa imprimia el nom del catàleg d'un POM
         # que el tècnic havia rebatejat.
-        # C2/Onada 1 — ÀNCORA EXTERIOR EXPLÍCITA per als QUATRE mapes, i tots quatre alhora:
-        # ancorar-ne un i deixar-ne un altre per POM sol donaria files amb l'ordre d'una capa
-        # i el nom d'una altra. La fila que els consulta (`_fila`, aquí sota) s'indexa per
-        # `pom_id` i no porta capa; donar-n'hi seria afegir un camp al payload, i el
-        # contracte no es toca fins a C4. El Repàs, fins llavors, és el de l'exterior.
-        # FASE_2/C1-ins — el segon eix entra a la mateixa àncora i pel mateix argument
-        # sencer: la fila no porta instància i donar-n'hi és canvi de contracte (C4-ins).
-        from fhort.pom.models import MeasurementLayer
+        # C4 — ELS QUATRE MAPES CREIXEN A LA CLAU SENCERA, i tots quatre alhora (era la llei
+        # de C2/Onada 1 i segueix sent-ho): un que cresqui i un altre que no dona files amb
+        # l'ordre d'una capa i el nom d'una altra.
+        #
+        # L'àncora existia perquè la fila que els consulta (`_fila`, aquí sota) s'indexava per
+        # `pom_id` i no portava capa. Ara la fila porta la identitat sencera i la publica, o
+        # sigui que el filtre seria pèrdua: la germana es quedaria sense nomenclatura de
+        # croquis, sense bateig i **sense `bm_id`** — i el `bm_id` és l'àncora per PK de fila
+        # que fa servir el corpus de cotes `.ftt`, o sigui que perdre'l no és cosmètic.
         bm_data = list(BaseMeasurement.objects
-                       .filter(model_id=model.id,
-                               capa=MeasurementLayer.SLUG_DEFECTE, instancia='')
-                       .values_list('pom_id', 'ordre', 'nom_fitxa', 'id',
-                                    'nom_canonic_model', 'nom_traduit_model'))
-        ordre_map = {p: o for p, o, _, _, _, _ in bm_data}
-        nom_fitxa_map = {p: nf for p, _, nf, _, _, _ in bm_data}
-        bm_id_map = {p: i for p, _, _, i, _, _ in bm_data}
-        bateig_map = {p: (nc or '', nt or '') for p, _, _, _, nc, nt in bm_data}
+                       .filter(model_id=model.id)
+                       .values_list('pom_id', 'capa', 'instancia', 'garment',
+                                    'ordre', 'nom_fitxa', 'id',
+                                    'nom_canonic_model', 'nom_traduit_model', 'is_active'))
+        # SET-2/T6a — la PEÇA entra a TOTS els mapes d'aquesta vista alhora. La identitat
+        # d'una fila del Repàs és la de la mesura, i amb la clau curta les dues peces del
+        # mateix POM es fonien en una fila: una prenda desapareixia sencera de la taula i
+        # la supervivent ensenyava el `bm_id`, el `nom_fitxa`, el bateig i els valors per
+        # sessió de l'altra. Creixen JUNTS o no creixen: és la llei de C2/Onada 1.
+        ordre_map = {(p, c, i, g): o for p, c, i, g, o, _, _, _, _, _ in bm_data}
+        nom_fitxa_map = {(p, c, i, g): nf for p, c, i, g, _, nf, _, _, _, _ in bm_data}
+        bm_id_map = {(p, c, i, g): bid for p, c, i, g, _, _, bid, _, _, _ in bm_data}
+        bateig_map = {(p, c, i, g): (nc or '', nt or '')
+                      for p, c, i, g, _, _, _, nc, nt, _ in bm_data}
+        # Les mesures VIVES del model, en ordre de fitxa. És el cens que la taula ha de portar
+        # sencer (v. la sembra de files, aquí sota).
+        actives = [(p, c, i, g) for p, c, i, g, _, _, _, _, _, act in bm_data if act]
 
-        # Files = els POMs que s'han fitat en aquesta talla (no el cens sencer de POMs del
-        # model: una fila buida a totes les sessions no és repàs, és soroll). Els POMs que
-        # només apareixen a les etapes també fan fila: si no, un model sense cap sessió
-        # tindria columnes i cap fila.
+        # B2 — LA TAULA PORTA SEMPRE TOTES LES MESURES DEL MODEL (ordre d'Agus, 10/08).
+        #
+        # Fins ara les files eren «els POMs que s'han fitat en aquesta talla», amb el raonament
+        # que una fila buida a totes les columnes és soroll. El raonament no s'aguanta des que
+        # hi ha columna d'ENTRADA: una mesura que es va entrar i que cap fitting no ha tocat NO
+        # és una fila buida —diu que ningú no l'ha comprovada mai—, i era precisament el que el
+        # Repàs amagava. Qui repassa ha de veure el cens sencer i que hi falta gent.
+        #
+        # Les files se sembren PRIMER i en ordre de fitxa, de manera que les que vinguin només
+        # de les etapes (POMs que ja no són mesura viva del model) s'hi afegeixin darrere.
         files = {}
 
-        def _fila(pom_id, pom):
-            fila = files.get(pom_id)
+        def _fila(ident, pom):
+            """`ident` és `(pom_id, capa, instancia, garment)` — la identitat de la mesura,
+            no el POM."""
+            fila = files.get(ident)
             if fila is None:
-                fila = files[pom_id] = {
+                pom_id, capa, instancia, garment = ident
+                fila = files[ident] = {
                     'pom_id': pom_id,
-                    'codi': nom_fitxa_map.get(pom_id) or (pom.pom_code if pom else ''),
+                    # C4 — els dos eixos al contracte: `pom_id` ja no desempata dues germanes.
+                    'capa': capa,
+                    'instancia': instancia,
+                    # SET-2/T6a — i el TERCER, l'eix de la peça.
+                    'garment': garment,
+                    'codi': nom_fitxa_map.get(ident) or (pom.pom_code if pom else ''),
                     'pom_code': pom.pom_code if pom else '',
                     'nom_en': pom.name_en if pom else '',
                     'nom_local': pom.name_cat if pom else '',
                     # CRUS i al costat del catàleg: '' = no batejat → mana el catàleg.
-                    'nom_canonic_model': (bateig_map.get(pom_id) or ('', ''))[0],
-                    'nom_traduit_model': (bateig_map.get(pom_id) or ('', ''))[1],
-                    'nom_fitxa': nom_fitxa_map.get(pom_id),
-                    'bm_id': bm_id_map.get(pom_id),
+                    'nom_canonic_model': (bateig_map.get(ident) or ('', ''))[0],
+                    'nom_traduit_model': (bateig_map.get(ident) or ('', ''))[1],
+                    'nom_fitxa': nom_fitxa_map.get(ident),
+                    'bm_id': bm_id_map.get(ident),
                     'is_key': pom.is_key_measure if pom else False,
                     'valors': {},
                     'ultim_comentari': None,
                 }
             return fila
 
+        # La sembra del cens: una query per la nomenclatura i les files ja hi són totes, tinguin
+        # presa o no.
+        from fhort.pom.models import POMMaster
+        cataleg = {p.id: p for p in POMMaster.objects
+                   .filter(id__in={ident[0] for ident in actives})
+                   .select_related('pom_global')}
+        for ident in sorted(actives, key=lambda x: (ordre_map.get(x, 10 ** 9), x[0], x[1], x[2])):
+            _fila(ident, cataleg.get(ident[0]))
+
+        # L'ENTRADA DE POMs a la seva columna. Va abans de les preses perquè és d'on parteixen.
+        for ident, valor in entrada_celles.items():
+            if ident not in files and ident not in set(actives):
+                continue                              # mesura morta: no se li obre fila nova
+            fila = files.get(ident)
+            if fila is None:
+                continue
+            fila['valors'][COL_ENTRADA] = {
+                'valor_real': valor,
+                'valor_teoric': None,     # l'entrada no es mesura contra res: és l'origen
+                'nota': '',
+                'veredicte': '',
+            }
+
         for l in linies:
             if l.size_label != talla:
                 continue
-            _fila(l.pom_id, l.pom)['valors'][str(l.piece_fitting.session_id)] = {
+            # La línia de fitting SAP de quina germana parla: porta els dos eixos des de C1 i
+            # C1-ins. Abans es col·lapsaven aquí, a `files[pom_id]`, i l'última llegida
+            # guanyava la cel·la de la sessió.
+            _fila((l.pom_id, l.capa, l.instancia, l.garment), l.pom)['valors'][
+                str(l.piece_fitting.session_id)] = {
                 'valor_real': l.valor_real,
                 'valor_teoric': l.valor_teoric,
                 'nota': l.nota or '',
+                # B2 — EL VEREDICTE DE LA MODISTA viatja: és qui decideix el color d'un canvi
+                # (decisió d'Agus, 10/08). Dada de domini, no es tradueix.
+                'veredicte': l.decisio or '',
             }
 
         # Etapes: els POMs que hi surten poden no haver estat mai en cap sessió. Es resolen
         # d'una tacada (sense N+1) i només els que encara no tenen fila.
-        poms_etapa = {pid for celles in etapa_celles.values() for pid in celles}
+        # C4 — les cel·les d'etapa ja venen indexades per la identitat sencera; el que es
+        # resol contra `POMMaster` segueix sent el POM, que és qui té la nomenclatura.
+        poms_etapa = {ident[0] for celles in etapa_celles.values() for ident in celles}
         if poms_etapa:
             from fhort.pom.models import POMMaster
             poms = {p.id: p for p in POMMaster.objects.filter(id__in=poms_etapa)
                     .select_related('pom_global')}
             for clau, celles in etapa_celles.items():
-                for pom_id, dades in celles.items():
-                    _fila(pom_id, poms.get(pom_id))['valors'][clau] = {
+                for ident, dades in celles.items():
+                    _fila(ident, poms.get(ident[0]))['valors'][clau] = {
                         'valor_real': dades['valor_real'],
                         # Una etapa no porta valor teòric: el log guarda el que es va mesurar,
                         # no contra què. Null i prou — inventar-lo seria pitjor que no dir-ho.
                         'valor_teoric': None,
                         'nota': dades['nota'],
+                        # Ni veredicte: ningú no va decidir res sobre una cel·la, es va
+                        # escriure a la taula. El canvi es marcarà, el color no.
+                        'veredicte': '',
                     }
+
+        # ── ELS CANVIS ES MARQUEN (ordre d'Agus, 10/08) ───────────────────────────────────
+        # Es decideix AQUÍ i no a la pantalla: qui sap l'ordre de les columnes és qui les ha
+        # muntades, i un front que ho recalculés seria un segon lloc capaç de dir una cosa
+        # diferent sobre el mateix parell de números.
+        #
+        # Un canvi és respecte de la columna ANTERIOR AMB VALOR de la mateixa fila, no respecte
+        # de la columna immediatament anterior: si un fitting no va tocar un POM, el següent que
+        # el toqui s'ha de llegir contra l'últim número que se'n va dir, no contra un buit. La
+        # primera columna amb valor no és mai un canvi —no hi ha res abans a què comparar-la.
+        ordre_columnes = [str(c['id']) for c in sessions]
+        for fila in files.values():
+            anterior = None
+            for cid in ordre_columnes:
+                cel = fila['valors'].get(cid)
+                if cel is None:
+                    continue
+                v = cel.get('valor_real')
+                if v is None:
+                    continue
+                cel['canvi'] = anterior is not None and float(v) != float(anterior)
+                anterior = v
 
         # Últim comentari per POM: es recorren les columnes en ordre cronològic (sessions I
         # etapes barrejades) i es reté l'ÚLTIM no buit. No és «el de l'última columna»: si
@@ -347,7 +524,16 @@ class FittingRepasView(APIView):
                         'text': nota, 'session_id': sessio['id'], 'data': sessio['data'],
                     }
 
-        rows = sorted(files.values(), key=lambda r: (ordre_map.get(r['pom_id'], 10 ** 9), r['pom_id']))
+        # C4 — l'ordre es demana amb la clau sencera i desempata pels dos eixos: dues germanes
+        # comparteixen `ordre` (és el del POM a la fitxa) i, sense desempat, qui va primer ho
+        # decidiria l'ordre d'inserció al dict, que ve del pla de Postgres.
+        # SET-2/T6a — la PEÇA encapçala el desempat (llei de T9: «la prenda a fora»), i sense
+        # ella la clau tornava a ser parcial: dues peces comparteixen `ordre`.
+        rows = sorted(files.values(),
+                      key=lambda r: (0 if not r['garment'] else 1, r['garment'],
+                                     ordre_map.get((r['pom_id'], r['capa'], r['instancia'],
+                                                    r['garment']), 10 ** 9),
+                                     r['pom_id'], r['capa'], r['instancia']))
 
         return Response({
             'model': {

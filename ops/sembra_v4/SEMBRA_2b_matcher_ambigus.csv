@@ -1,0 +1,46 @@
+client_code;descripcio;pom_canonic;capa;instancia
+A1;1/2 back chest width (armpit to armpit);A;exterior;pos. CB
+A1;Pocket position from side;PR;exterior;
+A2;Back top width relaxed;A;exterior;2a inst. «Back top» · estat relaxed
+A2;Pocket position from CF;PR;exterior;
+A3;Back top width stretched out;A;exterior;2a inst. «Back top» · estat extended
+A3;Pocket position from bottom;PR;exterior;
+B1;1/2 waist width stretched out / extended;B;exterior;estat EXTENDED
+B1;First pleat distance from armhole seam;QTP;exterior;
+B1;Pocket flap width;RF;exterior;
+B2;Distance between pleats;QTS;exterior;
+B2;Pocket flap width;RF;exterior;2a instància
+D;1/2 bottom width relaxed;D;exterior;estat relaxed
+D;1/2 bottom width spread out;D;exterior;
+D;Ancho bajo / bottom width (leg opening);M;exterior;
+EK;Neck width seam to seam;EK;exterior;datum SEAM
+EK;Neck width edge to edge;EK;exterior;datum EDGE
+EK;Neck width edge to edge including collar binding;EK;exterior;datum EDGE + INCL. BIES
+EK;1/2 neck width (measured at the top);EK;exterior;datum EDGE
+EK;Top width from edge to edge;A;exterior;pos. TOP · datum EDGE
+EP;Collarstand height at CB / Collar height at CB / Collar rib height;EP;exterior;
+EP;Collar binding width;EB;exterior;
+F;Centre front length from HPS (incl hem/rib);F;exterior;
+F;Centre front length at CF excluding collar;F;exterior;datum lliure «excl. collar»
+F;Centre front length from HPS stretched out;F;exterior;estat EXTENDED
+F;Total length at CF;F;exterior;
+F;Largo total;FT;exterior;
+F1;Curve at side;F1;exterior;
+F1;Total side length relaxed;F2;exterior;estat relaxed
+F1;Inseam length;FI;folre/exterior;
+FB;Alto cinturilla / waist height;BF;exterior;
+FB;TOP: Centre front length (visible);F;exterior;datum VISIBLE
+FF;Centre back length from HPS (incl hem/rib);FF;exterior;
+FF;Back piece with sequins height at CB;Y1;exterior;«Sequins piece» · pos. CB
+FT;Tiro detrás desde cinturilla;FE;exterior;datum INCL. CINTURILLA
+FT;Pants total length / Pants length (outseam);FT;exterior;
+FT;Side seam length excluding waistband;FT;folre;datum EXCL. CINTURILLA
+LZ;Collar height;EP;exterior;
+LZ;Cord length;ZL;fornitura;
+LZ;Cord width;ZF;fornitura;
+M;1/2 bottom width / 1/2 leg opening width;M;folre/exterior;
+M;Front piece distance from HPS (excl. lace);YP;exterior;«Front piece»
+M1;Bottom height / Bottom hem height;G1;folre/exterior;
+M1;Front piece width at the top;Y;exterior;«Front piece» · pos. TOP
+P1;Height at the center (Chest piece);Y1;exterior;«Chest piece» · pos. CF
+P1;Front yoke side height from HPS;P1;exterior;pos. CF

@@ -5,12 +5,18 @@ import useAuthStore from '../store/auth'
 import CustomerSelector from '../components/CustomerSelector'
 import BulkImportReconciliation from '../components/BulkImportReconciliation'
 import { bulkImport } from '../api/endpoints'
+import PageMenu from '../components/ui/PageMenu'
+import { apagat, botoPri, botoSec, botoTer } from '../components/ui/buttons'
 
 // Import massiu de models per Excel — modal stepper de 4 passos.
 // 1 Client+fitxer · 2 Preview · 3 Confirmació · 4 Resultat. Reutilitza CustomerSelector (Commit 0).
 const MONO = 'IBM Plex Mono, monospace'
-const GOLD = 'var(--gold, #c27a2a)'
-const BORDER = 'var(--gray-l)'
+// ⚠️ `GOLD` era `var(--gold, #c27a2a)` — una `var()` amb FALLBACK LITERAL. Aquí el token sí
+// que existeix, o sigui que el fallback no s'usava mai; però és el mateix patró que a
+// Planificació va amagar un token INEXISTENT (`var(--bg, #faf9f7)`), i un fallback que ningú no
+// veu és una xarxa que no se sap si aguanta. I `BORDER` era `--gray-l`, un àlies de FARCIMENT
+// fent de vora. Tots dos desapareixen: el daurat perquè deixa de ser acció (§5) i la vora
+// perquè passa a `--line`.
 
 // Baixa un Blob com a fitxer. Filename de Content-Disposition si hi és, si no el fallback.
 function downloadBlob(blob, filename) {
@@ -130,13 +136,28 @@ export default function BulkImportWizard() {
   const importables = rec?.resum?.importables ?? 0
 
   return (
-    <div style={{ maxWidth: 920, margin: '0 auto', padding: '2rem 1rem' }}>
+    <>
+      {/* §8b · MENÚ DE PANTALLA. La sortida d'aquest wizard era una `✕ Cancel·lar` de text pla
+          a l'extrem de la capçalera: un caràcter tipogràfic fent d'icona (§8) i l'única manera
+          de sortir-ne. La fletxa del menú porta al mateix lloc (`/models`, d'on penja l'import)
+          i hi és sempre, a la posició fixa de tot el producte. La `✕` es queda com a terciària:
+          «cancel·lar» i «tornar» no són el mateix gest, i el text ho diu. */}
+      <div style={{ margin: '-1.5rem -1.5rem 0' }}>
+        <PageMenu backTo="/models" backTitle={t('bulk_import.back_title')} />
+      </div>
+
+    {/* v. la nota d'`OnboardingWizard`: sense `width: 100%`, en columna flex la caixa passa
+        a mida de contingut (mesurat: 920 → 561.6). */}
+    <div style={{ width: '100%', maxWidth: 920, margin: '0 auto', paddingTop: 16 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 16, marginBottom: 18 }}>
         <div>
           <h1 style={{ fontFamily: MONO, fontSize: 'var(--fs-h1)', fontWeight: 500, margin: 0 }}>{t('bulk_import.title')}</h1>
-          <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300, margin: '4px 0 0' }}>{t('bulk_import.subtitle')}</p>
+          <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', fontWeight: 400, margin: '4px 0 0' }}>{t('bulk_import.subtitle')}</p>
         </div>
-        <button type="button" onClick={() => navigate('/models')} style={linkBtn}>✕ {t('bulk_import.cancel')}</button>
+        <button type="button" onClick={() => navigate('/models')} style={botoTer}>
+          <i className="ti ti-x" aria-hidden="true" style={{ fontSize: 14, color: 'currentColor' }} />
+          {t('bulk_import.cancel')}
+        </button>
       </div>
 
       <Stepper step={step} t={t} />
@@ -155,7 +176,7 @@ export default function BulkImportWizard() {
               <button type="button" onClick={downloadTemplate} disabled={!customerId} style={ghostBtn(!customerId)}>
                 <i className="ti ti-download" /> {t('bulk_import.download_template')}
               </button>
-              <span style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{t('bulk_import.download_template_hint')}</span>
+              <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>{t('bulk_import.download_template_hint')}</span>
             </div>
 
             <div
@@ -163,16 +184,16 @@ export default function BulkImportWizard() {
               onDrop={e => { e.preventDefault(); setFile(e.dataTransfer.files[0]) }}
               onClick={() => document.getElementById('bulk-file').click()}
               style={{
-                border: `2px dashed ${BORDER}`, borderRadius: 12, padding: '2.5rem 2rem',
-                textAlign: 'center', cursor: 'pointer', background: file ? '#f0f9f0' : 'var(--white)',
+                border: '2px dashed var(--line)', borderRadius: 'var(--r-card)', padding: '2.5rem 2rem',
+                textAlign: 'center', cursor: 'pointer', background: file ? 'var(--ok-bg)' : 'var(--panel)',
               }}>
               <input id="bulk-file" type="file" accept=".xlsx,.xls" style={{ display: 'none' }}
                 onChange={e => setFile(e.target.files[0])} />
-              <i className="ti ti-file-spreadsheet" style={{ fontSize: 30, color: GOLD }} />
+              <i className="ti ti-file-spreadsheet" aria-hidden="true" style={{ fontSize: 20, color: 'var(--text-soft)' }} />
               <div style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginTop: 8 }}>
                 {file ? file.name : t('bulk_import.drop_zone')}
               </div>
-              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', marginTop: 4 }}>{t('bulk_import.drop_hint')}</div>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', marginTop: 4 }}>{t('bulk_import.drop_hint')}</div>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -222,7 +243,7 @@ export default function BulkImportWizard() {
               ✓ {t('bulk_import.result_created', { n: commitStats?.models ?? 0 })}
             </div>
             {errCount > 0 && (
-              <div style={{ fontSize: 'var(--fs-body)', color: GOLD }}>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>
                 {t('bulk_import.result_errors_pending', { errors: errCount })}
                 <button type="button" onClick={downloadErrors} style={{ ...ghostBtn(false), marginLeft: 10 }}>
                   <i className="ti ti-download" /> {t('bulk_import.download_errors')}
@@ -239,6 +260,7 @@ export default function BulkImportWizard() {
         )}
       </div>
     </div>
+    </>
   )
 }
 
@@ -254,19 +276,26 @@ function Stepper({ step, t }) {
         return (
           <div key={key} style={{ display: 'flex', alignItems: 'center', flex: i < STEP_KEYS.length - 1 ? 1 : '0 0 auto' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {/* §6 · els estats del pas parlen el llenguatge de la casa: FET `--ok-bg` amb
+                  check i tinta `--ok` · ACTUAL `--sel` amb filet d'or · DISPONIBLE blanc amb
+                  `--line`. El cercle DAURAT PLE amb tinta blanca (3.44:1) no és cap dels tres,
+                  i el `✓` era un caràcter tipogràfic, no una icona del sistema (§8). */}
               <div style={{
                 width: 26, height: 26, borderRadius: '50%', flexShrink: 0, display: 'flex',
                 alignItems: 'center', justifyContent: 'center', fontSize: 'var(--fs-body)', fontWeight: 600,
-                background: active ? GOLD : done ? 'var(--ok)' : 'transparent',
-                color: active || done ? 'var(--white)' : 'var(--gray)',
-                border: active || done ? 'none' : `1px solid ${BORDER}`,
-              }}>{done ? '✓' : n}</div>
-              <span style={{ fontSize: 'var(--fs-body)', fontWeight: active ? 600 : 400, color: active ? 'var(--text-main)' : 'var(--gray)', whiteSpace: 'nowrap' }}>
+                background: done ? 'var(--ok-bg)' : active ? 'var(--sel)' : 'var(--panel)',
+                color: done ? 'var(--ok)' : active ? 'var(--text-main)' : 'var(--text-faint)',
+                borderWidth: 1, borderStyle: 'solid',
+                borderColor: done ? 'var(--ok)' : active ? 'var(--gold)' : 'var(--line)',
+              }}>{done
+                ? <i className="ti ti-check" aria-hidden="true" style={{ fontSize: 14, color: 'currentColor' }} />
+                : n}</div>
+              <span style={{ fontSize: 'var(--fs-body)', fontWeight: active ? 600 : 400, color: active ? 'var(--text-main)' : 'var(--text-soft)', whiteSpace: 'nowrap' }}>
                 {t(`bulk_import.${key}`)}
               </span>
             </div>
             {i < STEP_KEYS.length - 1 && (
-              <div style={{ flex: 1, height: 1, background: done ? 'var(--ok)' : BORDER, margin: '0 10px' }} />
+              <div style={{ flex: 1, height: 1, background: done ? 'var(--ok)' : 'var(--line)', margin: '0 10px' }} />
             )}
           </div>
         )
@@ -278,14 +307,20 @@ function Stepper({ step, t }) {
 function Field({ label, children }) {
   return (
     <div>
-      <div style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', textTransform: 'uppercase', letterSpacing: '.04em', fontFamily: MONO, marginBottom: 6 }}>{label}</div>
+      {/* §2 · un RÈTOL en majúscules amb tracking va a 10px; 12 en majúscules és la mida d'un
+          VALOR. La mesura el comptava com a incompliment. */}
+      <div style={{ fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-soft)', textTransform: 'uppercase', letterSpacing: '.08em', fontFamily: MONO, marginBottom: 6 }}>{label}</div>
       {children}
     </div>
   )
 }
 
-const card = { border: `0.5px solid ${BORDER}`, borderRadius: 12, background: 'var(--white)', padding: 22 }
-const errBox = { background: '#fee', border: '1px solid #fcc', borderRadius: 8, padding: '0.6rem 1rem', margin: '0 0 12px', fontSize: 'var(--fs-body)', color: '#c00', fontFamily: MONO }
-const linkBtn = { background: 'none', border: 'none', padding: 0, color: 'var(--gray)', fontSize: 'var(--fs-body)', cursor: 'pointer', fontFamily: MONO }
-const primaryBtn = (disabled) => ({ background: disabled ? 'var(--gray-l)' : GOLD, color: 'var(--white)', border: 'none', borderRadius: 6, padding: '8px 20px', fontSize: 'var(--fs-h3)', fontWeight: 500, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1, fontFamily: MONO })
-const ghostBtn = (disabled) => ({ background: 'var(--white)', color: GOLD, border: `0.5px solid ${GOLD}`, borderRadius: 6, padding: '7px 14px', fontSize: 'var(--fs-body)', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1, fontFamily: MONO })
+const card = { border: '1px solid var(--line)', borderRadius: 'var(--r-card)', background: 'var(--panel)', fontSize: 'var(--fs-body)', padding: 20 }
+// §1 · l'avís d'error passa a la forma de la casa: `#fee`/`#fcc`/`#c00` són tres hex que no són
+// a cap paleta, i el vermell de la norma és `--err` sobre `--err-bg` amb filet del mateix color.
+const errBox = { background: 'var(--err-bg)', borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--err)', borderRadius: 'var(--r-ctrl)', padding: '8px 12px', margin: '0 0 12px', fontSize: 'var(--fs-body)', color: 'var(--err)', fontFamily: MONO }
+// §5 · la primària és BLAVA (era DAURAT PLE amb tinta blanca: 3.44:1, per sota d'AA) i el
+// deshabilitat baixa el FONS, no la tinta. El ghost daurat el JUBILA la §5.4 com a botó: passa
+// a la secundària de la casa.
+const primaryBtn = (disabled) => ({ ...botoPri, ...(disabled ? apagat : null) })
+const ghostBtn = (disabled) => ({ ...botoSec, ...(disabled ? apagat : null) })

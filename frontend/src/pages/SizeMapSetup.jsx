@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../store/auth'
@@ -10,38 +10,52 @@ import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
 import Table from '../components/ui/Table'
 import Badge from '../components/ui/Badge'
-import { selS, primaryBtn } from '../components/ui/buttons'
+import PageMenu from '../components/ui/PageMenu'
+import { botoPri, selS } from '../components/ui/buttons'
+import { useElements } from '../utils/vocabulariDominiFont'
+import { aDocument } from '../utils/breakConvention'
 
 // Size Map Setup — wizard de 5 passos per derivar un SizeSystem (+GradingRuleSet +SizingProfiles)
 // a partir d'una taula de mides de client, i mode llista dels sistemes existents.
 // Backend: pom/size_map_views.py (gated CONFIGURE). Patró visual: TaskTypes.jsx (Peça 0).
 const MONO = 'IBM Plex Mono, monospace'
 
-const BASE_UNITS = ['ALPHA', 'NUMERIC_EU', 'NUMERIC_US', 'CM_HEIGHT', 'MONTHS', 'AGE_YEARS']
-const LOGICA = ['LINEAR', 'STEP', 'FIXED', 'ZERO']
+// LES UNITATS BASE i ELS RÈGIMS ja no es declaren aquí.
+//
+//   · `base_units` — `sizeMap.lookups()` ja les servia i aquesta constant era literalment la
+//     LLISTA DE RESERVA (`lookups.base_units?.length ? … : BASE_UNITS`), el mateix patró que la
+//     peça de les capes va matar a `EditableTable` i `TaulaPOMsCataleg`. Una reserva només
+//     s'usa el dia que l'endpoint falla, que és justament el dia en què ningú la mira.
+//   · `LOGICA` — els règims venen de `/vocabulari/`, filtrats per `autorable`.
+//     🛑 AQUESTA LLISTA OFERIA `ZERO` i la de `GraduacioSuperficie` no: la contradicció es
+//     resol al backend (v. `vocabulari_views.py`), i aquí es perd `ZERO` com a tria. Cap regla
+//     viva en porta (0 de 1.267) i el detector no el pot produir mai.
 const REC_VARIANT = { REUTILITZAR: 'ok', CLONAR: 'gold', CREAR: 'gate' }
-// Badge de confiança del matching (patró del W2): verd/groc/taronja/vermell.
-const CONF_BADGE = {
-  HIGH:     { bg: '#f0f9f0', color: '#3b6d11', label: 'alta' },
-  MEDIUM:   { bg: '#fdf6ee', color: 'var(--gold)', label: 'mitjana' },
-  LOW:      { bg: '#fdf3ee', color: 'var(--gold)', label: 'baixa' },
-  NO_MATCH: { bg: '#fff0f0', color: '#a32d2d', label: 'sense match' },
-}
+// LA CONFIANÇA DEL MATCHING, amb el badge de la casa. Això era un mapa de parells fons/tinta
+// amb **quatre hex literals** —entre ells el verd i el vermell ANTERIORS a l'alineació del
+// semàfor de la §1b(a)— i, pitjor, **amb l'etiqueta en català escrita a dins** («alta»,
+// «mitjana», «sense match»): text de cara a l'usuari fora de `t()`, que és la porta d'i18n de
+// la casa, en una pantalla que ja tenia tota la resta traduïda.
+// MEDIUM i LOW compartien el DAURAT, que és marca i no semàfor; totes dues van al taronja
+// d'avís, que és el que la §1 dona a «atenció» — i la distinció la fa l'etiqueta, que és qui
+// la sap dir.
+const CONF_VARIANT = { HIGH: 'ok', MEDIUM: 'warn', LOW: 'warn', NO_MATCH: 'err' }
 
 const STEPS = [
   { n: 1, key: 'size_map_screen_config', label: 'Configuració' },
   { n: 2, key: 'size_map_screen_import', label: 'Importació i confirmació' },
 ]
 
-const card = { border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', padding: 16, marginBottom: 14 }
+const card = { border: '1px solid var(--line)', borderRadius: 'var(--r-card)', background: 'var(--panel)', padding: 16, marginBottom: 14 }
 const ghostBtn = { ...selS, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }
 
 function Field({ label, children, hint }) {
   return (
     <div style={{ marginBottom: 14 }}>
-      <label style={{ fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>{label}</label>
+      {/* §2 · rètol de camp: 10px MAJÚSCULES amb tracking, no cos a 12 en majúscules. */}
+      <label style={{ fontSize: 'var(--fs-label)', fontWeight: 600, letterSpacing: '.08em', fontFamily: MONO, color: 'var(--text-soft)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>{label}</label>
       {children}
-      {hint && <div style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)', marginTop: 4 }}>{hint}</div>}
+      {hint && <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-faint)', marginTop: 4 }}>{hint}</div>}
     </div>
   )
 }
@@ -125,7 +139,7 @@ export default function SizeMapSetup() {
     { key: 'customer_codi', label: t('size_map_col_client'),
       render: r => r.customer_codi
         ? <Badge variant="gold">{r.customer_codi}</Badge>
-        : <span style={{ color: 'var(--gray)' }}>{t('size_map_canonical')}</span> },
+        : <span style={{ color: 'var(--text-soft)' }}>{t('size_map_canonical')}</span> },
     { key: 'parent_codi', label: t('size_map_col_parent'),
       render: r => r.parent_codi ? <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)' }}>{r.parent_codi}</span> : '—' },
     { key: 'num_talles', label: t('size_map_col_talles'), align: 'right',
@@ -135,15 +149,22 @@ export default function SizeMapSetup() {
   ]
 
   return (
-    <div style={{ minWidth: 0, maxWidth: 1100 }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: '1rem' }}>
-        <div>
-          <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>{t('size_map_title')}</h1>
-          <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300 }}>{t('size_map_subtitle')}</p>
-        </div>
-        <button onClick={() => setWizardOpen(true)} style={{ ...primaryBtn, marginLeft: 0 }}>
-          <i className="ti ti-plus" style={{ fontSize: 14 }} />{t('size_map_new_run')}
-        </button>
+    <>
+      {/* §8b · MENÚ DE PANTALLA, i l'acció hi puja: «Nou run» era un botó blau a la capçalera,
+          i la §8e diu que l'acció primària pujada al menú deixa de ser botó i deixa de ser
+          blava. El blau es reserva per al que completa la feina DINS del wizard. */}
+      <div style={{ margin: '-1.5rem -1.5rem 0' }}>
+        <PageMenu
+          backTo="/"
+          backTitle={t('size_map_back_title')}
+          items={[{ key: 'nou', label: t('size_map_new_run'), onClick: () => setWizardOpen(true) }]}
+        />
+      </div>
+
+    <div style={{ minWidth: 0, maxWidth: 1100, paddingTop: 16 }}>
+      <div style={{ marginBottom: 16 }}>
+        <h1 style={{ fontSize: 'var(--fs-h1)', lineHeight: '28px', fontWeight: 500, marginBottom: 4, color: 'var(--text-main)', fontFamily: MONO }}>{t('size_map_title')}</h1>
+        <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', fontFamily: MONO }}>{t('size_map_subtitle')}</p>
       </div>
 
       <Feedback feedback={feedback} onDismiss={() => setFeedback(null)} />
@@ -151,11 +172,12 @@ export default function SizeMapSetup() {
       {loading ? <Center>{t('size_map_loading')}</Center>
         : error ? <Center>{t('size_map_error')}</Center>
           : (
-            <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', overflowX: 'auto' }}>
+            <div style={{ border: '1px solid var(--line)', borderRadius: 'var(--r-card)', background: 'var(--panel)', overflowX: 'auto' }}>
               <Table columns={columns} data={systems} loading={false} empty={t('size_map_empty')} />
             </div>
           )}
     </div>
+    </>
   )
 }
 
@@ -173,14 +195,14 @@ function Stepper({ screen, t }) {
               <span style={{
                 width: 22, height: 22, borderRadius: 999, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 'var(--fs-body)', fontFamily: MONO, fontWeight: 600,
-                background: active ? 'var(--gold)' : done ? 'var(--gold-pale)' : 'var(--gray-l)',
-                color: active ? 'var(--white)' : done ? 'var(--gold)' : 'var(--gray)',
+                background: active ? 'var(--gold)' : done ? 'var(--sel)' : 'var(--line)',
+                color: active ? 'var(--text-main)' : done ? 'var(--gold)' : 'var(--text-soft)',
               }}>{s.n}</span>
-              <span style={{ fontSize: 'var(--fs-body)', fontFamily: MONO, color: active ? 'var(--text-main)' : 'var(--gray)', fontWeight: active ? 600 : 400 }}>
+              <span style={{ fontSize: 'var(--fs-body)', fontFamily: MONO, color: active ? 'var(--text-main)' : 'var(--text-soft)', fontWeight: active ? 600 : 400 }}>
                 {t(s.key, s.label)}
               </span>
             </div>
-            {i < STEPS.length - 1 && <i className="ti ti-chevron-right" style={{ fontSize: 13, color: 'var(--gray-l)' }} />}
+            {i < STEPS.length - 1 && <i className="ti ti-chevron-right" style={{ fontSize: 13, color: 'var(--line)' }} />}
           </div>
         )
       })}
@@ -198,6 +220,10 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
   // abans de tancar perquè l'humà vegi què s'ha desat i què ha quedat pendent.
   const [result, setResult] = useState(null)
   const [lookups, setLookups] = useState({ targets: [], constructions: [], fit_types: [], garment_types: [], base_units: [] })
+  // Els règims que es poden TRIAR per a una regla detectada: els `autorable` de `/vocabulari/`.
+  const { elements: vocRegims } = useElements('regims_graduacio')
+  const regimsAutorables = useMemo(
+    () => (vocRegims || []).filter(r => r.autorable).map(r => r.codi), [vocRegims])
 
   // Estat global del wizard en un sol objecte.
   const [wiz, setWiz] = useState({
@@ -460,7 +486,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
           <i className="ti ti-circle-check" style={{ fontSize: 20, color: 'var(--gold)' }} />
           <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, fontFamily: MONO, margin: 0 }}>{t('size_map_result_title')}</h1>
         </div>
-        <div style={{ background: 'var(--gray-l)', borderRadius: 8, padding: 12, marginBottom: 14, fontSize: 'var(--fs-body)', fontFamily: MONO }}>
+        <div style={{ background: 'var(--line)', borderRadius: 'var(--r-ctrl)', padding: 12, marginBottom: 14, fontSize: 'var(--fs-body)', fontFamily: MONO }}>
           <div>{result.nom}</div>
           {/* R5 — regles reals persistides (BD), font única. */}
           <div>{t('size_map_sum_rules')}: {result.rules_count ?? 0}</div>
@@ -469,7 +495,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
             FÓRMULA, no una taula: les talles no documentades s'extrapolaran quan un model les
             faci servir. Informa; no bloqueja ni marca cel·les. */}
         {result.extrapolacio?.talles?.length > 0 && (
-          <div style={{ background: 'var(--gold-pale)', border: '0.5px solid var(--gold)', borderRadius: 8,
+          <div style={{ background: 'var(--sel)', border: '0.5px solid var(--gold)', borderRadius: 'var(--r-ctrl)',
                         padding: '10px 12px', marginBottom: 14, fontSize: 'var(--fs-body)', color: 'var(--gold)' }}>
             <div style={{ fontWeight: 600, marginBottom: 4 }}>
               <i className="ti ti-arrow-bar-to-right" style={{ marginRight: 6 }} />
@@ -482,7 +508,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
           </div>
         )}
         {pendents.length > 0 && (
-          <div style={{ background: 'var(--warn-bg)', border: '0.5px solid var(--warn)', borderRadius: 8,
+          <div style={{ background: 'var(--warn-bg)', border: '0.5px solid var(--warn)', borderRadius: 'var(--r-ctrl)',
                         padding: '10px 12px', marginBottom: 14, fontSize: 'var(--fs-body)', color: 'var(--warn)' }}>
             <div style={{ fontWeight: 600, marginBottom: 4 }}>
               <i className="ti ti-link-off" style={{ marginRight: 6 }} />
@@ -492,7 +518,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
             <div style={{ marginTop: 4, fontSize: 'var(--fs-label)' }}>{t('size_map_pendents_hint')}</div>
           </div>
         )}
-        <button onClick={() => onComplete(result)} style={primaryBtn}>
+        <button onClick={() => onComplete(result)} style={botoPri}>
           <i className="ti ti-check" />{t('size_map_result_close')}
         </button>
       </div>
@@ -507,8 +533,8 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
       </div>
 
       {showReturnBanner && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--gold-pale)', color: 'var(--gold)',
-                      border: '0.5px solid var(--gold)', borderRadius: 8, padding: '8px 12px', marginBottom: 14, fontSize: 'var(--fs-body)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--sel)', color: 'var(--gold)',
+                      border: '0.5px solid var(--gold)', borderRadius: 'var(--r-ctrl)', padding: '8px 12px', marginBottom: 14, fontSize: 'var(--fs-body)' }}>
           <i className="ti ti-link" style={{ fontSize: 14 }} />
           {t('size_map_from_w1')}
         </div>
@@ -528,7 +554,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
           </Field>
           <Field label={t('size_map_f_unit')}>
             <select value={wiz.base_unit} onChange={e => set({ base_unit: e.target.value })} style={{ ...selS, width: '100%' }}>
-              {(lookups.base_units?.length ? lookups.base_units.map(o => o.codi) : BASE_UNITS).map(u =>
+              {lookups.base_units.map(o => o.codi).map(u =>
                 <option key={u} value={u}>{u}</option>)}
             </select>
           </Field>
@@ -588,7 +614,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
           </Field>
           <button onClick={goMatch}
             disabled={busy || !wiz.target_codi || labels().length === 0 || !wiz.base_size || wiz.applies_to.length === 0}
-            style={{ ...primaryBtn }}>{t('size_map_next')}</button>
+            style={{ ...botoPri }}>{t('size_map_next')}</button>
         </div>
       )}
 
@@ -599,35 +625,35 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
             {t('size_map_reco')}: <Badge variant={REC_VARIANT[wiz.recomanacio] || 'gray'}>{wiz.recomanacio}</Badge>
           </div>
           {wiz.candidates.length === 0 && (
-            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', marginBottom: 12 }}>{t('size_map_no_candidates')}</div>
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', marginBottom: 12 }}>{t('size_map_no_candidates')}</div>
           )}
           {wiz.candidates.map(c => (
-            <label key={c.size_system_id} style={{ display: 'block', border: '0.5px solid var(--gray-l)', borderRadius: 8, padding: 12, marginBottom: 8, cursor: 'pointer' }}>
+            <label key={c.size_system_id} style={{ display: 'block', border: '1px solid var(--line)', borderRadius: 'var(--r-ctrl)', padding: 12, marginBottom: 8, cursor: 'pointer' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <input type="radio" name="cand" checked={wiz.decision !== 'CREAR' && String(wiz.size_system_id) === String(c.size_system_id)}
                   onChange={() => set({ size_system_id: c.size_system_id, decision: c.recomanacio === 'CREAR' ? 'CLONAR' : c.recomanacio })} />
                 <span style={{ fontWeight: 600 }}>{c.nom}</span>
-                <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{c.codi}</span>
+                <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>{c.codi}</span>
                 <Badge variant={c.score >= 1 ? 'ok' : 'warn'}>{Math.round((c.score || 0) * 100)}%</Badge>
                 <Badge variant={REC_VARIANT[c.recomanacio] || 'gray'}>{c.recomanacio}</Badge>
               </div>
               {/* barra de score */}
-              <div style={{ height: 6, background: 'var(--gray-l)', borderRadius: 999, marginTop: 8 }}>
+              <div style={{ height: 6, background: 'var(--line)', borderRadius: 999, marginTop: 8 }}>
                 <div style={{ height: 6, width: `${Math.round((c.score || 0) * 100)}%`, background: 'var(--gold)', borderRadius: 999 }} />
               </div>
               {c.unmatched_labels?.length > 0 &&
                 <div style={{ fontSize: 'var(--fs-body)', color: 'var(--warn)', marginTop: 6 }}>{t('size_map_unmatched')}: {c.unmatched_labels.join(', ')}</div>}
-              {c.warning && <div style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', marginTop: 4 }}>{c.warning}</div>}
+              {c.warning && <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', marginTop: 4 }}>{c.warning}</div>}
             </label>
           ))}
           {/* opció crear nou */}
-          <label style={{ display: 'flex', alignItems: 'center', gap: 10, border: '0.5px dashed var(--gray-l)', borderRadius: 8, padding: 12, marginBottom: 14, cursor: 'pointer' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, border: '0.5px dashed var(--line)', borderRadius: 'var(--r-ctrl)', padding: 12, marginBottom: 14, cursor: 'pointer' }}>
             <input type="radio" name="cand" checked={wiz.decision === 'CREAR'} onChange={() => set({ decision: 'CREAR', size_system_id: null })} />
             <span>{t('size_map_create_new')}</span>
           </label>
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => setStep(1)} style={ghostBtn}>{t('size_map_back')}</button>
-            <button onClick={goPreview} disabled={busy || (wiz.decision !== 'CREAR' && !wiz.size_system_id)} style={primaryBtn}>{t('size_map_next')}</button>
+            <button onClick={goPreview} disabled={busy || (wiz.decision !== 'CREAR' && !wiz.size_system_id)} style={botoPri}>{t('size_map_next')}</button>
           </div>
         </div>
       )}
@@ -639,7 +665,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)' }}>
               <thead>
-                <tr style={{ textAlign: 'left', color: 'var(--text-muted)', fontFamily: MONO, fontSize: 'var(--fs-label)' }}>
+                <tr style={{ textAlign: 'left', color: 'var(--text-soft)', fontFamily: MONO, fontSize: 'var(--fs-label)' }}>
                   <th style={{ padding: 6 }}>{t('size_map_t_label')}</th>
                   <th style={{ padding: 6 }}>{t('size_map_t_order')}</th>
                   <th style={{ padding: 6 }}>{t('size_map_t_numeric')}</th>
@@ -657,7 +683,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
                     <input type={type} value={row[k] ?? ''} onChange={e => upd(k, e.target.value)} style={{ ...selS, width: w, padding: '3px 6px' }} />
                   )
                   return (
-                    <tr key={i} style={{ background: isBase ? 'var(--gold-pale)' : 'transparent', borderTop: '0.5px solid var(--gray-l)' }}>
+                    <tr key={i} style={{ background: isBase ? 'var(--sel)' : 'transparent', borderTop: '1px solid var(--line)' }}>
                       <td style={{ padding: 4 }}>{cellInput('etiqueta', 90)}</td>
                       <td style={{ padding: 4 }}>{cellInput('ordre', 56, 'number')}</td>
                       <td style={{ padding: 4 }}>{cellInput('valor_numeric', 80, 'number')}</td>
@@ -680,7 +706,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => setStep(2)} style={ghostBtn}>{t('size_map_back')}</button>
-            <button onClick={() => setStep(4)} disabled={wiz.talles.length === 0} style={primaryBtn}>{t('size_map_next')}</button>
+            <button onClick={() => setStep(4)} disabled={wiz.talles.length === 0} style={botoPri}>{t('size_map_next')}</button>
           </div>
         </div>
       )}
@@ -695,9 +721,9 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
             <label htmlFor="size-map-grading-file"
               onDragOver={e => e.preventDefault()}
               onDrop={e => { e.preventDefault(); calcGradingFromFile(e.dataTransfer.files[0]) }}
-              style={{ display: 'block', border: '1px dashed var(--gray-l)', borderRadius: 8,
+              style={{ display: 'block', border: '1px dashed var(--line)', borderRadius: 'var(--r-ctrl)',
                        padding: 14, textAlign: 'center', cursor: busy ? 'wait' : 'pointer',
-                       color: 'var(--gray)', fontSize: 'var(--fs-body)' }}>
+                       color: 'var(--text-soft)', fontSize: 'var(--fs-body)' }}>
               {/* HIGIENE (5) — rodeta mentre l'extracció processa: la IA triga i abans només hi havia
                   un canvi de cursor, sense cap senyal viu que allò estava treballant. */}
               {busy
@@ -712,14 +738,14 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
 
           {gradingAvisos.length > 0 && (
             <ul style={{ margin: '0 0 14px', padding: '8px 12px 8px 26px', background: 'var(--warn-bg)',
-                         borderRadius: 8, fontSize: 'var(--fs-body)', color: 'var(--warn)' }}>
+                         borderRadius: 'var(--r-ctrl)', fontSize: 'var(--fs-body)', color: 'var(--warn)' }}>
               {gradingAvisos.map((a, k) => <li key={k}>{a}</li>)}
             </ul>
           )}
 
           {incompletes.length > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--err-bg)', color: 'var(--err)',
-                          border: '0.5px solid var(--err)', borderRadius: 8, padding: '8px 12px', marginBottom: 14, fontSize: 'var(--fs-body)' }}>
+                          border: '0.5px solid var(--err)', borderRadius: 'var(--r-ctrl)', padding: '8px 12px', marginBottom: 14, fontSize: 'var(--fs-body)' }}>
               <i className="ti ti-alert-triangle" style={{ fontSize: 14 }} />
               {t('size_map_incompleta_warn', { count: incompletes.length })}
             </div>
@@ -727,7 +753,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
 
           {dupPomIds.size > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--err-bg)', color: 'var(--err)',
-                          border: '0.5px solid var(--err)', borderRadius: 8, padding: '8px 12px', marginBottom: 14, fontSize: 'var(--fs-body)' }}>
+                          border: '0.5px solid var(--err)', borderRadius: 'var(--r-ctrl)', padding: '8px 12px', marginBottom: 14, fontSize: 'var(--fs-body)' }}>
               <i className="ti ti-alert-triangle" style={{ fontSize: 14 }} />
               {t('size_map_dup_warn', { count: dupPomIds.size })}
             </div>
@@ -737,7 +763,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
             <div style={{ overflowX: 'auto', marginBottom: 14 }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)' }}>
                 <thead>
-                  <tr style={{ textAlign: 'left', color: 'var(--text-muted)', fontFamily: MONO, fontSize: 'var(--fs-label)' }}>
+                  <tr style={{ textAlign: 'left', color: 'var(--text-soft)', fontFamily: MONO, fontSize: 'var(--fs-label)' }}>
                     <th style={{ padding: 6 }}>POM</th>
                     <th style={{ padding: 6 }}>{t('size_map_g_logica')}</th>
                     <th style={{ padding: 6 }}>{t('size_map_g_value')}</th>
@@ -749,20 +775,20 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
                   {wiz.gradingResults.map((g, i) => {
                     const upd = (k, v) => set({ gradingResults: wiz.gradingResults.map((r, j) => j === i ? { ...r, [k]: v } : r) })
                     return (
-                      <tr key={i} style={{ borderTop: '0.5px solid var(--gray-l)',
+                      <tr key={i} style={{ borderTop: '1px solid var(--line)',
                         background: g.incompleta ? 'var(--err-bg)'
                           : g.pom_id ? (dupPomIds.has(g.pom_id) ? 'var(--err-bg)' : 'transparent') : 'var(--warn-bg)' }}>
                         <td style={{ padding: 6 }}>
                           {/* codi de client (nomenclatura seva, ex 'B') + descripció del fitxer
                               com a referència; badge de confiança; si no resol, select de catàleg. */}
                           <div style={{ fontFamily: MONO }}>{g.pom_codi_client}</div>
-                          {g.pom_descripcio && <div style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)' }}>{g.pom_descripcio}</div>}
+                          {g.pom_descripcio && <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)' }}>{g.pom_descripcio}</div>}
                           {(() => {
-                            const cb = CONF_BADGE[(g.confidence || '').toUpperCase()]
-                            return cb ? (
-                              <span style={{ display: 'inline-block', marginTop: 2, fontSize: 'var(--fs-label)', fontWeight: 600,
-                                             padding: '1px 6px', borderRadius: 8, background: cb.bg, color: cb.color }}>
-                                {cb.label}</span>
+                            const conf = (g.confidence || '').toUpperCase()
+                            const variant = CONF_VARIANT[conf]
+                            return variant ? (
+                              <Badge variant={variant} style={{ marginTop: 2 }}>
+                                {t(`size_map_conf_${conf}`)}</Badge>
                             ) : null
                           })()}
                           {g.pom_id && dupPomIds.has(g.pom_id) && (
@@ -772,7 +798,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
                             </div>
                           )}
                           {g.pom_id
-                            ? (g.pom_nom && <div style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)' }}>→ {g.pom_nom}</div>)
+                            ? (g.pom_nom && <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)' }}>→ {g.pom_nom}</div>)
                             : (<>
                               {/* Match dèbil (LOW) o guard many-to-one (N3-P2): el backend NO ha
                                   auto-vinculat; es mostra el suggeriment perquè l'humà vinculi
@@ -798,16 +824,20 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
                         </td>
                         <td style={{ padding: 6 }}>
                           <select value={g.logica} onChange={e => upd('logica', e.target.value)} style={{ ...selS, padding: '3px 6px' }}>
-                            {LOGICA.map(l => <option key={l} value={l}>{l}</option>)}
+                            {regimsAutorables.map(l => <option key={l} value={l}>{l}</option>)}
                           </select>
                         </td>
                         <td style={{ padding: 6 }}>
                           {g.increment_base == null
                             ? (g.valors_step_text
                                 ? <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)' }}>{g.valors_step_text}</span>
-                                : <span style={{ color: 'var(--gray)' }}>—</span>)
+                                : <span style={{ color: 'var(--text-soft)' }}>—</span>)
                             : (g.increment_break != null
-                                ? <span>+{g.increment_base} · +{g.increment_break} {t('size_map_g_break_from')} {g.talla_break_label}</span>
+                                /* El break, en convenció de DOCUMENT: aquesta previsualització
+                                   es llegeix contra el full del client, que és qui l'anomena.
+                                   El run és `wiz.gradingRun`, el mateix sobre el qual s'ha
+                                   derivat la regla (v. la nota de :415). */
+                                ? <span>+{g.increment_base} · +{g.increment_break} {t('size_map_g_break_from')} {aDocument(g.talla_break_label, wiz.gradingRun) || '—'}</span>
                                 : <span>+{g.increment_base}</span>)}
                         </td>
                         {/* Paritat R7 (NOMÉS display): valors originals del document per talla + toleràncies
@@ -820,17 +850,17 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
                                   {(wiz.gradingRun.length ? wiz.gradingRun : Object.keys(g.valors_calculats)).map(sz =>
                                     g.valors_calculats[sz] != null
                                       ? <span key={sz} style={{ whiteSpace: 'nowrap' }}>
-                                          <span style={{ color: 'var(--gray)' }}>{sz}</span> {g.valors_calculats[sz]}
+                                          <span style={{ color: 'var(--text-soft)' }}>{sz}</span> {g.valors_calculats[sz]}
                                         </span>
                                       : null)}
                                 </div>
                                 {(g.tolerance_minus != null || g.tolerance_plus != null) && (
-                                  <div style={{ color: 'var(--gray)', marginTop: 2 }}>
+                                  <div style={{ color: 'var(--text-soft)', marginTop: 2 }}>
                                     {t('size_map_g_tol')} −{g.tolerance_minus ?? 0} / +{g.tolerance_plus ?? 0}
                                   </div>
                                 )}
                               </>)
-                            : <span style={{ color: 'var(--gray)' }}>—</span>}
+                            : <span style={{ color: 'var(--text-soft)' }}>—</span>}
                         </td>
                         <td style={{ padding: 6, fontSize: 'var(--fs-body)' }}>
                           {g.incompleta && (
@@ -856,7 +886,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
         <div style={card}>
           {/* Destí (de la decisió resolta a la Pantalla 1). REUTILITZAR no modifica el sistema:
               només crea un GradingRuleSet nou lligat (confirmat al backend, pas 1-2 del create). */}
-          <div style={{ background: 'var(--gold-pale)', border: '0.5px solid var(--gold)', borderRadius: 8,
+          <div style={{ background: 'var(--sel)', border: '0.5px solid var(--gold)', borderRadius: 'var(--r-ctrl)',
                         padding: '8px 12px', marginBottom: 14, fontSize: 'var(--fs-body)' }}>
             {wiz.decision === 'CREAR'
               ? <span>{t('size_map_dest_new')}</span>
@@ -870,7 +900,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
                 const on = wiz.perfilTargets.includes(o.codi)
                 return (
                   <button key={o.codi} onClick={() => set({ perfilTargets: on ? wiz.perfilTargets.filter(x => x !== o.codi) : [...wiz.perfilTargets, o.codi] })}
-                    style={{ ...ghostBtn, background: on ? 'var(--gold-pale)' : 'var(--white)', color: on ? 'var(--gold)' : 'var(--text-main)', borderColor: on ? 'var(--gold)' : 'var(--gray-l)' }}>
+                    style={{ ...ghostBtn, background: on ? 'var(--sel)' : 'var(--panel)', color: on ? 'var(--gold)' : 'var(--text-main)', borderColor: on ? 'var(--gold)' : 'var(--line)' }}>
                     {o.nom}
                   </button>
                 )
@@ -891,7 +921,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
           )}
 
           {/* Resum */}
-          <div style={{ background: 'var(--gray-l)', borderRadius: 8, padding: 12, marginBottom: 14, fontSize: 'var(--fs-body)', fontFamily: MONO }}>
+          <div style={{ background: 'var(--line)', borderRadius: 'var(--r-ctrl)', padding: 12, marginBottom: 14, fontSize: 'var(--fs-body)', fontFamily: MONO }}>
             <div>{t('size_map_sum_action')}: <b>{wiz.decision}</b></div>
             <div>{t('size_map_sum_target')}: {wiz.target_codi ? t(`model_wizard.target_${wiz.target_codi}`, wiz.target_codi) : '—'} · {t('size_map_sum_unit')}: {wiz.base_unit} · {t('size_map_sum_client')}: {wiz.customer_codi || '—'}</div>
             {/* R5 — comptador de regles = POMs distints vinculats (regles reals que es
@@ -910,7 +940,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
 
           {/* Panell d'avís-i-confirma (409): graduacions ja existents per a la combinació. */}
           {conflict && (
-            <div style={{ border: '1px solid var(--gold)', background: 'var(--gold-pale)', borderRadius: 8, padding: 12, marginBottom: 14, fontSize: 'var(--fs-body)' }}>
+            <div style={{ border: '1px solid var(--gold)', background: 'var(--sel)', borderRadius: 'var(--r-ctrl)', padding: 12, marginBottom: 14, fontSize: 'var(--fs-body)' }}>
               <div style={{ fontWeight: 600, color: 'var(--gold)', marginBottom: 8 }}>
                 <i className="ti ti-alert-triangle" style={{ marginRight: 6 }} />
                 {conflict.message || t('size_map_conflict_title')}
@@ -938,7 +968,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
                 <button onClick={() => {
                     if (!wiz.nom_variant.trim()) { setErr(t('size_map_conflict_need_name')); return }
                     submitCreate({ on_conflict: 'new', nom_variant: wiz.nom_variant.trim() })
-                  }} disabled={busy} style={primaryBtn}>
+                  }} disabled={busy} style={botoPri}>
                   <i className="ti ti-plus" />{t('size_map_conflict_new')}
                 </button>
                 <button onClick={() => setConflict(null)} style={ghostBtn}>{t('size_map_cancel')}</button>
@@ -949,7 +979,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => { setConflict(null); setStep(wiz.decision === 'REUTILITZAR' ? 2 : 3) }}
               style={ghostBtn}>{t('size_map_back')}</button>
-            <button onClick={doCreate} disabled={busy} style={primaryBtn}>
+            <button onClick={doCreate} disabled={busy} style={botoPri}>
               <i className="ti ti-check" />{t('size_map_create_btn')}
             </button>
           </div>
@@ -965,11 +995,11 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
 function Pill({ active, onClick, children }) {
   return (
     <button type="button" onClick={onClick} style={{
-      padding: '6px 14px', borderRadius: 6, cursor: 'pointer', fontFamily: MONO,
+      padding: '6px 14px', borderRadius: 'var(--r-ctrl)', cursor: 'pointer', fontFamily: MONO,
       fontSize: 'var(--fs-body)', fontWeight: active ? 600 : 400,
-      background: active ? 'var(--warn-bg)' : 'var(--white)',
+      background: active ? 'var(--warn-bg)' : 'var(--panel)',
       color: active ? 'var(--warn)' : 'var(--text-main)',
-      border: `1px solid ${active ? 'var(--warn)' : 'var(--gray-l)'}`,
+      border: `1px solid ${active ? 'var(--warn)' : 'var(--line)'}`,
     }}>{children}</button>
   )
 }

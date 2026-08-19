@@ -7,22 +7,23 @@ import Feedback from '../ui/Feedback'
 import { primaryBtn } from '../ui/buttons'
 import PhaseTimeStrip from './PhaseTimeStrip'
 import TimeTree from './TimeTree'
+import { useEnumeracio, codiSeguent } from '../../utils/vocabulariDominiFont'
 
 // Panell de govern (tab "Tauler" de Planificació). Recupera la cua de gates òrfena de la
 // jubilació del Kanban (DIAGNOSI §16.A.b: gates/ready sense surface). Es construeix per blocs;
 // el primer és la cua "Llestos per validar". Comptadors + models en risc s'afegeixen després.
 const MONO = 'IBM Plex Mono, monospace'
-const PHASES = ['Pending', 'Dev', 'Proto', 'SizeSet', 'PP', 'TOP']
-const nextPhase = (f) => { const i = PHASES.indexOf(f); return i >= 0 && i < PHASES.length - 1 ? PHASES[i + 1] : null }
+// Les fases i «quina ve després» surten de `/vocabulari/` (`fases_model`), en l'ordre que el
+// model declara. `codiSeguent` és el mateix helper que `ActionsMenu`, no una segona còpia.
 
 const thS = {
-  fontFamily: MONO, fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-muted)', textAlign: 'left',
-  padding: '8px 10px', textTransform: 'uppercase', letterSpacing: '.04em',
-  borderBottom: '0.5px solid var(--gray-l)', whiteSpace: 'nowrap',
+  fontFamily: MONO, fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-soft)', textAlign: 'left',
+  padding: '8px 10px', textTransform: 'uppercase', letterSpacing: '.08em',
+  borderBottom: '1px solid var(--line)', whiteSpace: 'nowrap',
 }
-const tdS = { padding: '8px 10px', fontSize: 'var(--fs-body)', borderBottom: '0.5px solid var(--gray-l)', verticalAlign: 'middle' }
+const tdS = { padding: '8px 10px', fontSize: 'var(--fs-body)', borderBottom: '1px solid var(--line)', verticalAlign: 'middle' }
 const ghostBtn = {
-  background: 'none', border: '0.5px solid var(--gray-l)', borderRadius: 6, cursor: 'pointer',
+  background: 'none', border: '1px solid var(--line)', borderRadius: 'var(--r-ctrl)', cursor: 'pointer',
   padding: '4px 12px', fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-main)',
 }
 
@@ -54,7 +55,7 @@ function TimeAnalysisSection({ t }) {
         <i className="ti ti-clock-cog" style={{ fontSize: 16, marginRight: 6, color: 'var(--gold)' }} />
         {t('planning.time.title')}
       </h2>
-      <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300, marginTop: 0, marginBottom: 12 }}>
+      <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', fontWeight: 400, marginTop: 0, marginBottom: 12 }}>
         {t('planning.time.subtitle')}
       </p>
       <PhaseTimeStrip t={t} />
@@ -79,6 +80,7 @@ async function fetchAllPages(apiFn, baseParams = {}) {
 // Visible per a tothom amb accés al govern (no depèn de close_gates).
 function CountersBlock({ t }) {
   const [data, setData] = useState({ counts: {}, total: 0 })
+  const { codis: fases } = useEnumeracio('fases_model')
   useEffect(() => {
     modelsApi.faseCounts({})
       .then(res => setData({ counts: res.data?.counts || {}, total: res.data?.total ?? 0 }))
@@ -92,7 +94,7 @@ function CountersBlock({ t }) {
       </h2>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <Chip label={t('dashboard.board.total')} n={data.total} strong />
-        {PHASES.map(ph => (
+        {(fases || []).map(ph => (
           <Chip key={ph} label={t(`model_sheet.dashboard.phase.${ph}`, { defaultValue: ph })} n={data.counts?.[ph] ?? 0} />
         ))}
       </div>
@@ -104,8 +106,8 @@ function Chip({ label, n, strong }) {
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-label)', fontFamily: MONO,
-      color: 'var(--text-muted)', padding: '4px 11px', borderRadius: 10, background: 'var(--white)',
-      border: `0.5px solid ${strong ? 'var(--gold)' : 'var(--gray-l)'}`,
+      color: 'var(--text-soft)', padding: '4px 11px', borderRadius: 'var(--r-pill)', background: 'var(--panel)',
+      borderWidth: 1, borderStyle: 'solid', borderColor: strong ? 'var(--gold-border)' : 'var(--line)',
     }}>
       <span>{label}</span>
       <span style={{ fontWeight: 600, color: 'var(--text-main)', fontVariantNumeric: 'tabular-nums' }}>{n}</span>
@@ -142,21 +144,21 @@ function RiskBlock({ t }) {
     <section>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginBottom: 4 }}>
         <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, fontFamily: MONO, margin: 0 }}>
-          <i className="ti ti-alert-triangle" style={{ fontSize: 16, marginRight: 6, color: 'var(--warn)' }} />
+          <i className="ti ti-alert-triangle" style={{ fontSize: 16, marginRight: 6, color: 'var(--warn-ink)' }} />
           {t('planning.risk.title')}
         </h2>
-        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', fontFamily: MONO }}>{rows.length}</span>
+        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', fontFamily: MONO }}>{rows.length}</span>
       </div>
-      <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300, marginTop: 0, marginBottom: 12 }}>
+      <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', fontWeight: 400, marginTop: 0, marginBottom: 12 }}>
         {t('planning.risk.subtitle')}
       </p>
       {loading ? <Center>{t('planning.loading')}</Center>
         : rows.length === 0 ? (
-          <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)', border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)' }}>
+          <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-soft)', fontSize: 'var(--fs-body)', border: '1px solid var(--line)', borderRadius: 'var(--r-card)', background: 'var(--panel)' }}>
             {t('planning.risk.empty')}
           </div>
         ) : (
-          <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', overflowX: 'auto' }}>
+          <div style={{ border: '1px solid var(--line)', borderRadius: 'var(--r-card)', background: 'var(--panel)', overflowX: 'auto' }}>
             <table style={{ borderCollapse: 'collapse', width: '100%' }}>
               <thead><tr>
                 <th style={thS}>{t('planning.col_model')}</th>
@@ -170,7 +172,7 @@ function RiskBlock({ t }) {
                   <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/models/${r.id}`)}>
                     <td style={{ ...tdS, fontFamily: MONO, fontWeight: 600 }}>
                       {r.codi}
-                      <div style={{ fontWeight: 400, color: 'var(--gray)' }}>{r.nom}</div>
+                      <div style={{ fontWeight: 400, color: 'var(--text-soft)' }}>{r.nom}</div>
                     </td>
                     <td style={tdS}>{t(`model_sheet.dashboard.phase.${r.fase}`, { defaultValue: r.fase })}</td>
                     <td style={tdS}>{r.data_objectiu}</td>
@@ -197,6 +199,11 @@ function GatesReadyBlock({ t }) {
   const [busy, setBusy] = useState(false)
   const [selected, setSelected] = useState(() => new Set())
   const [feedback, setFeedback] = useState(null)
+  // ⚠️ SENSE VOCABULARI NO ES VALIDA RES, i tampoc es diu que el model sigui al final del cicle.
+  // «No sé quina fase ve després» i «no en ve cap» tenen la mateixa forma (`null`) i conseqüències
+  // oposades: la segona és una AFIRMACIÓ sobre el model. Per això `fases` es mira a part.
+  const { codis: fases } = useEnumeracio('fases_model')
+  const nextPhase = (f) => codiSeguent(fases, f)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -248,7 +255,7 @@ function GatesReadyBlock({ t }) {
           <i className="ti ti-checkup-list" style={{ fontSize: 16, marginRight: 6, color: 'var(--gold)' }} />
           {t('planning.gates.title')}
         </h2>
-        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', fontFamily: MONO }}>{rows.length}</span>
+        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', fontFamily: MONO }}>{rows.length}</span>
         {selectableCount > 0 && (
           <button onClick={validateSelected} disabled={busy} style={{ ...primaryBtn, marginLeft: 'auto' }}>
             <i className="ti ti-circle-check" style={{ fontSize: 14 }} />
@@ -256,7 +263,7 @@ function GatesReadyBlock({ t }) {
           </button>
         )}
       </div>
-      <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300, marginTop: 0, marginBottom: 12 }}>
+      <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', fontWeight: 400, marginTop: 0, marginBottom: 12 }}>
         {t('planning.gates.subtitle')}
       </p>
 
@@ -264,11 +271,11 @@ function GatesReadyBlock({ t }) {
 
       {loading ? <Center>{t('planning.loading')}</Center>
         : rows.length === 0 ? (
-          <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)', border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)' }}>
+          <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-soft)', fontSize: 'var(--fs-body)', border: '1px solid var(--line)', borderRadius: 'var(--r-card)', background: 'var(--panel)' }}>
             {t('planning.gates.empty')}
           </div>
         ) : (
-          <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', overflowX: 'auto' }}>
+          <div style={{ border: '1px solid var(--line)', borderRadius: 'var(--r-card)', background: 'var(--panel)', overflowX: 'auto' }}>
             <table style={{ borderCollapse: 'collapse', width: '100%' }}>
               <thead><tr>
                 <th style={{ ...thS, width: 34 }}></th>
@@ -291,9 +298,11 @@ function GatesReadyBlock({ t }) {
                           onClick={() => navigate(`/models/${r.model_id}`)}>{r.codi_intern}</td>
                       <td style={tdS}>{t(`model_sheet.dashboard.phase.${r.fase_actual}`, { defaultValue: r.fase_actual })}</td>
                       <td style={tdS}>
-                        {nx
-                          ? <span style={{ fontWeight: 500 }}>{t(`model_sheet.dashboard.phase.${nx}`, { defaultValue: nx })}</span>
-                          : <span style={{ color: 'var(--text-muted)' }}>{t('planning.gates.at_top')}</span>}
+                        {!fases
+                          ? <span style={{ color: 'var(--text-soft)' }}>—</span>
+                          : nx
+                            ? <span style={{ fontWeight: 500 }}>{t(`model_sheet.dashboard.phase.${nx}`, { defaultValue: nx })}</span>
+                            : <span style={{ color: 'var(--text-soft)' }}>{t('planning.gates.at_top')}</span>}
                       </td>
                       <td style={tdS}>{r.task_count}</td>
                       <td style={tdS}>

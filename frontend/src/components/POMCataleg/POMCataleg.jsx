@@ -1,0 +1,562 @@
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { poms, pomCategories, customerAliases } from '../../api/endpoints'
+import { useTraduccioPoms } from '../../utils/traduccioPomFont'
+import { InfoTraduccio } from '../EditableTable/EditableTable'
+
+// Segueix la paginació de DRF fins al final. `page_size: 1000` era un SOSTRE: amb un catàleg més
+// gran, la pantalla n'hauria pintat 1000 i el comptador n'hauria dit 1000, sense que res
+// indiqués que en faltaven. Un número que menteix és pitjor que una llista curta. Mateix patró
+// que `Planning.jsx:86` i `Dashboard.jsx:65`.
+async function totesLesPagines(apiFn, params = {}) {
+  const out = []
+  let page = 1
+  for (;;) {
+    const res = await apiFn({ ...params, page })
+    const d = res.data
+    out.push(...(d?.results ?? (Array.isArray(d) ? d : [])))
+    if (d?.next) page++
+    else return out
+  }
+}
+
+// U1 · CATÀLEG DE POMs — mitja i mitja: la llista no perd context i la fitxa té espai per
+// dir-ho tot (maqueta_cataleg_poms_v1). Substitueix les dues pestanyes de POM Systems: aquí
+// només hi ha catàleg. El `POMBrowser` no desapareix —el consumeixen 5 pantalles més—, però
+// deixa de ser una pestanya d'aquesta.
+//
+// ⚠️ SOBRE ELS «TAGS» DE CAPES I INSTÀNCIES. La casa té `Chip` (botó seleccionable,
+// `wizardUI.jsx:25`) i `ReadChip` (caixa etiqueta/valor), i cap dels dos té el contracte d'una
+// llista de tags de NOMÉS LECTURA. El `tagBase` de `RunRestrictionTags` sí que el tindria, però
+// és privat i el seu fitxer cau dins la frontera dura d'aquest sprint. Aquí es fa marcatge
+// LOCAL de pàgina amb tokens —no un component compartit nou, que hauria demanat aturar-se— i
+// s'ANOTA al report que un `Tag` compartit és la convergència òbvia de les tres formes.
+
+// PELL NORMA_LAYOUT v1 (A1). L'estructura —mitja i mitja, seccions de la fitxa, peu d'accions—
+// no es toca: ve de la maqueta v1 ja aprovada. El que canvia és el vestit, i tot són tokens:
+//   --bg-card/--bg-muted → --panel (§1: «--white: TOT panell, targeta i capçalera»; les
+//     capçaleres de panell i el peu deixen de ser crema) · --border → --line · --gold-pale →
+//     --sel + filet d'or (§1: el crema ja no marca selecció) · --gray → --text-faint ·
+//     --text-muted → --text-soft · radis 4/5/9 → --r-ctrl i --r-card · píndoles a --r-pill.
+// Mides: capçaleres de secció i de categoria a 10px (§2, mínim absolut) via --fs-label, que és
+// el rol correcte —van en MAJÚSCULES amb tracking—; --fs-caption queda per al text menor.
+const cx = {
+  wrap: { maxWidth: 1520, margin: '0 auto' },
+  split: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, alignItems: 'start' },
+  box: {
+    background: 'var(--panel)', border: '1px solid var(--line)',
+    borderRadius: 'var(--r-card)', overflow: 'hidden',
+  },
+  bhead: {
+    padding: '12px 16px', background: 'var(--panel)', borderBottom: '1px solid var(--line)',
+    display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+  },
+  // La cerca viu a la fila d'identitat, al costat del comptador (maqueta v3 `.ident .cerca`).
+  cerca: {
+    flex: 1, minWidth: 220, alignSelf: 'center', fontFamily: 'inherit', fontSize: 'var(--fs-body)',
+    border: '1px solid var(--line)', borderRadius: 'var(--r-ctrl)', padding: '8px 12px',
+    background: 'var(--panel)', color: 'var(--text-main)',
+  },
+  list: { maxHeight: 660, overflowY: 'auto' },
+  // §8e: capçalera de llista = th 10px MAJÚSCULES tracking .08em «a tot arreu (també llistes
+  // <div>)». Deixa de ser daurada: el daurat és marca i selecció, no rètol de columna.
+  cat: {
+    padding: '8px 16px 6px', fontSize: 'var(--fs-label)', lineHeight: '12px',
+    letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--text-soft)',
+    fontWeight: 600, background: 'var(--panel)',
+    borderBottom: '1px solid var(--line-soft)', position: 'sticky', top: 0, zIndex: 2,
+  },
+  // 🔴 AQUÍ HI HAVIA UNA LÍNIA NEGRA DE 3px, i el codi semblava correcte.
+  //
+  // Deia `borderBottom: '1px solid var(--line-soft)'` … i més avall, al mateix objecte,
+  // `border: 'none'` (per matar la vora d'UA del `<button>`) seguit de
+  // `borderBottomStyle: 'solid'`. Les propietats s'apliquen en ORDRE DE CLAU, i una SHORTHAND
+  // aplicada DESPRÉS de la seva pròpia longhand la reescriu sencera: `border: none` posa
+  // l'amplada a `medium` (3px) i el color a **`currentColor`**, i el `borderBottomStyle`
+  // següent tornava a fer visible això —no la vora que la línia de dalt demanava—. Amb
+  // `color: 'inherit'`, `currentColor` és `--text-main`: 3px de NEGRE sota cada fila,
+  // en comptes d'un filet d'1px de `--line-soft`.
+  //
+  // El codi no ho delata: cal MESURAR-HO (`getComputedStyle`, §8d). Ho va veure l'Agus a
+  // pantalla i ho confirma `ops/qa/qa_auditoria_computats.py`.
+  //
+  // Fix: cap shorthand de vora ni de font. `border: 0` primer (mata la d'UA sense tocar cap
+  // color), després NOMÉS les longhands del filet que volem; i `fontFamily` en comptes de
+  // `font`, que és qui es menjava la mida.
+  row: {
+    padding: '8px 16px', cursor: 'pointer',
+    display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left',
+    background: 'transparent', color: 'inherit', fontFamily: 'inherit',
+    // La MIDA també s'hereta, i del document: sense això la fila computava 16px (mesurat
+    // contra `.pom.on`/`.run.on` de la maqueta, que són 12). Els fills posaven la seva i per
+    // això no es veia — fins que un text hi cau sense mida pròpia.
+    fontSize: 'var(--fs-body)',
+    border: 0,
+    borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: 'var(--line-soft)',
+  },
+  rowOn: { background: 'var(--sel)', boxShadow: 'inset 3px 0 0 var(--gold)' },
+  code: { fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--gold)', width: 78, flex: 'none' },
+  nm: { fontSize: 'var(--fs-body)', flex: 1, lineHeight: 1.35 },
+  ab: {
+    fontSize: 'var(--fs-label)', letterSpacing: '.04em', border: '1px solid var(--line)',
+    borderRadius: 'var(--r-pill)', padding: '2px 8px', color: 'var(--text-soft)',
+    background: 'var(--panel)', flex: 'none',
+  },
+  sec: { marginTop: 16 },
+  secH: {
+    fontSize: 'var(--fs-label)', lineHeight: '12px', letterSpacing: '.08em',
+    textTransform: 'uppercase', color: 'var(--gold)', fontWeight: 600, paddingBottom: 6,
+    borderBottom: '1px solid var(--line-soft)', marginBottom: 10,
+  },
+  kv: {
+    display: 'grid', gridTemplateColumns: '132px 1fr', gap: 8, padding: '4px 0',
+    fontSize: 'var(--fs-body)', alignItems: 'baseline',
+  },
+  k: {
+    fontSize: 'var(--fs-label)', letterSpacing: '.05em', textTransform: 'uppercase',
+    color: 'var(--text-soft)',
+  },
+  buit: { color: 'var(--text-faint)', fontStyle: 'italic' },
+  tag: {
+    fontSize: 'var(--fs-label)', border: '1px solid var(--line)', borderRadius: 'var(--r-pill)',
+    padding: '3px 10px', background: 'var(--panel)',
+  },
+  us: { display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 'var(--fs-body)' },
+  usN: { fontSize: 'var(--fs-h3)', color: 'var(--gold)', fontWeight: 600 },
+  usL: {
+    display: 'block', fontSize: 'var(--fs-label)', letterSpacing: '.05em',
+    textTransform: 'uppercase', color: 'var(--text-soft)',
+  },
+  ffoot: {
+    padding: '12px 16px', borderTop: '1px solid var(--line)', background: 'var(--panel)',
+    display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap',
+  },
+  note: { fontSize: 'var(--fs-label)', color: 'var(--text-soft)', flex: 1, lineHeight: 1.5 },
+  // §1 (esmena Agus 08/08): TOT badge d'estat és fons suau + tinta del color + VORA FINA DEL
+  // MATEIX COLOR, sense excepció. Abans n'hi havia que anaven sense filet.
+  badge: {
+    fontSize: 'var(--fs-label)', lineHeight: '12px', fontWeight: 600, letterSpacing: '.04em',
+    padding: '3px 10px', borderRadius: 'var(--r-pill)',
+  },
+}
+
+// §5 · jerarquia d'acció. Aquesta pantalla és de CONSULTA i, ara mateix, no té cap acció
+// primària: «Desactivar» és terciària (reversible, de servei) i «Esborrar» és destructiva amb
+// vora. Per això no hi ha cap blau — §8c ho preveu: «pantalles de CONSULTA poden tenir ZERO
+// accions primàries». El daurat ple que feia de `pri` desapareix: el daurat ja no és acció.
+const btn = (variant) => ({
+  border: '1px solid var(--gold-border)', background: 'var(--panel)', color: 'var(--text-main)',
+  borderRadius: 'var(--r-ctrl)', padding: '8px 16px', fontFamily: 'inherit',
+  fontSize: 'var(--fs-body)', fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap',
+  ...(variant === 'ter' ? { borderColor: 'transparent', background: 'none', color: 'var(--text-soft)' } : null),
+  ...(variant === 'dang' ? { color: 'var(--err)', borderColor: 'var(--err)' } : null),
+})
+
+// ══ ELS TRES ESTATS DEL «COM ES MESURA» (A1 · Agus, 08/08) ═══════════════════════════════
+//
+// Un camp buit d'aquesta fitxa no vol dir una sola cosa, i pintar-hi un guió les confonia
+// totes tres en el mateix silenci. El «com es mesura» viu a `POMGlobal`, i per tant:
+//
+//   · DADA                     el POM està lligat i el camp té valor
+//   · «NO LLIGAT»              `pom_global` és `null` → no hi ha catàleg global on mirar-ho.
+//                              No és que falti la dada: és que aquest POM no en té cap font.
+//   · «LLIGAT SENSE INFORMAR»  `pom_global` hi és però el camp és `''` → la font existeix i
+//                              ningú l'ha omplerta. És una feina pendent d'algú, no un no-hi-ha.
+//
+// Les dues últimes són ACCIONS DIFERENTS per a qui llegeix: la primera es resol lligant el POM
+// al catàleg, la segona omplint-lo. Un «—» no permet saber quina de les dues toca.
+//
+// Això només és possible perquè F2.1a va fer que els 21 camps de `pom_global` s'emetin SEMPRE
+// (amb `null` quan no hi ha lligam) en comptes de desaparèixer de la resposta: sense allò, «no
+// lligat» i «camp inexistent» tenien la mateixa forma —la clau absent— i no es podien distingir.
+const LLIGAT = 'lligat'
+const NO_LLIGAT = 'no_lligat'
+const SENSE_INFORMAR = 'sense_informar'
+
+function estatCamp(sel, valor) {
+  if (sel?.pom_global == null) return NO_LLIGAT
+  const buit = valor === null || valor === undefined || String(valor).trim() === ''
+  return buit ? SENSE_INFORMAR : LLIGAT
+}
+
+/** El valor d'un camp del «com es mesura», o LA PARAULA que diu per què no hi és. Mai un guió. */
+function ValorGlobal({ sel, valor, t }) {
+  const estat = estatCamp(sel, valor)
+  if (estat === LLIGAT) return <span>{valor}</span>
+  return (
+    <span style={cx.buit}>
+      {t(estat === NO_LLIGAT ? 'poms.cat.state_unlinked' : 'poms.cat.state_uninformed')}
+    </span>
+  )
+}
+
+// EL CATÀLEG VA EN ANGLÈS I LA TRADUCCIÓ VIU DARRERE LA ⓘ (maqueta v3, decisió vigent). El nom
+// local deixa de competir amb el canònic a la mateixa línia; qui el necessiti l'hi troba. Va a
+// `title` I a `aria-label`: una icona que només parla amb el ratolí no diu res a qui no en té.
+// LA ⓘ DEL CATÀLEG — la MATEIXA del sistema (tram ⓘ), no una de pròpia.
+//
+// Aquí n'hi havia una feta a mà amb el caràcter «ⓘ» i un `title` natiu: el mecanisme que ja es
+// va diagnosticar inservible el 06/08 (només amb el ratolí a sobre, sense clic ni teclat). Ara
+// és `InfoTraduccio`, per portal i amb hover + clic + focus, com a la taula de mesures.
+//
+// I el que hi ha a dins ja no és només `name_cat`: el catàleg v4 no en porta cap, i per això
+// aquesta ⓘ no sortia MAI. Quan la casa no té nom local, es demana (`traduccio`).
+function InfoLocal({ nom, traduccio }) {
+  const text = nom || traduccio || ''
+  if (!text) return null
+  return <InfoTraduccio text={text} />
+}
+
+function Tags({ valors, buit }) {
+  if (!valors?.length) return <span style={cx.buit}>{buit}</span>
+  return (
+    <span style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+      {valors.map(v => <span key={v} style={cx.tag}>{v}</span>)}
+    </span>
+  )
+}
+
+export default function POMCataleg() {
+  // Sense `lang`: EL CATÀLEG VA EN ANGLÈS (maqueta v3). El nom canònic i el de la categoria
+  // surten de `nom_en`, i el local viu darrere la ⓘ — no hi ha cap text que depengui de l'idioma
+  // de qui mira, i per això aquesta pantalla ja no llegeix `i18n.language`.
+  const { t } = useTranslation()
+
+  const [llista, setLlista] = useState([])
+  const [cats, setCats] = useState([])
+  const [q, setQ] = useState('')
+  const [selId, setSelId] = useState(null)
+  const [us, setUs] = useState(null)
+  const [alies, setAlies] = useState([])
+  const [carregant, setCarregant] = useState(true)
+  const [error, setError] = useState(null)
+  const [ocupat, setOcupat] = useState(false)
+  // LA ⓘ TÉ FONT (tram ⓘ). El catàleg sencer d'un cop: són 142 POMs i la petició va en lot, o
+  // sigui tres crides al proveïdor el primer cop de cada idioma i cap més mai.
+  const traduccioDe = useTraduccioPoms(llista.map(p => p.id))
+
+  const carrega = useCallback(() => {
+    setCarregant(true); setError(null)
+    Promise.all([
+      totesLesPagines(poms.list, { page_size: 200, ordering: 'codi_client' }),
+      totesLesPagines(pomCategories.list, { page_size: 200 }),
+    ])
+      .then(([rows, categories]) => {
+        setLlista(rows)
+        setCats(categories)
+        setSelId(prev => (prev && rows.some(r => r.id === prev)) ? prev : (rows[0]?.id ?? null))
+      })
+      .catch(() => setError(t('poms.cat.load_error')))
+      .finally(() => setCarregant(false))
+  }, [t])
+
+  useEffect(() => { carrega() }, [carrega])
+
+  // L'ús es demana per POM seleccionat: és el que habilita el botó d'esborrar i el que
+  // omple les dues seccions d'ús observat. Una crida per fitxa, no per fila de la llista.
+  useEffect(() => {
+    if (!selId) { setUs(null); setAlies([]); return }
+    let viu = true
+    setUs(null)
+    poms.us(selId).then(r => { if (viu) setUs(r.data) }).catch(() => { if (viu) setUs(null) })
+    customerAliases.list({ pom: selId, page_size: 100 })
+      .then(r => { if (viu) setAlies(r.data?.results ?? (Array.isArray(r.data) ? r.data : [])) })
+      .catch(() => { if (viu) setAlies([]) })
+    return () => { viu = false }
+  }, [selId])
+
+  // 🔑 LA CATEGORIA ÉS LA DEL CATÀLEG (`POMMaster.categoria`, un ID), NO `categoria_nom`.
+  //
+  // `categoria_nom` és un `SerializerMethodField` que barreja DOS vocabularis: si el POM està
+  // lligat, torna `POMGlobal.categoria` (un text lliure: «TORS», «MANIGA»); si no, el `nom_ca`
+  // de la `POMCategory` del tenant («Part inferior del cos»). Per això la llista mostrava
+  // capçaleres en dues llengües i dues convencions alhora. Aquí es resol per ID contra
+  // `/pom-categories/`, que és l'única taula que sap com es diu una categoria i en quin ordre va.
+  //
+  // EL CATÀLEG ÉS EN ANGLÈS (maqueta v3): `nom_en` mana i `nom_ca` només és el recanvi.
+  const catPerId = useMemo(() => new Map(cats.map(c => [c.id, c])), [cats])
+  const nomCat = useCallback((id) => {
+    const c = catPerId.get(id)
+    return c ? (c.nom_en || c.nom_ca || c.codi) : t('poms.uncategorized')
+  }, [catPerId, t])
+
+  const filtrats = useMemo(() => {
+    const s = q.trim().toLowerCase()
+    if (!s) return llista
+    return llista.filter(p => `${p.codi_client || ''} ${p.nom_client || ''} ${p.pom_code || ''} `
+      .concat(`${p.name_en || ''} ${p.name_cat || ''} ${p.categoria || ''}`).toLowerCase().includes(s))
+  }, [llista, q])
+
+  // UN BLOC PER CATEGORIA REAL, i prou.
+  //
+  // Això agrupava TRAMS CONSECUTIUS: com que la llista ve ordenada per `codi_client`, les
+  // categories s'entrellacen i la mateixa capçalera sortia quatre vegades («MÀNIGA · 1 …
+  // TORS · 1 … MÀNIGA · 1 …»). No era agrupar: era detectar canvis de valor en una llista que
+  // no estava ordenada per aquell valor. Ara els blocs són tantes com categories REALS hi hagi
+  // amb POMs, en el `display_order` del catàleg, i els POMs sense categoria van a un bloc final
+  // —no barrejats, però tampoc amagats—.
+  const grups = useMemo(() => {
+    const perCat = new Map()
+    for (const p of filtrats) {
+      const k = p.categoria ?? null
+      if (!perCat.has(k)) perCat.set(k, [])
+      perCat.get(k).push(p)
+    }
+    const ordre = (id) => (id == null ? Infinity : (catPerId.get(id)?.display_order ?? Infinity - 1))
+    return [...perCat.entries()]
+      .sort((a, b) => ordre(a[0]) - ordre(b[0]) || String(nomCat(a[0])).localeCompare(String(nomCat(b[0]))))
+      .map(([id, items]) => ({ catId: id, cat: nomCat(id), items }))
+  }, [filtrats, catPerId, nomCat])
+
+  const sel = useMemo(() => llista.find(p => p.id === selId) || null, [llista, selId])
+
+  const desactiva = async () => {
+    if (!sel) return
+    setOcupat(true)
+    try { await poms.update(sel.id, { actiu: !sel.actiu }); carrega() }
+    catch { setError(t('poms.cat.save_error')) }
+    finally { setOcupat(false) }
+  }
+
+  const esborra = async () => {
+    if (!sel || !us?.pot_esborrar) return
+    if (!window.confirm(t('poms.cat.confirm_delete', { codi: sel.codi_client }))) return
+    setOcupat(true)
+    try { await poms.remove(sel.id); setSelId(null); carrega() }
+    catch { setError(t('poms.cat.delete_error')) }
+    finally { setOcupat(false) }
+  }
+
+  return (
+    <div style={cx.wrap}>
+      {/* §8b.3 · IDENTITAT sobre el fons, sense contenidor: comptador + etiqueta + descripció.
+          El comptador és SELECCIÓ, no KPI (§8e): el primer valor segueix el filtre de cerca i
+          el total va menor i suau. Substitueix el títol h2 que hi havia: el nom de l'entitat
+          deixa de ser títol i passa a ser element al costat del número. */}
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, padding: '16px 0 12px', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 'var(--fs-h1)', lineHeight: '28px', fontWeight: 600, color: 'var(--text-main)' }}>
+          {filtrats.length}
+          <small style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, color: 'var(--text-soft)' }}>
+            /{llista.length}</small>
+        </span>
+        <span style={{ fontSize: 'var(--fs-label)', letterSpacing: '.08em', textTransform: 'uppercase',
+                       color: 'var(--text-soft)', fontWeight: 600 }}>{t('poms.cat.title')}</span>
+        {/* LA CERCA PUJA AL COSTAT DEL COMPTADOR (maqueta v3 `.ident`). No és col·locació: el
+            comptador diu «13/396» i el primer número ÉS EL RESULTAT DE LA CERCA. Tenir-los
+            separats obligava a mirar dalt per saber quants en queden i avall per canviar-ho, i
+            a la capçalera de la llista hi havia un SEGON comptador dient el mateix número. */}
+        <input style={cx.cerca} value={q} onChange={e => setQ(e.target.value)}
+               placeholder={t('poms.cat.search_ph')} aria-label={t('poms.cat.search_ph')} />
+      {/* ⚠️ SENSE DESCRIPCIÓ SOTA EL COMPTADOR (esmena §8e d'Agus, 08/08): «comptador + cerca i
+          prou». La línia hi era —i les maquetes v3/v4 encara la dibuixen (`.ident .desc`)— però
+          l'ordre és posterior a la maqueta i mana. 🚩 Les maquetes s'han d'esmenar, o el pròxim
+          tram la tornarà a pintar. */}
+      </div>
+
+      {error && (
+        <div role="alert" style={{
+          marginBottom: 12, padding: '8px 12px', borderRadius: 'var(--r-ctrl)',
+          border: '1px solid var(--err)', background: 'var(--err-bg)', color: 'var(--err)',
+          fontSize: 'var(--fs-body)',
+        }}>{error}</div>
+      )}
+
+      <div style={cx.split}>
+        {/* ── LLISTA ── */}
+        <div style={cx.box}>
+          <div style={cx.bhead}>
+            <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', whiteSpace: 'nowrap' }}>
+              {t('poms.cat.count', { n: filtrats.length })}
+            </span>
+          </div>
+          <div style={cx.list}>
+            {carregant && <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-faint)', fontStyle: 'italic' }}>
+              {t('poms.loading_catalogue')}</div>}
+            {!carregant && !filtrats.length && (
+              <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-faint)', fontStyle: 'italic' }}>
+                {t('poms.no_match')}</div>
+            )}
+            {grups.map(g => (
+              <div key={g.catId ?? 'sense'}>
+                <div style={cx.cat}>{g.cat}
+                  <span style={{ color: 'var(--text-faint)', letterSpacing: 0 }}> · {g.items.length}</span>
+                </div>
+                {g.items.map(p => (
+                  <button key={p.id} type="button"
+                          onClick={() => setSelId(p.id)}
+                          aria-current={p.id === selId ? 'true' : undefined}
+                          style={{
+                            ...cx.row,
+                            ...(p.id === selId ? cx.rowOn : null),
+                            opacity: p.actiu ? 1 : 0.5,
+                          }}>
+                    <span style={cx.code}>{p.pom_code || p.codi_client}</span>
+                    <span style={cx.nm}>
+                      {p.name_en || p.nom_client}
+                      <InfoLocal nom={p.name_cat !== p.name_en ? p.name_cat : null}
+                        traduccio={traduccioDe(p.id)} />
+                    </span>
+                    {(p.abbreviation || p.codi_client) && (
+                      <span style={cx.ab}>{p.abbreviation || p.codi_client}</span>)}
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ── FITXA ── */}
+        <div style={cx.box}>
+          {!sel && (
+            <div style={{ padding: '60px 20px', textAlign: 'center', color: 'var(--text-faint)', fontStyle: 'italic' }}>
+              {t('poms.cat.pick_one')}
+            </div>
+          )}
+          {sel && (
+            <>
+              <div style={{ padding: '16px', borderBottom: '1px solid var(--line)' }}>
+                <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', letterSpacing: '.04em' }}>
+                  {sel.pom_code || sel.codi_client} · {nomCat(sel.categoria)}
+                </div>
+                <div style={{ fontSize: 'var(--fs-h3)', lineHeight: '20px', fontWeight: 600, marginTop: 4 }}>
+                  {sel.name_en || sel.nom_client}
+                  <InfoLocal nom={sel.name_cat !== sel.name_en ? sel.name_cat : null}
+                    traduccio={traduccioDe(sel.id)} /></div>
+                <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                  <span style={{
+                    ...cx.badge,
+                    background: sel.actiu ? 'var(--ok-bg)' : 'var(--bg-page)',
+                    color: sel.actiu ? 'var(--ok)' : 'var(--text-soft)',
+                    border: `1px solid ${sel.actiu ? 'var(--ok)' : 'var(--line)'}`,
+                  }}>{sel.actiu ? t('poms.cat.badge_active') : t('poms.cat.badge_off')}</span>
+                  {us && (
+                    <span style={{
+                      ...cx.badge,
+                      background: us.de_sistema ? 'var(--sel)' : 'var(--bg-page)',
+                      color: 'var(--text-main)',
+                      border: `1px solid ${us.de_sistema ? 'var(--gold-border)' : 'var(--line)'}`,
+                    }}>{us.de_sistema ? t('poms.cat.badge_system') : t('poms.cat.badge_tenant')}</span>
+                  )}
+                  {sel.pendent_revisio && (
+                    <span style={{ ...cx.badge, background: 'var(--warn-state-bg)', color: 'var(--warn-ink)',
+                      border: '1px solid var(--warn-state)' }}>
+                      {t('poms.cat.badge_review')}</span>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ padding: '0 16px 14px', maxHeight: 560, overflowY: 'auto' }}>
+                <section style={cx.sec}>
+                  <div style={cx.secH}>{t('poms.cat.sec_identity')}</div>
+                  {/* El NOM LOCAL ja no té fila pròpia: el catàleg va en anglès i la traducció
+                      viu darrere la ⓘ del nom canònic (maqueta v3, mateix patró a llista i fitxa). */}
+                  <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_name_en')}</span>
+                    <span>{sel.name_en || sel.nom_client}
+                      <InfoLocal nom={sel.name_cat !== sel.name_en ? sel.name_cat : null}
+                        traduccio={traduccioDe(sel.id)} /></span></div>
+                  <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_nomenclature')}</span>
+                    <span>{sel.abbreviation || sel.codi_client}</span></div>
+                  <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_family')}</span>
+                    <span>{sel.categoria != null
+                      ? nomCat(sel.categoria)
+                      : <span style={cx.buit}>{t('poms.cat.no_category')}</span>}</span></div>
+                  <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_unit')}</span>
+                    <ValorGlobal sel={sel} valor={sel.unitat} t={t} /></div>
+                </section>
+
+                <section style={cx.sec}>
+                  <div style={cx.secH}>{t('poms.cat.sec_howto')}</div>
+                  {/* La CAPÇALERA de la secció diu l'estat un sol cop quan afecta tota la secció:
+                      repetir cinc vegades «no lligat al catàleg global» seria cert i il·legible. */}
+                  {sel.pom_global == null && (
+                    <p style={{ ...cx.note, margin: '0 0 8px' }}>{t('poms.cat.howto_unlinked')}</p>
+                  )}
+                  {sel.pom_global != null && !sel.start_point && !sel.end_point
+                    && !sel.reference_point && !sel.scope && !sel.body_section && (
+                    <p style={{ ...cx.note, margin: '0 0 8px' }}>{t('poms.cat.howto_uninformed')}</p>
+                  )}
+                  <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_from')}</span>
+                    <ValorGlobal sel={sel} valor={sel.start_point} t={t} /></div>
+                  <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_to')}</span>
+                    <ValorGlobal sel={sel} valor={sel.end_point} t={t} /></div>
+                  <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_reference')}</span>
+                    <ValorGlobal sel={sel} valor={sel.reference_point} t={t} /></div>
+                  <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_scope')}</span>
+                    <ValorGlobal sel={sel}
+                      valor={[sel.scope, sel.orientation, sel.state, sel.line].filter(Boolean).join(' · ')}
+                      t={t} /></div>
+                  <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_body')}</span>
+                    <ValorGlobal sel={sel} valor={sel.body_section} t={t} /></div>
+                </section>
+
+                {/* 🔑 ÚS OBSERVAT, no política declarada (decisió Agus 07/08). El model no té
+                    enlloc «quines capes admet aquest POM»; això és el que es fa servir DE DEBÒ,
+                    i el text ho ha de dir amb aquestes paraules. */}
+                <section style={cx.sec}>
+                  <div style={cx.secH}>{t('poms.cat.sec_observed')}</div>
+                  <p style={{ ...cx.note, margin: '0 0 8px' }}>{t('poms.cat.observed_help')}</p>
+                  <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_layers')}</span>
+                    <Tags valors={us?.observat?.capes} buit={t('poms.cat.observed_none')} /></div>
+                  <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_instances')}</span>
+                    <Tags valors={us?.observat?.instancies} buit={t('poms.cat.observed_none')} /></div>
+                </section>
+
+                <section style={cx.sec}>
+                  <div style={cx.secH}>{t('poms.cat.sec_aliases')}</div>
+                  {!alies.length && <div style={cx.buit}>{t('poms.cat.aliases_none')}</div>}
+                  {alies.map(a => (
+                    <div key={a.id} style={{
+                      display: 'grid', gridTemplateColumns: '96px 1fr', gap: 8, padding: '4px 0',
+                      fontSize: 'var(--fs-body)', borderBottom: '1px solid var(--line-soft)',
+                    }}>
+                      <span style={{ ...cx.k, alignSelf: 'center' }}>{a.customer_codi || a.customer}</span>
+                      <span><span style={{ fontWeight: 600, color: 'var(--gold)' }}>{a.client_code}</span>{' '}
+                        <span style={{ color: 'var(--text-soft)', fontSize: 'var(--fs-label)' }}>
+                          {a.client_description || ''}</span></span>
+                    </div>
+                  ))}
+                  <p style={{ ...cx.note, marginTop: 8 }}>{t('poms.cat.aliases_readonly')}</p>
+                </section>
+
+                <section style={cx.sec}>
+                  <div style={cx.secH}>{t('poms.cat.sec_usage')}</div>
+                  <div style={cx.us}>
+                    <span><b style={cx.usN}>{us?.us?.items ?? '—'}</b>
+                      <span style={cx.usL}>{t('poms.cat.u_items')}</span></span>
+                    <span><b style={cx.usN}>{us?.us?.families ?? '—'}</b>
+                      <span style={cx.usL}>{t('poms.cat.u_families')}</span></span>
+                    <span><b style={cx.usN}>{us?.us?.grups ?? '—'}</b>
+                      <span style={cx.usL}>{t('poms.cat.u_groups')}</span></span>
+                    <span><b style={cx.usN}>{us?.us?.models ?? '—'}</b>
+                      <span style={cx.usL}>{t('poms.cat.u_models')}</span></span>
+                    <span><b style={cx.usN}>{us?.us?.rules ?? '—'}</b>
+                      <span style={cx.usL}>{t('poms.cat.u_rules')}</span></span>
+                  </div>
+                  {!!us?.cascada?.length && (
+                    <p style={{ ...cx.note, marginTop: 8, color: 'var(--warn-ink)' }}>
+                      {t('poms.cat.cascade_warn', {
+                        n: us.cascada.reduce((a, f) => a + f.n, 0),
+                      })}
+                    </p>
+                  )}
+                </section>
+              </div>
+
+              <div style={cx.ffoot}>
+                <button type="button" style={btn('ter')} onClick={desactiva} disabled={ocupat}>
+                  {sel.actiu ? t('poms.cat.act_deactivate') : t('poms.cat.act_reactivate')}
+                </button>
+                <button type="button" style={btn('dang')} onClick={esborra}
+                        disabled={ocupat || !us || !us.pot_esborrar}>
+                  {t('poms.cat.act_delete')}
+                </button>
+                {/* La nota diu SEMPRE el motiu, la redacta el backend (és qui sap el recompte). */}
+                <span style={cx.note}>{us ? us.motiu : t('poms.cat.usage_loading')}</span>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}

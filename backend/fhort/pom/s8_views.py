@@ -186,7 +186,9 @@ def export_fitting_csv_view(request, pf_id):
         for bm in BaseMeasurement.objects.filter(model=model, is_active=True):
             tm = float(bm.tolerancia_minus) if bm.tolerancia_minus is not None else TOL_FALLBACK
             tp = float(bm.tolerancia_plus) if bm.tolerancia_plus is not None else TOL_FALLBACK
-            tol_map[(bm.pom_id, bm.capa, bm.instancia)] = (tm, tp)
+            # SET-2/T6a — la PEÇA, com al germà `s10_views`: si no, el CSV imprimeix la
+            # tolerància i per tant el `Resultat` d'una altra prenda.
+            tol_map[(bm.pom_id, bm.capa, bm.instancia, bm.garment)] = (tm, tp)
 
         nom_model = str(model) if model else f'piece_{pf_id}'
         response = HttpResponse(content_type='text/csv; charset=utf-8')
@@ -207,8 +209,9 @@ def export_fitting_csv_view(request, pf_id):
             spec = float(line.valor_teoric) if line.valor_teoric is not None else None
             val = float(line.valor_real) if line.valor_real is not None else None
             desv = round(val - spec, 2) if (val is not None and spec is not None) else None
-            tol_minus, tol_plus = tol_map.get((line.pom_id, line.capa, line.instancia),
-                                              (TOL_FALLBACK, TOL_FALLBACK))
+            tol_minus, tol_plus = tol_map.get(
+                (line.pom_id, line.capa, line.instancia, line.garment),
+                (TOL_FALLBACK, TOL_FALLBACK))
             passa = ((-tol_minus) <= desv <= tol_plus) if desv is not None else None
 
             writer.writerow([

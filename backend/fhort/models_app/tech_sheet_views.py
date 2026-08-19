@@ -369,6 +369,8 @@ class TechSheetCreateModelView(APIView):
                 pom=pom_master,
                 capa=MeasurementLayer.SLUG_DEFECTE,
                 instancia='',
+                # SET-2/T5 — la fitxa tècnica escriu a la peça mare i ho declara.
+                garment='',
                 defaults={
                     'base_value_cm': float(base_value or 0),
                     'nom_fitxa': client_code or '',

@@ -15,7 +15,7 @@ Alça LES DUES comportes de cada taula, dins d'un savepoint que sempre es desfà
 transaccional: a Postgres un `ALTER TABLE … DROP CONSTRAINT` es desfà amb el savepoint igual
 que un INSERT — el test no deixa rastre, i l'últim cas ho verifica llegint el catàleg.
 
-Quan C4-ins retiri les comportes, el `with comportes_alcades(...)` sobra i els asserts es
+C4/G1-G4 (04/08) JA les ha retirades: el `with comportes_alcades(...)` és un no-op i els asserts es
 queden.
 
 Convenció del repo: `python manage.py test fhort.models_app` (el projecte NO fa servir pytest).
@@ -48,9 +48,11 @@ def comportes_alcades(*taules):
         with connection.cursor() as cur:
             for taula in taules:
                 for sufix in ('capa_gate_c1', 'instancia_gate_cins'):
+                    # `IF EXISTS` — C4/G1-G4 (04/08) han retirat les 40 comportes: alçar-ne
+                    # una que ja no hi és és el mateix estat, i el `finally` retorna igual.
                     cur.execute(
                         f'ALTER TABLE "{connection.schema_name}"."{taula}" '
-                        f'DROP CONSTRAINT "{taula}_{sufix}"'
+                        f'DROP CONSTRAINT IF EXISTS "{taula}_{sufix}"'
                     )
         yield
     finally:
@@ -119,9 +121,13 @@ class LectorsInstanciaCinsTest(TenantTestCase):
             tol = _tolerance_map(self.model)
 
             self.assertEqual(len(tol), 3, 'cada germana ha de tenir entrada pròpia')
-            self.assertEqual(tol[(self.pom.id, EXTERIOR, '')], (0.5, 0.5))
-            self.assertEqual(tol[(self.pom.id, FOLRE, '')], (2.0, 2.0))
-            self.assertEqual(tol[(self.pom.id, EXTERIOR, LEFT)], (9.0, 9.0))
+            # SET-2/T6a (2026-08-11) — LA CLAU DEL MAPA TÉ UN TRAM MÉS: el `garment`. Pin
+            # de FORMA i era el seu ofici caure avui — les toleràncies no s'han mogut
+            # (0.5/2.0/9.0, les mateixes germanes), només la clau. Segueix exigint una
+            # entrada PRÒPIA per germana, que és el que aquest test defensa.
+            self.assertEqual(tol[(self.pom.id, EXTERIOR, '', '')], (0.5, 0.5))
+            self.assertEqual(tol[(self.pom.id, FOLRE, '', '')], (2.0, 2.0))
+            self.assertEqual(tol[(self.pom.id, EXTERIOR, LEFT, '')], (9.0, 9.0))
 
     # ── El serializer de Size Check ──────────────────────────────────────────────────
 
@@ -204,14 +210,29 @@ class LectorsInstanciaCinsTest(TenantTestCase):
             self.assertEqual(vals_ext, {100.0},
                              'la fila d\'exterior ha de veure NOMÉS la seva presa')
 
-    # ── Els lectors ancorats (FORMA B): la instància NO s'hi cola ────────────────────
+    # ── Els lectors DESANCORATS (C4): les tres germanes, cadascuna amb la seva ───────
 
-    def test_els_lectors_ancorats_serveixen_nomes_la_instancia_unica(self):
-        """La cara B del contracte de FASE_2. Els lectors que no poden portar la clau
-        completa —el seu payload s'indexa per `pom_id` i és contracte fins a C4-ins—
-        s'ancoren als DOS eixos. Amb tres germanes vives, han de servir-ne UNA: l'exterior de
-        la instància única. Si l'àncora només tapés la capa, en servirien dues amb el mateix
-        `pom_id` i el consumidor en perdria una en silenci."""
+    def test_els_lectors_serveixen_les_tres_germanes_amb_els_seus_eixos(self):
+        """C4 — LA CARA B DE FASE_2 CAU, I CAU PERQUÈ TOCA.
+
+        Aquest test es deia `test_els_lectors_ancorats_serveixen_nomes_la_instancia_unica` i
+        exigia el contrari del que exigeix ara: amb tres germanes vives, que el lector en
+        servís UNA. El seu propi docstring deia per què i fins quan — «els lectors que no
+        poden portar la clau completa —el seu payload s'indexa per `pom_id` i **és contracte
+        fins a C4-ins**— s'ancoren als DOS eixos».
+
+        Això és C4. El payload de `base_measurements_with_units_view` ja porta `capa` i
+        `instancia` a cada element, o sigui que la premissa d'aquell test —«no poden portar la
+        clau completa»— ja no és certa, i l'àncora que en sortia hauria passat de contenció a
+        pèrdua: tres mesures reals de la fitxa, dues de les quals no arribarien mai a la
+        pantalla.
+
+        El que NO s'afluixa és el motiu pel qual l'àncora existia: que el consumidor no en
+        perdi cap en silenci. Abans es garantia servint-ne una de sola; ara es garanteix
+        servint-les totes tres i exigint que **cada element digui quina és** — que és
+        estrictament més fort, perquè un col·lapse tornaria a donar `count` < 3 i aquest
+        assert cauria.
+        """
         from rest_framework.test import APIRequestFactory, force_authenticate
 
         from fhort.pom.s6_views import base_measurements_with_units_view
@@ -227,14 +248,35 @@ class LectorsInstanciaCinsTest(TenantTestCase):
             resp.render() if hasattr(resp, 'render') else None
 
             self.assertEqual(resp.status_code, 200)
-            self.assertEqual(resp.data['count'], 1,
-                             'l\'àncora ha de tapar els DOS eixos, no només la capa')
-            self.assertEqual(resp.data['results'][0]['base_value_cm'], 100.0)
+            self.assertEqual(resp.data['count'], 3,
+                             'les tres germanes són mesures reals de la fitxa: hi han de ser')
+            per_eixos = {(r['capa'], r['instancia']): r['base_value_cm']
+                         for r in resp.data['results']}
+            self.assertEqual(per_eixos, {
+                (EXTERIOR, ''): 100.0,
+                (FOLRE, ''): 98.0,
+                (EXTERIOR, LEFT): 40.0,
+            }, 'cada element ha de portar el valor de LA SEVA germana i dir quina és')
 
-    def test_la_llista_del_taller_no_repeteix_la_fila_per_germana(self):
-        """El forat #1 dels dos d'Onada 1. `model-poms` creua les mesures amb els ancoratges
-        del patró per `pom_id`: sense àncora, el taller veuria tres files repetint el MATEIX
-        conjunt d'ancoratges i res que digués quina fila és quina."""
+    def test_la_llista_del_taller_fa_una_fila_per_germana(self):
+        """C4 — DUES CARES, DUES LÍNIES (decisió d'Agus, 04/08). Aquest test es deia
+        `test_la_llista_del_taller_no_repeteix_la_fila_per_germana` i exigia el contrari.
+
+        L'àncora que fixava («el taller veuria tres files repetint el MATEIX conjunt
+        d'ancoratges i res que digués quina fila és quina») tenia dues meitats i només se'n
+        sosté una. La que cau: ara cada fila SÍ que diu quina és, perquè el payload en porta
+        `capa` i `instancia`. La que queda —que les germanes comparteixen ancoratges, perquè
+        `PatternPOM` és `(pattern_piece, pom_master)` i no té els eixos— és real, però costa
+        menys que el que l'àncora cobrava: un POM mesurat NOMÉS per instància desapareixia
+        SENCER de la llista, i el patronista no veia que hi hagués res a mesurar-hi.
+
+        El que NO s'afluixa és el motiu de l'àncora: que el taller no perdi cap mesura en
+        silenci. Abans es garantia servint-ne una de sola; ara, servint-les totes tres i
+        exigint que cada fila digui de qui és — que és estrictament més fort, perquè un
+        col·lapse tornaria a donar `total` < 3 i aquests asserts cauríen.
+
+        `PatternPOM` segueix sense tocar-se: aquest test no li demana res.
+        """
         from rest_framework.test import APIRequestFactory, force_authenticate
 
         from fhort.patterns.models import PatternFile
@@ -253,9 +295,23 @@ class LectorsInstanciaCinsTest(TenantTestCase):
                 resp.render()
 
             self.assertEqual(resp.status_code, 200)
-            self.assertEqual(resp.data['total'], 1,
-                             'la llista de treball del taller ha de servir una sola fila')
-            self.assertEqual(resp.data['results'][0]['nom_fitxa'], 'A-EXT')
+            self.assertEqual(resp.data['total'], 3,
+                             'les tres germanes són feina real del taller: hi han de ser')
+
+            per_eixos = {(f['capa'], f['instancia']): f for f in resp.data['results']}
+            self.assertEqual(set(per_eixos), {(EXTERIOR, ''), (FOLRE, ''), (EXTERIOR, LEFT)},
+                             'cada fila ha de dir de quina capa i de quina instància és')
+            self.assertEqual(per_eixos[(EXTERIOR, '')]['nom_fitxa'], 'A-EXT')
+            self.assertEqual(per_eixos[(FOLRE, '')]['nom_fitxa'], 'A-FOL')
+            self.assertEqual(per_eixos[(EXTERIOR, LEFT)]['nom_fitxa'], 'A-ESQ')
+            self.assertEqual(
+                {k: float(f['valor_fitxa_cm']) for k, f in per_eixos.items()},
+                {(EXTERIOR, ''): 100.0, (FOLRE, ''): 98.0, (EXTERIOR, LEFT): 40.0},
+                'cada fila ha de portar el valor de LA SEVA germana')
+
+            # L'àncora forta de cada fila segueix sent la PK de la mesura, que és per on el
+            # front hi indexa (`ModelPomList`, `key={f.base_measurement}`).
+            self.assertEqual(len({f['base_measurement'] for f in resp.data['results']}), 3)
 
     def test_el_patrimoni_que_viatja_no_emet_dues_claus_iguals(self):
         """El forat #2. `_llegeix_patrimoni` emet cada mesura amb `_clau_natural_pom`, que no
@@ -277,19 +333,26 @@ class LectorsInstanciaCinsTest(TenantTestCase):
 
     # ── El rastre: cap ───────────────────────────────────────────────────────────────
 
-    def test_les_dues_comportes_tornen_a_estar_vives(self):
-        """El harness alça DUES famílies: si el savepoint no les tornés totes, la BD de test
-        quedaria sense guard i la resta de tests del tram passarien per una raó falsa."""
+    def test_el_harness_no_deixa_rastre(self):
+        """Deia «les dues comportes tornen a estar vives» i en comptava nou de cada família.
+        C4/G1-G4 les han retirades totes; el que segueix fent falta és que el harness deixi
+        l'esquema EXACTAMENT com el va trobar, o la resta del fitxer passaria per una raó
+        falsa. Pel NOM i no per recompte: els dos nous són la xifra que va quedar ranci."""
+        def noms_de_check():
+            with connection.cursor() as cur:
+                cur.execute(
+                    "SELECT conname FROM pg_constraint c "
+                    "JOIN pg_namespace n ON n.oid = c.connamespace "
+                    "WHERE n.nspname = %s AND c.contype = 'c'",
+                    [connection.schema_name])
+                return {row[0] for row in cur.fetchall()}
+
+        abans = noms_de_check()
         with comportes_alcades('models_app_basemeasurement',
                                'models_app_measurementchangelog'):
             pass
 
-        with connection.cursor() as cur:
-            for patro, esperades in (('%_capa_gate_c1', 9), ('%_instancia_gate_cins', 9)):
-                cur.execute(
-                    "SELECT conname FROM pg_constraint c "
-                    "JOIN pg_namespace n ON n.oid = c.connamespace "
-                    "WHERE n.nspname = %s AND c.contype = 'c' AND c.conname LIKE %s",
-                    [connection.schema_name, patro])
-                self.assertEqual(len(cur.fetchall()), esperades,
-                                 f'el harness ha deixat una comporta per terra ({patro})')
+        self.assertEqual(noms_de_check(), abans, 'el harness ha canviat l\'esquema')
+        self.assertEqual(
+            {c for c in abans if c.endswith(('_capa_gate_c1', '_instancia_gate_cins'))},
+            set(), 'una comporta ha sobreviscut a C4')

@@ -14,9 +14,22 @@ class TimerEntrada(models.Model):
     # No és inactivitat: és DURADA des de l'últim senyal (decisió Patró C).
     # GANXO F-MÀ (no construït): aquest és el senyal que alimentarà `last_activity_at` del TTL de
     # la mà. Qui escrigui aquí haurà d'escriure els dos alhora, no inventar-se un segon batec.
+    # F1.3 — EL GANXO S'HA HONRAT: l'escriptura de dades també bat AQUÍ
+    # (`services_batec.batec_escriptura`), no en un camp propi. Hi ha dos emissors i UN sol
+    # camp: el guard (presència: «sóc davant de la pantalla») i l'escriptura (activitat: «he
+    # escrit»). Qui n'afegeixi un tercer, que escrigui aquí mateix.
     last_heartbeat = models.DateTimeField(null=True, blank=True,
                                           help_text='Últim senyal de vida del tècnic sobre el '
                                                     'tram obert. null = cap encara (val `inici`).')
+    # F1.7 · D-2 — d'on surt aquest tram. `mesurat` = el rellotge el va obrir i tancar el sistema
+    # (tot l'històric i tot el camí normal). `declarat` = una persona ha dit quant hi ha
+    # treballat, perquè la feina no passa per aquí: les tasques Externa-lliure (patró a mà,
+    # revisió de disseny) es fan fora de l'eina i el seu temps no és observable. Un tram declarat
+    # neix TANCAT i alimenta el Welford igual que un de mesurat — una tasca, una mostra (D-3).
+    ORIGEN_MESURAT = 'mesurat'
+    ORIGEN_DECLARAT = 'declarat'
+    ORIGEN_CHOICES = [(ORIGEN_MESURAT, 'Mesurat'), (ORIGEN_DECLARAT, 'Declarat')]
+    origen = models.CharField(max_length=10, choices=ORIGEN_CHOICES, default=ORIGEN_MESURAT)
 
     class Meta:
         verbose_name = 'Entrada de timer'
@@ -48,6 +61,13 @@ class TaskType(models.Model):
     name = models.CharField(max_length=200)
     default_order = models.PositiveIntegerField(default=0)
     active = models.BooleanField(default=True)
+    # `visible` NO és `active`. Un tipus inactiu està RETIRAT del catàleg: ni s'ofereix ni
+    # s'hi pot obrir feina. Un tipus invisible segueix sent vàlid i les seves tasques vives
+    # segueixen funcionant —només que la UI no l'ofereix per iniciar-lo de nou, perquè encara
+    # no té pantalla o perquè avui no toca. Tornaran: per això no s'esborren ni es desactiven.
+    visible = models.BooleanField(
+        default=True,
+        help_text='El catàleg l\'ofereix a la UI. False = vàlid però no oferible (encara).')
     # --- Catàleg canònic (Sprint catàleg de tasques) ---
     fase = models.CharField(max_length=20, choices=FASE_CHOICES, default='Dev. tècnic')
     tipus = models.CharField(max_length=20, choices=TIPUS_CHOICES, default='Interna')
@@ -57,6 +77,13 @@ class TaskType(models.Model):
     mode = models.CharField(max_length=40, null=True, blank=True,
                             help_text="Context d'obertura de l'eina (sub-mode). null si sense eina.")
     facturable = models.BooleanField(default=True)
+    # F1.6 — «aquesta tasca produeix un PRODUCTE que s'entrega?». No és `facturable`, que parla
+    # de l'albarà: una tasca pot ser facturable i no lliurar res (definir POMs es cobra i no
+    # s'entrega), i el que decideix si una RONDA ja ha donat el que havia de donar
+    # (`services_r.ronda_lliurable`) són els lliurables, no la feina intermèdia.
+    es_lliurable = models.BooleanField(
+        default=False,
+        help_text='La tasca produeix un lliurable per al client (fitxa, patró).')
 
     class Meta:
         ordering = ['default_order', 'code']
@@ -65,6 +92,53 @@ class TaskType(models.Model):
 
     def __str__(self):
         return self.code
+
+
+class Ronda(models.Model):
+    """F1.1 · Una VOLTA de feina sobre un model, després que la primera ja s'hagi lliurat.
+
+    Neix de la decisió D-5: una tasca **albaranada és intocable** (`transition_task` refusa
+    `Done→InProgress` si té línia en albarà EMÈS). Fins avui això deixava el model tapiat per
+    sempre — set 409 en dues hores sobre el model 188, i tota la feina posterior sense rellotge.
+    La sortida no és reobrir la tasca facturada: és **obrir-ne una de nova, penjada d'una Ronda**,
+    que el comercial pugui facturar a part i que el log sàpiga d'on ve.
+
+    `motiu` diu de qui és la culpa, i és el que decideix si es cobra:
+      · `nova_mostra` = el client demana una altra volta (feina nova, facturable)
+      · `correccio`   = ho refem nosaltres (feina de reparació)
+    La decisió comercial NO viu aquí: aquest camp és el fet, no la tarifa.
+
+    `seq` és el número de volta **dins del model** (la ronda 1 és implícita: tota la feina
+    històrica té `ModelTask.ronda = NULL`). No hi ha cap backfill i no n'hi ha d'haver: inventar
+    una fila Ronda per a 101 tasques que mai no van ser una «volta» seria escriure història.
+
+    Oberta = `tancada_el IS NULL`. N'hi pot haver **una de sola** oberta per model, i qui ho
+    imposa és `obrir_ronda` (`services_r`), no la BD: tancar-la és un acte humà i una constraint
+    parcial aquí obligaria a inventar-ne el tancament.
+    """
+    MOTIU_NOVA_MOSTRA = 'nova_mostra'
+    MOTIU_CORRECCIO = 'correccio'
+    MOTIU_CHOICES = [(MOTIU_NOVA_MOSTRA, 'Nova mostra'), (MOTIU_CORRECCIO, 'Correcció')]
+
+    model = models.ForeignKey('models_app.Model', on_delete=models.CASCADE,
+                              related_name='rondes')
+    seq = models.PositiveIntegerField(
+        help_text='Número de volta dins del model. La ronda 1 és implícita (ronda NULL).')
+    motiu = models.CharField(max_length=20, choices=MOTIU_CHOICES)
+    oberta_el = models.DateTimeField(auto_now_add=True)
+    tancada_el = models.DateTimeField(null=True, blank=True,
+                                      help_text='null = oberta. És la definició de «vigent».')
+
+    class Meta:
+        ordering = ['model', 'seq']
+        verbose_name = 'Ronda'
+        verbose_name_plural = 'Rondes'
+        constraints = [
+            models.UniqueConstraint(fields=['model', 'seq'], name='uniq_ronda_model_seq'),
+        ]
+
+    def __str__(self):
+        return f'{self.model_id} · ronda {self.seq} ({self.motiu})'
 
 
 class ModelTask(models.Model):
@@ -108,6 +182,20 @@ class ModelTask(models.Model):
     # no cau. Punter MUTABLE: en re-obrir la tasca des d'una altra sessió es reapunta (decisió 4).
     fitting_session = models.ForeignKey('fitting.FittingSession', on_delete=models.SET_NULL,
                                         null=True, blank=True, related_name='model_tasks')
+    # F1.1 — GENEALOGIA. Els tres camps responen tres preguntes diferents i cap n'implica una
+    # altra: `ronda` = a quina volta pertany (null = la 1a, implícita); `mare` = de quina tasca
+    # concreta és repetició (null = no repeteix res); `motiu` = per què existeix.
+    # SET_NULL als dos FK: esborrar una ronda o una tasca antiga no pot arrossegar feina viva —
+    # la filla perd la referència, no la vida.
+    ronda = models.ForeignKey('Ronda', on_delete=models.SET_NULL, null=True, blank=True,
+                              related_name='tasques')
+    mare = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True,
+                             related_name='filles',
+                             help_text='La tasca homònima de la volta anterior.')
+    # Es DUPLICA el motiu de la Ronda a posta: una tasca ad-hoc pot néixer d'una correcció sense
+    # que s'obri cap ronda (el cas d'una sola tasca refeta), i llavors la Ronda no existeix per
+    # respondre-ho. Quan totes dues hi són, `obrir_ronda` les escriu iguals.
+    motiu = models.CharField(max_length=20, choices=Ronda.MOTIU_CHOICES, null=True, blank=True)
 
     class Meta:
         ordering = ['model', 'order']
@@ -181,9 +269,13 @@ class GateEvent(models.Model):
 class Supplier(models.Model):
     """Destinatari d'una confecció (taller/fàbrica). Esquelètic ara; creix cap a fitxa
     de proveïdor en un sprint futur."""
+    # Els `choices` estaven INLINE al camp, sense ni tan sols una constant amb nom, i el modal
+    # de proveïdor n'és un select que ESCRIU. Es bategen perquè `/api/v1/vocabulari/` els pugui
+    # publicar (llei 1: cap enumeració de domini al frontend) i perquè hi hagi UN sol lloc on
+    # canviar-los. Cap valor canvia; és el mateix parell, amb nom.
+    TYPE_CHOICES = [('workshop', 'Taller'), ('factory', 'Fàbrica')]
     name = models.CharField(max_length=200)
-    type = models.CharField(max_length=20,
-                            choices=[('workshop', 'Taller'), ('factory', 'Fàbrica')], default='workshop')
+    type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='workshop')
     active = models.BooleanField(default=True)
 
     # Comercial Studio (B1) — dades fiscals, condicions de compra i contacte. Additives (blank).
@@ -368,6 +460,31 @@ class GarmentTypeItem(models.Model):
         help_text="Context de grading de l'Item (un sol ruleset). Mutable; obligatori a la pàgina "
                   "(Fase B). Constreny base_size_definition al seu size_system.")
 
+    # ── U2/R3 (2026-08-07) · LA PROPOSTA DE RUN I DE TALLA BASE ─────────────────────────────
+    # «El GTI proposa, el model disposa.» El catàleg de peces ensenya UN run i UNA talla base
+    # per item, i fins avui no hi havia on desar-los: el que existia eren dues coses que diuen
+    # una altra cosa i que aquest tram NO toca —el `size_system` del joc de regles (que és del
+    # MODEL, no de l'item: llei C1) i `ItemBaseSet` (que en té N per item, un per món, i que
+    # declara la seva talla base en NÉIXER i no la re-tria)—. Aquests dos camps són la PROPOSTA
+    # de l'item i prou: no manen sobre cap dels dos, no els llegeixen i no els escriuen.
+    #
+    # Tots dos són TOUS a posta: un item sense proposta és un estat normal (la pantalla ho diu,
+    # no ho omple), i esborrar un sistema de talles del catàleg no pot bloquejar-se perquè un
+    # item el «proposava» — per això SET_NULL i no PROTECT, al contrari de `grading_rule_set`.
+    proposed_size_system = models.ForeignKey(
+        'pom.SizeSystem', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='proposed_by_items',
+        help_text="Run de talles que aquest item PROPOSA (suggeriment del catàleg). No mana "
+                  "sobre el size_system del joc de regles ni sobre cap ItemBaseSet.")
+
+    # ETIQUETA, no fila. És la mateixa llei que el motor de graduació: les regles ancoren per
+    # `base_size_label` i la fila de `SizeDefinition` és mer metadata del seed (CAT2.1). Guardar
+    # aquí un FK tornaria a lligar la proposta a una fila concreta d'un catàleg que es reordena.
+    proposed_base_size_label = models.CharField(
+        max_length=30, blank=True, default='',
+        help_text="Etiqueta de la talla base proposada (p.ex. 'M'), dins de proposed_size_system. "
+                  "Etiqueta i no FK: les regles ancoren per etiqueta (CAT2.1).")
+
     class Meta:
         ordering = ['garment_type', 'complexity_order', 'code']
         unique_together = [('garment_type', 'code')]
@@ -386,6 +503,21 @@ class GarmentTypeItem(models.Model):
                     'base_size_definition': (
                         "La talla base ha de pertànyer al mateix sistema de talles que el "
                         "grading rule set de l'Item.")
+                })
+
+        # U2/R3 — la MATEIXA llei per a la proposta: una etiqueta que el run proposat no conté
+        # seria un valor inventat, i el catàleg no n'inventa cap. SKIP quan en falta algun dels
+        # dos, que és l'estat normal d'un item sense proposta. Canviar el run i deixar-hi
+        # l'etiqueta vella cau aquí a posta: la pantalla envia sempre els dos camps junts,
+        # perquè triar un altre run és tornar a triar la talla base (ho fa la mateixa maqueta).
+        if self.proposed_size_system_id and self.proposed_base_size_label:
+            te_etiqueta = self.proposed_size_system.talles.filter(
+                etiqueta=self.proposed_base_size_label).exists()
+            if not te_etiqueta:
+                from django.core.exceptions import ValidationError
+                raise ValidationError({
+                    'proposed_base_size_label': (
+                        "La talla base proposada ha de ser una etiqueta del run proposat.")
                 })
 
     def __str__(self):

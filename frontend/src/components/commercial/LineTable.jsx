@@ -12,13 +12,38 @@
 import { Fragment } from 'react'
 import { minutesToHhMm, tecnicShort } from './format'
 
+//
+// ── LA PELL, POSADA EN NORMA (i per què cada cosa) ────────────────────────────────────────
+// · `th` anava amb tracking **.05em** i tinta `--gray`. La §2 fixa la capçalera de llista a
+//   **10px MAJÚSCULES tracking .08em** «a tot arreu», i l'escala de tintes de la §1b(c) hi posa
+//   `--text-soft`. Que aquesta sigui una taula de LÍNIES i no una llista principal no li canvia
+//   la capçalera: la capçalera és la mateixa a tota la casa.
+// · Els filets anaven a **`0.5px`** amb `--border` (DEPRECAT, §1b(b)) i `--bg-muted`. Passen a
+//   1px `--line` (extern) i `--line-soft` (intern), que és la parella que la casa fa servir per
+//   distingir el marc de la taula de la separació entre files.
+// · El **radi 5** de la cel·la editable no és cap dels tres del sistema (6 · 12 · 999): `--r-ctrl`.
+// · `--intern-bg` (#edeff0) és un gris **FRED** fora de la paleta de la §1. La columna interna ha
+//   de dir «això no ho veurà el client», i per dir-ho no cal un color nou: la superfície neutra
+//   de la casa i el fet que sigui una columna a part ja ho diuen.
+// · Les vores en **LONGHAND**: una shorthand `border` col·locada després de la seva pròpia
+//   longhand la reescriu sencera, i és el defecte que el bloc A va haver de caçar amb el
+//   navegador (línies negres de 3px on hi havia d'haver un filet d'1px).
 const MONO = 'IBM Plex Mono, monospace'
-const th = { fontSize: 'var(--fs-label)', textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--gray)', fontWeight: 600, padding: '6px 10px', borderBottom: '0.5px solid var(--border)' }
-const td = { fontSize: 'var(--fs-body)', color: 'var(--text-main)', padding: '7px 10px', borderBottom: '0.5px solid var(--bg-muted)', verticalAlign: 'top' }
-const internCell = { background: 'var(--intern-bg)', color: 'var(--text-muted)' }
+const th = {
+  fontSize: 'var(--fs-label)', lineHeight: '12px', textTransform: 'uppercase',
+  letterSpacing: '.08em', color: 'var(--text-soft)', fontWeight: 600, padding: '8px 10px',
+  borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: 'var(--line)',
+}
+const td = {
+  fontSize: 'var(--fs-body)', color: 'var(--text-main)', padding: '7px 10px',
+  borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: 'var(--line-soft)',
+  verticalAlign: 'top',
+}
+const internCell = { background: 'var(--bg-page)', color: 'var(--text-soft)' }
 const cellInput = {
   width: '100%', fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-main)',
-  padding: '3px 6px', border: '0.5px solid var(--gray-l)', borderRadius: 5, background: 'var(--white)',
+  padding: '3px 6px', borderRadius: 'var(--r-ctrl)', background: 'var(--panel)',
+  borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)',
 }
 
 function cellContent(col, row) {
@@ -36,7 +61,13 @@ export default function LineTable({ columns = [], rows = [], renderActions, show
   const colCount = (renderActions ? 1 : 0) + columns.length + (showInternal ? 3 : 0)
   return (
     <div style={{ overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: MONO }}>
+      {/* LA MIDA I LA TINTA ES DECLAREN AL CONTENIDOR, no només a les cel·les: sense això
+          qualsevol cosa que hi entri sense mida pròpia neix als 16px del document — el mateix
+          defecte que la mesura va caçar a A1/A2 i que `ui/TaulaLlista` ja declara. */}
+      <table style={{
+        width: '100%', borderCollapse: 'collapse',
+        fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-main)',
+      }}>
         <thead>
           <tr>
             {renderActions && <th style={{ ...th, width: 1, whiteSpace: 'nowrap' }} aria-hidden="true" />}
@@ -76,7 +107,10 @@ export default function LineTable({ columns = [], rows = [], renderActions, show
                 </tr>
                 {expansion && (
                   <tr>
-                    <td colSpan={colCount} style={{ padding: 0, borderBottom: '0.5px solid var(--bg-muted)' }}>{expansion}</td>
+                    <td colSpan={colCount} style={{
+                      padding: 0,
+                      borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: 'var(--line-soft)',
+                    }}>{expansion}</td>
                   </tr>
                 )}
               </Fragment>

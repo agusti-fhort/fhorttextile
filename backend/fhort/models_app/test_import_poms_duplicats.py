@@ -25,6 +25,7 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 from fhort.accounts.models import UserProfile
 from fhort.models_app.extraction_views import import_session_poms_view
 from fhort.models_app.models import ImportSession
+from fhort.pom.catalog_testing import desactiva_unicitat_codi_client
 from fhort.pom.models import POMMaster
 
 
@@ -45,6 +46,12 @@ class ImportPomsCodiDuplicatTest(_TenantBase):
 
     def setUp(self):
         super().setUp()
+        # ⚠️ EL CATÀLEG DUPLICAT JA NO EL POT FABRICAR NINGÚ (migració `pom/0075`), i aquestes
+        # proves l'han de poder muntar igualment: el que exerciten és el GUARD del 409, que
+        # segueix viu al codi de producció. La constraint es treu NOMÉS aquí i NOMÉS dins de la
+        # transacció de la prova; v. `fhort/pom/catalog_testing.py` per al perquè i per a la
+        # decisió que hi queda oberta.
+        desactiva_unicitat_codi_client()
         user = get_user_model().objects.create_user(username='tec', password='x')
         self.profile, _ = UserProfile.objects.get_or_create(
             user=user, defaults={'nom_complet': 'Tècnic', 'rol_nom': 'patronista'})

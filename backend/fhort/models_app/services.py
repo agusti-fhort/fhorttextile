@@ -253,20 +253,119 @@ def origen_mgr_des_de_ruleset(rule_set) -> str:
     return _ORIGEN_RS_A_MGR.get(getattr(rule_set, 'origen', None) or '', 'MANUAL')
 
 
-def materialize_model_grading_rules(model, source_rules, origen):
+#: Sentinella per a `joc_anterior`. NO és `None`: `None` vol dir «el model no tenia cap joc»,
+#: que és una informació ben real; això vol dir «el caller no m'ho ha dit», i llavors el motor
+#: es comporta exactament com abans de la decisió 6.1.
+JOC_ANTERIOR_NO_INFORMAT = object()
+
+
+def joc_classificat(rule_set) -> bool:
+    """El joc declara la seva provinença?
+
+    Un `GradingRuleSet` amb `origen` NULL no la declara, i les residents que en surten es
+    materialitzen com a `MANUAL` (`origen_mgr_des_de_ruleset`). A partir d'aquell moment «el
+    que ve del joc» i «el que ha escrit el tècnic» **es diuen igual i són indistingibles**:
+    `ModelGradingRule` no guarda de quin joc ve cada fila.
+    """
+    return bool(rule_set) and (getattr(rule_set, 'origen', None) or '') in _ORIGEN_RS_A_MGR
+
+
+def poms_manual_a_preservar(model, joc_anterior, garment=''):
+    """Els `pom_id` de les residents `MANUAL` que han de sobreviure al wipe (set, possiblement buit).
+
+    ── SET-2/T3 · `garment` ─────────────────────────────────────────────────────────────────
+    La preservació és **de la peça que es re-sembra, no del model sencer**. Una `MANUAL` del
+    top no pot fer que la sembra de la calceta salti el seu POM: el que es preserva ha de
+    correspondre a les files que aquest mateix wipe esborraria, i el wipe ara és per
+    `(model, garment)`. Amb el default `''` el comportament és exactament el d'abans.
+
+    ── DECISIÓ 6.1 (2026-08-06 nit), VERSIÓ MÍNIMA REVERSIBLE ────────────────────────────────
+    La regla és **estricta i literal**: es preserva NOMÉS si el joc del qual venien les
+    residents estava CLASSIFICAT. Llavors les seves regles porten el seu origen real
+    (CANONICAL/CLIENT_RUN/IMPORTED) i una `MANUAL` no en pot venir — o sigui que és autoria.
+
+    ── M1 (Agus, 2026-08-07 matí) · I EL MODEL **SENSE CAP JOC** TAMBÉ PRESERVA ──────────────
+    `joc_anterior is None` vol dir «el model no en tenia cap», i llavors una `MANUAL` no pot
+    ser còpia: no hi ha joc del qual hagi pogut sortir, i «Sense graduació» —l'únic gest que
+    deixa un model sense joc havent-ne tingut— ja esborra TOTES les residents abans. El que
+    hi hagi després, doncs, s'ha escrit a mà. Deixava de ser deducció i era política; l'Agus
+    l'ha presa amb el cens de 7.2 al davant.
+
+    Tota la resta es comporta com abans de 6.1 i **s'ANOTA** (`motiu_no_preserva`):
+
+      · `no_informat` — el caller no diu de quin joc venien. Els camins que encara no han
+        adoptat 6.1 no canvien de comportament.
+      · `joc_sense_classificar` — el parany conegut: `origen_mgr_des_de_ruleset` materialitza
+        `MANUAL` per als jocs amb `origen` NULL, i llavors autoria i còpia es diuen igual.
+        L'extingeix el backfill (`manage.py set_grading_origen`, M2), no un filtre més ample.
+
+    La preservació no és gratuïta: `ModelGradingRule` té `unique_together('model','pom')`, i el
+    `bulk_create` de sota no porta conflict-handling. Per això la materialització SALTA les
+    regles del joc nou que cauen sobre un POM preservat — si no, el que surt d'aquí no és una
+    regla salvada, és un `IntegrityError`.
+    """
+    if motiu_no_preserva(joc_anterior):
+        return set()
+    return set(model.grading_rules.filter(origen='MANUAL', garment=garment)
+               .values_list('pom_id', flat=True))
+
+
+def motiu_no_preserva(joc_anterior):
+    """Per què aquest wipe NO preserva les `MANUAL`, com a codi curt, o `None` si sí que ho fa.
+
+    Serveix perquè els camins destructius ho puguin deixar escrit (Watchpoint, resposta, log):
+    la decisió 6.1 tancava el cas net i en deixava dos d'oberts; M1 (07/08) tanca `sense_joc`
+    —un model sense joc preserva—, i queda obert només `joc_sense_classificar`, que no es tanca
+    amb un filtre sinó classificant els jocs (M2, `manage.py set_grading_origen`).
+
+    ⚠️ El codi `'sense_joc'` ja NO existeix: `joc_anterior is None` retorna `None` (preserva).
+    Qui el busqui a un log vell, era això.
+    """
+    if joc_anterior is JOC_ANTERIOR_NO_INFORMAT:
+        return 'no_informat'
+    if joc_anterior is None:
+        return None
+    if not joc_classificat(joc_anterior):
+        return 'joc_sense_classificar'
+    return None
+
+
+def materialize_model_grading_rules(model, source_rules, origen,
+                                    joc_anterior=JOC_ANTERIOR_NO_INFORMAT, garment=''):
     """Materialitza regles de grading residents al model des d'un iterable de
-    GradingRule. Wipe-and-recreate: el set resultant és EXACTAMENT source_rules.
+    GradingRule. Wipe-and-recreate: el set resultant és source_rules **més les `MANUAL`
+    preservades** (decisió 6.1; v. `poms_manual_a_preservar`).
 
     NO copia valor_base ni talla_base (viuen a BaseMeasurement / model.base_size_label).
-    Idempotent per (model): esborra les regles residents prèvies abans de recrear.
+    Idempotent per **(model, garment)**: esborra les regles residents prèvies d'AQUESTA PEÇA
+    abans de recrear.
     origen: 'IMPORTED' (W5) | 'CANONICAL' (wizard) | 'MANUAL'.
+
+    ── SET-2/T3 · PER QUÈ EL WIPE ÉS PER PEÇA I NO PER MODEL ────────────────────────────────
+    Era per MODEL, i amb dues peces això feia dos mals a la vegada. El primer, destructiu:
+    sembrar la calceta **esborrava les regles del top** —tot el model—, de manera que la
+    darrera peça sembrada era l'única que en tenia. El segon, immediat: el `bulk_create` no
+    porta conflict-handling, i amb la clau vella `('model','pom')` dues peces que
+    compartissin un POM petaven amb `IntegrityError` abans i tot d'arribar a l'anterior.
+    Amb el default `garment=''` tots els camins que encara no la informen es comporten
+    EXACTAMENT com abans: esborren i recreen la peça mare, que és l'únic que existeix.
+
+    `joc_anterior`: el `GradingRuleSet` que el model tenia ABANS d'aquest gest (l'objecte, no
+    l'id), o `None` si no en tenia cap. Sense aquest argument el motor esborra tot, com sempre:
+    els camins que encara no l'informen no canvien de comportament.
     """
     from fhort.models_app.models import ModelGradingRule
     from fhort.pom.grading_regime import normalitza_logica
-    model.grading_rules.all().delete()
+    preservats = poms_manual_a_preservar(model, joc_anterior, garment)
+    del_qs = model.grading_rules.filter(garment=garment)
+    if preservats:
+        del_qs.exclude(origen='MANUAL').delete()
+    else:
+        del_qs.delete()
+    source_rules = [r for r in source_rules if r.pom_id not in preservats]
     objs = [
         ModelGradingRule(
-            model=model, pom_id=r.pom_id,
+            model=model, pom_id=r.pom_id, garment=garment,
             # A3 (2026-07-22) — LINEAR+0 sense break s'etiqueta FIXED en sembrar. Aquest camí
             # NO és autoria (no hi ha ningú a qui preguntar i rebutjar trencaria l'import):
             # es normalitza. La conversió és neutra — cap valor graduat canvia.
@@ -275,6 +374,11 @@ def materialize_model_grading_rules(model, source_rules, origen):
             increment=r.increment, valors_step=r.valors_step,
             increment_base=r.increment_base, increment_break=r.increment_break,
             talla_break_label=r.talla_break_label, talla_break_pos=r.talla_break_pos,
+            # M3 — la traçabilitat, presa a la FONT: aquesta fila ve d'aquesta regla, i aquesta
+            # regla ve d'aquest joc. Ho sap el `GradingRule` d'origen, ningú més ho tornarà a
+            # saber després. `getattr` perquè algun caller passa regles no desades (specs
+            # convertits a objecte) i un `rule_set_id` absent és NULL, no un error.
+            derivat_de_rule_set_id=getattr(r, 'rule_set_id', None),
             origen=origen, actiu=True,
         )
         for r in source_rules
@@ -283,24 +387,43 @@ def materialize_model_grading_rules(model, source_rules, origen):
     return len(objs)
 
 
-def materialize_model_grading_rules_from_specs(model, specs, origen):
+def materialize_model_grading_rules_from_specs(model, specs, origen,
+                                               joc_anterior=JOC_ANTERIOR_NO_INFORMAT,
+                                               garment=''):
     """Com materialize_model_grading_rules però des d'SPECS (dicts uniformes de grading_utils),
     no objectes GradingRule. Permet barrejar regles de CONTENIDOR i residents-només-de-model
     (conflictes resolts 'model_resident' / camí sense contenidor) en una sola sembra selectiva.
-    Wipe-and-recreate idempotent per (model): el set resultant és EXACTAMENT `specs`.
-    origen: 'IMPORTED' (W5) | 'CANONICAL' | 'MANUAL'."""
+    Wipe-and-recreate idempotent per **(model, garment)**: el set resultant és `specs` **més
+    les `MANUAL` preservades** (decisió 6.1; v. `poms_manual_a_preservar`).
+    origen: 'IMPORTED' (W5) | 'CANONICAL' | 'MANUAL'.
+
+    SET-2/T3 — el `garment` hi entra pel mateix motiu i amb la mateixa forma que a la seva
+    germana (v. l'argument sencer allà). Aquesta funció NO surt citada al brief del tram, però
+    porta el wipe idèntic: deixar-la per MODEL hauria fet que el camí d'specs —el de l'import
+    i el dels conflictes resolts— seguís esborrant les regles de les altres peces."""
     from fhort.models_app.models import ModelGradingRule
     from fhort.pom.grading_regime import normalitza_logica
-    model.grading_rules.all().delete()
+    preservats = poms_manual_a_preservar(model, joc_anterior, garment)
+    del_qs = model.grading_rules.filter(garment=garment)
+    if preservats:
+        del_qs.exclude(origen='MANUAL').delete()
+    else:
+        del_qs.delete()
+    specs = [s for s in specs if s['pom_id'] not in preservats]
     objs = [
         ModelGradingRule(
-            model=model, pom_id=s['pom_id'],
+            model=model, pom_id=s['pom_id'], garment=garment,
             # A3 — mateixa normalització que materialize_model_grading_rules (vegeu-hi la nota).
             logica=normalitza_logica(s['logica'], s.get('increment_base'), s.get('increment'),
                                      s.get('increment_break'), s.get('talla_break_label')),
             increment=s.get('increment'), valors_step=s.get('valors_step'),
             increment_base=s.get('increment_base'), increment_break=s.get('increment_break'),
             talla_break_label=s.get('talla_break_label'), talla_break_pos=s.get('talla_break_pos'),
+            # M3 — igual que la germana, però aquí el camí és MIXT a posta: els specs que vénen
+            # d'una regla de contenidor el porten (`grading_utils.rule_to_spec`) i els que vénen
+            # del DOCUMENT del client no (no surten de cap joc). NULL, doncs, no és una pèrdua:
+            # és la resposta correcta per a la meitat d'aquest camí.
+            derivat_de_rule_set_id=s.get('rule_set_id'),
             origen=origen, actiu=True,
         )
         for s in specs

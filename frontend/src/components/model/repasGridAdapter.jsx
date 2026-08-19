@@ -42,6 +42,18 @@ const origenAccent = (origen) => ({
 // Si l'esdeveniment porta comentari propi (notes o motiu del gate), l'indicador viu aquí: és un
 // comentari de SESSIÓ, no de cel·la.
 function EsdevenimentLabel({ session, t }) {
+  // B2 — L'ENTRADA DE POMs és la primera columna i NO és un esdeveniment de fitting: és d'on
+  // es parteix. Per això no porta ni punt d'estat ni data —la data d'una entrada de fitxa no
+  // diu res a qui repassa— sinó la icona de la taula i el seu nom, traduït.
+  if (session.origen === 'ENTRADA') {
+    return (
+      <span>
+        <i className="ti ti-table-plus" aria-hidden="true"
+          style={{ fontSize: 12, marginRight: 4, color: 'var(--text-muted)', verticalAlign: 'middle' }} />
+        {t('fitting.repas.col_entrada')}
+      </span>
+    )
+  }
   const esEtapa = session.origen && session.origen !== 'SESSIO'
   const comentari = [
     session.notes && `${t('fitting.repas.session_notes')}: ${session.notes}`,
@@ -111,16 +123,46 @@ export function buildRepasRows(rows, sessions) {
       const v = row.valors?.[String(s.id)]
       // Objecte {value, nota} SEMPRE: és el contracte que fa aparèixer l'indicador de comentari
       // a MeasureGrid. Sense presa en aquell esdeveniment, la cel·la queda a null (surt '—').
-      history[String(s.id)] = v ? { value: v.valor_real, nota: v.nota } : null
+      //
+      // B2 — `canvi` i `veredicte` els decideix EL BACKEND (`repas_views`), que és qui coneix
+      // l'ordre de les columnes. Aquí no es recalcula res: un front que comparés cel·les seria
+      // un segon lloc capaç de dir una cosa diferent sobre el mateix parell de números.
+      history[String(s.id)] = v
+        ? { value: v.valor_real, nota: v.nota, canvi: !!v.canvi, veredicte: v.veredicte || null }
+        : null
     }
     const v = row.valors?.[String(ultima.id)]
+    // C4/BLOC 3 — l'identificador de línia porta els dos eixos. El repàs ja agrupa per
+    // `(pom_id, capa, instancia)` al backend (`repas_views._fila`), o sigui que dues germanes
+    // arriben com a dues files; amb `repas:${pom_id}` les dues compartien lineId i el buffer
+    // per lineId de MeasureGrid els donava el mateix valor a la columna activa.
+    //
+    // Aquí NO s'hi posa la clau de payload (`{pom}|{capa}|{inst}`) sinó els camps tal com
+    // vénen: aquest identificador és sintètic i intern del front —la columna és read-only i
+    // no es desa enlloc—, i fer-lo passar per la clau del contracte seria un segon lloc que
+    // decideix com s'aplana una identitat que decideix `pom/identitat.py`.
+    // SET-2/T6b — l'eix de PRENDA hi entra pel mateix motiu que els dos de germanor, i per
+    // aquí i no per `identitatMesura`: aquest identificador és sintètic, intern i amb dialecte
+    // propi (prefix + `:`), i el paràgraf de sobre diu per què no ha de passar per la clau del
+    // contracte. El que ha de créixer és l'eix, no el format.
+    const ident = `repas:${row.pom_id}:${row.capa || ''}:${row.instancia || ''}:${row.garment || ''}`
     return {
       pom_id: row.pom_id, codi: row.codi, pom_code: row.pom_code, is_key: row.is_key,
+      capa: row.capa, instancia: row.instancia,
+      // SET-2/T7-B11 — l'eix de prenda, per repartir les files entre contenidors. Aquí és
+      // NOMÉS de lectura: el Repàs no escriu res.
+      garment: row.garment,
+      rowKey: ident,   // clau de fila per a MeasureGrid (v. `ident` aquí sobre)
       nom_en: row.nom_en, nom_local: row.nom_local, nom_fitxa: row.nom_fitxa, bm_id: row.bm_id,
       cells: {
         repas: {
           history,
-          active: v ? { lineId: `repas:${row.pom_id}`, value: v.valor_real ?? '', baseValue: null, nota: v.nota, readonly: true } : null,
+          // El VEREDICTE només tenyeix la cel·la quan hi ha CANVI (ordre d'Agus: «els canvis es
+          // marquen; la resta, normal»). Una presa que confirma el número anterior es llegeix
+          // com el que és —res de nou— i la taula es queda quieta.
+          active: v ? { lineId: ident, value: v.valor_real ?? '', baseValue: null, nota: v.nota,
+                        readonly: true, canvi: !!v.canvi,
+                        veredicte: v.canvi ? (v.veredicte || null) : null } : null,
           trail: { coment: <UltimComentari ultim={row.ultim_comentari} /> },
         },
       },

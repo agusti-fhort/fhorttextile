@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react"
 import { useTranslation } from "react-i18next"
 import { SizeSetCard } from "./SizeSetCard"
-import { constructionTypes, fitTypes, sizingProfiles } from "../api/endpoints"
-import { TARGETS } from "./grading/gradingAxes"
+import { sizingProfiles } from "../api/endpoints"
+import { groupLabel } from "./grading/gradingAxes"
+import { useEixos } from "./grading/eixosFont"
 import TargetLabel from "./grading/TargetLabel"
 
-// TARGETS: vocabulari ÚNIC (ordre + etiquetes) de gradingAxes — fora la còpia TARGET_ORDER + la crida
+// Els targets (ordre + etiquetes) surten del CATÀLEG de la BD (`/targets/`, ordenat per
+// `display_order`) — fora la còpia TARGET_ORDER + la crida
 // a targets/ (Onada 2). Les cerques de perfils van per CODI de target, no cal l'objecte de BD.
 
 function LoadError({ onRetry, label }) {
@@ -62,33 +64,26 @@ export function SizingProfileSelector({
   onClone,
   onSelectionChange,
 }) {
-  const { t } = useTranslation()
-  const [constructions, setConstructions] = useState([])
-  const [allFitTypes, setAllFitTypes] = useState([])
+  const { t, i18n } = useTranslation()
+  // ELS TRES EIXOS, D'UNA SOLA FONT. Aquesta pantalla ja anava a buscar construccions i fits pel
+  // seu compte (dues peticions pròpies) i els targets se'ls escrivia amb una constant importada:
+  // tres camins per a tres taules germanes del mateix catàleg. Ara és `useEixos()`, que memoritza
+  // a nivell de mòdul — o sigui que això no afegeix cap petició, en treu dues.
+  const { targets, constructions: catConstructions, fits: catFits, error: lookupsError,
+          reintenta: recarregaEixos } = useEixos()
+  const constructions = catConstructions || []
+  const allFitTypes = catFits || []
   const [profiles, setProfiles] = useState([])
   const [loadingProfiles, setLoadingProfiles] = useState(false)
 
   const [selectedTarget, setSelectedTarget] = useState(initialTarget)
   const [selectedConstruction, setSelectedConstruction] = useState(null)
   const [selectedFit, setSelectedFit] = useState(null)
+  // N2 — filtres que llegeixen les etiquetes del RUN (N1), no els eixos del perfil.
+  const [selectedEscala, setSelectedEscala] = useState(null)
+  const [selectedGrup, setSelectedGrup] = useState(null)
 
-  const [lookupsError, setLookupsError] = useState(false)
   const [profilesError, setProfilesError] = useState(false)
-
-  // Carregar targets i construccions
-  const loadLookups = () => {
-    setLookupsError(false)
-    constructionTypes.list()
-      .then(({ data: d }) => setConstructions(Array.isArray(d) ? d : (d.results || [])))
-      .catch(() => setLookupsError(true))
-
-    // FitTypes del catàleg complet (no bloquejant: si falla, no hi ha chips Fit).
-    fitTypes.list()
-      .then(({ data: d }) => setAllFitTypes(Array.isArray(d) ? d : (d.results || [])))
-      .catch(() => {})
-  }
-
-  useEffect(() => { loadLookups() }, [])
 
   // Carrega perfils per target+construcció (SENSE fit: el filtre de Fit és client-side).
   const loadProfiles = () => {
@@ -121,9 +116,27 @@ export function SizingProfileSelector({
     if (selectedFit && !activeFitCodis.has(selectedFit)) setSelectedFit(null)
   }, [profiles])  // eslint-disable-line react-hooks/exhaustive-deps
 
-  const visibleProfiles = selectedFit
+  // N2 — filtres del RUN (no del perfil): tipus d'escala i grup de peça. Client-side pel mateix
+  // motiu que el de Fit: filtrar-los al servidor trencaria el faceting i faria desaparèixer els
+  // altres chips. Els vocabularis són els mateixos de sempre; només canvia d'on surt el valor.
+  const perfilsAmbFit = selectedFit
     ? profiles.filter(p => p.fit_type_codi === selectedFit)
     : profiles
+
+  const escalesDisponibles = [...new Set(
+    perfilsAmbFit.map(p => p.size_system?.tipus_escala).filter(Boolean))].sort()
+  const grupsDisponibles = [...new Set(
+    perfilsAmbFit.flatMap(p => p.size_system?.grup_codis || []))].sort()
+
+  // Si el valor triat deixa d'existir per a la combinació, s'ignora. DERIVAT, no un reset dins
+  // d'un efecte: el que val és el valor viu, i un `setState` en efecte només hi afegiria un
+  // render en cascada per arribar al mateix lloc.
+  const escalaActiva = escalesDisponibles.includes(selectedEscala) ? selectedEscala : null
+  const grupActiu = grupsDisponibles.includes(selectedGrup) ? selectedGrup : null
+
+  const visibleProfiles = perfilsAmbFit
+    .filter(p => !escalaActiva || p.size_system?.tipus_escala === escalaActiva)
+    .filter(p => !grupActiu || (p.size_system?.grup_codis || []).includes(grupActiu))
 
   const pickTarget = (codi) => {
     setSelectedTarget(codi === selectedTarget ? null : codi)
@@ -152,7 +165,7 @@ export function SizingProfileSelector({
         </div>
         {/* Targets del vocabulari únic (estàtics): no depenen de cap càrrega. */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-          {TARGETS.map(tg => (
+          {(targets || []).map(tg => (
             <button
               key={tg.codi}
               onClick={() => pickTarget(tg.codi)}
@@ -181,7 +194,7 @@ export function SizingProfileSelector({
           <div style={{ fontSize: 'var(--fs-label)', fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--gold)", marginBottom: 10 }}>
             2 · {t("size_library.step_construction")}
           </div>
-          {lookupsError && <LoadError onRetry={loadLookups} label={t("size_library.load_error")} />}
+          {lookupsError && <LoadError onRetry={recarregaEixos} label={t("size_library.load_error")} />}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button
               onClick={() => pickConstruction(selectedConstruction)}
@@ -272,6 +285,55 @@ export function SizingProfileSelector({
           <div style={{ fontSize: 'var(--fs-caption)', color: "var(--text-muted)", marginBottom: 12, textTransform: "none", letterSpacing: "normal", fontWeight: 400 }}>
             {t("size_library.sizesets_help")}
           </div>
+
+          {/* N2 — filtres del RUN. Només surten les capes que els runs d'aquesta combinació
+              declaren: una fila de filtres amb un sol valor no filtra res i seria soroll. */}
+          {(escalesDisponibles.length > 1 || grupsDisponibles.length > 1) && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 14 }}>
+              {escalesDisponibles.length > 1 && (
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 'var(--fs-caption)', color: "var(--text-muted)", textTransform: "none", letterSpacing: "normal", fontWeight: 400 }}>
+                    {t("size_library.filter_scale")}
+                  </span>
+                  {escalesDisponibles.map(e => (
+                    <button
+                      key={e}
+                      onClick={() => setSelectedEscala(escalaActiva === e ? null : e)}
+                      style={{
+                        ...chipBase, padding: "4px 10px", fontSize: 'var(--fs-label)',
+                        background: escalaActiva === e ? "#f5e6d0" : "var(--white)",
+                        color: escalaActiva === e ? "var(--gold)" : "var(--text-main)",
+                        border: `1px solid ${escalaActiva === e ? "var(--gold)" : "var(--border)"}`,
+                      }}
+                    >
+                      {t(`size_library.scale_${e}`, e)}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {grupsDisponibles.length > 1 && (
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 'var(--fs-caption)', color: "var(--text-muted)", textTransform: "none", letterSpacing: "normal", fontWeight: 400 }}>
+                    {t("size_library.filter_group")}
+                  </span>
+                  {grupsDisponibles.map(g => (
+                    <button
+                      key={g}
+                      onClick={() => setSelectedGrup(grupActiu === g ? null : g)}
+                      style={{
+                        ...chipBase, padding: "4px 10px", fontSize: 'var(--fs-label)',
+                        background: grupActiu === g ? "#f5e6d0" : "var(--white)",
+                        color: grupActiu === g ? "var(--gold)" : "var(--text-main)",
+                        border: `1px solid ${grupActiu === g ? "var(--gold)" : "var(--border)"}`,
+                      }}
+                    >
+                      {groupLabel(g, i18n.language) || g}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {profilesError ? (
             <LoadError onRetry={loadProfiles} label={t("size_library.load_error_sizesets")} />

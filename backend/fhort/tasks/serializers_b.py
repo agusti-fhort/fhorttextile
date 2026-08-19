@@ -1,4 +1,7 @@
 from rest_framework import serializers
+
+from fhort.accounts.capabilities import PodaEconomicaMixin
+
 from .models import (TaskType, ModelTask, Supplier, Production,
                      GarmentTypeItem, GarmentTypeItemPart, TaskTimeEstimate, Customer)
 from .services_c import rectification_count
@@ -9,14 +12,52 @@ class TaskTypeSerializer(serializers.ModelSerializer):
         model = TaskType
         # B1: s'exposen fase/eina/mode (additiu, read-only) perquè l'arbre de tasques agrupi per
         # fase i pugui navegar a l'eina correcta en iniciar. Referència sempre per `code` (G9).
-        fields = ['id', 'code', 'name', 'default_order', 'active', 'fase', 'eina', 'mode']
+        # F2.0 — `tipus` i `es_lliurable` s'hi afegeixen perquè la UI sàpiga QUÈ té davant sense
+        # inventar-s'ho: `tipus` decideix si la tasca admet temps declarat (F2.5, Externa-lliure)
+        # i `es_lliurable` si compta per a l'avís de ronda lliurada (F2.7).
+        # T1 — `visible` s'hi afegeix perquè la UI sàpiga QUÈ ha d'oferir sense mantenir cap
+        # llista pròpia de codis: qui decideix si una targeta es pinta és el catàleg.
+        fields = ['id', 'code', 'name', 'default_order', 'active', 'fase', 'eina', 'mode',
+                  'tipus', 'es_lliurable', 'visible']
 
 
 class ModelTaskSerializer(serializers.ModelSerializer):
+    """F2.0 — EL CONTRACTE QUE LA UI DE F2 NECESSITA.
+
+    F1 va construir la genealogia (`ronda`, `mare`, `motiu`) i les regles noves (albarà, batec,
+    exclusió per trams) però **no en va exposar res**: el serializer seguia sent el de Sprint B.
+    La UI de F2 ha de decidir quina cara del modal ensenya, i no pot deduir-ho de l'`status`.
+
+    Els sis camps derivats responen sis preguntes concretes, totes read-only:
+
+      · `es_vigent`      — és AQUESTA la tasca que `tasca_vigent` resol per al seu code?
+      · `ronda_seq`      — de quina volta és (null = la 1a, implícita)
+      · `albaranada`     — té línia en albarà EMÈS? (la paret de D-5; cara C del modal)
+      · `obert_per`/`_nom` — QUI la té oberta ara, segons el TRAM (no segons `assignee`)
+      · `es_lliurable`   — el seu tipus produeix lliurable (F2.7)
+      · `tipus_extern`   — admet temps declarat (F2.5)
+
+    ⚠️ `obert_per` mira `TimerEntrada`, no `assignee`. És la lliçó de F1.5: `assignee` és
+    planificació i el rellotge és realitat, i confondre-les és el que va trencar l'exclusió.
+    """
+
     task_type_code = serializers.CharField(source='task_type.code', read_only=True)
     task_type_name = serializers.CharField(source='task_type.name', read_only=True)
     model_codi = serializers.CharField(source='model.codi_intern', read_only=True)
     rectifications = serializers.SerializerMethodField()
+    assignee_nom = serializers.CharField(source='assignee.nom_complet', read_only=True,
+                                         default=None)
+    es_lliurable = serializers.BooleanField(source='task_type.es_lliurable', read_only=True)
+    tipus_extern = serializers.SerializerMethodField()
+    ronda_seq = serializers.IntegerField(source='ronda.seq', read_only=True, default=None)
+    es_vigent = serializers.SerializerMethodField()
+    albaranada = serializers.SerializerMethodField()
+    obert_per = serializers.SerializerMethodField()
+    obert_per_nom = serializers.SerializerMethodField()
+    # T4 — el modal d'acabar diu en veu alta quant temps s'està tancant: la sessió que s'acaba i
+    # el total de la tasca. Sense això la decisió es pren a cegues, i és la que porta a albarà.
+    temps_consumit_min = serializers.SerializerMethodField()
+    sessio_inici = serializers.SerializerMethodField()
 
     class Meta:
         model = ModelTask
@@ -24,7 +65,12 @@ class ModelTaskSerializer(serializers.ModelSerializer):
                   'status', 'origen', 'assignee', 'order', 'created_at', 'updated_at',
                   'started_at', 'finished_at', 'estimated_minutes', 'rectifications',
                   'planned_start', 'planned_end', 'planned_locked',
-                  'work_order', 'off_recipe', 'fitting_session']
+                  'work_order', 'off_recipe', 'fitting_session',
+                  # F2.0 — genealogia (F1.1) + estat derivat per al modal de F2.1.
+                  'ronda', 'ronda_seq', 'mare', 'motiu',
+                  'assignee_nom', 'es_lliurable', 'tipus_extern',
+                  'es_vigent', 'albaranada', 'obert_per', 'obert_per_nom',
+                  'temps_consumit_min', 'sessio_inici']
         # started_at/finished_at els gestiona la transició; estimated_minutes és snapshot → read-only.
         # origen el fixa el backend en crear (prevista per defecte; ad_hoc des de l'arbre global,
         # Sprint 4) → read-only per al client.
@@ -36,10 +82,52 @@ class ModelTaskSerializer(serializers.ModelSerializer):
         read_only_fields = ['created_at', 'updated_at', 'origen',
                             'started_at', 'finished_at', 'estimated_minutes',
                             'planned_start', 'planned_end', 'planned_locked',
-                            'work_order', 'off_recipe', 'fitting_session']
+                            'work_order', 'off_recipe', 'fitting_session',
+                            # La genealogia l'escriu `obrir_ronda`, mai el client.
+                            'ronda', 'mare', 'motiu']
 
     def get_rectifications(self, obj):
         return rectification_count(obj)
+
+    def get_tipus_extern(self, obj):
+        return obj.task_type.tipus == 'Externa-lliure'
+
+    def get_es_vigent(self, obj):
+        """La resolució la fa `tasca_vigent`, mai el client: si la UI se la reimplementés,
+        tornaríem a tenir dos criteris (§S-4)."""
+        from .services_r import tasca_vigent
+        vigent = tasca_vigent(obj.model_id, obj.task_type.code)
+        return bool(vigent and vigent.pk == obj.pk)
+
+    def get_albaranada(self, obj):
+        """La paret de D-5, precalculada. El modal de F2.1 no pot dependre NOMÉS del 409:
+        ha de poder ensenyar la cara C abans que l'usuari piqui contra la porta."""
+        return obj.delivery_note_lines.filter(
+            delivery_note__status__in=['ISSUED', 'INVOICED']).exists()
+
+    def _tram_obert(self, obj):
+        return (obj.timers.filter(fi__isnull=True, actiu=True)
+                .select_related('tecnic').order_by('-inici').first())
+
+    def get_temps_consumit_min(self, obj):
+        """Minuts SANS acumulats. Mateixa higiene que el recompute i que l'albarà: els trams
+        desbocats no són temps treballat, i aquí no poden dir una xifra diferent."""
+        from .services_i import _real_minutes
+        return _real_minutes(obj)
+
+    def get_sessio_inici(self, obj):
+        """Quan va començar el tram OBERT (null si no n'hi ha cap). El modal en calcula la
+        sessió; el serializer no li dóna una durada perquè el rellotge corre mentre es llegeix."""
+        tram = obj.timers.filter(fi__isnull=True, actiu=True).first()
+        return tram.inici.isoformat() if tram else None
+
+    def get_obert_per(self, obj):
+        tram = self._tram_obert(obj)
+        return tram.tecnic_id if tram else None
+
+    def get_obert_per_nom(self, obj):
+        tram = self._tram_obert(obj)
+        return tram.tecnic.nom_complet if tram else None
 
 
 class SupplierSerializer(serializers.ModelSerializer):
@@ -51,7 +139,13 @@ class SupplierSerializer(serializers.ModelSerializer):
                   'pais', 'condicions_compra', 'persona_contacte', 'telefon_contacte', 'email_contacte']
 
 
-class CustomerSerializer(serializers.ModelSerializer):
+class CustomerSerializer(PodaEconomicaMixin, serializers.ModelSerializer):
+    #: `descompte_pct` és condició comercial. El Dashboard (la home de TOTHOM) carrega
+    #: `customers.list({page_size:200})` (`frontend/src/pages/Dashboard.jsx:233`) i el
+    #: CustomerSelector el fa servir des del wizard de models: el descompte de tots els
+    #: clients arribava a qualsevol tècnic (diagnosi 2026-08-14 §3.1).
+    CAMPS_ECONOMICS = ('descompte_pct',)
+
     # Comptadors agregats (annotate del CustomerViewSet). SerializerMethodField amb default 0 perquè
     # les respostes fora de list (create/update) — que no venen annotades — no petin.
     quotes_sent = serializers.SerializerMethodField()
@@ -108,16 +202,16 @@ class CustomerSerializer(serializers.ModelSerializer):
         return link.estat if link else None
 
     def get_quotes_sent(self, o):
-        return getattr(o, 'cnt_quotes_sent', 0) or 0
+        return getattr(o, 'quotes_sent', 0) or 0
 
     def get_quotes_accepted(self, o):
-        return getattr(o, 'cnt_quotes_accepted', 0) or 0
+        return getattr(o, 'quotes_accepted', 0) or 0
 
     def get_orders_open(self, o):
-        return getattr(o, 'cnt_orders_open', 0) or 0
+        return getattr(o, 'orders_open', 0) or 0
 
     def get_delivery_notes_count(self, o):
-        return getattr(o, 'cnt_delivery_notes', 0) or 0
+        return getattr(o, 'delivery_notes_count', 0) or 0
 
 
 class ProductionSerializer(serializers.ModelSerializer):
@@ -158,6 +252,9 @@ class GarmentTypeItemSerializer(serializers.ModelSerializer):
     # GarmentTypeItemPartSerializer). `is_set` sí és escrivible pel PATCH genèric: és un camp
     # concret de la taula, i és la declaració que la decisió 3 posa a mans de l'autoria.
     parts = GarmentTypeItemPartSerializer(many=True, read_only=True)
+    # U2/R3 — el nom del run PROPOSAT, per a la columna «Run de talles» de la llista del catàleg.
+    # Read-only i amb el mateix patró que `grading_rule_set_nom`: el que s'escriu és el FK.
+    proposed_size_system_nom = serializers.SerializerMethodField()
 
     class Meta:
         model = GarmentTypeItem
@@ -166,10 +263,16 @@ class GarmentTypeItemSerializer(serializers.ModelSerializer):
         fields = ['id', 'garment_type', 'code', 'name', 'complexity_order', 'active',
                   'is_set', 'parts',
                   'grading_rule_set', 'base_size_definition',
-                  'grading_rule_set_nom', 'base_size_label', 'poms_count', 'fitxers_count']
+                  'grading_rule_set_nom', 'base_size_label', 'poms_count', 'fitxers_count',
+                  # U2/R3 — la PROPOSTA de l'item: run i talla base. Escrivibles per la pantalla
+                  # del catàleg; no manen sobre el joc de regles ni sobre cap ItemBaseSet.
+                  'proposed_size_system', 'proposed_base_size_label', 'proposed_size_system_nom']
 
     def get_grading_rule_set_nom(self, obj):
         return obj.grading_rule_set.nom if obj.grading_rule_set_id else None
+
+    def get_proposed_size_system_nom(self, obj):
+        return obj.proposed_size_system.nom if obj.proposed_size_system_id else None
 
     def get_base_size_label(self, obj):
         return obj.base_size_definition.etiqueta if obj.base_size_definition_id else None
@@ -182,7 +285,15 @@ class GarmentTypeItemSerializer(serializers.ModelSerializer):
         from django.core.exceptions import ValidationError as DjangoValidationError
         grs = attrs.get('grading_rule_set', getattr(self.instance, 'grading_rule_set', None))
         bsd = attrs.get('base_size_definition', getattr(self.instance, 'base_size_definition', None))
-        probe = GarmentTypeItem(grading_rule_set=grs, base_size_definition=bsd)
+        # U2/R3 — el probe ha de portar TAMBÉ la proposta: si no, la seva branca del clean()
+        # veuria sempre els camps buits i la validació no s'executaria mai per API. Mateixa
+        # fusió (attrs sobre instància) perquè el PATCH parcial es validi contra el que ja hi ha.
+        pss = attrs.get('proposed_size_system',
+                        getattr(self.instance, 'proposed_size_system', None))
+        pbl = attrs.get('proposed_base_size_label',
+                        getattr(self.instance, 'proposed_base_size_label', '') or '')
+        probe = GarmentTypeItem(grading_rule_set=grs, base_size_definition=bsd,
+                                proposed_size_system=pss, proposed_base_size_label=pbl)
         try:
             probe.clean()
         except DjangoValidationError as e:

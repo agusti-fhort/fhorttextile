@@ -140,10 +140,15 @@ export default function SizeSystemDrawer({ sizeSystem, onClose, onDeleted, onTar
   }
 
   const handleAdd = async () => {
+    // `ordre` és ÚNIC per run des de C4 (pom/0067), i els forats a `ordre` són LEGÍTIMS
+    // (grading_utils.py:374). Comptar files (`length + 1`) dona un número que ja existeix
+    // en qualsevol run amb forat — p. ex. 1·2·4 → proposaria 4, que ja hi és. El següent
+    // lliure surt del MÀXIM, no del recompte.
+    const seguent = definitions.reduce((m, d) => Math.max(m, Number(d.ordre) || 0), 0) + 1
     const newDef = {
       size_system: sizeSystem.id,
       etiqueta: 'NOVA',
-      ordre: definitions.length + 1,
+      ordre: seguent,
     }
     const res = await fetch('/api/v1/size-definitions/', {
       method: 'POST',
@@ -155,7 +160,17 @@ export default function SizeSystemDrawer({ sizeSystem, onClose, onDeleted, onTar
       setDefinitions(prev => [...prev, created])
       setEditingId(created.id)
       setDraft({ ...created })
+      return
     }
+    // Sense aquest `else` el botó no feia res i no deia res: el 400 de la unicitat (o el de
+    // l'etiqueta 'NOVA' repetida) es perdia sencer. Mateixa manera d'avisar que la resta del
+    // drawer.
+    let msg = t('size_system.add_error')
+    try {
+      const d = await res.json()
+      msg = d.detail || d.error || d.non_field_errors?.[0] || d.ordre?.[0] || d.etiqueta?.[0] || msg
+    } catch { /* si això falla, el drawer no ha de petar */ }
+    alert(msg)
   }
 
   if (!sizeSystem) return null
@@ -235,7 +250,7 @@ export default function SizeSystemDrawer({ sizeSystem, onClose, onDeleted, onTar
                       padding: '0.25rem 0.6rem', borderRadius: 999,
                       border: `1px solid ${on ? 'var(--gold)' : '#ddd'}`,
                       background: on ? 'var(--gold)' : 'var(--white)',
-                      color: on ? 'var(--white)' : '#666',
+                      color: on ? 'var(--text-main)' : '#666',
                       cursor: 'pointer', fontSize: '0.75rem',
                       fontWeight: on ? 600 : 400,
                     }}
@@ -257,8 +272,8 @@ export default function SizeSystemDrawer({ sizeSystem, onClose, onDeleted, onTar
                 onClick={handleSaveTargets}
                 disabled={savingTargets}
                 style={{
-                  padding: '0.35rem 0.8rem', border: '1px solid var(--gold)',
-                  borderRadius: 6, background: 'var(--gold)', color: 'var(--white)',
+                  padding: '0.35rem 0.8rem', border: '1px solid var(--accio)',
+                  borderRadius: 6, background: 'var(--accio)', color: 'var(--white)',
                   cursor: savingTargets ? 'default' : 'pointer',
                   opacity: savingTargets ? 0.6 : 1,
                   fontSize: '0.8rem', fontWeight: 500,
@@ -336,7 +351,7 @@ export default function SizeSystemDrawer({ sizeSystem, onClose, onDeleted, onTar
                           <button onClick={handleSave}
                             style={{
                               fontSize: '0.7rem', padding: '0.15rem 0.4rem',
-                              background: 'var(--gold)', color: 'var(--white)', border: 'none',
+                              background: 'var(--accio)', color: 'var(--white)', border: 'none',
                               borderRadius: 3, cursor: 'pointer', marginRight: 4,
                             }}>
                             ✓

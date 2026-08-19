@@ -1,120 +1,249 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../store/auth'
 import { suppliers } from '../api/endpoints'
-import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
 import Modal from '../components/ui/Modal'
-import Table from '../components/ui/Table'
-import { selS, primaryBtn } from '../components/ui/buttons'
+import Badge from '../components/ui/Badge'
+import { useCodisEstat } from '../components/commercial/estats'
+import PageMenu from '../components/ui/PageMenu'
+import TaulaLlista from '../components/ui/TaulaLlista'
+import {
+  BotoMenu, SepMenu, Comptador, FilaIdentitat, EstatBuit, BotoEsborrar, Paginacio,
+  camp, forceBarra,
+} from '../components/llista/ChromLlista'
 
-// Fase catàlegs — Pas 4A · Catàleg de proveïdors (tallers/fàbrica). Plantilla Peça 0.
-// Backend: SupplierViewSet (CRUD); escriptura gated SCHEDULE_FITTINGS; destroy→409 si té confeccions.
+// CATALEG DE PROVEIDORS (tallers/fabrica) — LLISTA CANONICA DE LA CASA (NORMA_LAYOUT §8b + §8e).
+//
+// Germana de `/clients` i de `/models`: mateix menu de pantalla, mateixa graella
+// (`ui/TaulaLlista`), mateix crom (`components/llista/ChromLlista`). El que canvia son les
+// columnes. Backend: `SupplierViewSet`; escriptura gated SCHEDULE_FITTINGS (no CONFIGURE, com a
+// Clients: qui contracta una confeccio es qui planifica); destroy → 409 si te confeccions.
+//
+// ── TRES COSES QUE ES DIUEN EN VEU ALTA ──────────────────────────────────────────────────
+//
+// 1 · **EL CERCADOR VA HAVER D'ARREGLAR-SE AL BACKEND, i el defecte era el GERMA INVERS del de
+//    /clients.** Alla se substituien els `filter_backends` i queia l'`OrderingFilter`; aqui el
+//    `SearchFilter` hi era i el que faltava era `search_fields` — i DRF, sense `search_fields`,
+//    **deixa passar el queryset SENCER**. Dos silencis diferents amb la mateixa cara: no falla,
+//    no avisa, i el control sembla que funciona. Mesurat abans (`?search=zzzz` → count 1, el
+//    mateix que sense filtre) i DESPRES que S1 hi posés `['name','nif','ciutat']`:
+//    sense filtre → count 1 · `?search=zzzz` → **count 0** · `?search=Syt` → count 1.
+//
+// 2 · **LES CAPCALERES ORDENEN, pero no s'ha pogut VEURE.** El ViewSet no sobreescriu
+//    `filter_backends`, o sigui que hereta l'`OrderingFilter` del `DEFAULT_FILTER_BACKENDS`, i
+//    `name`/`type`/`active` son camps del serializer (comprovat) → DRF els accepta com a
+//    `ordering_fields` implicits. Pero `ordering_fields` NO esta declarat, i el implicit es
+//    justament la mena de contracte que es trenca en silenci el dia que algu toca el serializer.
+//    Demanat a S1 que el faci explicit.
+//    🛑 **LIMIT DECLARAT**: el banc te **UN sol proveidor** (`Syttex`, tenant `fhort`) i **CAP**
+//    al tenant `los`. Amb una fila no es pot observar cap ordenacio. Les icones hi son perque el
+//    contracte les sosté; el que NO s'ha pogut fer es la comprovacio empirica que si que s'ha fet
+//    a /clients. No esta amagat: esta dit.
+//
+// 3 · **`Supplier.type` (workshop · factory) ja ve de `/vocabulari/`** (`tipus_proveidor`), i
+//    era l'ULTIMA enumeracio de domini que el lot comercial declarava al client. Els `choices`
+//    estaven INLINE al camp del model, sense ni tan sols una constant amb nom: la forma mes
+//    dificil de censar de totes, perque no hi ha res a cercar. S1 els ha batejat
+//    (`Supplier.TYPE_CHOICES`) i l'endpoint els llegeix del `_meta` del camp, com la resta.
+//    Es un select que ESCRIU: mentre el vocabulari no ha arribat NO ofereix cap opcio, que es el
+//    correcte —oferir-ne una d'endevinada seria deixar escriure un tipus que potser no existeix.
 const MONO = 'IBM Plex Mono, monospace'
-const actBtn = {
-  background: 'none', border: '0.5px solid var(--gray-l)', borderRadius: 6, cursor: 'pointer',
-  padding: '4px 9px', fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)',
-}
+const PAGE_SIZE = 25
+// Ordre per defecte: alfabètic pel nom, que és el `Meta.ordering` del model. Explícit aquí
+// perquè la icona de la capçalera pugui dir-ho en obrir la pàgina.
+const ORDRE_DEFECTE = { camp: 'name', dir: 'asc' }
 
 export default function Suppliers() {
   const { t } = useTranslation()
   const me = useAuthStore(s => s.user)
   const canEdit = !!me?.capabilities?.includes('schedule_fittings')
 
+  const [items, setItems] = useState([])
+  const [count, setCount] = useState(0)
+  const [total, setTotal] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
-  const [items, setItems] = useState([])
   const [feedback, setFeedback] = useState(null)
   const [saving, setSaving] = useState(false)
   const [modal, setModal] = useState(null)   // { mode:'create'|'edit', sup? }
 
-  const fetchList = () => suppliers.list({ ordering: 'name', page_size: 500 })
-    .then(res => res.data?.results ?? (Array.isArray(res.data) ? res.data : []))
+  const [sp, setSp] = useSearchParams()
+  const search = sp.get('search') || ''
+  const [searchInput, setSearchInput] = useState(search)
+  const page = Math.max(1, parseInt(sp.get('page') || '1', 10))
+  // §8e · filtres ràpids de VISTA al menú. Com a Clients, el criteri no s'endevina: `active` és
+  // un camp de debò i el backend ja el filtra (`filterset_fields = ['active', 'type']`).
+  // ⚠️ CONDUCTA AFEGIDA: fins avui la llista barrejava actius i inactius; ara els inactius són a
+  // la píndola del costat. Va al report perquè Agus ho pugui vetar.
+  const vista = sp.get('vista') === 'inactius' ? 'inactius' : 'actius'
+  const ordre = useMemo(() => {
+    const raw = sp.get('ordering')
+    if (!raw) return ORDRE_DEFECTE
+    const desc = raw.startsWith('-')
+    return { camp: desc ? raw.slice(1) : raw, dir: desc ? 'desc' : 'asc' }
+  }, [sp])
+
+  const setParams = useCallback((patch) => {
+    setSp(prev => {
+      const next = new URLSearchParams(prev)
+      Object.entries(patch).forEach(([k, v]) => {
+        if (v === undefined || v === null || v === '') next.delete(k)
+        else next.set(k, v)
+      })
+      return next
+    }, { replace: true })
+  }, [setSp])
+
+  const ordenar = useCallback((c) => {
+    const dir = (ordre.camp === c && ordre.dir === 'asc') ? 'desc' : 'asc'
+    setParams({ ordering: dir === 'desc' ? `-${c}` : c, page: undefined })
+  }, [ordre, setParams])
 
   const load = useCallback(() => {
-    setError(false)
-    return fetchList().then(setItems).catch(() => setError(true))
-  }, [])
+    setLoading(true); setError(false)
+    suppliers.list({
+      active: vista === 'actius',
+      ...(search ? { search } : {}),
+      ordering: ordre.dir === 'desc' ? `-${ordre.camp}` : ordre.camp,
+      page, page_size: PAGE_SIZE,
+    })
+      .then(res => {
+        const d = res.data
+        setItems(Array.isArray(d) ? d : (d.results || []))
+        setCount(d?.count ?? (Array.isArray(d) ? d.length : 0))
+      })
+      .catch(() => { setItems([]); setCount(0); setError(true) })
+      .finally(() => setLoading(false))
+  }, [vista, search, ordre, page])
 
+  // El DENOMINADOR del comptador: el cens sencer, sense el filtre de vista. Una sola fila
+  // demanada — l'únic que se'n vol és el `count` (§8e: «no es dedueix d'una pàgina»).
+  const carregaTotal = useCallback(() => {
+    suppliers.list({ page_size: 1 }).then(r => setTotal(r.data?.count ?? null)).catch(() => setTotal(null))
+  }, [])
+  useEffect(() => { carregaTotal() }, [carregaTotal])
+  // Cerca: mirall local per a la resposta de teclat, a la URL amb debounce (patró d'A5).
+  useEffect(() => { setSearchInput(search) }, [search])
   useEffect(() => {
-    let alive = true
-    fetchList()
-      .then(rows => { if (alive) setItems(rows) })
-      .catch(() => { if (alive) setError(true) })
-      .finally(() => { if (alive) setLoading(false) })
-    return () => { alive = false }
-  }, [])
+    const id = setTimeout(() => { if (searchInput !== search) setParams({ search: searchInput, page: undefined }) }, 250)
+    return () => clearTimeout(id)
+  }, [searchInput])   // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { const id = setTimeout(load, 150); return () => clearTimeout(id) }, [load])
 
-  const toggleActive = (sup) => {
-    setSaving(true); setFeedback(null)
-    suppliers.update(sup.id, { active: !sup.active })
-      .then(() => load())
-      .then(() => setFeedback({ type: 'ok', text: t('suppliers.saved') }))
-      .catch(() => setFeedback({ type: 'err', text: t('suppliers.error') }))
-      .finally(() => setSaving(false))
-  }
+  const pages = Math.max(1, Math.ceil(count / PAGE_SIZE))
 
-  const remove = (sup) => {
+  const remove = (sup, e) => {
+    e.stopPropagation()
     if (!window.confirm(t('suppliers.confirm_delete', { name: sup.name }))) return
     setSaving(true); setFeedback(null)
     suppliers.remove(sup.id)
-      .then(() => load())
+      .then(() => { load(); carregaTotal() })
       .then(() => setFeedback({ type: 'ok', text: t('suppliers.deleted') }))
       // PROTECT → 409 amb {detail} del backend; fallback i18n.
-      .catch(e => setFeedback({ type: 'err', text: e?.response?.data?.detail || t('suppliers.delete_protected') }))
+      .catch(err => setFeedback({ type: 'err', text: err?.response?.data?.detail || t('suppliers.delete_protected') }))
       .finally(() => setSaving(false))
   }
 
-  const typeLabel = (type) => type === 'factory' ? t('suppliers.factory') : t('suppliers.workshop')
+  // L'etiqueta d'un `Supplier.type`. La CLAU es construeix pel codi que arriba, com a tot arreu:
+  // no hi ha cap `if type === 'factory'` que hagi de saber-se la llista.
+  const typeLabel = (type) => (type ? t(`suppliers.${type}`, type) : '—')
 
-  const columns = [
-    { key: 'name', label: t('suppliers.col_name'), render: r => <span style={{ fontFamily: MONO, fontWeight: 600 }}>{r.name}</span> },
-    { key: 'type', label: t('suppliers.col_type'), render: r => typeLabel(r.type) },
-    { key: 'active', label: t('suppliers.col_active'), render: r => (
-      <span style={{
-        fontSize: 'var(--fs-label)', fontWeight: 600, padding: '2px 8px', borderRadius: 999, fontFamily: MONO,
-        background: r.active ? 'var(--ok-bg)' : 'var(--gray-l)', color: r.active ? 'var(--ok)' : 'var(--gray)',
-      }}>{r.active ? t('suppliers.active') : t('suppliers.inactive')}</span>
-    ) },
-    ...(canEdit ? [{ key: '_a', label: '', align: 'right', render: r => (
-      <span style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-        <button onClick={() => setModal({ mode: 'edit', sup: r })} disabled={saving} style={actBtn}>{t('suppliers.edit')}</button>
-        <button onClick={() => toggleActive(r)} disabled={saving} style={actBtn}>{r.active ? t('suppliers.deactivate') : t('suppliers.activate')}</button>
-        <button onClick={() => remove(r)} disabled={saving} style={{ ...actBtn, color: 'var(--err)', borderColor: 'var(--err)' }}>{t('suppliers.delete')}</button>
-      </span>) }] : []),
+  const cols = useMemo(() => [
+    {
+      // LA DADA REINA d'un catàleg de proveïdors és el NOM: és l'única cosa amb què es demanen.
+      key: 'name', label: t('suppliers.col_name'), min: 200, max: 340, sort: 'name',
+      estil: { fontWeight: 600 }, titol: r => r.name,
+      render: r => r.name || '—',
+    },
+    {
+      key: 'type', label: t('suppliers.col_type'), min: 100, max: 130, sort: 'type',
+      estil: { fontSize: 11, color: 'var(--text-soft)' },
+      render: r => typeLabel(r.type),
+    },
+    {
+      // §8e · l'ESTAT amb badge de codi de colors. Actiu = verd; inactiu = NEUTRE, no vermell:
+      // un proveïdor retirat no és cap error.
+      key: 'active', label: t('suppliers.col_active'), min: 86, max: 100, sort: 'active',
+      render: r => (
+        <Badge variant={r.active ? 'ok' : 'gray'}>
+          {r.active ? t('suppliers.active') : t('suppliers.inactive')}
+        </Badge>
+      ),
+    },
+    {
+      key: 'del', amplada: 36,
+      render: r => (canEdit
+        ? <BotoEsborrar onClick={(e) => remove(r, e)} title={t('suppliers.delete')} disabled={saving} />
+        : null),
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [t, canEdit, saving])
+
+  const VISTES = [
+    ['actius', t('suppliers.view_active')],
+    ['inactius', t('suppliers.view_inactive')],
   ]
 
   return (
-    <div style={{ minWidth: 0, maxWidth: 900 }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: '1rem' }}>
-        <div>
-          <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>{t('suppliers.title')}</h1>
-          <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300 }}>{t('suppliers.subtitle')}</p>
-        </div>
-        {canEdit && (
-          <button onClick={() => setModal({ mode: 'create' })} style={{ ...primaryBtn, marginLeft: 0 }}>
-            <i className="ti ti-plus" style={{ fontSize: 14 }} />{t('suppliers.new')}
-          </button>
-        )}
+    <>
+      <div style={forceBarra}>
+        <PageMenu
+          backTo="/"
+          backTitle={t('suppliers.back_title')}
+          items={VISTES.map(([v, label]) => ({
+            key: v, label, active: vista === v,
+            onClick: () => setParams({ vista: v === 'actius' ? undefined : v, page: undefined }),
+          }))}
+        >
+          {canEdit && <>
+            <SepMenu />
+            <BotoMenu onClick={() => setModal({ mode: 'create' })} icona="ti-plus"
+              label={t('suppliers.new')} />
+          </>}
+        </PageMenu>
       </div>
 
-      <Feedback feedback={feedback} onDismiss={() => setFeedback(null)} />
+      <div style={{ minWidth: 0, maxWidth: '100%' }}>
+        {/* §8e · el comptador mana i la cerca hi va al costat, mateixa línia. */}
+        <FilaIdentitat>
+          <Comptador valor={count} total={total ?? count} etiqueta={t('suppliers.entity')} />
+          <input value={searchInput} onChange={e => setSearchInput(e.target.value)}
+            placeholder={t('suppliers.search_ph')} aria-label={t('suppliers.search_ph')}
+            style={{ ...camp, flex: 1, minWidth: 220 }} />
+        </FilaIdentitat>
 
-      {loading ? <Center>{t('suppliers.loading')}</Center>
-        : error ? <Center>{t('suppliers.error')}</Center>
-          : (
-            <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', overflowX: 'auto' }}>
-              <Table columns={columns} data={items} loading={false} empty={t('suppliers.empty')} />
-            </div>
-          )}
+        <Feedback feedback={feedback} onDismiss={() => setFeedback(null)} />
+
+        {loading ? <EstatBuit>{t('suppliers.loading')}</EstatBuit>
+          : error ? <EstatBuit>{t('suppliers.error')}</EstatBuit>
+            : items.length === 0 ? <EstatBuit>{search ? t('suppliers.empty_filtered') : t('suppliers.empty')}</EstatBuit>
+              : (
+                <TaulaLlista cols={cols} files={items} clau={(r) => r.id}
+                  ordre={ordre} onOrdenar={ordenar}
+                  // No hi ha fitxa de proveïdor: obrir la fila obre el seu formulari, que és on
+                  // viu tot el que se'n sap. Sense permís d'escriptura la fila no s'obre —
+                  // oferir-ho seria prometre una edició que el backend rebutjaria.
+                  onObrir={canEdit ? (r) => setModal({ mode: 'edit', sup: r }) : null} />
+              )}
+
+        <Paginacio page={page} pages={pages} onPage={(p) => setParams({ page: p })}
+          labelPrev={t('suppliers.prev')} labelNext={t('suppliers.next')}
+          info={t('suppliers.page_info', { page, pages })} />
+      </div>
 
       {modal && (
-        <SupplierModal mode={modal.mode} sup={modal.sup} t={t} saving={saving} setSaving={setSaving} typeLabel={typeLabel}
+        <SupplierModal mode={modal.mode} sup={modal.sup} t={t} saving={saving} setSaving={setSaving}
           onCancel={() => setModal(null)}
-          onSaved={(msg) => { setModal(null); load().then(() => setFeedback({ type: 'ok', text: msg })) }}
+          onSaved={(msg) => {
+            setModal(null)
+            load(); carregaTotal()
+            setFeedback({ type: 'ok', text: msg })
+          }}
           onError={(text) => setFeedback({ type: 'err', text })} />
       )}
-    </div>
+    </>
   )
 }
 
@@ -122,6 +251,7 @@ export default function Suppliers() {
 // (B1-P4). Tab "Dades" = identitat; tab "Comercial" = fiscalitat, condicions de compra i contacte.
 function SupplierModal({ mode, sup, t, saving, setSaving, onCancel, onSaved, onError }) {
   const isEdit = mode === 'edit'
+  const { codis: tipus } = useCodisEstat('tipus_proveidor')
   const [tab, setTab] = useState('dades')
   const [name, setName] = useState(sup?.name || '')
   const [type, setType] = useState(sup?.type || 'workshop')
@@ -162,11 +292,11 @@ function SupplierModal({ mode, sup, t, saving, setSaving, onCancel, onSaved, onE
         tabs={[['dades', t('suppliers.tab_dades')], ['comercial', t('suppliers.tab_comercial')]]} />
 
       {tab === 'dades' && <>
-        <Field label={t('suppliers.col_name')}><input value={name} onChange={e => setName(e.target.value)} style={{ ...selS, width: '100%' }} /></Field>
+        <Field label={t('suppliers.col_name')}><input value={name} onChange={e => setName(e.target.value)} style={{ ...camp, width: '100%' }} /></Field>
         <Field label={t('suppliers.col_type')}>
-          <select value={type} onChange={e => setType(e.target.value)} style={{ ...selS, width: '100%' }}>
-            <option value="workshop">{t('suppliers.workshop')}</option>
-            <option value="factory">{t('suppliers.factory')}</option>
+          {/* Cap llista escrita aquí: els dos codis venen de `/vocabulari/` (`tipus_proveidor`). */}
+          <select value={type} onChange={e => setType(e.target.value)} style={{ ...camp, width: '100%' }}>
+            {(tipus || []).map(k => <option key={k} value={k}>{t(`suppliers.${k}`, k)}</option>)}
           </select>
         </Field>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-body)', marginTop: 4 }}>
@@ -176,56 +306,66 @@ function SupplierModal({ mode, sup, t, saving, setSaving, onCancel, onSaved, onE
 
       {tab === 'comercial' && <>
         <Field label={t('suppliers.rao_social')}>
-          <input value={f.rao_social} onChange={e => set('rao_social', e.target.value)} style={{ ...selS, width: '100%' }} />
+          <input value={f.rao_social} onChange={e => set('rao_social', e.target.value)} style={{ ...camp, width: '100%' }} />
         </Field>
         <Field label={t('suppliers.nif')}>
-          <input value={f.nif} onChange={e => set('nif', e.target.value)} style={{ ...selS, width: '100%' }} />
+          <input value={f.nif} onChange={e => set('nif', e.target.value)} style={{ ...camp, width: '100%' }} />
         </Field>
         <Field label={t('suppliers.adreca')}>
           <input value={f.adreca_linia1} onChange={e => set('adreca_linia1', e.target.value)}
-            placeholder={t('suppliers.adreca1')} style={{ ...selS, width: '100%', marginBottom: 6 }} />
+            placeholder={t('suppliers.adreca1')} style={{ ...camp, width: '100%', marginBottom: 6 }} />
           <input value={f.adreca_linia2} onChange={e => set('adreca_linia2', e.target.value)}
-            placeholder={t('suppliers.adreca2')} style={{ ...selS, width: '100%' }} />
+            placeholder={t('suppliers.adreca2')} style={{ ...camp, width: '100%' }} />
         </Field>
         <Row>
           <Field label={t('suppliers.codi_postal')}>
-            <input value={f.codi_postal} onChange={e => set('codi_postal', e.target.value)} style={{ ...selS, width: '100%' }} />
+            <input value={f.codi_postal} onChange={e => set('codi_postal', e.target.value)} style={{ ...camp, width: '100%' }} />
           </Field>
           <Field label={t('suppliers.ciutat')}>
-            <input value={f.ciutat} onChange={e => set('ciutat', e.target.value)} style={{ ...selS, width: '100%' }} />
+            <input value={f.ciutat} onChange={e => set('ciutat', e.target.value)} style={{ ...camp, width: '100%' }} />
           </Field>
           <Field label={t('suppliers.pais')}>
             <input value={f.pais} maxLength={2} onChange={e => set('pais', e.target.value.toUpperCase())}
-              style={{ ...selS, width: '100%', textTransform: 'uppercase' }} />
+              style={{ ...camp, width: '100%', textTransform: 'uppercase' }} />
           </Field>
         </Row>
         <Field label={t('suppliers.condicions_compra')}>
-          <input value={f.condicions_compra} onChange={e => set('condicions_compra', e.target.value)} style={{ ...selS, width: '100%' }} />
+          <input value={f.condicions_compra} onChange={e => set('condicions_compra', e.target.value)} style={{ ...camp, width: '100%' }} />
         </Field>
         <Row>
           <Field label={t('suppliers.persona_contacte')}>
-            <input value={f.persona_contacte} onChange={e => set('persona_contacte', e.target.value)} style={{ ...selS, width: '100%' }} />
+            <input value={f.persona_contacte} onChange={e => set('persona_contacte', e.target.value)} style={{ ...camp, width: '100%' }} />
           </Field>
           <Field label={t('suppliers.telefon_contacte')}>
-            <input value={f.telefon_contacte} onChange={e => set('telefon_contacte', e.target.value)} style={{ ...selS, width: '100%' }} />
+            <input value={f.telefon_contacte} onChange={e => set('telefon_contacte', e.target.value)} style={{ ...camp, width: '100%' }} />
           </Field>
         </Row>
         <Field label={t('suppliers.email_contacte')}>
-          <input value={f.email_contacte} onChange={e => set('email_contacte', e.target.value)} type="email" style={{ ...selS, width: '100%' }} />
+          <input value={f.email_contacte} onChange={e => set('email_contacte', e.target.value)} type="email" style={{ ...camp, width: '100%' }} />
         </Field>
       </>}
     </Modal>
   )
 }
 
+// §8b-bis · TABS DE SECCIO (dues germanes dins d'un panell): subratllat d'or. No es barregen
+// amb les pindoles del menu de pantalla, que son l'altre patro i viuen a un altre nivell.
+// El subratllat va per `box-shadow` i no per `border-bottom` pel mateix motiu que a la graella
+// del fitting: una vora que apareix i desapareix mou el contingut dos pixels cada cop que algu
+// tria.
 function TabBar({ tab, setTab, tabs }) {
   return (
-    <div style={{ display: 'flex', gap: 4, borderBottom: '0.5px solid var(--border)', marginBottom: 16 }}>
+    <div style={{
+      display: 'flex', gap: 4, marginBottom: 16,
+      borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: 'var(--line)',
+    }}>
       {tabs.map(([k, label]) => (
-        <button key={k} onClick={() => setTab(k)} style={{
-          fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '6px 12px', cursor: 'pointer',
-          background: 'none', border: 'none', color: tab === k ? 'var(--gold)' : 'var(--text-muted)',
-          borderBottom: tab === k ? '2px solid var(--gold)' : '2px solid transparent', marginBottom: -1,
+        <button key={k} type="button" onClick={() => setTab(k)} style={{
+          fontFamily: MONO, fontSize: 'var(--fs-body)', lineHeight: '16px',
+          padding: '8px 12px', cursor: 'pointer', background: 'none', border: 'none',
+          color: tab === k ? 'var(--text-main)' : 'var(--text-soft)',
+          fontWeight: tab === k ? 600 : 400,
+          boxShadow: tab === k ? 'inset 0 -2px 0 var(--gold)' : 'none',
         }}>{label}</button>
       ))}
     </div>
@@ -236,10 +376,16 @@ function Row({ children }) {
   return <div style={{ display: 'flex', gap: 10 }}>{children}</div>
 }
 
+// §2 · l'etiqueta d'un camp es un LABEL: 10px, majuscules, tracking .08em, pes 600. Anava a
+// 12px (mida de COS) amb pes normal, o sigui que cridava tant com el valor que etiqueta.
 function Field({ label, children }) {
   return (
     <div style={{ marginBottom: 14, flex: 1 }}>
-      <label style={{ fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>{label}</label>
+      <label style={{
+        display: 'block', marginBottom: 6, fontFamily: MONO,
+        fontSize: 'var(--fs-label)', lineHeight: '12px', letterSpacing: '.08em',
+        textTransform: 'uppercase', color: 'var(--text-soft)', fontWeight: 600,
+      }}>{label}</label>
       {children}
     </div>
   )

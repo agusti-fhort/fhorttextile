@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../../store/auth'
 import { PomNamePair, POMDetailPanel } from './POMBrowser'
+import { useTraduccioPoms } from '../../utils/traduccioPomFont'
 
 // Sentinel id for the synthetic "uncategorized" group (kept as id for grouping/sort; label translated).
 const UNCAT = 'Sense categoria'
@@ -48,6 +49,8 @@ export default function POMCatalogue() {
   const { t } = useTranslation()
   const token = useAuthStore(s => s.token) || localStorage.getItem('access_token')
   const [items, setItems] = useState([])
+  // LA ⓘ/segona línia TÉ FONT (tram ⓘ): el mateix hook i el mateix lot que la resta del sistema.
+  const traduccioDe = useTraduccioPoms(items.map(p => p.pom_id))
   const [loading, setLoading] = useState(false)
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState(null)
@@ -150,7 +153,9 @@ export default function POMCatalogue() {
                         {pom.pom_code}
                       </span>
                       <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        <PomNamePair en={pom.name_en} local={pom.name_cat} />
+                        <PomNamePair en={pom.name_en}
+                          local={(pom.name_cat && pom.name_cat !== pom.name_en ? pom.name_cat : '')
+                            || traduccioDe(pom.pom_id)} />
                       </span>
                       {pom.abbreviation && (
                         <span style={{

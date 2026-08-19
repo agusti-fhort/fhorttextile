@@ -1,0 +1,173 @@
+<meta charset="utf-8">
+<title>--gold-action · evidència per a la tria (S37)</title>
+<style>
+  :root{
+    --marca:#c27a2a;              /* --gold d'index.css:15 == color de marca del logo */
+    --ACTUAL:#c27a2a; --A:#a56824; --B:#9d6322; --REF:#9b6222; --WARN:#854f0b;
+    --tinta:#1d1d1b; --moll:#868685; --vora:#e0d5c5; --paper:#fdf9f5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:32px;font:14px/1.55 'IBM Plex Mono',ui-monospace,monospace;color:var(--tinta);background:#fff;max-width:1180px;margin-inline:auto}
+  h1{font-size:22px;font-weight:600;margin:0 0 4px}
+  h2{font-size:16px;font-weight:600;margin:44px 0 6px;padding-top:14px;border-top:1px solid var(--vora)}
+  h3{font-size:13px;font-weight:600;margin:22px 0 8px;color:var(--moll);text-transform:uppercase;letter-spacing:.06em}
+  p{margin:0 0 12px;max-width:76ch}
+  .lede{color:var(--moll);margin-bottom:26px}
+  code{background:#f5f0e8;padding:1px 5px;border-radius:3px;font-size:.92em}
+  table{border-collapse:collapse;width:100%;margin:10px 0 8px;font-size:13px}
+  th,td{border:1px solid var(--vora);padding:7px 10px;text-align:left}
+  th{background:#f5f0e8;font-weight:600}
+  td.num{text-align:right;font-variant-numeric:tabular-nums}
+  .sw{display:inline-block;width:15px;height:15px;border-radius:3px;vertical-align:-3px;margin-right:7px;border:1px solid rgba(0,0,0,.12)}
+  .pass{color:#3b6d11;font-weight:600}.fail{color:#a32d2d;font-weight:600}
+  .note{background:var(--paper);border:1px solid var(--vora);border-left:3px solid var(--marca);padding:11px 14px;margin:14px 0;font-size:13px}
+  .note b{color:var(--marca)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:16px;margin:14px 0}
+  .card{border:1px solid var(--vora);border-radius:8px;overflow:hidden;background:#fff}
+  .card>figcaption{background:#f5f0e8;padding:6px 10px;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;border-bottom:1px solid var(--vora);display:flex;justify-content:space-between;gap:8px}
+  .card .body{padding:16px}
+  .card img{width:100%;height:auto;display:block}
+  .btn{display:inline-block;padding:11px 16px;border:none;border-radius:8px;color:#fff;font:600 12px/1 'IBM Plex Mono',monospace;font-family:inherit}
+  .ghost{display:inline-block;padding:10px 15px;border-radius:8px;background:#fff;color:var(--marca);border:1px solid var(--marca);font:400 12px/1 'IBM Plex Mono',monospace;font-family:inherit}
+  .badge{display:inline-block;padding:4px 10px;border-radius:999px;background:#faeeda;color:#854f0b;font:600 11px/1.4 'IBM Plex Mono',monospace;font-family:inherit}
+  .rail{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .ko{outline:2px solid #a32d2d;outline-offset:3px}
+  figure{margin:0}
+  .pair{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:760px){.pair{grid-template-columns:1fr}}
+  .miss{padding:22px;text-align:center;color:var(--moll);background:var(--paper);border:1px dashed var(--vora);border-radius:6px;font-size:12px}
+</style>
+
+<h1>`--gold-action` · evidència per a la tria</h1>
+<p class="lede">S37 · 2026-08-07 · <b>cap canvi al producte</b>: els colors s'han injectat al navegador en temps d'execució. El <code>dist/</code> desplegat no s'ha tocat.</p>
+
+<div class="note">
+  <b>El punt de partida:</b> <code>--gold</code> d'<code>index.css:15</code> és <b>exactament</b> <code>#c27a2a</code>, el mateix valor que el daurat del logotip. <b>No divergeixen.</b>
+  Els candidats en surten congelant to (31.6°) i saturació (64.4%) i baixant <b>només</b> la lluminositat — o sigui que són literalment «el daurat de la casa, més fosc», no un color nou.
+</div>
+
+<h2>1 · Ràtios mesurats (WCAG 2.1, text blanc a sobre)</h2>
+<table>
+  <tr><th>id</th><th>hex</th><th>to</th><th>sat</th><th>llum</th><th class="num">vs <code>--white</code></th><th>AA (4.5:1)</th><th>què és</th></tr>
+  <tr><td><span class="sw" style="background:#c27a2a"></span>ACTUAL</td><td><code>#c27a2a</code></td><td>31.6°</td><td>64.4%</td><td>46.3%</td><td class="num">3.44:1</td><td class="fail">✗ falla</td><td><b>el d'avui</b> — i el color de marca</td></tr>
+  <tr><td><span class="sw" style="background:#a56824"></span>A</td><td><code>#a56824</code></td><td>31.6°</td><td>64.4%</td><td>39.5%</td><td class="num">4.56:1</td><td class="pass">✓ passa</td><td>la <b>mínima</b> que passa AA</td></tr>
+  <tr><td><span class="sw" style="background:#9d6322"></span>B</td><td><code>#9d6322</code></td><td>31.6°</td><td>64.4%</td><td>37.5%</td><td class="num">4.95:1</td><td class="pass">✓ passa</td><td>un punt <b>més fosca</b></td></tr>
+  <tr><td><span class="sw" style="background:#9b6222"></span>REF</td><td><code>#9b6222</code></td><td>31.7°</td><td>64.0%</td><td>37.1%</td><td class="num">5.04:1</td><td class="pass">✓ passa</td><td>referència — <b>pràcticament idèntica a B</b></td></tr>
+  <tr><td><span class="sw" style="background:#854f0b"></span>WARN</td><td><code>#854f0b</code></td><td><b>33.4°</b></td><td><b>84.7%</b></td><td>28.2%</td><td class="num">6.73:1</td><td class="pass">✓ passa</td><td><b>descartat</b> — token d'AVÍS, i un 20% més saturat</td></tr>
+</table>
+
+<div class="note">
+  <b>Per què <code>--warn</code> queda fora:</b> no és «un <code>--gold</code> fosc». És un altre to i un 20% més saturat, i a més és el token d'<b>estat d'avís</b> (122 usos: <code>at_risk</code>, <code>Paused</code>, avisos del mapatge de talles). A, B i REF, en canvi, comparteixen to i saturació amb la marca.
+  <br><br>
+  <b>B i REF són el mateix color a la pràctica</b> (2 unitats de hex, 0.09 de ràtio). La tria real és <b>A vs B</b>: A té <b>0.06 de marge</b> sobre el 4.5 i B en té <b>0.45</b>. Si es vol coixí davant de futurs retocs de to, B.
+</div>
+
+<h2>2 · El botó al costat del logotip</h2>
+<p>El criteri: que es llegeixi com <b>«el daurat de la casa en versió botó»</b>, no com un color nou. El logotip està pintat amb el valor de marca <code>#c27a2a</code>.</p>
+
+<div class="grid" id="logos"></div>
+
+<h2>3 · La família daurada: dues lluminositats del mateix to</h2>
+<p>Botó candidat + el secundari <code>ghostBtn</code> i les superfícies, que <b>es queden a <code>--gold</code></b>. La pregunta és si el conjunt segueix semblant una família.</p>
+<div class="grid" id="familia"></div>
+
+<h2>4 · Contra el badge d'avís (el defecte que <code>--warn</code> tenia)</h2>
+<p>La parella crítica d'<code>Encarrecs</code>: primari + secundari daurat + badge «Pendent» (text <code>--warn</code>). Amb <code>--warn</code> el primari <b>es confonia amb el badge</b> i deixava de fer parella amb el seu germà secundari.</p>
+<div class="grid" id="badges"></div>
+
+<h2>5 · Pantalles reals</h2>
+<p>Mateixa vista, mateixa mida, mateix scroll; només canvia el color injectat.</p>
+
+<h3>a · Login — un dels 40 orfes que no són <code>primaryBtn</code></h3>
+<div class="note">
+  <b>Dues pantalles d'entrada, i el logotip només és a una.</b> <code>Entrar.jsx:198</code> (el fitxer del brief) és una targeta neutra <b>sense logotip</b>; el logotip viu a <code>Login.jsx</code> (<code>/login</code>). Es donen les dues sèries.
+  <br><br>
+  <b>I el logotip NO es mouria amb el token:</b> <code>Login.jsx:12</code> el pinta amb <code>fill="#c27a2a"</code> <b>literal</b>. (De fet és una <b>còpia</b>: <code>components/brand/FhortLogo.jsx</code> té el mateix wordmark amb <code>var(--gold)</code> — el mateix mal que el chip de C5 i els dos <code>primaryBtn</code>.) Per a aquesta tria és una bona notícia: <b>la marca es queda a <code>#c27a2a</code> passi el que passi</b>, i el que es compara és el botó al seu costat.
+</div>
+<p><b>/login</b> — el botó al costat de l'or de marca:</p>
+<div class="pair" id="sc-login"></div>
+<p style="margin-top:18px"><b>/entrar</b> — el <code>submitBtn</code> del fitxer citat al brief:</p>
+<div class="pair" id="sc-entrar"></div>
+
+<h3>b · Encarrecs — primari + secundari + badge d'avís</h3>
+<div class="pair" id="sc-encarrecs"></div>
+
+<h3>c · Wizard de model — el primari contra els chips TRIATS</h3>
+<div class="pair" id="sc-wizard"></div>
+
+<h3>d · Família daurada en pantalla real (llista de Models)</h3>
+<p>El test més dur: hi conviuen <b>quatre usos del daurat alhora</b> — badges de fase PLENS <code>--gold</code>+blanc, el codi intern en text <code>--gold</code>, el ghost «Nou model» i la vora de card seleccionada — i al costat, el botó d'acció que és el que es repinta. <b>Tota la resta queda intacta a posta</b>, perquè cada captura serveixi també de contrast.</p>
+<div class="pair" id="sc-familia"></div>
+
+<h2>6 · 🚩 El que aquestes captures NO resolen</h2>
+<div class="note">
+  <b>Els daurats GHOST també fallen AA, i aquí no es toquen.</b> Els botons de text <code>--gold</code> sobre blanc (<code>Encarrecs.jsx:230</code> «Tots els pendents», «Nou model» de Models, i els seus germans) són <b>la mateixa parella <code>#c27a2a</code>/blanc = 3.44:1</b>, que per a TEXT també incompleix el 4.5:1.
+  <br><br>
+  A les captures s'han deixat <b>sense repintar</b> a posta, per fer de contrast. Però la decisió de <code>--gold-action</code> els ha de contemplar: si el token només s'aplica als fons plens, els ghosts es queden fallant i a més <b>deixen de fer parella</b> amb el primari. <b>Això és part de la mateixa tria.</b>
+</div>
+<p style="color:var(--moll);font-size:13px">Altres límits, dits clarament: les dades de les captures són <b>stubs</b> (l'API està interceptada al navegador) — els píxels i el CSS són els del bundle real, els models i encàrrecs són fabricats.</p>
+
+<script>
+const VARS = [
+  ['ACTUAL','#c27a2a','3.44:1 ✗'],
+  ['A','#a56824','4.56:1 ✓'],
+  ['B','#9d6322','4.95:1 ✓'],
+  ['REF','#9b6222','5.04:1 ✓'],
+]
+const LOGO = `<svg viewBox="0 0 144.5 41" xmlns="http://www.w3.org/2000/svg" style="width:118px;height:auto;display:block">
+<path fill="#c27a2a" d="M31.22,0H1.07C.48,0,0,.48,0,1.07v38.22c0,.59.48,1.07,1.07,1.07h9.04c.59,0,1.07-.48,1.07-1.07v-12.27c0-.59.48-1.07,1.07-1.07h16.94c.59,0,1.07-.48,1.07-1.07v-7.14c0-.59-.48-1.07-1.07-1.07H12.26c-.59,0-1.07-.48-1.07-1.07v-4.72c0-.59.48-1.07,1.07-1.07h18.96c.59,0,1.07-.48,1.07-1.07V1.07c0-.59-.48-1.07-1.07-1.07Z"/>
+<path fill="#c27a2a" d="M54.21,8.48c-4.38,0-7.24,2.3-9.25,4.85-.03.04-.09.02-.09-.03V1.07c0-.59-.48-1.07-1.07-1.07h-8.81c-.59,0-1.07.48-1.07,1.07v38.22c0,.59.48,1.07,1.07,1.07h8.81c.59,0,1.07-.48,1.07-1.07v-15.82c0-3.46,1.96-5.31,4.61-5.31s4.44,1.85,4.44,5.31v15.82c0,.59.48,1.07,1.07,1.07h8.75c.59,0,1.07-.48,1.07-1.07v-19.34c0-7.09-3.98-11.48-10.61-11.48Z"/>
+<path fill="#c27a2a" d="M83.62,8.48c-9.98,0-17.24,7.44-17.24,16.32v.12c0,8.88,7.21,16.2,17.13,16.2s17.3-7.44,17.3-16.32v-.12c0-8.88-7.21-16.2-17.18-16.2ZM90.19,24.91c0,3.75-2.59,6.92-6.57,6.92s-6.63-3.23-6.63-7.04v-.12c0-3.39,2.02-6.28,5.27-6.87,4.16-.75,7.93,2.62,7.93,6.84v.26Z"/>
+<path fill="#c27a2a" d="M137.24,20.18h6.14c.59,0,1.07-.48,1.07-1.07v-9.39c0-.59-.48-1.07-1.07-1.07h-6.14s-.05-.02-.05-.05V1.07c0-.59-.48-1.07-1.07-1.07h-8.75c-.59,0-1.07.48-1.07,1.07v7.53s-.02.05-.05.05h-2.89c-5.22,0-7.98,2.45-9.77,6.58-.02.05-.1.04-.1-.02v-4.97c0-.59-.48-1.07-1.07-1.07h-8.81c-.59,0-1.07.48-1.07,1.07v29.05c0,.59.48,1.07,1.07,1.07h8.81c.59,0,1.07-.48,1.07-1.07v-8.67c0-7.15,3.23-10.44,8.94-10.44h3.81s.05.02.05.05v10.45c0,7.44,3.86,10.32,10.44,10.32h6.54c.59,0,1.07-.48,1.07-1.07v-8.76c0-.59-.48-1.07-1.07-1.07-1.07,0-1.91-.02-3.08-.02-2.02,0-3-.92-3-3.11v-6.73s.02-.05.05-.05Z"/></svg>`
+
+document.getElementById('logos').innerHTML = VARS.map(([id,hex,r]) =>
+  `<figure class="card${id==='ACTUAL'?' ko':''}">
+     <figcaption><span><span class="sw" style="background:${hex}"></span>${id} <code>${hex}</code></span><span>${r}</span></figcaption>
+     <div class="body"><div style="display:flex;flex-direction:column;gap:16px;align-items:flex-start">
+       ${LOGO}
+       <button class="btn" style="background:${hex}">Entrar</button>
+     </div></div></figure>`).join('')
+
+document.getElementById('familia').innerHTML = VARS.map(([id,hex,r]) =>
+  `<figure class="card${id==='ACTUAL'?' ko':''}">
+     <figcaption><span><span class="sw" style="background:${hex}"></span>${id}</span><span>${r}</span></figcaption>
+     <div class="body" style="background:#fdf9f5">
+       <div style="border:1px solid #e0c8a0;border-radius:6px;padding:12px;background:#fff">
+         <div style="font-size:11px;color:#868685;text-transform:uppercase;letter-spacing:.05em;margin-bottom:9px">superfície <code style="font-size:10px">--gold-pale</code></div>
+         <div style="background:#f5e6d0;color:#c27a2a;border:1px solid #c27a2a;border-radius:4px;padding:5px 10px;font-size:11px;display:inline-block;margin-bottom:12px">tag daurat</div>
+         <div class="rail">
+           <button class="btn" style="background:${hex}">Desar</button>
+           <span class="ghost">Cancel·lar</span>
+         </div>
+       </div>
+     </div></figure>`).join('')
+
+document.getElementById('badges').innerHTML = [...VARS,['WARN','#854f0b','6.73:1 ✓']].map(([id,hex,r]) =>
+  `<figure class="card${id==='ACTUAL'||id==='WARN'?' ko':''}">
+     <figcaption><span><span class="sw" style="background:${hex}"></span>${id}</span><span>${r}</span></figcaption>
+     <div class="body">
+       <div class="rail" style="margin-bottom:14px">
+         <button class="btn" style="background:${hex}">Traspassar (2)</button>
+         <span class="ghost">Tots els pendents</span>
+       </div>
+       <div class="rail"><span style="font-size:11px;color:#868685">SS27</span><span class="badge">Pendent</span></div>
+       ${id==='WARN'?'<div style="margin-top:12px;font-size:11px;color:#a32d2d">el primari té la tinta del badge i ja no fa parella amb el seu germà</div>':''}
+     </div></figure>`).join('')
+
+// Captures de pantalles reals: es mostren si existeixen.
+const SCREENS = {
+  'sc-login':    ['a_login',     ['ACTUAL','A','B','REF']],
+  'sc-entrar':   ['a_entrar',    ['ACTUAL','A','B','REF']],
+  'sc-encarrecs':['b_encarrecs', ['ACTUAL','A','B','REF','WARN']],
+  'sc-wizard':   ['c_wizard',    ['ACTUAL','A','B','REF','WARN']],
+  'sc-familia':  ['d_familia',   ['ACTUAL','A','B','REF']],
+}
+for (const [slot,[base,ids]] of Object.entries(SCREENS)) {
+  document.getElementById(slot).innerHTML = ids.map(id =>
+    `<figure class="card${id==='ACTUAL'||id==='WARN'?' ko':''}">
+       <figcaption><span>${id}</span><span>${base}_${id}.png</span></figcaption>
+       <img src="${base}_${id}.png" alt="${base} ${id}"
+            onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'miss',textContent:'(captura no generada)'}))">
+     </figure>`).join('')
+}
+</script>

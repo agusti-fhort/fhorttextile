@@ -52,10 +52,10 @@ export default function WatchpointsPanel({ modelId, taskId = null, editable = fa
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
         <i className="ti ti-flag" style={{ color: 'var(--warn)' }} />
         <span style={{ fontSize: 'var(--fs-body)', fontWeight: 500, color: 'var(--text-main)' }}>{t('watchpoints.title')}</span>
-        <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>({open.length} {t('watchpoints.open')})</span>
+        <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)' }}>({open.length} {t('watchpoints.open')})</span>
         {resolved.length > 0 && (
           <button type="button" onClick={() => setShowResolved(s => !s)}
-            style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>
+            style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', fontSize: 'var(--fs-caption)', color: 'var(--text-soft)' }}>
             {showResolved ? t('watchpoints.hide_resolved') : t('watchpoints.show_resolved', { n: resolved.length })}
           </button>
         )}
@@ -64,7 +64,7 @@ export default function WatchpointsPanel({ modelId, taskId = null, editable = fa
         <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
           <input value={text} onChange={e => setText(e.target.value)} placeholder={t('watchpoints.placeholder')}
             onKeyDown={e => { if (e.key === 'Enter') add() }}
-            style={{ flex: 1, font: 'inherit', fontSize: 'var(--fs-body)', padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 4, background: 'var(--white)' }} />
+            style={{ flex: 1, font: 'inherit', fontSize: 'var(--fs-body)', padding: '4px 8px', border: '1px solid var(--line)', borderRadius: 4, background: 'var(--white)' }} />
           <button type="button" onClick={add} disabled={busy || !text.trim()}
             style={{ padding: '4px 12px', border: '0.5px solid var(--gold)', borderRadius: 4, background: 'var(--white)', color: 'var(--gold)', cursor: busy ? 'default' : 'pointer', fontSize: 'var(--fs-body)' }}>
             + {t('watchpoints.add')}
@@ -77,9 +77,9 @@ export default function WatchpointsPanel({ modelId, taskId = null, editable = fa
         </div>
       )}
       {visible.length === 0 ? (
-        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{t('watchpoints.empty')}</div>
+        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)', fontStyle: 'italic' }}>{t('watchpoints.empty')}</div>
       ) : visible.map(w => (
-        <div key={w.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '6px 0', borderTop: '0.5px solid var(--border)' }}>
+        <div key={w.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '6px 0', borderTop: '1px solid var(--line)' }}>
           <i className={`ti ${w.estat === 'resolved' ? 'ti-check' : 'ti-flag'}`}
             style={{ fontSize: 14, marginTop: 2, color: w.estat === 'resolved' ? 'var(--ok)' : 'var(--warn)' }} />
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -92,7 +92,7 @@ export default function WatchpointsPanel({ modelId, taskId = null, editable = fa
             ) : Array.isArray(w.dades) && w.dades.length > 0 ? (
               // F2 — Watchpoint de SISTEMA (import viu): render PER CLAU en l'idioma del lector.
               <div style={{ fontSize: 'var(--fs-body)',
-                            color: w.estat === 'resolved' ? 'var(--text-muted)' : 'var(--text-main)',
+                            color: w.estat === 'resolved' ? 'var(--text-soft)' : 'var(--text-main)',
                             textDecoration: w.estat === 'resolved' ? 'line-through' : 'none' }}>
                 <div style={{ fontWeight: 500 }}>{t('import_missing.title')}</div>
                 <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
@@ -108,10 +108,10 @@ export default function WatchpointsPanel({ modelId, taskId = null, editable = fa
               </div>
             ) : (
               <div style={{ fontSize: 'var(--fs-body)', whiteSpace: 'pre-wrap',
-                            color: w.estat === 'resolved' ? 'var(--text-muted)' : 'var(--text-main)',
+                            color: w.estat === 'resolved' ? 'var(--text-soft)' : 'var(--text-main)',
                             textDecoration: w.estat === 'resolved' ? 'line-through' : 'none' }}>{w.text}</div>
             )}
-            <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>
+            <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)' }}>
               {w.created_by_nom || '—'} · {fmtDate(w.created_at)}{w.task_type_code ? ` · ${w.task_type_code}` : ''}
               {w.estat === 'resolved' && w.resolved_by_nom ? ` · ${t('watchpoints.resolved_by', { who: w.resolved_by_nom })}` : ''}
             </div>

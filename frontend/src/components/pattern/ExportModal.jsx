@@ -103,13 +103,13 @@ export default function ExportModal({ patternFile, onCancel }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50,
     }}>
       <div onClick={e => e.stopPropagation()} style={{
-        background: 'var(--white)', borderRadius: 12, padding: 22,
+        background: 'var(--panel)', borderRadius: 12, padding: 22,
         width: 900, maxWidth: '95vw', maxHeight: '88vh', overflowY: 'auto',
       }}>
         <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>
           {t('pattern.exp_title')}
         </h2>
-        <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', marginBottom: 16 }}>
+        <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', marginBottom: 16 }}>
           {t('pattern.exp_subtitle')}
         </p>
 
@@ -165,7 +165,7 @@ export default function ExportModal({ patternFile, onCancel }) {
                     </option>
                   ))}
                 </select>
-                <small style={{ color: 'var(--gray)', fontSize: '0.75rem' }}>
+                <small style={{ color: 'var(--text-soft)', fontSize: '0.75rem' }}>
                   {t('pattern.exp_only_approved')}
                 </small>
               </Camp>
@@ -209,7 +209,7 @@ export default function ExportModal({ patternFile, onCancel }) {
                 {/* ── EL GATE ───────────────────────────────────────────── */}
                 <label style={{
                   display: 'flex', gap: 10, alignItems: 'flex-start', marginTop: 16,
-                  padding: 12, border: '1px solid var(--border)', borderRadius: 6,
+                  padding: 12, border: '1px solid var(--line)', borderRadius: 6,
                   background: 'var(--bg-soft, #fafafa)', cursor: 'pointer',
                 }}>
                   <input
@@ -265,7 +265,7 @@ function TaulaPreview({ preview, t }) {
               <td style={{ ...tdStyle, fontWeight: sp.es_base ? 600 : 400, fontFamily: MONO }}>
                 {sp.talla}
                 {sp.es_base && (
-                  <small style={{ color: 'var(--gray)', marginLeft: 6 }}>
+                  <small style={{ color: 'var(--text-soft)', marginLeft: 6 }}>
                     {t('pattern.exp_base')}
                   </small>
                 )}
@@ -284,7 +284,7 @@ function TaulaPreview({ preview, t }) {
                       ) : (
                         <small style={{
                           display: 'block',
-                          color: p.ok ? 'var(--gray)' : 'var(--danger, #c0392b)',
+                          color: p.ok ? 'var(--text-soft)' : 'var(--err)',
                         }}>
                           {p.delta_spec_cm >= 0 ? '+' : ''}{p.delta_spec_cm.toFixed(2)}
                           {!p.ok && ` ⚠ ${p.desviament_cm?.toFixed(2)}`}
@@ -302,7 +302,7 @@ function TaulaPreview({ preview, t }) {
                     title={s.missatge}
                     style={{
                       display: 'inline-block', marginRight: 6,
-                      color: s.casa ? 'var(--ok, #2e7d32)' : 'var(--danger, #c0392b)',
+                      color: s.casa ? 'var(--ok)' : 'var(--err)',
                     }}
                   >
                     <i className={`ti ${s.casa ? 'ti-check' : 'ti-alert-triangle'}`} />
@@ -315,7 +315,7 @@ function TaulaPreview({ preview, t }) {
         </tbody>
       </table>
 
-      <small style={{ color: 'var(--gray)', fontSize: '0.72rem' }}>
+      <small style={{ color: 'var(--text-soft)', fontSize: '0.72rem' }}>
         {t('pattern.exp_table_hint')}
       </small>
     </div>
@@ -352,7 +352,7 @@ function Omissions({ preview, t }) {
           <li>
             {t('pattern.exp_om_no_anchor', { count: senseAncora.length })}
             {' '}
-            <span style={{ color: 'var(--gray)', fontFamily: MONO }}>
+            <span style={{ color: 'var(--text-soft)', fontFamily: MONO }}>
               {senseAncora.map(o => o.pom_code).join(', ')}
             </span>
           </li>
@@ -380,7 +380,7 @@ function Autovalidacio({ auto, t }) {
 function Camp({ etiqueta, children }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 260, flex: 1 }}>
-      <label style={{ fontSize: '0.78rem', color: 'var(--gray)' }}>{etiqueta}</label>
+      <label style={{ fontSize: '0.78rem', color: 'var(--text-soft)' }}>{etiqueta}</label>
       {children}
     </div>
   )
@@ -406,18 +406,18 @@ function Avis({ to = 'warn', children }) {
 }
 
 const inputStyle = {
-  border: '1px solid var(--border)', borderRadius: 4,
-  padding: '0.4rem 0.6rem', fontSize: 'var(--fs-body)', background: 'var(--white)',
+  border: '1px solid var(--line)', borderRadius: 4,
+  padding: '0.4rem 0.6rem', fontSize: 'var(--fs-body)', background: 'var(--panel)',
 }
 const thStyle = {
-  textAlign: 'left', padding: '6px 8px', borderBottom: '2px solid var(--border)',
-  fontWeight: 500, color: 'var(--gray)', whiteSpace: 'nowrap',
+  textAlign: 'left', padding: '6px 8px', borderBottom: '2px solid var(--line)',
+  fontWeight: 500, color: 'var(--text-soft)', whiteSpace: 'nowrap',
 }
 const tdStyle = {
-  padding: '6px 8px', borderBottom: '1px solid var(--border)', verticalAlign: 'top',
+  padding: '6px 8px', borderBottom: '1px solid var(--line)', verticalAlign: 'top',
 }
 const btnGhost = {
-  border: '1px solid var(--border)', borderRadius: 4, background: 'var(--white)',
+  border: '1px solid var(--line)', borderRadius: 4, background: 'var(--panel)',
   padding: '0.45rem 1rem', fontSize: 'var(--fs-body)', cursor: 'pointer',
 }
 const btnPrimary = {

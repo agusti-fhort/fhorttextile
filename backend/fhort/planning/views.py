@@ -473,7 +473,22 @@ def calendar_events_view(request):
                     'duracio_minuts': s.duracio_minuts,
                     'durada_real': eff if (s.started_at and s.finished_at) else None,
                 }
-                titol = f'Fitting · {n} models · {s.fase}'
+                # F5 — LA PASTILLA DIU DE QUIN MODEL ÉS, i porta a la seva sessió.
+                #
+                # Deia `Fitting · {n} models · {fase}` per a TOTES: el 13/07 el calendari
+                # ensenyava quatre pastilles idèntiques de deu minuts consecutius, cap amb el
+                # codi del model, i totes enllaçant a `/fittings` —la llista sencera—. Qui
+                # obre el calendari al matí per saber què li toca no en treia res.
+                #
+                # Cada marcador ÉS una sessió: diu el seu model i hi porta. La convocatòria no
+                # es perd —segueix a `meta` i al recompte del final—, però passa a ser el
+                # CONTEXT («i 4 models més»), no la identitat.
+                target = (s.model.codi_intern if s.model_id
+                          else (s.garment_set.codi_base if s.garment_set_id else '?'))
+                titol = f'{target} · fitting {s.fase}'
+                if n > 1:
+                    titol += f' · +{n - 1}'
+                link = f'/fittings/{s.id}'
                 if att is not None:
                     events.append({
                         'id': f'fitting-conv-{convocatoria}-{att.id}-{s.id}',
@@ -482,7 +497,7 @@ def calendar_events_view(request):
                         'tecnic_id': att.id,
                         'tecnic_nom': att.user.get_full_name() or att.user.username,
                         'color': COLOR_FITTING_CLOSED if s_tancada else (att.color_avatar or '#888888'),
-                        'link': '/fittings', 'en_risc': False, 'all_day': all_day,
+                        'link': link, 'en_risc': False, 'all_day': all_day,
                         'meta': meta,
                     })
                 else:
@@ -492,7 +507,7 @@ def calendar_events_view(request):
                         'start': start_dt, 'end': end_dt, 'titol': titol,
                         'tecnic_id': None, 'tecnic_nom': None,
                         'color': COLOR_FITTING_CLOSED if s_tancada else COLOR_FITTING,
-                        'link': '/fittings', 'en_risc': False, 'all_day': all_day,
+                        'link': link, 'en_risc': False, 'all_day': all_day,
                         'meta': meta,
                     })
 

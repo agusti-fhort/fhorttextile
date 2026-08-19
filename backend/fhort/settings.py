@@ -137,6 +137,19 @@ ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
 # crida per polir text cosmètic. S'encén per avaluar-la, no per a tothom.
 IMPORT_REVISIO_SONNET = os.environ.get('IMPORT_REVISIO_SONNET', '').lower() in ('1', 'true', 'yes')
 
+# TRAM ⓘ — traducció del vocabulari de domini (`pom/translation_service.py`).
+# La clau viu AQUÍ i no al bundle: el front només coneix `/api/v1/translate/pom/`.
+# Sense clau, tot segueix funcionant en anglès (fallback silenciós), i és per això que el tram
+# es pot construir i provar abans que la clau hi sigui.
+# ⚠️ DeepL NO té el CATALÀ entre els idiomes destí: amb `deepl`, un usuari en `ca` cau al
+# fallback. Per fer parlar la ⓘ en català cal `TRANSLATE_PROVIDER=google` + la seva clau.
+TRANSLATE_PROVIDER = os.environ.get('TRANSLATE_PROVIDER', 'deepl')
+DEEPL_API_KEY = os.environ.get('DEEPL_API_KEY', '')
+# Buit = el host oficial que toqui segons la clau. Es posa per apuntar a una passarel·la o a un
+# doble de proves, que és com es verifica el tram sencer sense la clau real.
+DEEPL_API_URL = os.environ.get('DEEPL_API_URL', '')
+GOOGLE_TRANSLATE_API_KEY = os.environ.get('GOOGLE_TRANSLATE_API_KEY', '')
+
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
@@ -195,6 +208,42 @@ STORAGES = {
         'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
     },
 }
+
+# ─── C1 · PROPIETAT DELS DIRECTORIS DE MEDIA (fix estructural, 2026-08-09) ────────────
+# El bug reincident: `upload_to='.../%Y/%m/'` fa que CADA MES neixi un directori NOU, i
+# `os.makedirs` el crea amb l'usuari del PROCÉS. Gunicorn corre com www-data, però
+# `manage.py` es corre sovint com a root: qui arribi primer al mes nou decideix l'amo.
+# El 2026-08-05 el va crear un procés root → `media/fhort/model_fitxers/2026/08` va quedar
+# root:root 755 → CAP fitxa tècnica es va poder crear en tot l'agost (500 EACCES). Un chown
+# a l'agost no arregla el setembre: el mes següent torna a ser una cursa.
+#
+# El fix són DUES MEITATS que només funcionen JUNTES, i cap de les dues sola:
+#   (a) FS, un sol cop i per sempre: `chgrp -R www-data media && chmod -R g+rwXs media`.
+#       El bit **setgid d'un directori l'HEREDEN els subdirectoris que s'hi creïn** (i el
+#       grup també), o sigui que `2026/09`, `2027/`, o un tenant nou neixen ja de grup
+#       www-data sense que ningú hi torni. Això dona el GRUP, però no el bit d'escriptura:
+#       amb l'umask 022 de root el directori nou seria drwxr-sr-x → grup sense `w`.
+#   (b) Aquestes dues constants: donen el BIT d'escriptura, i **repliquen el setgid**.
+#
+# ⚠️ El 0o2 del davant NO és decoratiu, i costa una tarda descobrir-ho. Django 6.0 crea els
+# directoris amb `django.utils._os.safe_makedirs`, que fa `os.mkdir(name, mode)` i tot seguit
+# un `os.chmod(name, mode)` explícit (per no dependre de l'umask del procés). El `mkdir` SÍ
+# que hereta el setgid del pare, però el `chmod` de la línia següent te'l TORNA A TREURE si
+# el mode no el porta. Mesurat amb 0o775: `2099/` naixia drwxrwxr-x root:www-data (grup bo,
+# setgid perdut) i per tant `2099/01/` ja naixia **root:root** i intocable — el mateix bug
+# que volíem matar, ara amb el fix posat. Amb 0o2775 la cadena es propaga sencera.
+# 0o664 als fitxers pel mateix motiu: perquè www-data pugui SOBREESCRIURE un fitxer que hagi
+# desat un procés root (esborrar-lo ja depèn del directori, que amb (a)+(b) és de grup).
+#
+# Alternatives descartades, amb motiu:
+#   · `UMask=0002` a la unit de systemd → només afecta el que crea GUNICORN, i gunicorn mai
+#     va ser el problema (ja crea www-data). No toca els directoris que crea `manage.py`.
+#   · storage propi que faci chown → gunicorn NO és root i no pot fer chown a un altre amo.
+#   · ACL per defecte (`setfacl -d`) → el `mode` del mkdir recalcula la MASK de l'ACL, o sigui
+#     que un creador amb mode 0755 tornaria a deixar el grup sense `w`. No és a prova de
+#     creador, i és invisible a `ls -l`.
+FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o2775
+FILE_UPLOAD_PERMISSIONS = 0o664
 
 # Comercial Studio (B2) — directori de fonts TTF per als PDF (Montserrat). Configurable via
 # env per a producció. Si les fonts no hi són, el pdf_service fa fallback a Helvetica (WARNING).

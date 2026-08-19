@@ -9,6 +9,9 @@ Dues peces del backend, provades pel forat pel qual es colarien:
      ESCRIVIBLE si ningú no ho impedeix — i un `last_heartbeat` escrivible pel PATCH deixa
      esquivar el guard des del navegador. L'única porta d'escriptura ha de ser `heartbeat`, i
      només sobre un tram viu del PROPI tècnic.
+     04/08 — la llei ja no es defensa camp a camp sinó al nivell correcte: el viewset és
+     `ReadOnlyModelViewSet` i el CRUD de trams (create/update/destroy) **no existeix**. El tram
+     neix i mor dins de `transition_task`; el client només llegeix i truca les dues accions.
   2. **La marca.** `transition_task(..., auto=...)` no obre cap camí nou: passa per les mateixes
      regles i només tenyeix el log. I sense marca, el log ha de seguir dient «gest humà» (null),
      que és el que val per a tot l'històric.
@@ -112,18 +115,81 @@ class GuardTascaOblidadaTest(TenantTestCase):
         self.assertEqual(self._heartbeat(user=self.altre_user).status_code, 404)
         self.assertIsNone(self._timer_obert().last_heartbeat)
 
-    # ── El serializer (lliçó DRF: `fields='__all__'` fa néixer camps escrivibles) ──
+    # ── El CRUD de trams: la porta que no hi ha de ser ──────────────────────
+    #
+    # Es prova per la RUTA REAL (`APIClient` + domini del tenant, patró de
+    # `pom/test_regla_inactiva_no_editable.py`) i no amb `as_view({...})`, perquè el que es
+    # defensa és exactament el que el ROUTER publica: `SimpleRouter.get_method_map` només
+    # enruta els verbs l'acció dels quals existeix al viewset, i sense `create`/`update`/
+    # `destroy` la resposta és un 405 de debò. Cridar `as_view({'post': 'create'})` provaria
+    # una altra cosa (no hi ha handler) i no diria res del que veu un navegador.
+    def _api(self):
+        from rest_framework.test import APIClient
+        c = APIClient(SERVER_NAME=self.get_test_tenant_domain())
+        c.force_authenticate(user=self.user)
+        return c
+
     def test_last_heartbeat_no_es_pot_falsificar_pel_patch(self):
+        """La defensa ja no és camp a camp: **el PATCH no existeix**.
+
+        Abans això comprovava que el PATCH tornava 200 i ignorava el camp — una porta oberta amb
+        el forat tapat. Ara la porta és tancada, i el camp segueix intacte (que és la invariant
+        que aquest test defensa des del primer dia)."""
         transition_task(self.task, 'InProgress', self.prof)
         timer = self._timer_obert()
         fals = (timezone.now() + datetime.timedelta(hours=5)).isoformat()
-        req = self.factory.patch(f'/api/v1/timers/{timer.pk}/', {'last_heartbeat': fals},
-                                 format='json')
-        force_authenticate(req, user=self.user)
-        res = TimerEntradaViewSet.as_view({'patch': 'partial_update'})(req, pk=timer.pk)
-        self.assertEqual(res.status_code, 200)
+        res = self._api().patch(f'/api/v1/timers/{timer.pk}/', {'last_heartbeat': fals},
+                                format='json')
+        self.assertEqual(res.status_code, 405)
         timer.refresh_from_db()
-        self.assertIsNone(timer.last_heartbeat)   # ignorat, no desat
+        self.assertIsNone(timer.last_heartbeat)   # ni desat ni tocat
+
+    def test_el_tram_no_es_pot_inventar_ni_esborrar_des_del_client(self):
+        """El temps facturable no és un recurs que el navegador redacti.
+
+        `POST /timers/` deixava crear un tram amb l'`inici` i el `model_task` que es volgués, i
+        `DELETE /timers/<id>/` en deixava esborrar un — tots dos amb només `IsAuthenticated` i
+        sense passar per cap transició ni deixar cap `TaskTransition` al log. El tram neix i mor
+        dins de `transition_task`; per aquí només es llegeix."""
+        transition_task(self.task, 'InProgress', self.prof)
+        timer = self._timer_obert()
+        api = self._api()
+
+        inventat = api.post('/api/v1/timers/', {
+            'model_task': self.task.pk,
+            'inici': (timezone.now() - datetime.timedelta(hours=9)).isoformat(),
+        }, format='json')
+        self.assertEqual(inventat.status_code, 405)
+        self.assertEqual(api.delete(f'/api/v1/timers/{timer.pk}/').status_code, 405)
+        self.assertEqual(api.put(f'/api/v1/timers/{timer.pk}/', {}, format='json').status_code, 405)
+
+        # Cap tram nou, i el que hi havia segueix viu: el cens no s'ha mogut.
+        self.assertEqual(TimerEntrada.objects.filter(model_task=self.task).count(), 1)
+        self.assertTrue(TimerEntrada.objects.filter(pk=timer.pk).exists())
+
+    def test_les_portes_vives_sobreviuen_al_read_only(self):
+        """Tancar el CRUD no pot tancar el que sí que es fa servir: `list`, `retrieve` i
+        `heartbeat` (guard)."""
+        transition_task(self.task, 'InProgress', self.prof)
+        api = self._api()
+        self.assertEqual(api.get('/api/v1/timers/', {'actiu': 'true'}).status_code, 200)
+        self.assertEqual(api.post('/api/v1/timers/heartbeat/').status_code, 200)
+        timer = self._timer_obert()
+        self.assertEqual(api.get(f'/api/v1/timers/{timer.pk}/').status_code, 200)
+
+    def test_l_accio_tancar_esta_JUBILADA(self):
+        """F1.7 — `tancar` tancava un tram sense passar per `transition_task`: cap
+        `TaskTransition`, cap `record_actual_time`, i la tasca quedava «En curs» sense tram obert
+        (l'anomalia «òrfena»). Era, a més, l'última escriptura pública d'aquest viewset: el pas a
+        `ReadOnlyModelViewSet` va tancar el router, però les `@action` no en depenen.
+
+        Qui vulgui tancar feina té el Stop, que passa per la màquina d'estats."""
+        transition_task(self.task, 'InProgress', self.prof)
+        timer = self._timer_obert()
+        resposta = self._api().post(f'/api/v1/timers/{timer.pk}/tancar/')
+        self.assertIn(resposta.status_code, (404, 405))
+        timer.refresh_from_db()
+        self.assertIsNone(timer.fi, 'el tram s\'ha tancat per una porta que ja no hi hauria de ser')
 
     def test_serializer_exposa_last_heartbeat_en_lectura(self):
         """El frontend llegeix el segell d'aquí per saber des d'on comptar."""

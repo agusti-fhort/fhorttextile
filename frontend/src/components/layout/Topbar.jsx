@@ -4,33 +4,68 @@ import { useTranslation } from 'react-i18next'
 import LanguageSwitcher from './LanguageSwitcher'
 import { UnitToggle } from '../UnitToggle'
 import useAuthStore from '../../store/auth'
+import useMolla from '../../store/molla'
+import { navGroups } from './navGroups'
 
-const PATH_TO_KEY = {
-  '/':                          'nav.dashboard',
-  '/models':                    'nav.models',
-  '/models/nou':                'nav.models_new',
-  '/models/nou-des-de-fitxer':  'nav.models_from_file',
-  '/fittings':                  'nav.fittings',
-  '/planificacio':              'nav.planning',
-  '/task-types':                'nav.tasques_catalog',
-  '/temps':                     'nav.temps',
-  '/poms':                      'nav.poms',
-  '/poms/grading':              'nav.grading',
-  '/perfil':                    'nav.perfil',
+// BREADCRUMB DE NAVEGACIÓ (NORMA_LAYOUT §8b): «Tenant › secció › pantalla», el tenant SEMPRE
+// primer «així sempre se sap on s'està navegant».
+//
+// Les rutes surten de `navGroups` (Sidebar), que és l'única llista de navegació de la casa.
+// El PATH_TO_KEY que hi havia aquí cobria 11 rutes de les 58 del router: fora d'aquelles onze
+// el títol requeia a `t('app.title')` i el resultat era «Fhort Textile Tech › Fhort Textile
+// Tech» — que és el que es veu a qualsevol captura d'un model.
+//
+// Guanya el prefix MÉS ESPECÍFIC, la mateixa regla que el Sidebar fa servir per a l'ítem
+// actiu (Sidebar.jsx:~281); si les dues no coincidissin, el molla del breadcrumb i el ressaltat
+// del menú es contradirien a la mateixa pantalla.
+function trobaMolla(pathname) {
+  let millor = null
+  for (const grup of navGroups) {
+    for (const item of grup.items) {
+      const candidats = [item, ...(item.children || [])]
+      for (const c of candidats) {
+        if (!c.to) continue
+        const encaixa = c.to === '/' ? pathname === '/' : (pathname === c.to || pathname.startsWith(c.to + '/'))
+        if (encaixa && (!millor || c.to.length > millor.c.to.length)) millor = { c, sectionKey: grup.sectionKey }
+      }
+    }
+  }
+  return millor
+}
+
+// Un segment del molla. El darrer —on ets— va en pes 600 i no és clicable; els d'abans, en
+// tinta suau, i porten a on diuen si en saben el destí.
+function SegmentMolla({ text, to, darrer, navigate }) {
+  if (darrer || !to) {
+    return <span style={darrer ? {color: 'var(--text-main)', fontWeight: 600} : undefined}>{text}</span>
+  }
+  return (
+    <button type="button" onClick={() => navigate(to)}
+      style={{background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+              fontFamily: 'inherit', fontSize: 'inherit', color: 'var(--text-soft)'}}>
+      {text}
+    </button>
+  )
 }
 
 export default function Topbar() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const { t, i18n } = useTranslation()
-  const key = PATH_TO_KEY[pathname]
-  const title = key ? t(key) : t('app.title')
+  const molla = trobaMolla(pathname)
+  // La cua que publica la pantalla (entitat + secció). Buida a tot arreu menys dins d'una fitxa.
+  const cua = useMolla(s => s.cua)
   // Pas 5B-fix: el botó "Nou model" surt de la barra global; baixarà a la llista de Models (5C).
   const showNewModel = false
 
   // Bloc nom + data + rellotge (esquerra dels icones). Nom des de l'auth store.
   const user = useAuthStore(s => s.user)
   const nom = user?.nom_complet || user?.username || ''
+  // LA CASA, no la persona (P7 · Federació v2): `tenant` és { nom, codi_tenant, tipologia } i
+  // és null mentre /me no ha respost. Mentrestant es diu el nom del producte, que és el que
+  // deia abans: el breadcrumb no pot quedar-se sense primer element ni parpellejar buit.
+  const tenant = useAuthStore(s => s.tenant)
+  const nomTenant = tenant?.nom || t('app.title')
 
   // Rellotge en viu (patró TimerWidget): tick cada segon, mostra HH:MM. Net al desmuntar.
   const [now, setNow] = useState(() => new Date())
@@ -48,30 +83,67 @@ export default function Topbar() {
   const hora = new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }).format(now)
 
   return (
+    // §8b-quater (Agus 09/08) · LA TOP BAR I EL MENÚ DE PANTALLA, ENGANXATS COM UN SOL BLOC.
+    // Aquesta barra ja era `sticky`; el que hi entra ara és (a) la pell de la norma —fons
+    // `--panel` OPAC i filet inferior `--line`, on hi havia `#e8e8e8`, un dels tres colors fora
+    // de paleta que els blocs A i B ja tenien anotats— i (b) la geometria compartida: el `top`
+    // el diu el Shell amb `--topbar-top` i el menú de pantalla s'atura a `--chrome-top`, o sigui
+    // que les dues alçades surten del MATEIX lloc i no poden derivar l'una de l'altra.
+    // La z: per sobre del contingut i per SOTA del menú lateral (100) i dels modals (150,
+    // `ui/overlay.js`). Va un pèl per sobre del menú de pantalla (20) perquè, si mai un
+    // arrodoniment de subpíxel els fes solapar, qui tapa és la barra de dalt.
     <header style={{
       height: 56,
-      background: 'var(--white)',
-      borderBottom: '1px solid #e8e8e8',
+      background: 'var(--panel)',
+      borderBottom: '1px solid var(--line)',
       display: 'flex',
       alignItems: 'center',
       padding: '0 1.5rem',
       gap: '1rem',
-      position: 'sticky',
-      top: import.meta.env.VITE_STAGING === 'true' ? '28px' : '0',
-      zIndex: 10,
+      // §8b-quater · el `sticky` puja al BLOC DE CROM del Shell, que conté la top bar i el
+      // forat del menú de pantalla: enganxar-les per separat les deixaria enganxades, sí, però
+      // com a dues coses. L'ordre d'Agus és «com un sol bloc».
     }}>
-      <div style={{display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-body)', color: 'var(--gray)'}}>
-        <i className="ti ti-layout-dashboard" style={{fontSize: 14}} />
-        <span>{t('app.title')}</span>
-        <i className="ti ti-chevron-right" style={{fontSize: 14}} />
-        <strong style={{color: 'var(--charcoal)', fontWeight: 500}}>{title}</strong>
+      {/* Tenant › SECCIÓ › pantalla (decisió Agus 08/08). La secció és la del menú lateral, o
+          sigui que el molla i el ressaltat del menú no poden dir coses diferents. Els segments
+          intermedis van en tinta suau i el darrer —on ets— en pes 600. El chevron només apareix
+          si hi ha element següent: a l'arrel no penja res de ningú.
+          EL QUART SEGMENT (entitat › secció de l'entitat) arriba amb el dashboard del model:
+          la pantalla el publica a `store/molla` perquè la ruta sola no el pot dir. Quan n'hi
+          ha, el nom del GRUP en surt (v. la nota del store): Tenant › Models › NOM › Secció. */}
+      <div style={{display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', color: 'var(--text-soft)'}}>
+        <span style={{fontWeight: 600, color: 'var(--text-main)'}}>{nomTenant}</span>
+        {molla && (
+          <>
+            <span style={{color: 'var(--text-faint)'}}>›</span>
+            {cua.length === 0 && (
+              <>
+                <span>{t(molla.sectionKey)}</span>
+                <span style={{color: 'var(--text-faint)'}}>›</span>
+              </>
+            )}
+            <SegmentMolla text={t(molla.c.labelKey)} to={cua.length ? molla.c.to : undefined}
+              darrer={cua.length === 0} navigate={navigate} />
+            {cua.map((seg, i) => (
+              <span key={`${seg.text}-${i}`} style={{display: 'contents'}}>
+                <span style={{color: 'var(--text-faint)'}}>›</span>
+                <SegmentMolla text={seg.text} to={seg.to} darrer={i === cua.length - 1} navigate={navigate} />
+              </span>
+            ))}
+          </>
+        )}
       </div>
       <div style={{marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.8rem'}}>
+        {/* §1b(b)(c) · MIGRACIÓ DE TOKENS DE LA BARRA, que passa conformitat en aquest tram.
+            `--gray` (#868685) és un àlies legacy que dona **3.64:1** sobre blanc: per sota d'AA,
+            i aquí hi anava la data i l'hora, que es llegeixen. L'escala de la norma és de tres
+            nivells i el rol d'aquest text és secundari → `--text-soft` (5.37:1). `--charcoal`
+            és el mateix hex que `--text-main`, i el nom de rol és el que la norma nomena. */}
         <div style={{
           display: 'flex', alignItems: 'center', gap: 6,
-          fontSize: 'var(--fs-body)', color: 'var(--gray)', whiteSpace: 'nowrap',
+          fontSize: 'var(--fs-body)', color: 'var(--text-soft)', whiteSpace: 'nowrap',
         }}>
-          {nom && <span style={{color: 'var(--charcoal)', fontWeight: 500}}>{nom}</span>}
+          {nom && <span style={{color: 'var(--text-main)', fontWeight: 500}}>{nom}</span>}
           {nom && <span style={{opacity: 0.45}}>·</span>}
           <span>{data}</span>
           <span style={{opacity: 0.45}}>·</span>
@@ -79,28 +151,35 @@ export default function Topbar() {
         </div>
         <UnitToggle />
         <LanguageSwitcher />
+        {/* §8b-quater · mateixa migració que el commutador d'idioma. I la icona baixa de 17px
+            —que no és cap de les tres mides de la §8— a 20, que és la que la norma dona a una
+            icona STANDALONE. El botó no tenia ni títol ni `aria-label`: un botó que només és
+            una icona no diu on porta a ningú que no el vegi. */}
         <button
           onClick={() => navigate('/perfil')}
+          title={t('topbar.profile')}
+          aria-label={t('topbar.profile')}
           style={{
             width: 32, height: 32,
-            border: '0.5px solid #e4e4e2',
-            borderRadius: 8,
-            background: 'none',
+            border: '1px solid var(--line)',
+            borderRadius: 'var(--r-ctrl)',
+            background: 'var(--panel)',
             cursor: 'pointer',
-            color: 'var(--gray)',
-            fontSize: 17,
+            color: 'var(--text-soft)',
+            fontSize: 20,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}
         >
-          <i className="ti ti-user" />
+          <i className="ti ti-user" aria-hidden="true"
+            style={{ fontSize: 'inherit', color: 'currentColor', lineHeight: 1 }} />
         </button>
         {showNewModel && (
           <button
             onClick={() => navigate('/models/nou')}
             style={{
               display: 'flex', alignItems: 'center', gap: 6,
-              background: 'var(--gold)',
-              color: 'white',
+              background: 'var(--accio)',
+              color: 'var(--white)',
               border: 'none',
               borderRadius: 8,
               padding: '0 0.9rem',

@@ -1,16 +1,21 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import CascadeSelector from '../components/CascadeSelector/CascadeSelector'
+import CascadeFinder from '../components/CascadeSelector/CascadeFinder'
 import CustomerSelector from '../components/CustomerSelector'
-import { matchingRuleSetsStrict, TARGETS, CONSTRUCTIONS, FITS } from '../components/grading/gradingAxes'
+import { matchingRuleSetsStrict } from '../components/grading/gradingAxes'
+import { useEixos } from '../components/grading/eixosFont'
 // Els àtoms de UI i el PAS DE GRADUACIÓ viuen fora des del 31/07: el pas s'obre també com a
 // overlay sobre Mesures, i ha de ser el MATEIX component als dos llocs (mai una còpia).
 import GraduacioPanel from '../components/grading/GraduacioPanel'
 import { Chip, Field, labelStyle, MONO } from '../components/grading/wizardUI'
 import TargetLabel from '../components/grading/TargetLabel'
+import useConfirmacioRuleset from '../components/model/useConfirmacioRuleset'
 import useAuthStore from '../store/auth'
-import { models, sizeSystems, gradingRuleSets, garmentGroups, garmentTypes } from '../api/endpoints'
+import { targetDerivable } from '../utils/derivaTarget'
+import { ordenaPerProximitat } from '../utils/proximitatRun'
+import { labelsOf, runCapDins, ordenaPelSistema } from '../utils/talles'
+import { models, sizeSystems, gradingRuleSets, garmentGroups, garmentTypes, garmentTypeItems, itemBaseMeasurements, sizingProfiles, customers } from '../api/endpoints'
 
 // Wizard d'ESQUELET unificat. Un sol flux de creació (4 blocs) + mode edició.
 // Crea el Model amb identificació + garment def (família→ITEM = baula del motor) + talles + GRADUACIÓ.
@@ -24,22 +29,12 @@ const YEARS = [currentYear, currentYear + 1, currentYear + 2, currentYear + 3]
 // Només l'identificador (codi); l'etiqueta visible es resol amb t('model_wizard.<tipus>_<codi>').
 const SEASONS = ['SS', 'FW', 'CO', 'SP']
 
-// Etiquetes de talla d'un SizeSystem (les tres formes que retorna l'API, en ordre de preferència).
-const labelsOf = (sys) => (sys?.talles || []).map(s => s.etiqueta || s.size_label || s.label).filter(Boolean)
-// Un run és VÀLID dins un sistema si totes les seves talles hi són (subconjunt legítim, forma normal
-// i massiva al tenant: 218 models — DIAGNOSI_MODEL_174 §B0.4).
-const runCapDins = (run, labels) => run.length > 0 && run.every(l => labels.includes(l))
-// S24b — l'ORDRE el mana el SizeSystem, no l'ordre de clic. `labels` ve ja ordenat per
-// `SizeDefinition.ordre` (el prefetch de l'API respecta el Meta.ordering), i per tant ordenar
-// per la seva posició és ordenar pel sistema. Les talles que no hi són (no hauria de passar-ne
-// cap: el guard `runCapDins` ho comprova) queden al final en comptes de desaparèixer.
-const ordenaPelSistema = (run, labels) =>
-  [...run].sort((a, b) => {
-    const ia = labels.indexOf(a), ib = labels.indexOf(b)
-    return (ia < 0 ? Infinity : ia) - (ib < 0 ? Infinity : ib)
-  })
-// TARGETS i CONSTRUCTIONS: vocabulari ÚNIC de gradingAxes (fora la còpia privada — Onada 1). Objectes
-// {codi, nom_*}; aquí només en fem servir el `codi` (l'etiqueta la resol t('model_wizard.*')).
+// `labelsOf`, `runCapDins` i `ordenaPelSistema` han passat a `utils/talles.js`: el Resum amb el
+// wizard partit (§8f) és la GERMANA DE PRESENTACIÓ d'aquest pas 3 i ha de decidir EXACTAMENT
+// igual què és un run vàlid i en quin ordre va. Moviment pur; res del wizard canvia.
+// Els tres eixos venen del CATÀLEG de la BD (`useEixos`), no de cap llista al client: n'usem el
+// `codi` (l'etiqueta la resol `t('model_wizard.*')`). Sense catàleg les tres files de píndoles es
+// queden només amb «Totes» —que segueix filtrant bé— en comptes d'oferir eixos inventats.
 
 // EL WIZARD, també ENCASTAT (31/07). El botó «Graduació» de Mesures obre AQUEST wizard —el
 // d'editar model, el que ja existeix i funciona— posicionat al pas 4, com a calaix lateral
@@ -60,6 +55,7 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
   const encastat = embedModelId != null
   const navigate = useNavigate()
   const { t } = useTranslation()
+  const { targets: catTargets, constructions: catConstructions, fits: catFits } = useEixos()
   const isEditMode = !!id
   const me = useAuthStore(s => s.user)
   const canConfigure = !!me?.capabilities?.includes('configure')
@@ -86,10 +82,20 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
   // servir el `nom_peca` que la composició del catàleg ja declara.
   const [setNoms, setSetNoms] = useState({})
   // El ruleset que el CATÀLEG proposa per a la combinació (SizingProfile). Només SUGGEREIX: es
-  const [picking, setPicking] = useState(false)
-  // Navegació controlada del picker de peça (CascadeSelector single, grup→ítem). Es sembra des de
-  // family/item en reobrir; onConfirm (triar ítem) commita a family/item i tanca.
+  // Navegació del navegador de peça (CascadeFinder, grup›família›ítem). El finder és SEMPRE
+  // visible: la maqueta no té cap mode d'obrir i tancar el picker, ni cap botó «Canviar» —la
+  // tria es veu a les columnes mateixes—, i per això la navegació ja no porta estat d'obertura.
   const [pickAxes, setPickAxes] = useState({})
+  // W2.1 — cerca de peça per nom o codi. Acota la població que el finder compta i llista.
+  const [cerca, setCerca] = useState('')
+  // W2.2 — el CODI del client del model. El selector de client dona l'id, i els SizeSystem porten
+  // `customer_codi`: sense aquesta baula no es pot saber quins runs són d'AQUEST client i la
+  // proximitat del pas 3 no sabria per on començar.
+  // El resultat va LLIGAT a l'id que el va demanar (mateix patró que els fitxers de Garment
+  // Types): mentre no casen, encara carreguem → null. Així no s'ordena mai la llista de talles
+  // amb el codi del client anterior, i no cal cap `setState` síncron per netejar-lo.
+  const [customerCodiRes, setCustomerCodiRes] = useState({ id: null, codi: null })
+  const customerCodi = customerCodiRes.id === customerId ? customerCodiRes.codi : null
   const [construction, setConstruction] = useState(null)
   // Bloc 3 — talles (LLEI 5 CAPES: ESCALA PURA — SizeSystem, sense fit ni graduació)
   const [systems, setSystems] = useState([])
@@ -146,20 +152,47 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
   // (garment-types/?target=) i NOMÉS en acció d'usuari — el prefill d'edició no passa per aquí.
   const onPickTarget = (codi) => {
     if (codi === target) return
+    // El target ara és un FILTRE i es pot DESMARCAR (P6): sense target, el catàleg surt sencer.
+    // Desmarcar no pot invalidar la peça ja triada —no s'ha estret res—, o sigui que no es
+    // consulta la compatibilitat ni es neteja res.
+    if (!codi) { setTarget(null); return }
     setTarget(codi)
     if (!family) return
     garmentTypes.list({ target: codi, actiu: 'true', page_size: 500 })
       .then(r => {
         const fams = r.data?.results ?? r.data ?? []
-        if (!fams.some(f => f.id === family.id)) { setFamily(null); setItem(null); resetGrading() }
+        // La navegació del finder també torna a zero: si la peça ha deixat de ser vàlida, deixar
+        // les columnes obertes per la seva branca seria assenyalar el que s'acaba de retirar.
+        if (!fams.some(f => f.id === family.id)) { setFamily(null); setItem(null); setPickAxes({}); resetGrading() }
       })
       .catch(() => {})
+  }
+
+  // El finder arrenca ON JA ÉS EL MODEL: si hi ha peça triada (edició, o simplement tornant al
+  // pas 2), les columnes s'obren per la seva branca en comptes de buides. Es DERIVA, no es sembra
+  // amb un effect: sincronitzar dos estats que diuen el mateix és el que provoca les renderitzades
+  // en cascada, i aquí no cal —`pickAxes` buit ja vol dir «l'usuari encara no ha navegat».
+  // El sentinella és la PRESÈNCIA de la clau, no el seu valor: un cop s'ha navegat, `garmentTypeId`
+  // hi és encara que sigui null (pujar al nivell de grup), i llavors mana la navegació. Amb `??`
+  // sobre el valor, tornar amunt ressuscitaria la família anterior.
+  const finderValue = 'garmentTypeId' in pickAxes ? pickAxes : {
+    garmentGroup: family?.grup ?? null,
+    garmentTypeId: family?.id ?? null,
+    garmentTypeItemId: item?.id ?? null,
   }
 
   // Un cop hi ha sistema i run, la talla base és obligatòria i ha de ser DINS el run. Abans això
   // només es demanava quan el sistema canviava respecte al model (`systemChanged`), i el pas 4 podia
   // quedar cec sense dir-ho. Ara la condició és la real, valgui per a creació o edició.
   const baseSizeInvalid = !!(selSystem && selectedSizes.length > 0 && (!baseSize || !selectedSizes.includes(baseSize)))
+
+  // El grup canònic de la peça (eix fix del matching del bloc 4 i 5a clau de proximitat del
+  // bloc 3). Prové de l'ITEM (arbre únic): family.grup en creació; garment_type.grup del model
+  // en edició. Mai es re-tria a mà.
+  // N3 — DECLARAT AQUÍ DALT a posta: l'efecte de càrrega de sistemes del bloc 3 el porta a la
+  // seva llista de dependències, i una llista de dependències s'avalua DURANT el render. Amb la
+  // declaració 70 línies més avall, això era un ReferenceError de TDZ en obrir el wizard.
+  const garmentGroupCodi = family?.grup ?? modelGarmentGrup ?? null
 
   // Preview de referència (només create). El prefix surt del customer triat (fallback self-customer).
   useEffect(() => {
@@ -199,26 +232,66 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
     return () => { alive = false }
   }, [id, isEditMode])
 
+  // El codi del client, per a la proximitat del pas 3. Es demana pel client TRIAT, no per la
+  // llista sencera: el selector ja la carrega ell i duplicar-la aquí seria pagar dos cops el
+  // mateix per llegir-ne un sol camp.
+  useEffect(() => {
+    if (!customerId) return undefined
+    let alive = true
+    customers.get(customerId)
+      .then(r => { if (alive) setCustomerCodiRes({ id: customerId, codi: r.data?.codi ?? null }) })
+      .catch(() => { if (alive) setCustomerCodiRes({ id: customerId, codi: null }) })
+    return () => { alive = false }
+  }, [customerId])
+
   // Bloc 3 (LLEI 5 CAPES) — carrega SizeSystems PURS quan hi ha target i estem al bloc 3.
-  // Filtra pel target de la peça (target_codis, buit = universal) i descarta systems sense talles.
-  // Escala pura: SENSE fit, SENSE construcció, SENSE graduació. Pre-selecciona el primer en creació.
+  // Escala pura: SENSE fit, SENSE construcció, SENSE graduació.
   // F1.1 — també al pas 4: entrant per «Canviar graduació» (?block=4) els sistemes no es carregaven
   // mai i la rehidratació no tenia de què estirar (DIAGNOSI_MODEL_174, risc #7).
+  //
+  // ── L'ELECCIÓ NEIX BUIDA I LLIURE (Agus, 09/08) ────────────────────────────────────────
+  // Aquí hi havia `if (rows.length && !selSystem && !isEditMode) setSelSystem(rows[0])`: en un
+  // model NOU, el primer run de la llista quedava triat pel sol fet de ser el primer. I com que
+  // l'efecte de sota omple el run sencer i la talla base en quant hi ha sistema, el pas 3
+  // arribava amb TRES decisions ja preses que ningú no havia pres.
+  //
+  // El delator era el diàleg de substitució: la tècnica clicava el run que volia de debò i el
+  // sistema li preguntava si volia «substituir» un run que ella no havia triat mai. Aquell avís
+  // (`pickSystem`, F1.2) és correcte i es queda — però només té sentit **quan ja hi havia tria
+  // HUMANA**, que és exactament el que passa ara: amb la preselecció fora, el primer clic troba
+  // `selectedSizes` buit i no pregunta res.
+  //
+  // És la mateixa llei que ja regeix la llista (D-31.3, W2.2) portada fins al final: LA
+  // PROXIMITAT ORDENA, MAI TRIA. Ordenar és oferir; preseleccionar és decidir per l'altre. I té
+  // el precedent escrit a quatre línies d'aquí: la B1 va retirar l'autoselecció del ruleset pel
+  // mateix motiu —un model no pot néixer graduat sense que ningú hi hagi passat.
+  //
+  // W2.2 — LA PROXIMITAT ORDENA, NO EXCLOU (maqueta v1: «ordenats per proximitat, cap amagat»).
+  // Fins ara el target ERA UN FILTRE: un sistema que no el portés als seus `target_codis`
+  // desapareixia, i la tècnica es quedava mirant una llista buida sense saber que existien. Ara
+  // el target és la primera clau d'ordre i tots els sistemes segueixen a la llista. És la mateixa
+  // D1 que ja regeix a dues línies d'aquí: les eines s'ofereixen senceres i s'acoten amb
+  // informació, no amb ocultació.
+  //
+  // El que SÍ que segueix filtrant és `talles.length > 0`: un sistema sense talles no és un
+  // sistema llunyà, és un sistema buit — no hi ha res a triar-hi.
   useEffect(() => {
     if (!target || (block !== 3 && block !== 4)) return
     let alive = true
     sizeSystems.list({ actiu: true, page_size: 100 })
       .then(r => {
         if (!alive) return
-        const rows = (r.data?.results ?? r.data ?? []).filter(s =>
-          (s.talles || []).length > 0 &&
-          (!s.target_codis || s.target_codis.length === 0 || s.target_codis.includes(target)))
+        const rows = ordenaPerProximitat(
+          (r.data?.results ?? r.data ?? []).filter(s => (s.talles || []).length > 0),
+          // N3 — els 4 eixos del model en curs, contra les 4 capes del run. Construcció i fit
+          // ja estan triats al pas 2; el grup el mana l'item (arbre únic), mai es re-tria.
+          { target, construction, fit, grup: garmentGroupCodi },
+          customerCodi)
         setSystems(rows)
-        if (rows.length && !selSystem && !isEditMode) setSelSystem(rows[0])
       })
       .catch(() => { if (alive) setSystems([]) })
     return () => { alive = false }
-  }, [target, block])  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [target, block, customerCodi, construction, fit, garmentGroupCodi])  // eslint-disable-line react-hooks/exhaustive-deps
 
   // F1.1 — REHIDRATACIÓ del pas 3 en edició: el que el model ja té desat (size_system + run + base)
   // torna a ser la selecció viva. Sense això `sizingResult` era null i tot el pas 4 naixia cec.
@@ -267,10 +340,6 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
       && !window.confirm(t('model_wizard.size_run_replace_confirm', { from: selectedSizes.length, to: labels.length, sistema: s.nom || s.codi }))) return
     setSelSystem(s)
   }
-
-  // Bloc 4 — el grup canònic de la peça (eix fix del matching). Prové de l'ITEM (arbre únic):
-  // family.grup en creació; garment_type.grup del model en edició. Mai es re-tria a mà.
-  const garmentGroupCodi = family?.grup ?? modelGarmentGrup ?? null
 
   // F1.3 — quina de les tres peces del pas 3 falta (l'ordre és el del flux: sistema → run → base).
   const sizingMissing = !selSystem ? 'system'
@@ -384,13 +453,10 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
     return d?.message || d?.error || (d ? JSON.stringify(d) : t('model_wizard.conn_error'))
   }
 
-  // D1 — grading d'un ALTRE client: 409 que NO bloqueja. És un flux de taller legítim (aplicar
-  // la forma d'un altre client), però ha de ser un acte conscient → es confirma i es reintenta.
-  const confirmaAltreClient = (e) => {
-    const d = e.response?.data
-    if (e.response?.status !== 409 || d?.tipus !== 'ruleset_altre_client') return false
-    return window.confirm(`${d.message}\n\n${t('model_wizard.grading_other_customer_confirm')}`)
-  }
+  // D1 + D-31.4 — els avisos conscients d'assignar un joc de regles. Eren un `window.confirm`
+  // calcat aquí i a `ModelSheet`; ara els porta un sol component, que és l'únic que pot ensenyar
+  // el que el segon avís necessita (quantes regles pròpies cauen i quantes són IMPORTED).
+  const { executa: executaAmbConfirmacio, dialeg: dialegRuleset } = useConfirmacioRuleset()
 
   const handleCreate = async () => {
     if (!season) { setError(t('model_wizard.season_required')); setBlock(1); return }
@@ -410,13 +476,8 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
           Object.entries(setNoms).filter(([, v]) => (v || '').trim())) } : {}),
         ...skeletonPayload(),
       }
-      let r
-      try {
-        r = await models.createWizard(payload)
-      } catch (e) {
-        if (!confirmaAltreClient(e)) throw e
-        r = await models.createWizard({ ...payload, confirmar_altre_client: true })
-      }
+      const r = await executaAmbConfirmacio(
+        flags => models.createWizard({ ...payload, ...flags }))
       // SET-1 · A4 (forat #5 del dimensionat) — la resposta d'un CONJUNT no porta `id` sinó
       // {garment_set_id, codi_base, num_pieces, pieces[]}. Fins ara `navigate('/models/' +
       // r.data.id)` hauria anat a `/models/undefined` el dia que s'hi creés un conjunt.
@@ -438,12 +499,8 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
       // Edit: el camp FK del serializer és `customer` (rep l'id); codi_client = el camp de text.
       await models.update(id, { customer: customerId, codi_client: refClient, nom_prenda: nomPrenda, descripcio, collection, data_objectiu: dataObjectiu || null })
       const payload = skeletonPayload()
-      try {
-        await models.updateStep2(id, payload)
-      } catch (e) {
-        if (!confirmaAltreClient(e)) throw e
-        await models.updateStep2(id, { ...payload, confirmar_altre_client: true })
-      }
+      await executaAmbConfirmacio(
+        flags => models.updateStep2(id, { ...payload, ...flags }))
       if (encastat) { onSaved?.(); return }
       navigate(`/models/${id}`)
     } catch (e) {
@@ -451,12 +508,29 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
     } finally { setSaving(false) }
   }
 
-  const BLOCKS = [t('model_wizard.block1'), t('model_wizard.block2'), t('model_wizard.block3'), t('model_wizard.block4')]
+  // C5-UI/P6 — EL PAS DE GRADUACIÓ DESAPAREIX DEL WIZARD (decisió 31/07): el model neix NET i la
+  // graduació s'incorpora pel seu gest, amb acceptació explícita al davant. Un pas dins del wizard
+  // convidava a assignar-la de passada, sense mirar-se la regla.
+  //
+  // Sobreviu UNA porta, i és una porta EXPLÍCITA: «Canviar graduació» des de la fitxa obre el
+  // wizard directament aquí (`?block=4`). Aquell gest no és néixer, és canviar el que ja hi ha, i
+  // treure'l deixaria l'enllaç apuntant al buit.
+  const mostraGrading = initialBlock === 4
+  const BLOCKS = [t('model_wizard.block1'), t('model_wizard.block2'), t('model_wizard.block3'),
+    ...(mostraGrading ? [t('model_wizard.block4')] : [])]
 
   // GATE entre contenidors: el client mana el prefix del codi i l'abast de la seqüència, així que
   // els passos 2 (Peça) i 3 (Talles) queden bloquejats fins que el pas 1 estigui resolt
   // (CLIENT + ANY + TEMPORADA → referència interna generada en conseqüència).
   const block1Resolved = !!(customerId && year && season)
+
+  // El gate no canvia; el que canvia és que ara es pot EXPLICAR. Es diu quin camp falta,
+  // no un genèric: l'any ja ve informat per defecte, així que els dos que poden faltar de
+  // debò són el client i la temporada, i dir-ho malament seria tan inútil com no dir res.
+  const nextBlocat = block === 1 && !block1Resolved
+  const motiuBlocat = !customerId
+    ? t('model_wizard.next_needs_customer')
+    : (!season ? t('model_wizard.next_needs_season') : '')
 
   return (
     <div style={encastat ? {} : { maxWidth: 820, margin: '0 auto', padding: '2rem 1rem' }}>
@@ -540,121 +614,172 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
 
         {block === 2 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            <Field label={t('model_wizard.target')}>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {TARGETS.map(tg => (
-                  <Chip key={tg.codi} active={target === tg.codi} onClick={() => onPickTarget(tg.codi)}>
-                    <TargetLabel
-                      codi={tg.codi}
-                      nomFallback={tg.nom_en}
-                      franjaColor={target === tg.codi ? 'var(--white)' : 'var(--text-muted)'}
-                    />
-                  </Chip>
-                ))}
-              </div>
-            </Field>
+            {/* C5-UI/P6 — EL PAS 2 COL·LAPSA A UNA SOLA TRIA: L'ITEM.
+                Target, construcció i fit eren PORTES: sense target no hi havia construcció, sense
+                construcció no hi havia fit, i sense els tres no es veia el catàleg. Es preguntaven
+                dues vegades (aquí i al pas de graduació) i permetien contradir-se. Ara són
+                FILTRES: acosten, no delimiten (D-31.3), i el navegador de peces hi és des del
+                primer moment. Es deriven de la peça i queden editables si aquest model se'n desvia.
 
-            {/* Construcció i FIT ABANS de la peça: són els eixos que decideixen si el catàleg té
-                perfil de talles per a la combinació, i per tant el que el pas Peça pot dir-te
-                (C5). El fit era una pregunta del pas 4; aquí és la mateixa variable, preguntada
-                una sola vegada i al lloc on serveix. */}
-            {target && (
-              <Field label={t('model_wizard.construction')}>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {CONSTRUCTIONS.map(c => (
-                    <Chip key={c.codi} active={construction === c.codi} onClick={() => { if (construction !== c.codi) { resetSizing(); resetGradingIFit() } setConstruction(c.codi) }}>{t(`model_wizard.construction_${c.codi}`)}</Chip>
-                  ))}
-                </div>
-              </Field>
-            )}
-
-            {target && construction && (
-              <Field label={t('model_wizard.pick_fit')}>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {FITS.map(f => (
-                    <Chip key={f.codi} active={fit === f.codi}
-                      onClick={() => { if (fit !== f.codi) setGradingRuleSetId(null); setFit(f.codi) }}>
-                      {t(`model_wizard.fit_${f.codi}`, f.nom_en)}
-                    </Chip>
-                  ))}
-                </div>
-              </Field>
-            )}
-
-            {target && (
-              <Field label={t('model_wizard.garment')}>
-                {item && !picking ? (
-                  <div style={summaryBox}>
-                    <div>
-                      <div style={{ ...labelStyle, fontSize: 'var(--fs-caption)' }}>{t('model_wizard.selected_item')}</div>
-                      <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600 }}>
-                        {(family?.nom_en || '—')} · {item.name}
-                      </div>
+                🔑 LLEI RELAXADA (Agus, 04/08): els eixos filtren NOMÉS si la peça els té
+                informats. Brownie no separa punt de plana i el sistema no li ho ha d'exigir. Avui
+                el veredicte de compatibilitat el calcula el backend per FAMÍLIA (SizingProfile) i
+                «sense perfil» hi compta com a incompatible → v. el PENDENT anotat al commit. El
+                que sí que es compleix ja: res queda BLOQUEJAT, tot segueix sent triable. */}
+            {/* W2.1 — LA BARRA DE FILTRES ÉS LA CAPÇALERA DEL FINDER, no una caixa a part. Els
+                filtres i el que acoten són la mateixa cosa: separar-los deixava el comptador
+                parlant d'una llista que no tenia al costat. Va per `renderHeader` (render prop,
+                durant el render) i no per un callback amb effect, que seria un bucle esperant
+                una excusa per passar. */}
+            <Field label={t('model_wizard.garment')}>
+              <CascadeFinder
+                target={target}
+                compat={{ construction, fit }}
+                query={cerca}
+                value={finderValue}
+                onChange={setPickAxes}
+                onPickItem={({ family: fam, item: it }) => { setFamily(fam); setItem(it); resetGrading() }}
+                renderHeader={({ total, matching, filtrant }) => (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+                    <div style={{ ...labelStyle, marginBottom: 0 }}>{t('model_wizard.filter_discard')}</div>
+                    <FiltreFila etiqueta={t('model_wizard.axis_target')}>
+                      <Chip active={!target} onClick={() => onPickTarget('')}>{t('model_wizard.filter_all')}</Chip>
+                      {(catTargets || []).map(tg => (
+                        <Chip key={tg.codi} active={target === tg.codi}
+                          onClick={() => onPickTarget(target === tg.codi ? '' : tg.codi)}>
+                          <TargetLabel
+                            codi={tg.codi}
+                            nomFallback={tg.nom_en}
+                            franjaColor={target === tg.codi ? 'var(--white)' : 'var(--text-muted)'}
+                          />
+                        </Chip>
+                      ))}
+                    </FiltreFila>
+                    <FiltreFila etiqueta={t('model_wizard.axis_fit')}>
+                      <Chip active={!fit} onClick={() => { if (fit) { setFit(null); setGradingRuleSetId(null) } }}>
+                        {t('model_wizard.filter_all')}
+                      </Chip>
+                      {(catFits || []).map(f => (
+                        <Chip key={f.codi} active={fit === f.codi}
+                          onClick={() => {
+                            const nou = fit === f.codi ? '' : f.codi
+                            if (fit !== nou) setGradingRuleSetId(null)
+                            setFit(nou)
+                          }}>
+                          {t(`model_wizard.fit_${f.codi}`, f.nom_en)}
+                        </Chip>
+                      ))}
+                      <span style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 'var(--fs-caption)',
+                                     color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                        {filtrant
+                          ? t('model_wizard.pieces_match', { n: matching, total })
+                          : t('model_wizard.pieces_total', { total })}
+                      </span>
+                    </FiltreFila>
+                    {/* LA CONSTRUCCIÓ ES QUEDA, i la maqueta no la té. Motiu: `construction` VIATJA
+                        AL PAYLOAD del model i aquestes píndoles són l'únic lloc que l'escriu —
+                        treure-les sense construir abans la fila d'eixos DERIVATS de la maqueta
+                        («derivats de la peça · editables») no seria seguir la maqueta, seria
+                        perdre un camp pel camí. Divergència anotada al report; decisió d'Agus. */}
+                    <FiltreFila etiqueta={t('model_wizard.axis_construction')}>
+                      <Chip active={!construction}
+                        onClick={() => { if (construction) { resetSizing(); resetGradingIFit(); setConstruction(null) } }}>
+                        {t('model_wizard.filter_all')}
+                      </Chip>
+                      {(catConstructions || []).map(c => (
+                        <Chip key={c.codi} active={construction === c.codi}
+                          onClick={() => {
+                            const nou = construction === c.codi ? '' : c.codi
+                            if (construction !== nou) { resetSizing(); resetGradingIFit() }
+                            setConstruction(nou)
+                          }}>{t(`model_wizard.construction_${c.codi}`)}</Chip>
+                      ))}
+                    </FiltreFila>
+                    <input
+                      value={cerca}
+                      onChange={e => setCerca(e.target.value)}
+                      placeholder={t('model_wizard.search_garment')}
+                      style={{ ...inputStyle, width: 260, marginTop: 4 }} />
+                    <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                      {t('model_wizard.axes_filter_hint')}
                     </div>
-                    <button type="button" onClick={() => {
-                      setPickAxes({ target, garmentGroup: family?.grup ?? null, garmentTypeId: family?.id ?? null, garmentTypeItemId: item?.id ?? null })
-                      setPicking(true)
-                    }} style={ghostBtn}>{t('model_wizard.change')}</button>
-                  </div>
-                ) : null}
-                {/* SET-1 · A4 — si l'item triat és un CONJUNT, la composició es diu AQUÍ, en
-                    LECTURA: és el catàleg qui la declara (decisió 3) i el wizard no la
-                    negocia. L'únic editable és el nom de cada peça, i és opcional: buit ⇒ el
-                    backend fa servir el `nom_peca` de la composició. */}
-                {item?.is_set && !picking ? (
-                  <div style={{ border: '0.5px solid var(--gold)', borderRadius: 8, padding: 14,
-                                background: 'var(--gold-pale)', display: 'flex',
-                                flexDirection: 'column', gap: 10 }}>
-                    <div style={{ fontSize: 'var(--fs-body)', color: 'var(--gold)', fontWeight: 600 }}>
-                      {t('model_wizard.set_title', { total: (item.parts || []).length })}
-                    </div>
-                    <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>
-                      {t('model_wizard.set_hint')}
-                    </div>
-                    {(item.parts || []).map((p, i) => (
-                      <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{ fontFamily: MONO, fontSize: 'var(--fs-caption)',
-                                       color: 'var(--gold)', minWidth: 28 }}>
-                          {String(p.ordre || i + 1).padStart(2, '0')}
-                        </span>
-                        <span style={{ fontSize: 'var(--fs-body)', minWidth: 160 }}>
-                          {p.part_item_name || p.part_item_code}
-                        </span>
-                        <input
-                          value={setNoms[p.id] ?? ''}
-                          onChange={e => setSetNoms(prev => ({ ...prev, [p.id]: e.target.value }))}
-                          placeholder={p.nom_peca || t('model_wizard.set_piece_name_ph')}
-                          style={{ ...inputStyle, flex: 1 }} />
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-                {item && !picking ? null : (
-                  <div style={{ maxHeight: 460, border: '0.5px solid var(--gray-l)', borderRadius: 8, overflowY: 'auto', padding: 14 }}>
-                    <CascadeSelector
-                      mode="single"
-                      minLevel="group"
-                      maxLevel="item"
-                      stopPolicy="require-item"
-                      target={target}
-                      compat={{ construction, fit }}
-                      value={pickAxes}
-                      onChange={setPickAxes}
-                      onConfirm={({ family: fam, item: it }) => { setFamily(fam); setItem(it); setPicking(false); resetGrading() }}
-                    />
                   </div>
                 )}
-              </Field>
+              />
+            </Field>
+
+            {/* SET-1 · A4 — si l'item triat és un CONJUNT, la composició es diu AQUÍ, en
+                LECTURA: és el catàleg qui la declara (decisió 3) i el wizard no la
+                negocia. L'únic editable és el nom de cada peça, i és opcional: buit ⇒ el
+                backend fa servir el `nom_peca` de la composició. */}
+            {item?.is_set ? (
+              <div style={{ border: '0.5px solid var(--gold)', borderRadius: 8, padding: 14,
+                            background: 'var(--gold-pale)', display: 'flex',
+                            flexDirection: 'column', gap: 10 }}>
+                <div style={{ fontSize: 'var(--fs-body)', color: 'var(--gold)', fontWeight: 600 }}>
+                  {t('model_wizard.set_title', { total: (item.parts || []).length })}
+                </div>
+                <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>
+                  {t('model_wizard.set_hint')}
+                </div>
+                {(item.parts || []).map((p, i) => (
+                  <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontFamily: MONO, fontSize: 'var(--fs-caption)',
+                                   color: 'var(--gold)', minWidth: 28 }}>
+                      {String(p.ordre || i + 1).padStart(2, '0')}
+                    </span>
+                    <span style={{ fontSize: 'var(--fs-body)', minWidth: 160 }}>
+                      {p.part_item_name || p.part_item_code}
+                    </span>
+                    <input
+                      value={setNoms[p.id] ?? ''}
+                      onChange={e => setSetNoms(prev => ({ ...prev, [p.id]: e.target.value }))}
+                      placeholder={p.nom_peca || t('model_wizard.set_piece_name_ph')}
+                      style={{ ...inputStyle, flex: 1 }} />
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            {/* LA TARGETA DE SEMBRA — què rebrà el model d'aquesta peça, abans de triar-la. Un
+                desplegable no ho pot dir: «Blusa» no diu si el model naixerà amb 47 POMs buits o
+                amb 47 mesurats. I diu també què NO rebrà: la graduació. */}
+            {item?.id && <TargetaDeSembra itemId={item.id} t={t} />}
+
+            {/* EL TARGET ES DERIVA DE LA PEÇA quan no s'ha filtrat per ell. Amb el target
+                convertit en filtre opcional, es podia arribar al pas de Talles sense cap —i
+                allà el target NO és opcional: és qui tria el sistema—. La peça el sap: els
+                seus SizingProfile el diuen. Es deriva NOMÉS si no n'hi ha cap de triat, i queda
+                editable: derivar no és decidir per l'usuari, és no fer-li repetir el que la
+                peça ja declara. */}
+            {family?.id && !target && <DerivaTarget familyId={family.id} onDeriva={setTarget} />}
+
+            {/* L'avís de l'ítem viu AQUÍ, al pas on es tria la peça. Fins ara es pintava fora de
+                tots els blocs i sortia a TOTS els passos —també al pas 1, on encara no has
+                arribat a triar-ne cap i el missatge no vol dir res (Agus, 06/08). */}
+            {!item && (
+              <div style={{ ...errBox, background: 'var(--warn-bg)', color: 'var(--warn)', border: '0.5px solid var(--warn)' }}>
+                {t('model_wizard.no_item_warn')}
+              </div>
             )}
           </div>
         )}
 
         {block === 3 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {/* SENSE TARGET NO ÉS «no hi ha sistemes»: és que encara no s'ha dit per a qui és la
+                peça, i el target és qui tria el sistema. Les dues branques deien el MATEIX
+                («Cap sistema disponible per aquesta combinació»), que era fals aquí i deixava
+                l'usuari mirant una pantalla buida sense saber què li falta. Amb el target
+                derivat només quan és unívoc (V2), aquesta branca passa a veure's sovint. */}
             {(!target) ? (
-              <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO }}>{t('model_wizard.no_sizes')}</p>
+              <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO }}>{t('model_wizard.no_target')}</p>
             ) : (
               <>
+                {/* W2.3 — el títol de la maqueta diu la LLEI del pas, no només de què va: els
+                    sistemes s'ordenen, i cap no s'amaga. És el contracte que el filtre de target
+                    incomplia (v. `ordenaPerProximitat`). */}
+                <div style={{ ...labelStyle, marginBottom: 0 }}>{t('model_wizard.size_systems_label')}</div>
                 <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO, margin: 0 }}>
                   {t('model_wizard.sizes_for')} {t(`model_wizard.target_${target}`)}
                 </p>
@@ -734,7 +859,7 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
           </div>
         )}
 
-        {block === 4 && (
+        {block === 4 && mostraGrading && (
           /* EL PAS DE GRADUACIÓ — el mateix component que el botó «Graduació» de Mesures obre
              com a overlay. Aquí el wizard només hi porta el seu estat; qui decideix segueix
              sent ell (el `grading_rule_set_id` viatja al seu payload i s'escriu en desar). */
@@ -758,21 +883,26 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
         )}
       </div>
 
-      {/* Avís si no hi ha ítem */}
-      {!item && (
-        <div style={{ ...errBox, background: 'var(--warn-bg)', color: 'var(--warn)', border: '0.5px solid var(--warn)' }}>
-          {t('model_wizard.no_item_warn')}
-        </div>
-      )}
-
       {/* Footer */}
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 18 }}>
         <button type="button" disabled={block === 1} onClick={() => setBlock(b => Math.max(1, b - 1))}
           style={{ ...ghostBtn, opacity: block === 1 ? 0.4 : 1 }}>← {t('model_wizard.back')}</button>
-        {block < 4 ? (
-          <button type="button" disabled={block === 1 && !block1Resolved}
-            onClick={() => { if (!(block === 1 && !block1Resolved)) setBlock(b => Math.min(BLOCKS.length, b + 1)) }}
-            style={primaryBtn(block === 1 && !block1Resolved)}>{t('model_wizard.next')} →</button>
+        {/* «Següent» fins a l'ÚLTIM pas, i allà «Crear model». Deia `block < 4` amb el 4 escrit a
+            mà: en retirar el pas de graduació, el pas 3 va passar a ser l'últim i el botó seguia
+            dient «Següent» sense portar enlloc — el model no es podia crear. El límit el mana la
+            llista de passos, que és qui sap quants n'hi ha. */}
+        {block < BLOCKS.length ? (
+          /* EL GATE ES QUEDA (04/06: el client mana el prefix del codi i l'abast de la
+             seqüència; un model de Brownie no pot néixer amb prefix FTT-). El que es
+             corregeix és que NO ES COMUNICAVA: el botó desactivat es pintava blanc sobre
+             --gray-l (#f0f0f0) amb opacity 0.6, o sigui invisible, i no deia mai per què
+             no funcionava. Ara diu QUÈ falta, al costat i al tooltip (Agus, 06/08). */
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {nextBlocat && <span style={hintStyle}>{motiuBlocat}</span>}
+            <button type="button" disabled={nextBlocat} title={nextBlocat ? motiuBlocat : undefined}
+              onClick={() => { if (!nextBlocat) setBlock(b => Math.min(BLOCKS.length, b + 1)) }}
+              style={primaryBtn(nextBlocat)}>{t('model_wizard.next')} →</button>
+          </div>
         ) : (
           <button type="button" disabled={saving || baseSizeInvalid} onClick={isEditMode ? handleSaveEdit : handleCreate} style={primaryBtn(saving || baseSizeInvalid)}>
             {saving ? (isEditMode ? t('model_wizard.saving') : t('model_wizard.creating'))
@@ -781,6 +911,7 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
         )}
       </div>
 
+      {dialegRuleset}
     </div>
   )
 }
@@ -788,11 +919,141 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
 // ── UI atoms (tokens) ─────────────────────────────────────────────────────────
 const inputStyle = { width: '100%', padding: '8px 10px', borderRadius: 4, border: '0.5px solid var(--gray-l)', fontFamily: MONO, fontSize: 'var(--fs-body)', background: 'var(--white)', boxSizing: 'border-box' }
 const refBox = { background: 'var(--warn-bg)', border: '0.5px solid var(--warn)', borderRadius: 8, padding: '8px 14px', fontFamily: MONO, fontSize: 'var(--fs-h3)', color: 'var(--warn)', fontWeight: 500, minHeight: 36, display: 'flex', alignItems: 'center' }
+// W2.2 · LA PROXIMITAT viu a `utils/proximitatRun.js` (N3, 2026-08-06 nit): mateixa regla
+// —ordena, mai amaga— i font nova, les 4 capes que N1 va donar al run. Es va extreure per
+// poder-la provar sense muntar el wizard sencer (`proximitatRun.test.js`).
+
+// Una fila de la barra de filtres per descarte: l'etiqueta de l'eix a l'esquerra, en columna fixa
+// perquè les píndoles de totes les files comencin al mateix lloc, i el que li pengi a la dreta.
+function FiltreFila({ etiqueta, children }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+      <span style={{ fontFamily: MONO, fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
+                     width: 64, flexShrink: 0, textTransform: 'uppercase', letterSpacing: '.05em' }}>
+        {etiqueta}
+      </span>
+      {children}
+    </div>
+  )
+}
+
 const errBox = { background: '#fee', border: '1px solid #fcc', borderRadius: 8, padding: '0.6rem 1rem', margin: '12px 0 0', fontSize: 'var(--fs-body)', color: '#c00', fontFamily: MONO }
-const summaryBox = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '12px 16px', borderRadius: 8, border: '0.5px solid var(--gray-l)', background: 'var(--warn-bg)' }
 const linkBtn = { background: 'none', border: 'none', padding: 0, color: 'var(--gray)', fontSize: 'var(--fs-body)', cursor: 'pointer', fontFamily: MONO }
 const ghostBtn = { background: 'var(--white)', color: 'var(--warn)', border: '0.5px solid var(--warn)', borderRadius: 6, padding: '6px 14px', fontSize: 'var(--fs-body)', cursor: 'pointer', fontFamily: MONO }
-const primaryBtn = (disabled) => ({ background: disabled ? 'var(--gray-l)' : 'var(--warn)', color: 'var(--white)', border: 'none', borderRadius: 6, padding: '8px 20px', fontSize: 'var(--fs-h3)', fontWeight: 500, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1, fontFamily: MONO })
+// El motiu pel qual «Següent» no es pot prémer, al costat del botó.
+const hintStyle = { fontFamily: MONO, fontSize: 'var(--fs-caption)', color: 'var(--gray)' }
+
+// DESACTIVAT ≠ INVISIBLE. Abans: fons --gray-l (#f0f0f0) amb text --white a sobre i, per
+// rematar-ho, opacity 0.6 — blanc sobre quasi-blanc, esvaït. El botó no havia perdut la
+// caixa: la caixa no es veia, i el text tampoc. Ara el desactivat conserva la caixa, agafa
+// tinta llegible (--gray) i una vora (--border) que el separa del fons; l'opacity se'n va,
+// que era qui acabava d'esborrar el poc contrast que quedava.
+const primaryBtn = (disabled) => ({
+  background: disabled ? 'var(--gray-l)' : 'var(--warn)',
+  color: disabled ? 'var(--gray)' : 'var(--white)',
+  border: disabled ? '0.5px solid var(--border)' : 'none',
+  borderRadius: 6, padding: '8px 20px', fontSize: 'var(--fs-h3)', fontWeight: 500,
+  cursor: disabled ? 'not-allowed' : 'pointer', fontFamily: MONO,
+})
+
+// LA TARGETA DE SEMBRA (C5-UI/P6) — el contracte de la peça, dit abans de triar-la.
+//
+// Diu QUÈ PUJA al model: els POMs de l'item, quants en porten valor base, a quina talla base i
+// —sobretot— que la GRADUACIÓ NO hi puja. Aquesta última línia no és decorativa: fins al 31/07
+// el wizard assignava el ruleset de l'item sol, i un model podia néixer graduat sense que ningú
+// hagués vist la regla. El model neix NET i la graduació s'incorpora pel seu gest; la regla de
+// l'item es mostra aquí com a INFORMACIÓ, i prou.
+//
+// Un item BUIT ho diu clar en comptes de deixar-ho endevinar pel número: néixer amb 47 POMs sense
+// cap valor és una decisió legítima, però ha de ser conscient.
+function TargetaDeSembra({ itemId, t }) {
+  const [dades, setDades] = useState(null)
+
+  useEffect(() => {
+    let viu = true
+    setDades(null)
+    Promise.all([
+      garmentTypeItems.get(itemId).then(r => r.data).catch(() => null),
+      // Quants POMs porten VALOR: el recompte de l'item (`poms_count`) diu quantes mesures
+      // declara, no quantes en sap el número. Són dues coses diferents i la targeta les separa.
+      itemBaseMeasurements.list({ garment_type_item: itemId, page_size: 500 })
+        .then(r => (r.data?.results ?? r.data ?? [])).catch(() => []),
+    ]).then(([it, bases]) => {
+      if (!viu) return
+      const ambValor = bases.filter(b => b.base_value_cm != null).length
+      setDades({ it, ambValor })
+    })
+    return () => { viu = false }
+  }, [itemId])
+
+  if (!dades?.it) return null
+  const { it, ambValor } = dades
+  const buit = ambValor === 0
+  const kv = (k, v, atenuat) => (
+    <div key={k} style={{ minWidth: 120 }}>
+      <div style={{ ...labelStyle, marginBottom: 2 }}>{k}</div>
+      <div style={{ fontFamily: MONO, fontSize: 'var(--fs-h3)', fontWeight: 500,
+                    color: atenuat ? 'var(--text-muted)' : 'var(--text-main)' }}>{v}</div>
+    </div>
+  )
+
+  return (
+    <div style={{ border: `0.5px solid ${buit ? 'var(--warn)' : 'var(--gray-l)'}`, borderRadius: 8,
+                  background: buit ? 'var(--warn-bg)' : 'var(--white)', padding: 16,
+                  display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+        <b style={{ fontFamily: MONO, fontSize: 'var(--fs-body)' }}>{it.name}</b>
+        <span style={{ fontFamily: MONO, fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>{it.code}</span>
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24 }}>
+        {kv(t('model_wizard.seed_poms'), it.poms_count ?? '—')}
+        {kv(t('model_wizard.seed_with_value'), buit ? t('model_wizard.seed_none') : ambValor, buit)}
+        {kv(t('model_wizard.seed_base_size'), it.base_size_label || '—', !it.base_size_label)}
+        {kv(t('model_wizard.seed_ruleset'), it.grading_rule_set_nom || t('model_wizard.seed_none'), true)}
+      </div>
+      <div style={{ fontSize: 'var(--fs-body)', color: buit ? 'var(--warn)' : 'var(--text-muted)' }}>
+        {buit
+          ? t('model_wizard.seed_empty', { poms: it.poms_count ?? 0 })
+          : t('model_wizard.seed_ok', { poms: it.poms_count ?? 0, amb: ambValor, talla: it.base_size_label || '—' })}
+      </div>
+      {/* LA REGLA NO PUJA. Es diu sempre, també quan l'item no en té: el silenci en aquest punt
+          és el que va deixar néixer models graduats sense que ningú ho hagués demanat. */}
+      <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+        {t('model_wizard.seed_no_grading')}
+      </div>
+    </div>
+  )
+}
+
+// Deriva el TARGET de la peça triada (SizingProfile de la família) quan l'usuari no n'ha filtrat
+// cap. No pinta res: només omple el buit que el filtre ha deixat d'omplir per força.
+//
+// 🔴 NOMÉS QUAN ÉS UNÍVOC (V2, 06/08 vespre). Abans agafava «el primer que el catàleg declara»,
+// i el catàleg no els ordena per res que tingui a veure amb aquest model: la consulta va sense
+// `customer_codi` i l'ordre acaba sortint del nom del sistema de talles. Amb dades vives això
+// donava `KID_BOY` a `JERSEY_TOPS` i a `TAILORED_PANTS` —dues famílies que també serveixen MAN i
+// WOMAN—, i el pas 3 hi preseleccionava un run de nen amb talla base 6 o 7. És l'origen del
+// model 1307: el wizard no es va inventar el target, el va DERIVAR, i ningú ho va veure perquè
+// derivar no pinta res.
+//
+// Una família que serveix diversos públics no té «el seu» target: qui el sap és la persona, i
+// ja té on dir-ho (el filtre del pas 2). Derivar és estalviar-li repetir el que la peça declara
+// sense ambigüitat; endevinar-ho quan n'hi ha més d'un no és estalviar, és decidir per ella.
+function DerivaTarget({ familyId, onDeriva }) {
+  useEffect(() => {
+    let viu = true
+    sizingProfiles.list({ garment_type: familyId, page_size: 50 })
+      .then(r => {
+        if (!viu) return
+        const codi = targetDerivable(r.data?.results ?? r.data ?? [])
+        if (codi) onDeriva(codi)
+      })
+      .catch(() => {})
+    return () => { viu = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [familyId])
+  return null
+}
 
 function TextInput({ label, value, onChange, placeholder }) {
   return (

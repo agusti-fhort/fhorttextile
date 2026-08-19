@@ -3,9 +3,15 @@ import { timeAnalysis } from '../../api/endpoints'
 import Center from '../ui/Center'
 
 // Tira horitzontal de fases amb TEMPS estadístic (rollup task_type→fase, GET time-analysis/by-phase/).
-// Germà visual de PhaseStepper, però eix DIFERENT: PhaseStepper pinta el cicle de vida del MODEL
-// (fase_actual: Nou…Tancat); aquí l'eix és TaskType.fase (Disseny…Producció), que és el del temps.
-// Per això NO es reusa PhaseStepper (semàntica i conjunt de fases diferents); se'n manté el llenguatge.
+//
+// L'EIX ÉS LA FASE DE TASCA (`TaskType.fase`: Disseny…Producció), que és la que porta temps, i
+// NO el cicle de vida del model (`Model.fase_actual`: Pending…TOP). Són dos vocabularis
+// independents i l'endpoint `/api/v1/vocabulari/` els publica per separat (`fases_tasca` i
+// `fases_model`) justament perquè no es tornin a barrejar.
+//
+// Aquests comentaris citaven un `PhaseStepper` com a germà visual: era CODI MORT —no el muntava
+// ningú— i barrejava tres vocabularis (dos estats del model, cinc fases de tasca i un 'Tècnic'
+// que no existeix enlloc; la fase real és 'Dev. tècnic'). Esborrat a F2.2.
 const MONO = 'IBM Plex Mono, monospace'
 
 // TaskType.fase → slug per a la clau i18n (els valors reals duen punts/espais: 'Dev. tècnic').
@@ -13,7 +19,7 @@ const FASE_KEY = {
   'Disseny': 'disseny', 'Dev. tècnic': 'dev_tecnic', 'Prototip': 'prototip',
   'Mostres': 'mostres', 'Preproducció': 'preproduccio', 'Producció': 'produccio',
 }
-const MAT_DOT = { empiric: 'var(--ok)', seed: 'var(--gold)', empty: 'var(--gray-l)' }
+const MAT_DOT = { empiric: 'var(--ok)', seed: 'var(--gold)', empty: 'var(--line)' }
 
 function fmtMins(m) {
   if (m == null) return null
@@ -45,22 +51,22 @@ export default function PhaseTimeStrip({ t }) {
         return (
           <div key={p.fase} style={{ display: 'flex', alignItems: 'center' }}>
             <div title={tip} style={{
-              minWidth: 116, padding: '8px 12px', borderRadius: 6,
-              border: '0.5px solid var(--gray-l)',
-              background: p.maturity === 'empty' ? '#f0f0f0' : 'var(--white)',
+              minWidth: 116, padding: '8px 12px', borderRadius: 'var(--r-ctrl)',
+              border: '1px solid var(--line)',
+              background: p.maturity === 'empty' ? 'var(--bg-page)' : 'var(--panel)',
               opacity: p.maturity === 'empty' ? 0.6 : 1,
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4 }}>
-                <span style={{ width: 7, height: 7, borderRadius: '50%', background: MAT_DOT[p.maturity] || 'var(--gray-l)', flexShrink: 0 }} />
-                <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontFamily: MONO, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{label}</span>
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: MAT_DOT[p.maturity] || 'var(--line)', flexShrink: 0 }} />
+                <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)', fontFamily: MONO, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{label}</span>
               </div>
-              <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, fontFamily: MONO, color: mins ? 'var(--text-main)' : 'var(--text-muted)' }}>
+              <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, fontFamily: MONO, color: mins ? 'var(--text-main)' : 'var(--text-soft)' }}>
                 {mins || '—'}
               </div>
-              <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontFamily: MONO }}>{matLabel}</div>
+              <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)', fontFamily: MONO }}>{matLabel}</div>
             </div>
             {i < phases.length - 1 && (
-              <div style={{ width: 12, height: 1, background: 'var(--border)', flexShrink: 0 }} />
+              <div style={{ width: 12, height: 1, background: 'var(--line)', flexShrink: 0 }} />
             )}
           </div>
         )

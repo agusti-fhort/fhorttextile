@@ -104,9 +104,12 @@ export function useGarmentGroups() {
       .catch(() => { if (alive) setRegistry([]) })
     return () => { alive = false }
   }, [])
+  // U2 — l'`id` passa (additiu). `normGroup` cau al VOCAB quan el codi és canònic, i el VOCAB no
+  // en porta: sense això, una superfície d'administració que hagi de demanar res PER GRUP —el
+  // catàleg de peces demana els POMs de nivell de grup— es queda amb el codi i sense clau.
   return useMemo(() => registry
     .filter(g => g.actiu !== false)
-    .map(g => normGroup(g.codi, g.nom))
+    .map(g => ({ ...normGroup(g.codi, g.nom), id: g.id }))
     .sort((a, b) => (ORDER.indexOf(a.codi) + 1 || 999) - (ORDER.indexOf(b.codi) + 1 || 999)),
     [registry])
 }

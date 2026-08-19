@@ -22,7 +22,7 @@ const thS = {
 }
 const tdS = { padding: '4px 10px', verticalAlign: 'middle', fontSize: 'var(--fs-body)' }
 const btnPrimary = (disabled) => ({
-  background: disabled ? '#ccc' : 'var(--gold)', color: 'var(--white)',
+  background: disabled ? '#ccc' : 'var(--accio)', color: 'var(--white)',
   border: 'none', borderRadius: 6, padding: '7px 18px',
   fontSize: 'var(--fs-body)', fontWeight: 500, cursor: disabled ? 'not-allowed' : 'pointer',
 })
@@ -310,7 +310,7 @@ function SortableRow({ row, readOnly, onCellChange, onDelete }) {
         {row.is_key && (
           <span style={{
             marginLeft: 5, fontSize: 'var(--fs-caption)', padding: '1px 4px', borderRadius: 3,
-            background: '#fdf6ee', color: 'var(--gold)', border: '0.5px solid #e0c8a0',
+            background: '#fdf6ee', color: 'var(--gold)', border: '0.5px solid var(--gold-border)',
             fontWeight: 600, letterSpacing: '.06em', verticalAlign: 'middle',
           }}>KEY</span>
         )}
@@ -418,21 +418,6 @@ function AddPOMInline({ onAdd }) {
     return () => clearTimeout(timer)
   }, [query])
 
-  const handleCreatePOM = async (nom) => {
-    try {
-      const r = await poms.crearTenant({
-        nom_client: nom,
-        codi_client: nom.toUpperCase().replace(/\s+/g, '_').slice(0, 20),
-        actiu: true,
-        pendent_revisio: true,
-      })
-      onAdd({ id: r.data.id, codi_client: r.data.codi_client, nom_client: r.data.nom_client })
-      setQuery(''); setResults([]); setOpen(false)
-    } catch (e) {
-      console.error('Error creant POM', e)
-    }
-  }
-
   if (!open) {
     return (
       <button type="button" onClick={() => setOpen(true)}
@@ -470,14 +455,19 @@ function AddPOMInline({ onAdd }) {
               {p.nom_client || p.nom_ca || p.nom_en}
             </div>
           ))}
+          {/* AQUÍ HI HAVIA L'ENCUNYADOR DE CODIS LLIURES (mort el 06/08).
+              «+ Crear POM "{query}"» cridava `poms.crearTenant` amb
+              `codi_client: nom.toUpperCase().replace(/\s+/g,'_').slice(0,20)` — el codi sortia
+              del text cercat, sense mirar el catàleg de cap client. És literalment el gest que
+              va fabricar POMs com el 440 (`U1` «Height sequins piece») quan Brownie ja tenia
+              `U1 → Button spacing`, i el que la llei d'Agus del 06/08 prohibeix: els POMs es van
+              a buscar al catàleg del client, i el que no hi és es crea amb nom, nomenclatura i
+              validació de col·lisió («Crear POM propi del model», al cercador de la taula).
+              Aquí no es reposa: aquesta graella és d'autoria d'ITEMS (BaseSetPanel), no de
+              model, i no té client de qui parlar per poder validar res. */}
           {query.length >= 2 && results.length === 0 && (
             <div style={{ padding: '8px 12px', fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
-              {t('measurement_base_grid.no_pom_found', { query })}{' '}
-              <button type="button" onClick={() => handleCreatePOM(query)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer',
-                         color: 'var(--gold)', fontSize: 'var(--fs-body)', padding: 0 }}>
-                + {t('measurement_base_grid.create_pom', { query })}
-              </button>
+              {t('measurement_base_grid.no_pom_found', { query })}
             </div>
           )}
         </div>

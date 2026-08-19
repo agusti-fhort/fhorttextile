@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { pieceFittings, fittingSessions, modelTasks } from '../../api/endpoints'
+import { boto } from '../ui/buttons'
 
 // Sprint Y — accions del mode sessió a la superfície Mesures (migra el doSave/doDiscard de
 // FittingDetail). Gravar i tornar = close de la peça + seal de la sessió (verificant l'estat REAL,
@@ -9,12 +10,13 @@ import { pieceFittings, fittingSessions, modelTasks } from '../../api/endpoints'
 // tasca Paused (no Done). MOTOR intacte: close/seal/discard/transition_task es criden, no es toquen.
 
 const MONO = 'IBM Plex Mono, monospace'
-const btn = (variant) => ({
-  fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '6px 14px', borderRadius: 4, cursor: 'pointer',
-  border: '0.5px solid var(--gray-l)',
-  background: variant === 'err' ? 'var(--err)' : variant === 'plain' ? 'var(--white)' : 'var(--gold)',
-  color: variant === 'plain' ? 'var(--text-main)' : 'var(--white)', fontWeight: 500,
-})
+// CODA · retoc 3 (Agus) — «GRAVAR I TORNAR» ÉS EL BLAU D'AQUESTA PANTALLA (§5.1): és el que
+// tanca la feina de la sessió. «Descartar canvis» és TERCIÀRIA (desfà, no compromet) i
+// «Descartar sessió» és DESTRUCTIVA amb VORA — plena NOMÉS al botó que confirma dins del modal,
+// que és on la §5.5 vol el vermell ple. Abans les tres eren plenes: daurada, blanca i vermella,
+// i la vermella cridava més que la que de debò havies de prémer.
+const btn = (variant, disabled = false) => boto(
+  variant === 'gold' ? 'pri' : variant === 'plain' ? 'ter' : variant, disabled)
 const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }
 const modalBox = { background: 'var(--white)', borderRadius: 8, padding: 24, maxWidth: 460, fontFamily: MONO, boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }
 
@@ -40,8 +42,10 @@ export default function SessionActions({ session, pieceFittingId, taskId, onSave
     try { const r = await fittingSessions.seal(session.id); estat = r.data?.estat }
     catch { setErr(t('fitting.save.seal_error')); setBusy(false); return }
     if (estat !== 'Tancada') { setErr(t('fitting.save.not_sealed')); setBusy(false); return }
-    // Tasca a Done (no fatal: la sessió ja és Tancada encara que la transició falli).
-    if (taskId) { try { await modelTasks.transition(taskId, { to_status: 'Done' }) } catch { /* no-op */ } }
+    // F1.2 — AQUÍ hi havia `transition(taskId, {to_status:'Done'})` dins d'un `catch {}` buit.
+    // Desar no tanca (D-2): «Gravar i tornar» segella la SESSIÓ, i el Stop humà tanca la TASCA.
+    // El catch buit, a més, s'empassava el 409 d'albarà i deixava la sessió tancada amb la
+    // tasca viva sense dir-ho a ningú (germà de §S-5).
     setBusy(false)
     onSaved?.()
   }
@@ -70,9 +74,12 @@ export default function SessionActions({ session, pieceFittingId, taskId, onSave
   return (
     <div style={{ marginTop: 16 }}>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-        <button style={btn('gold')} disabled={busy} onClick={() => doSave(false)}>{t('fitting.save.save_and_back')}</button>
-        <button style={btn('plain')} disabled={busy} onClick={doDiscardChanges}>{t('fitting.save.discard_changes')}</button>
-        <button style={btn('err')} disabled={busy} onClick={() => setDiscardMotiu('')}>{t('fitting.save.discard_session')}</button>
+        <button type="button" style={btn('gold', busy)} disabled={busy}
+          onClick={() => doSave(false)}>{t('fitting.save.save_and_back')}</button>
+        <button type="button" style={btn('plain', busy)} disabled={busy}
+          onClick={doDiscardChanges}>{t('fitting.save.discard_changes')}</button>
+        <button type="button" style={btn('err', busy)} disabled={busy}
+          onClick={() => setDiscardMotiu('')}>{t('fitting.save.discard_session')}</button>
       </div>
       {err && <div style={{ color: 'var(--err)', fontSize: 'var(--fs-body)', marginTop: 10 }}>{err}</div>}
 
@@ -84,10 +91,12 @@ export default function SessionActions({ session, pieceFittingId, taskId, onSave
               <i className="ti ti-lock-open" style={{ color: 'var(--gold)' }} />{t('fitting.save.reopen_title')}
             </h3>
             <p style={{ margin: '0 0 10px', fontSize: 'var(--fs-body)', lineHeight: 1.5, color: 'var(--text-main)' }}>{t('fitting.save.reopen_body')}</p>
-            {sealedModal.msg && <p style={{ margin: '0 0 16px', fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>{sealedModal.msg}</p>}
+            {sealedModal.msg && <p style={{ margin: '0 0 16px', fontSize: 'var(--fs-caption)', color: 'var(--text-soft)' }}>{sealedModal.msg}</p>}
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <button style={btn('plain')} disabled={busy} onClick={() => setSealedModal(null)}>{t('common.cancel')}</button>
-              <button style={btn('gold')} disabled={busy} onClick={() => doSave(true)}>{t('fitting.save.reopen_confirm')}</button>
+              <button type="button" style={btn('plain', busy)} disabled={busy}
+                onClick={() => setSealedModal(null)}>{t('common.cancel')}</button>
+              <button type="button" style={btn('gold', busy)} disabled={busy}
+                onClick={() => doSave(true)}>{t('fitting.save.reopen_confirm')}</button>
             </div>
           </div>
         </div>
@@ -100,10 +109,13 @@ export default function SessionActions({ session, pieceFittingId, taskId, onSave
             <h3 style={{ margin: '0 0 12px', fontSize: 'var(--fs-h3)', fontWeight: 600 }}>{t('fitting.save.discard_session')}</h3>
             <input type="text" value={discardMotiu} onChange={e => setDiscardMotiu(e.target.value)}
               placeholder={t('fitting.save.discard_motiu_ph')}
-              style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '6px 8px', borderRadius: 4, border: '1px solid var(--border)', marginBottom: 18, width: '100%', boxSizing: 'border-box' }} />
+              style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '6px 8px', borderRadius: 4, border: '1px solid var(--line)', marginBottom: 18, width: '100%', boxSizing: 'border-box' }} />
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <button style={btn('plain')} disabled={busy} onClick={() => setDiscardMotiu(null)}>{t('common.cancel')}</button>
-              <button style={btn('err')} disabled={busy} onClick={doDiscardSession}>{t('fitting.save.discard_session')}</button>
+              <button type="button" style={btn('plain', busy)} disabled={busy}
+                onClick={() => setDiscardMotiu(null)}>{t('common.cancel')}</button>
+              {/* §5.5 — AQUÍ sí: el vermell ple, al botó que confirma la destrucció. */}
+              <button type="button" style={btn('err-ple', busy)} disabled={busy}
+                onClick={doDiscardSession}>{t('fitting.save.discard_session')}</button>
             </div>
           </div>
         </div>

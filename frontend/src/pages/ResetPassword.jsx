@@ -63,6 +63,10 @@ export default function ResetPassword() {
           <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{t('reset.checking')}</p>
         )}
 
+        {/* 🔒 Els dos botons d'aquesta pantalla van en DAURAT PLE a posta: és l'EXCEPCIÓ ÚNICA de
+            la §1 · Acció (Agus, 09/08) — la porta d'entrada és territori de MARCA, no de la §5.1.
+            La coda C2 els va passar a `--accio` i la decisió d'Agus els torna. Tinta
+            `--text-main` (4.91:1), mai blanca (3.44:1). V. la nota llarga a `Login.jsx`. */}
         {status === 'invalid' && (
           <>
             <div style={{ padding: '12px 14px', borderRadius: 8, background: 'var(--err-bg)', color: 'var(--err)',
@@ -72,7 +76,7 @@ export default function ResetPassword() {
             <button onClick={() => navigate('/login')} style={{
               marginTop: 18, width: '100%', fontFamily: 'IBM Plex Mono, monospace', fontSize: 'var(--fs-body)',
               fontWeight: 600, padding: '11px', borderRadius: 8, border: 'none',
-              background: 'var(--gold)', color: 'var(--white)', cursor: 'pointer',
+              background: 'var(--gold)', color: 'var(--text-main)', cursor: 'pointer',
             }}>{t('reset.back_login')}</button>
           </>
         )}
@@ -97,7 +101,7 @@ export default function ResetPassword() {
             <button type="submit" disabled={saving || !pw || !pw2} style={{
               width: '100%', fontFamily: 'IBM Plex Mono, monospace', fontSize: 'var(--fs-body)',
               fontWeight: 600, padding: '11px', borderRadius: 8, border: 'none',
-              background: 'var(--gold)', color: 'var(--white)', cursor: saving ? 'default' : 'pointer',
+              background: 'var(--gold)', color: 'var(--text-main)', cursor: saving ? 'default' : 'pointer',
               opacity: (saving || !pw || !pw2) ? 0.6 : 1,
             }}>{saving ? t('reset.saving') : t('reset.submit')}</button>
           </form>

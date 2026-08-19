@@ -106,7 +106,7 @@ export default function TenantsPage() {
               type="button"
               onClick={() => navigate('/tenants/new')}
               style={{
-                display: 'flex', alignItems: 'center', gap: 7, background: 'var(--gold)',
+                display: 'flex', alignItems: 'center', gap: 7, background: 'var(--accio)',
                 border: 'none', borderRadius: 8, padding: '8px 14px',
                 fontFamily: MONO, fontSize: 12, fontWeight: 600, color: '#fff', cursor: 'pointer',
               }}

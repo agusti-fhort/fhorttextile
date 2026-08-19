@@ -13,7 +13,9 @@ from .views import (
     create_model_wizard,
     generate_grading_view,
     set_size_override_view,
-    escalat_ajustar_talla_view,
+    # E1/B4 — sense ruta (jubilada); l'import es queda perquè `urls.py` és el cens
+    # viu de vistes i els bancs la criden per funció. V. la nota de sota.
+    escalat_ajustar_talla_view,  # noqa: F401
     grading_status_view,
     base_measurement_noms_view,
     base_measurements_reorder_view,
@@ -39,6 +41,9 @@ from .views import (
     promoure_a_item_view,
 )
 
+from .comprovacio_views import comprovacio_view
+from .garment_views import peca_del_model_view, peces_del_model_view
+from .vocabulari_views import vocabulari_domini_view
 from .views_size_check import SizeCheckViewSet, SizeCheckLineViewSet
 from .ftt_template_views import DocumentTemplateViewSet
 from .item_fitxer_views import ItemFitxerViewSet
@@ -108,6 +113,7 @@ try:
         save_base_size_view,
         confirm_base_size_view,
         base_measurements_view,
+        create_model_pom_view,
     )
     _sprint7_model_paths = [
         path('models/<int:model_id>/aprovar-design-freeze/', approve_design_freeze_view),
@@ -115,6 +121,10 @@ try:
         # D5 — `confirmar-talla-base/` JUBILADA (cap consumidor a frontend/src; resta del
         # wizard vell). La vista es conserva importable per a test_g6_segell (camí 6 del segell).
         path('models/<int:model_id>/base-measurements/',     base_measurements_view),
+        # POM PROPI DEL MODEL — la porta explícita per a la mesura que el catàleg del client
+        # encara no té. Va sota `models/` perquè el client (i per tant el catàleg on neix
+        # l'àlies) el diu el MODEL; la vista viu amb les seves germanes a `pom/wizard_views`.
+        path('models/<int:model_id>/pom-propi/',             create_model_pom_view),
     ]
 except Exception:
     _sprint7_model_paths = []
@@ -212,6 +222,10 @@ urlpatterns = (
         path('models/<int:model_id>/proposar-cotes/', proposar_cotes_view),
         path('models/<int:model_id>/gravar-pom/', gravar_pom_view),
         path('models/<int:model_id>/tancar-taula/', close_table_view),
+        # SET-2/T2-bis — les prendes d'un model amb els seus valors EFECTIUS. Només
+        # lectura: l'autoria de peces és T7. El contracte viu al docstring de la vista.
+        path('models/<int:model_id>/peces/', peces_del_model_view),
+        path('models/<int:model_id>/peces/<int:peca_id>/', peca_del_model_view),
         path('models/<int:model_id>/taula-mesures/', measurements_table_view),
         path('models/<int:model_id>/set-measurements/', set_measurements_view),
         path('models/<int:model_id>/reorder-measurements/', reorder_measurements_view),
@@ -219,15 +233,33 @@ urlpatterns = (
         path('models/<int:model_id>/analisi-ia/', ai_analysis_view),
         path('models/<int:model_id>/xat-mesures/', measurements_chat_view),
         path('models/<int:model_id>/generar-grading/', generate_grading_view),
-        # D5 — `set-size-override/` JUBILADA: el wrapper JS existia i cap component el cridava;
-        # l'editor real fa servir escalat/ajustar-talla. Vista conservada per a test_g6_segell.
-        path('models/<int:model_id>/escalat/ajustar-talla/', escalat_ajustar_talla_view),
+        # D5 — `set-size-override/` JUBILADA: el wrapper JS existia i cap component el cridava.
+        # ✅ E1/B4 (17/08) — `escalat/ajustar-talla/` JUBILADA TAMBÉ, i per la mateixa porta que
+        # aquella: es retira LA RUTA i la vista es conserva per als bancs que la fan servir de
+        # VEHICLE per a lleis que segueixen vives (el segell G6, la guarda de rang, l'escriptura
+        # per germanes de C4, la conservació de valors en STEP, i el banc F1 del `garment`).
+        #
+        # 🔑 PER QUÈ SURT: era la porta que feia que la columna «Fit actual» de l'Escalat
+        # EDITÉS LA CORBA TEÒRICA —`BaseMeasurement`/`ModelGradingOverride` + re-derivació dels
+        # specs a cada tecla—, i per això «Mesurar prenda» clonava com a teòric el número que el
+        # tècnic acabava d'anotar: desviació zero i acceptació buida. Ara aquella columna anota
+        # una PRESA (`fitting/model/<id>/presa/`, E1/B3) i el seu únic cridador ha canviat de
+        # porta. Sense ruta, **R2 és estructural**: no queda cap camí viu per decidir ni propagar
+        # des d'una talla no-base (el guard partit d'E1/B1 tanca l'altre).
+        #
+        # 🚩 EL QUE DESAPAREIX AMB ELLA, i consta perquè és una CAPACITAT, no codi mort: no queda
+        # cap superfície per pinçar el valor d'UNA talla no-base (`ModelGradingOverride` per
+        # cel·la). N'hi entren igualment per l'import W5, i ningú no els pot editar. Si algun dia
+        # cal, ha de tornar per un gest que digui què fa, no per la cel·la d'una presa.
         path('models/<int:model_id>/grading-status/', grading_status_view),
         path('models/<int:model_id>/base-measurements/reorder/', base_measurements_reorder_view),
         # Sprint NOMS-POM — el BATEIG de la línia (nom canònic + traducció del client). Porta
         # pròpia i estreta, abans del router: el ViewSet genèric obriria tota la fila.
         path('base-measurements/<int:bm_id>/noms/', base_measurement_noms_view),
         path('models/<int:model_id>/base-stages/', base_stages_view),
+        # D-31.17 — LA COMPROVACIÓ del model. Lectura pura: què falta i què s'ha de mirar
+        # abans que la fitxa surti cap al fabricant. Cap escriptura per aquesta porta.
+        path('models/<int:model_id>/comprovacio/', comprovacio_view),
         path('models/<int:model_id>/pom/<int:pom_id>/regim/', set_pom_regim_view),
         # C1 — poda SOFT d'un POM del model des de la graella (mai DELETE dur).
         path('models/<int:model_id>/pom/<int:pom_id>/desactivar/', desactivar_pom_view),
@@ -250,5 +282,10 @@ urlpatterns = (
     + _bulk_paths
     + _techsheet_editor_paths
     + _ftt_document_paths
+    + [
+        # F2.1c — les enumeracions de domini, publicades. Mateix patró que
+        # `mesures/diccionari/`: lectura pura, perquè el frontend deixi de duplicar-les.
+        path('vocabulari/', vocabulari_domini_view),
+    ]
     + router.urls
 )

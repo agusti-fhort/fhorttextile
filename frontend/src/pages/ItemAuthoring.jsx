@@ -35,7 +35,7 @@ const slugify = (s) => (s || '').toLowerCase().trim()
   .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60)
 
 const btnPrimary = (disabled) => ({
-  background: disabled ? '#ccc' : 'var(--gold)', color: 'var(--white)', border: 'none',
+  background: disabled ? '#ccc' : 'var(--accio)', color: 'var(--white)', border: 'none',
   borderRadius: 6, padding: '8px 20px', fontSize: 'var(--fs-body)', fontWeight: 600,
   cursor: disabled ? 'not-allowed' : 'pointer',
 })
@@ -249,7 +249,7 @@ export default function ItemAuthoring() {
               <span style={{
                 width: 20, height: 20, borderRadius: '50%', display: 'inline-flex',
                 alignItems: 'center', justifyContent: 'center', fontSize: 'var(--fs-caption)',
-                fontWeight: 700, color: 'var(--white)',
+                fontWeight: 700, color: 'var(--text-main)',
                 background: cur || done ? 'var(--gold)' : 'var(--text-muted)',
               }}>{done ? '✓' : n}</span>
               <span style={{ fontSize: 'var(--fs-body)', fontWeight: cur ? 600 : 400 }}>

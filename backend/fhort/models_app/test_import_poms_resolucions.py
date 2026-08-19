@@ -27,6 +27,7 @@ from fhort.accounts.models import UserProfile
 from fhort.models_app.extraction_views import import_session_poms_view
 from fhort.models_app.models import ImportSession
 from fhort.models_app.test_import_poms_duplicats import _TenantBase
+from fhort.pom.catalog_testing import desactiva_unicitat_codi_client
 from fhort.pom.models import POMMaster
 
 
@@ -64,6 +65,9 @@ class ImportPomsResolucionsTest(_TenantBase):
 
     # ── 1. Els dos verbs nous, en verd ─────────────────────────────────────────────
     def test_vincula_la_fila_pren_el_pom_triat(self):
+        # El catàleg duplicat ja no el pot fabricar cap camí viu (`pom/0075`); aquesta
+        # prova el munta a mà perquè és justament el conflicte que la resolució resol.
+        desactiva_unicitat_codi_client()
         bo = self._pom('E', 'Ample pit (el bo)')
         self._pom('E', 'Ample pit (el vell)')          # el duplicat que va provocar el 409
         session = self._sessio([(0, 'E', 'chest width', None)])
@@ -182,6 +186,9 @@ class ImportPomsResolucionsTest(_TenantBase):
     def test_la_resolucio_mana_sobre_poms_tenant_only_de_la_mateixa_fila(self):
         """La fila 0 va marcada com a tenant-only I resolta: mana la resolució, i el codi del
         document ('E', duplicat al catàleg) no arriba mai a la porta del 409."""
+        # El catàleg duplicat ja no el pot fabricar cap camí viu (`pom/0075`); aquesta
+        # prova el munta a mà perquè és justament el conflicte que la resolució resol.
+        desactiva_unicitat_codi_client()
         self._pom('E', 'duplicat 1')
         self._pom('E', 'duplicat 2')
         session = self._sessio([(0, 'E', 'chest width', None)])

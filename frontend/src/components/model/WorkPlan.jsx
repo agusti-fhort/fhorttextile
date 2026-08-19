@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import Badge from '../ui/Badge'
 import Modal from '../ui/Modal'
-import { models, modelTasks } from '../../api/endpoints'
+import TempsDeclaratForm from './TempsDeclaratForm'
+import { models, modelTasks, taskTypes } from '../../api/endpoints'
 import { formatMinutes } from '../../utils/format'
 import { taskTypeLabel } from '../../utils/taskType'
+import { destiDeTasca } from '../../utils/destiTasca'
 
 // Pla de treball — PEÇA P3 + P4a (Q4 crescut): l'encàrrec del model com a procés.
 // Consumeix dashboard.tasques (compositor enriquit a P1, JA ordenat canònic) — NO reordena.
@@ -18,40 +20,11 @@ import { taskTypeLabel } from '../../utils/taskType'
 
 const API = import.meta.env.VITE_API_URL || ''
 
-// task_type_code → ruta de l'eina al frontend. Mini-taula LOCAL (mirall del kanban
-// KanbanTasks.jsx pom/tech_sheet/size_check; duplicació mínima conscient, deute anotat a P0 §B —
-// NO importem ACTIONS del kanban). null = tipus sense eina → transport manual (§4).
-function toolRoute(task, modelId) {
-  switch (task.task_type_code) {
-    // J1+: "Definició POM" (pom) → el TAB Mesures en mode ENTRADA (mode=entry): obre la genesi/wizard
-    // d'entrada per definir/afegir POMs, encara que el model JA tingui mesures (no consulta). Sense
-    // task_id (la definició de POMs no en porta). Ja NO la pàgina standalone.
-    case 'pom':        return `/models/${modelId}?tab=Mesures&mode=entry`
-    case 'tech_sheet': return `/models/${modelId}/fitxa?task_id=${task.id}`
-    // J1: "Mesurar prenda" (size_check) → el TAB Mesures del ModelSheet amb task_id (el tab el consumeix
-    // sense encunyar-ne cap de nova). Ja NO va a la pàgina standalone (jubilada).
-    case 'size_check': return `/models/${modelId}?tab=Mesures&task_id=${task.id}`
-    // "Escalat" (grading = definir la regla de gradació) → editor propagat editable, amb task_id
-    // (compta temps). scaling ("Escalat CAD" = aplicar al patró) és tasca diferent, eina futura → null.
-    case 'grading':    return `/models/${modelId}/escalat?task_id=${task.id}`
-    // W2: el patró s'anota al TALLER (POMs i costures sobre la geometria); el tab Patró
-    // ha quedat de porta i ja no hi ha eines. Amb task_id: el taller REPRÈN aquesta tasca
-    // en lloc d'encunyar-ne una de nova, igual que fa Mesures.
-    case 'pattern_digit':
-    case 'pattern_cad': return `/models/${modelId}/patro/taller?task_id=${task.id}`
-    default:           return null
-  }
-}
-
-function toolTab(task) {
-  switch (task.task_type_code) {
-    case 'pom':
-    case 'size_check':
-      return 'Mesures'
-    default:
-      return null
-  }
-}
+// T2 — la mini-taula local de destins (sis casos i un `default: null`) marxa d'aquí. Emmirallava
+// la del Kanban, que ja no existeix (`fc98cab6`), i la seva bessona de `TaskTree`; el que decideix
+// on va una tasca és el CATÀLEG (`tipus`/`eina`/`mode`), traduït pel resolutor únic
+// `utils/destiTasca`. Aquí només cal creuar la tasca amb el seu tipus per `code` — el compositor
+// del dashboard no porta `eina`/`mode`, o sigui que el catàleg es demana a part i es creua.
 
 // task_type.code → icona Tabler (no hi havia mapa compartit; design system).
 const TASK_ICON = {
@@ -87,9 +60,10 @@ function isOutOfCharge(task) { return task?.off_recipe === true || task?.origen 
 
 const containerStyle = { background: 'transparent', width: '100%' }
 const cardsGrid = { display: 'flex', flexWrap: 'wrap', gap: 12 }
+// A6 · NOMÉS PELL. `.lblc` de la maqueta: 10px MAJÚSCULES amb tracking .08em i pes 600.
 const sectionTitle = {
-  fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontWeight: 500,
-  textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10,
+  fontSize: 'var(--fs-label)', lineHeight: '12px', color: 'var(--text-soft)', fontWeight: 600,
+  textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10,
 }
 const footerWrap = { width: '100%', marginTop: 14 }
 
@@ -103,18 +77,22 @@ function TransportBtn({ icon, active, title, onClick }) {
       }}
       style={{
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        width: 28, height: 28, borderRadius: 6,
-        border: '0.5px solid var(--border)',
-        background: active ? 'var(--bg-muted)' : 'transparent',
-        color: active ? 'var(--text-main)' : 'var(--text-muted)',
-        cursor: active ? 'pointer' : 'not-allowed', opacity: active ? 1 : 0.4,
+        // `.tctl button` de la maqueta: 26×26, filet --line, radi de control i fons --panel.
+        // §5.7 — deshabilitat: BAIXA EL FONS, no la tinta; l'`opacity: .4` d'abans apagava
+        // també la icona i la deixava molt per sota d'AA.
+        width: 26, height: 26, borderRadius: 'var(--r-ctrl)',
+        borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)',
+        background: active ? 'var(--panel)' : 'var(--bg-page)',
+        color: active ? 'var(--text-soft)' : 'var(--text-faint)',
+        cursor: active ? 'pointer' : 'not-allowed',
+        fontSize: 14,
       }}>
-      <i className={`ti ${icon}`} style={{ fontSize: 15 }} />
+      <i className={`ti ${icon}`} aria-hidden="true" style={{ fontSize: 'inherit', color: 'currentColor' }} />
     </button>
   )
 }
 
-function TaskCard({ task, mine, hasToolRoute, onPlay, onPause, onStop }) {
+function TaskCard({ task, mine, hasToolRoute, onPlay, onPause, onStop, onDeclarar }) {
   const { t } = useTranslation()
   const out = isOutOfCharge(task)
   const transport = TRANSPORT[task.status] || TRANSPORT.Pending
@@ -125,9 +103,12 @@ function TaskCard({ task, mine, hasToolRoute, onPlay, onPause, onStop }) {
   return (
     <div style={{
       flex: '1 1 220px', maxWidth: 320, minWidth: 0,
-      border: out ? '1px solid var(--err)' : '0.5px solid var(--border)',
-      borderLeft: out ? '3px solid var(--err)' : '0.5px solid var(--border)',
-      borderRadius: 8, padding: '0.7rem 0.8rem', background: 'var(--white)',
+      // `.tcard`: filet --line i radi 12. El filet gruixut de l'esquerra quan la tasca és
+      // FORA D'ENCÀRREC es queda tal com és: és marca de dada (§1), no selecció.
+      borderWidth: 1, borderStyle: 'solid',
+      borderColor: out ? 'var(--err)' : 'var(--line)',
+      borderLeftWidth: out ? 3 : 1,
+      borderRadius: 'var(--r-card)', padding: '12px', background: 'var(--panel)',
       opacity: otherTech ? 0.55 : 1,
     }}>
       {/* Capçalera: icona + nom del tipus (truncat, mai desborda) */}
@@ -141,14 +122,14 @@ function TaskCard({ task, mine, hasToolRoute, onPlay, onPause, onStop }) {
 
       {/* Cos: temps consumit (helper existent) + obertures */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8,
-                    fontFamily: 'var(--mono)', fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>
+                    fontFamily: 'var(--mono)', fontSize: 'var(--fs-label)', color: 'var(--text-soft)' }}>
         <span><i className="ti ti-clock" style={{ fontSize: 13, marginRight: 3 }} />{formatMinutes(task.temps_consumit_min ?? 0)}</span>
         <span><i className="ti ti-repeat" style={{ fontSize: 13, marginRight: 3 }} />{t('model_sheet.dashboard.workplan.openings', { n: task.obertures ?? 0 })}</span>
       </div>
 
       {/* d'altri: qui la duu */}
       {otherTech && task.assignee_nom && (
-        <div style={{ marginTop: 4, fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>
+        <div style={{ marginTop: 4, fontSize: 'var(--fs-label)', color: 'var(--text-soft)' }}>
           {t('model_sheet.dashboard.timeline.by', { label: task.assignee_nom })}
         </div>
       )}
@@ -167,6 +148,14 @@ function TaskCard({ task, mine, hasToolRoute, onPlay, onPause, onStop }) {
           <TransportBtn icon="ti-player-play"  active={playActive} title={mine ? t('model_sheet.dashboard.workplan.play') : t('model_sheet.dashboard.workplan.handoff_play')} onClick={() => onPlay(task)} />
           <TransportBtn icon="ti-player-pause" active={mine && transport.pause} title={t('model_sheet.dashboard.workplan.pause')} onClick={() => onPause(task)} />
           <TransportBtn icon="ti-player-stop"  active={mine && transport.stop}  title={t('model_sheet.dashboard.workplan.stop')}  onClick={() => onStop(task)} />
+          {/* F2.5 · D-2 — les tasques EXTERNES es fan fora de l'eina i el rellotge no hi arriba
+              mai: l'única manera que aquell temps entri al sistema és dir-lo. Va aquí, al costat
+              del transport, i no dins d'un menú: si estigués amagat ningú no el faria servir i
+              les hores del patró a mà seguirien sense existir. Les internes no el veuen mai. */}
+          {task.tipus_extern && (
+            <TransportBtn icon="ti-clock-plus" active title={t('temps_declarat.boto')}
+                          onClick={() => onDeclarar(task)} />
+          )}
         </div>
         <Badge variant={STATUS_VARIANT[task.status] || 'gray'} style={{ maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {t(`model_sheet.dashboard.task_status.${task.status}`, { defaultValue: task.status })}
@@ -183,6 +172,7 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
   const [myProfileId, setMyProfileId] = useState(null)
   const [toast, setToast] = useState(null)        // { type, text }
   const [handoff, setHandoff] = useState(null)     // task pendent de reassignar (diàleg §6)
+  const [declarant, setDeclarant] = useState(null)  // F2.5: tasca externa a la qual declarar temps
   const [claiming, setClaiming] = useState(false)  // guard anti-doble-clic del claim
   const toastTimer = useRef(null)
 
@@ -197,6 +187,28 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
   }, [])
 
   useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current) }, [])
+
+  // El CATÀLEG, per `code`. El compositor del dashboard no porta `eina`/`mode` (només `code`),
+  // o sigui que es demana a part i es creua aquí. Mentre no ha arribat, cap targeta navega —
+  // que és millor que navegar a un destí endevinat.
+  const [tipusPerCode, setTipusPerCode] = useState({})
+  useEffect(() => {
+    let alive = true
+    taskTypes.list({ page_size: 200 })
+      .then(res => {
+        const d = res?.data
+        const llista = Array.isArray(d?.results) ? d.results : (Array.isArray(d) ? d : [])
+        if (!alive) return
+        const map = {}
+        for (const tt of llista) map[tt.code] = tt
+        setTipusPerCode(map)
+      })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [])
+
+  const desti = (task) => destiDeTasca(tipusPerCode[task.task_type_code],
+    { modelId, taskId: task.id })
 
   const list = Array.isArray(tasques) ? tasques : []
   const isMine = (task) => task.assignee_id != null && task.assignee_id === myProfileId
@@ -249,8 +261,7 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
   // idempotent al backend + navega (Done = reobertura §3.8). Sense eina: InProgress sense navegar (§4)
   // — la targeta passa a "en curs".
   function playMine(task) {
-    const route = toolRoute(task, modelId)
-    const tab = toolTab(task)
+    const teDesti = !!desti(task)
     // El backend decideix si cal crear/reobrir/claimar o fer no-op. Evita basar-se en l'estat
     // possiblement obsolet de la targeta i no pot demanar InProgress→InProgress.
     models.openTask(modelId, task.task_type_code)
@@ -260,9 +271,12 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
           id: res?.data?.task_id ?? task.id,
           status: res?.data?.status ?? task.status,
         }
-        if (route) {
-          if (tab) onOpenTab?.(tab)
-          navigate(toolRoute(openedTask, modelId))
+        // El destí es recalcula amb la tasca JA oberta: el task_id de la resposta és el que
+        // ha de viatjar a la URL (pot ser una tasca acabada de crear o la de la ronda viva).
+        const d = teDesti ? desti(openedTask) : null
+        if (d) {
+          if (d.tab) onOpenTab?.(d.tab)
+          navigate(d.route)
         } else {
           onRefresh?.()
         }
@@ -339,16 +353,20 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
   return (
     <section style={containerStyle}>
       <div style={sectionTitle}>{t('model_sheet.dashboard.workplan.title')}</div>
+      {/* §8c — estat buit: frase en --text-faint CURSIVA, mai caixa buida muda. */}
       {list.length === 0 ? (
-        <div style={{ border: '0.5px dashed var(--border)', borderRadius: 8, padding: '0.7rem 0.9rem',
-                      background: 'var(--bg-muted)', color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>
+        <div style={{ borderWidth: 1, borderStyle: 'dashed', borderColor: 'var(--line)',
+                      borderRadius: 'var(--r-card)', padding: '12px 16px',
+                      background: 'var(--panel)', color: 'var(--text-faint)',
+                      fontStyle: 'italic', fontSize: 'var(--fs-body)' }}>
           {t('model_sheet.dashboard.workplan.empty')}
         </div>
       ) : (
         <div style={cardsGrid}>
           {list.map(task => (
-            <TaskCard key={task.id} task={task} mine={isMine(task)} hasToolRoute={Boolean(toolRoute(task, modelId))}
-              onPlay={handlePlay} onPause={handlePause} onStop={handleStop} />
+            <TaskCard key={task.id} task={task} mine={isMine(task)} hasToolRoute={Boolean(desti(task))}
+              onPlay={handlePlay} onPause={handlePause} onStop={handleStop}
+              onDeclarar={setDeclarant} />
           ))}
         </div>
       )}
@@ -357,18 +375,31 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
       <div style={footerWrap}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
                       gap: 12, flexWrap: 'wrap', marginBottom: 6, fontSize: 'var(--fs-label)',
-                      color: 'var(--text-muted)' }}>
+                      color: 'var(--text-soft)' }}>
           <span>{t('model_sheet.dashboard.workplan.progress_label', { done, total })} · {pct}%</span>
           <span>{t('model_sheet.dashboard.workplan.time_total')}:{' '}
             <span style={{ fontFamily: 'var(--mono)', color: 'var(--text-main)' }}>{formatMinutes(totalMin)}</span>
           </span>
         </div>
-        <div style={{ height: 8, borderRadius: 6, background: 'var(--bg-muted)',
-                      border: '0.5px solid var(--border)', overflow: 'hidden' }}>
+        {/* `.prog` de la maqueta: 6px de canal en --line-soft, sense vora, píndola. El farciment
+            és --ok: la barra diu QUANT S'HA FET, i el fet és verd a tot el sistema. */}
+        <div style={{ height: 6, borderRadius: 'var(--r-pill)', background: 'var(--line-soft)',
+                      overflow: 'hidden' }}>
           <div style={{ width: `${pct}%`, height: '100%', background: 'var(--ok)',
                         transition: 'width 200ms' }} />
         </div>
       </div>
+      {declarant && (
+        <TempsDeclaratForm
+          tasca={declarant}
+          onFet={(d) => {
+            setDeclarant(null)
+            showToast('ok', t('temps_declarat.ok', { minuts: d?.minuts ?? 0 }))
+            onRefresh?.()
+          }}
+          onCancel={() => setDeclarant(null)}
+        />
+      )}
       {handoff && (
         <Modal
           title={t('model_sheet.dashboard.workplan.handoff_title')}

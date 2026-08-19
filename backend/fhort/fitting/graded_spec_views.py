@@ -35,25 +35,52 @@ class GradedSpecTableView(APIView):
                 status=404,
             )
 
-        # FASE_2/C1-ins — ÀNCORA als DOS eixos, i ha d'anar al MATEIX commit que la dels
-        # quatre mapes de més avall: `rows_by_pom` s'indexa per `pom.id` pelat i ÉS la fila
-        # del payload. Sense àncora aquí i amb àncora allà, hi hauria files sense mapa;
-        # sense àncora enlloc, dues instàncies del mateix POM es fondrien a la mateixa fila i
-        # l'última llegida guanyaria talla a talla. Aquest queryset no havia crescut mai —ni
-        # a `(pom, capa)`—, o sigui que rep els dos filtres de cop.
-        from fhort.pom.models import MeasurementLayer
+        # C4 — L'ÀNCORA SE'N VA I LA FILA CREIX A LA IDENTITAT SENCERA.
+        #
+        # Què hi havia i per què: entre FASE_2/C1-ins i C4 aquest queryset filtrava
+        # `capa='exterior', instancia=''` perquè `rows_by_pom` s'indexava per `pom.id` pelat i
+        # ÉS la fila del payload — sense àncora, dues germanes es fondrien a la mateixa fila i
+        # l'última llegida guanyaria talla a talla. L'àncora era contenció mentre la fila no
+        # sabia dir de quina germana parlava.
+        #
+        # Ara ho sap: la fila s'indexa per `(pom_id, capa, instancia)` i PUBLICA els dos eixos.
+        # Amb la clau completa el filtre ja no protegeix res i seria pèrdua: amb les comportes
+        # fora, la germana no es col·lapsaria —quedaria FORA del `filter`—, i la fitxa sortiria
+        # coherent amb una fila de menys. Absència silenciosa, que és pitjor de veure que un
+        # valor equivocat.
+        # SET-2/T6a (2026-08-11) — LA FILA SERVEIX L'EIX DE LA PEÇA, i cal dir per què això
+        # NO contradiu el revert de `7cc133b5` (que va TREURE una clau `garment` del payload
+        # de `base-measurements/`). Els dos motius d'aquell revert no apliquen aquí:
+        #
+        #   (a) Allà el que s'hi servia era una DEFINICIÓ HEREDABLE (run, ruleset, talla base):
+        #       un valor que la peça pot NO tenir i que s'ha de resoldre contra el model. La
+        #       resolució `garment.X or model.X` ha de viure en UN SOL PUNT (D5), i servir-la
+        #       crua des d'una vora n'obria una segona via. Aquí NO hi ha cap resolució: el
+        #       `garment` d'una fila és l'eix PROPI de la fila, dada factual —de quina peça és
+        #       aquesta mesura—, no heretada de ningú.
+        #   (b) Allà la clau no tenia cap lector i era bastida sense funció. Aquí en té un de
+        #       NOMENAT: la partició de la T1b per prenda (D7), i el camí ja existeix —
+        #       `TechSheetEditor.jsx` passa `data.rows` per `partirEnTaules`→`garmentDeFila`,
+        #       que avui llegeix la mare perquè el payload no la porta.
+        #
+        # 🔑 LA REGLA QUE SE'N DERIVA, i val per a tot el sprint: **servir l'EIX D'UNA FILA és
+        # sempre legítim; servir una DEFINICIÓ RESOLTA, només des del punt únic.**
+        #
+        # L'`order_by` el porta també: sense ell, dues peces del mateix POM a la mateixa capa i
+        # instància empataven a tots els camps i el desempat el decidia `id`, o sigui l'ordre
+        # d'inserció dels specs.
         specs = (
             GradedSpec.objects
-            .filter(grading_version=gv, is_active=True,
-                    capa=MeasurementLayer.SLUG_DEFECTE, instancia='')
+            .filter(grading_version=gv, is_active=True)
             .select_related('pom__pom_global')
-            .order_by('pom_id', 'id')
+            .order_by('pom_id', 'capa', 'instancia', 'garment', 'id')
         )
 
         # size_labels en ordre d'aparició (no alfabètic: respecta l'ordre dels specs).
         size_labels = []
         seen_sizes = set()
-        # rows indexats per POMMaster (un dict de valors per talla), en ordre d'aparició.
+        # rows indexats per la IDENTITAT de la mesura (un dict de valors per talla), en ordre
+        # d'aparició. La clau del dict és interna; el que surt al payload és la fila.
         rows_by_pom = {}
         rows_order = []
 
@@ -64,9 +91,19 @@ class GradedSpecTableView(APIView):
 
             pom = s.pom
             pg = pom.pom_global  # pot ser None → fallback als camps *_client del POMMaster
-            if pom.id not in rows_by_pom:
-                rows_by_pom[pom.id] = {
+            ident = (pom.id, s.capa, s.instancia, s.garment)
+            if ident not in rows_by_pom:
+                rows_by_pom[ident] = {
                     'pom_id': pom.id,
+                    # SET-2/T6a — L'EIX DE LA FILA (v. l'acta del queryset, a sobre). El
+                    # consumidor és `partirEnTaules`→`garmentDeFila`, que fins avui llegia la
+                    # mare per a totes les files perquè aquest camp no hi era.
+                    'garment': s.garment,
+                    # C4 — ELS DOS EIXOS AL CONTRACTE. `pom_id` es queda i no canvia de
+                    # significat (consumidors antics segueixen llegint-lo); el que canvia és que
+                    # ja no és únic dins de `rows`, i aquests dos camps són el que ho desempata.
+                    'capa': s.capa,
+                    'instancia': s.instancia,
                     'codi': (pg.codi if pg else None) or pom.codi_client,
                     'abbreviation': (pg.abbreviation if pg else '') or '',
                     'nom_en': (pg.nom_en if pg else None) or pom.nom_client,
@@ -76,10 +113,10 @@ class GradedSpecTableView(APIView):
                     'valors': {},
                     'deltas': {},   # TS-4a: increment_applied_cm per talla (delta vs base)
                 }
-                rows_order.append(pom.id)
+                rows_order.append(ident)
 
-            rows_by_pom[pom.id]['valors'][s.size_label] = s.graded_value_cm
-            rows_by_pom[pom.id]['deltas'][s.size_label] = float(s.increment_applied_cm or 0)
+            rows_by_pom[ident]['valors'][s.size_label] = s.graded_value_cm
+            rows_by_pom[ident]['deltas'][s.size_label] = float(s.increment_applied_cm or 0)
 
         # TS-4a: enriquiment del payload — talla base, ordre de fitxa i nomenclatura del croquis.
         # Imports locals (evita cicle fitting↔models_app a nivell de mòdul).
@@ -91,31 +128,35 @@ class GradedSpecTableView(APIView):
         # BaseMeasurement del model, no del GradedSpec (la graduació no en sap res, i no li
         # pertoca: la secció és una propietat del document d'origen, no de l'escalat).
         #
-        # C2/Onada 1 — ÀNCORA EXTERIOR EXPLÍCITA per als QUATRE mapes de sota, i han
-        # d'anar-hi tots quatre alhora: si un s'ancorés i un altre no, una fila podria
-        # acabar amb l'ordre d'una capa i el nom d'una altra.
-        # La clau es queda per POM perquè la FILA que la consulta (`rows_by_pom`, aquí a
-        # sobre) tampoc no porta capa, i donar-n'hi voldria dir afegir un camp al payload
-        # —canvi de contracte, i el contracte no es toca fins a C4—. Les taules per capa al
-        # paper són C4; fins llavors la fitxa parla de l'exterior i ho diu aquí.
-        # FASE_2/C1-ins — el segon eix entra a la MATEIXA àncora i pel mateix argument sencer:
-        # la fila no porta instància, i donar-n'hi és canvi de contracte (C4-ins). Els quatre
-        # mapes segueixen creixent alhora — amb dos eixos, «l'ordre d'una capa i el nom d'una
-        # altra» es converteix en quatre maneres de barrejar-ho, no dues.
+        # C4 — ELS QUATRE MAPES CREIXEN A LA CLAU SENCERA, i han d'anar-hi tots quatre alhora
+        # (era la llei de C2/Onada 1 i segueix sent-ho): si un cresqués i un altre no, una fila
+        # podria acabar amb l'ordre d'una capa i el nom d'una altra. Amb dos eixos són quatre
+        # maneres de barrejar-ho, no dues.
+        #
+        # L'àncora d'aquests mapes existia perquè la fila que els consulta no portava capa. Ara
+        # la porta, o sigui que la contenció sobra i el filtre seria pèrdua: la germana es
+        # quedaria sense ordre, sense nomenclatura de croquis, sense secció i sense bateig —
+        # sortiria a la fitxa amb el nom del catàleg i al final de la taula.
         bms = BaseMeasurement.objects.filter(
-            model_id=sf.model_id,
-            capa=MeasurementLayer.SLUG_DEFECTE, instancia='').values(
-            'pom_id', 'ordre', 'nom_fitxa', 'seccio',
+            model_id=sf.model_id).values(
+            'pom_id', 'capa', 'instancia', 'garment', 'ordre', 'nom_fitxa', 'seccio',
             # R1 (31/07) — el BATEIG viatja pel MATEIX camí que `ordre`/`nom_fitxa`: surt de la
             # BaseMeasurement del model, perquè és del MODEL i no de la graduació. Sense això,
             # la taula T1b de la fitxa imprimia el nom del catàleg d'un POM que el tècnic havia
             # rebatejat — el panell de cotes deia una cosa i el paper una altra.
             'nom_canonic_model', 'nom_traduit_model')
-        ordre_map = {bm['pom_id']: bm['ordre'] for bm in bms}
-        nom_fitxa_map = {bm['pom_id']: bm['nom_fitxa'] for bm in bms}
-        seccio_map = {bm['pom_id']: bm['seccio'] for bm in bms}
-        bateig_map = {bm['pom_id']: (bm['nom_canonic_model'] or '',
-                                     bm['nom_traduit_model'] or '') for bm in bms}
+
+        def _ident(bm):
+            # SET-2/T6a — ELS QUATRE MAPES CREIXEN ALHORA, i segueix sent la llei de C2/Onada 1
+            # que ja obligava amb capa i instància: amb un eix més són vuit maneres de barrejar
+            # l'ordre d'una peça amb el nom de l'altra, no quatre.
+            return (bm['pom_id'], bm['capa'], bm['instancia'], bm['garment'])
+
+        ordre_map = {_ident(bm): bm['ordre'] for bm in bms}
+        nom_fitxa_map = {_ident(bm): bm['nom_fitxa'] for bm in bms}
+        seccio_map = {_ident(bm): bm['seccio'] for bm in bms}
+        bateig_map = {_ident(bm): (bm['nom_canonic_model'] or '',
+                                   bm['nom_traduit_model'] or '') for bm in bms}
 
         # LA REGLA per fila. `deltas` (increment_applied_cm) és la distància ACUMULADA a la
         # base — invariant declarada a patterns/engine/ports.py:64 i grading_projection.py:29 —
@@ -129,15 +170,19 @@ class GradedSpecTableView(APIView):
         from fhort.pom.services import _load_grading_rules
         regles = _load_grading_rules(model) if model else {}
 
-        rows = [rows_by_pom[pid] for pid in rows_order]
+        rows = [rows_by_pom[ident] for ident in rows_order]
         # ref = nomenclatura del croquis (nom_fitxa) amb fallback a abbreviation del POMGlobal.
-        for row in rows:
-            row['ref'] = nom_fitxa_map.get(row['pom_id']) or row['abbreviation']
-            row['seccio'] = seccio_map.get(row['pom_id']) or ''
+        for ident, row in zip(rows_order, rows):
+            row['ref'] = nom_fitxa_map.get(ident) or row['abbreviation']
+            row['seccio'] = seccio_map.get(ident) or ''
             # R1 — CRUS i al costat del catàleg (`nom_en`/`nom_ca`, que no es toquen):
             # '' = no batejat → mana el catàleg. La cascada la resol qui pinta. Camps NOUS.
-            _bat = bateig_map.get(row['pom_id']) or ('', '')
+            _bat = bateig_map.get(ident) or ('', '')
             row['nom_canonic_model'], row['nom_traduit_model'] = _bat
+            # La REGLA segueix sent per POM, i és decisió de domini amb acta
+            # (`pom/services.py:723-730`): mateix POM, mateix increment a totes les capes i
+            # instàncies. Aquí no s'hi busca amb la clau sencera perquè la taula de regles no
+            # té els eixos — no és un oblit, és que la regla no en distingeix.
             r = regles.get(row['pom_id'])
             # Increment PER SALT ascendent (positiu). Sense regla, o amb regla sense increment
             # (STEP/FIXED), viatja null: el pintor decideix el placeholder, la vista no en posa.
@@ -145,8 +190,18 @@ class GradedSpecTableView(APIView):
             row['increment_base'] = float(inc) if inc is not None else None
             row['talla_break_label'] = (getattr(r, 'talla_break_label', None) if r else None) or ''
             row['logica'] = getattr(r, 'logica', None) if r else None
-        # Ordre de fitxa (POMs sense BaseMeasurement → al final).
-        rows.sort(key=lambda r: ordre_map.get(r['pom_id'], 10 ** 9))
+        # Ordre de fitxa (mesures sense BaseMeasurement → al final). El desempat pels dos eixos
+        # no és decoratiu: dues germanes comparteixen `ordre` (és el del POM a la fitxa), i
+        # sense ell l'ordre entre elles el decidiria el pla de Postgres i es mouria sol.
+        # SET-2/T6a — la PEÇA encapçala el desempat, mateix criteri que `clau_ordre_taula`
+        # (`pom/grading_views.py`): la llei de T9 és «la prenda a fora», o sigui que les files
+        # d'una peça van JUNTES i no intercalades amb les d'una altra. La mare primer (`0`).
+        # I sense ella la clau tornava a ser parcial: dues peces comparteixen `ordre` —és el
+        # del POM a la fitxa— i el seu ordre relatiu el decidiria el pla de Postgres.
+        rows.sort(key=lambda r: (0 if not r['garment'] else 1, r['garment'],
+                                 ordre_map.get((r['pom_id'], r['capa'], r['instancia'],
+                                                r['garment']), 10 ** 9),
+                                 r['capa'], r['instancia']))
 
         return Response({
             'size_fitting_id': sf.id,

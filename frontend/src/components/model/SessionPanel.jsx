@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { fittingSessions, fittingPhotos } from '../../api/endpoints'
+import { fittingSessions, fittingPhotos, timers } from '../../api/endpoints'
 import { thStyle, useDebouncedSave, SaveStatus, fmtMeasure, useUnit } from '../../pages/fittingShared'
 import { orderedSizes } from '../../utils/sizeRun'
+import { identitatMesura } from '../../utils/identitatMesura'
 
 // Sprint Y — Panell de la SESSIÓ de fitting dins la superfície Mesures (mode sessió). Migra de
 // FittingDetail: la franja de context (estat/data/responsable/lloc/persona) + el panell plegable
-// Canvis · Observacions · Imatges. Cap pantalla pròpia: és un germà de DependencyPanel/WatchpointsPanel.
+// Canvis · Observacions · Imatges. Cap pantalla pròpia: és un germà de PecaContenidor/WatchpointsPanel.
 
 const estatColor = { Oberta: 'var(--warn)', Programada: 'var(--gold)', Tancada: 'var(--ok)', Anullada: 'var(--gray)' }
 
@@ -18,8 +19,10 @@ function changedRows(grid) {
   const baseLabel = (grid?.model?.base_size_label || '').trim()
   const pomMap = new Map()
   for (const l of lines) {
-    if (!pomMap.has(l.pom_id)) pomMap.set(l.pom_id, { pom_id: l.pom_id, codi: l.codi, nom: l.nom, is_key: l.is_key, cells: {} })
-    pomMap.get(l.pom_id).cells[l.size_label] = l
+    // C4/BLOC 1-BIS — s'agrupa per la MESURA, no pel POM: dues germanes són dues files.
+    const ident = identitatMesura(l)
+    if (!pomMap.has(ident)) pomMap.set(ident, { pom_id: l.pom_id, capa: l.capa, instancia: l.instancia, codi: l.codi, nom: l.nom, is_key: l.is_key, cells: {} })
+    pomMap.get(ident).cells[l.size_label] = l
   }
   const baseOf = (l) => l?.evolucio?.[0]?.valor_cm ?? null
   const isMod = (l) => {
@@ -49,7 +52,7 @@ function EditableContextField({ sessionId, field, label, value }) {
 const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString('ca-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'
 const muted = { fontSize: 'var(--fs-body)', color: 'var(--text-muted)', fontStyle: 'italic' }
 
-export default function SessionPanel({ session, pieceFittingId, grid }) {
+export default function SessionPanel({ session, pieceFittingId, grid, modelId = null }) {
   const { t } = useTranslation()
   const unit = useUnit()                       // unitat del tenant (CM|INCH) → format de presentació
   const [open, setOpen] = useState(false)
@@ -74,6 +77,10 @@ export default function SessionPanel({ session, pieceFittingId, grid }) {
     if (!files.length) return
     setUploading(true); setErr(null)
     Promise.all(files.map(f => fittingPhotos.upload(session.id, f, pieceFittingId)))
+      // F1.3 · §S-1 — `POST fitting-photos/` va per `session`/`piece_fitting` i el backend no en
+      // pot deduir el model: el batec el fa el client. `heartbeat` segella el tram obert del
+      // propi tècnic sense necessitar model_id, i mai fa caure la pujada que observa.
+      .then(r => { timers.heartbeat().catch(() => {}); return r })
       .then(reloadPhotos)
       .catch(() => setErr(t('fitting.save.image_error')))
       .finally(() => { setUploading(false); e.target.value = '' })
@@ -101,8 +108,21 @@ export default function SessionPanel({ session, pieceFittingId, grid }) {
         </span>
         <EditableContextField sessionId={session.id} field="model_persona" label={t('fitting.id.persona')} value={session.model_persona} />
         <EditableContextField sessionId={session.id} field="lloc" label={t('fitting.id.location')} value={session.lloc} />
+        {/* C5-UI/P5 — EL FULL QUE ES PORTA A LA SALA. Viu a la franja de la sessió i no dins del
+            panell plegable: es demana ABANS de començar a mesurar, i una porta que s'ha de
+            desplegar arriba tard. S'obre en una pestanya pròpia perquè imprimir-lo no faci
+            perdre la graella que s'està treballant. */}
+        {modelId && (
+          <a href={`/fittings/${session.id}/full/${modelId}`} target="_blank" rel="noopener noreferrer"
+            style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 5,
+                     border: '1px solid var(--gold)', borderRadius: 6, padding: '4px 11px',
+                     fontSize: 'var(--fs-body)', color: 'var(--gold)', textDecoration: 'none' }}>
+            <i className="ti ti-download" style={{ fontSize: 14 }} />
+            {t('fitting.print.sheet')}
+          </a>
+        )}
         <button onClick={() => setOpen(o => !o)} style={{
-          marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)',
+          marginLeft: modelId ? 0 : 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)',
           fontSize: 'var(--fs-body)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
           <i className={`ti ti-chevron-${open ? 'up' : 'down'}`} style={{ fontSize: 14 }} />
           {t(open ? 'fitting.session.collapse' : 'fitting.session.expand')}

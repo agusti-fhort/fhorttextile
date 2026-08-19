@@ -38,9 +38,9 @@ export default function SewEditor({
   const llest = segmentsA.length > 0 && segmentsB.length > 0 && repetits.length === 0
 
   const chip = (actiu, color) => ({
-    background: actiu ? color : 'var(--white)',
+    background: actiu ? color : 'var(--panel)',
     color: actiu ? 'var(--white)' : 'var(--text-main)',
-    border: `1px solid ${actiu ? color : 'var(--border)'}`,
+    border: `1px solid ${actiu ? color : 'var(--line)'}`,
     borderRadius: 4, padding: '0.25rem 0.6rem', cursor: 'pointer',
     fontSize: 'var(--fs-caption)',
   })
@@ -73,7 +73,7 @@ export default function SewEditor({
         <select
           value={tipus} onChange={e => onTipus(e.target.value)}
           style={{ fontSize: 'var(--fs-caption)', padding: '0.2rem',
-                   border: '1px solid var(--border)', borderRadius: 4 }}
+                   border: '1px solid var(--line)', borderRadius: 4 }}
         >
           <option value="casat">{t('pattern.sew_type.casat')}</option>
           <option value="frunzit">{t('pattern.sew_type.frunzit')}</option>
@@ -89,7 +89,7 @@ export default function SewEditor({
               type="number" step="0.1" value={diferencial}
               onChange={e => onDiferencial(e.target.value)}
               style={{ width: 62, fontSize: 'var(--fs-caption)', padding: '0.15rem 0.3rem',
-                       border: '1px solid var(--border)', borderRadius: 4 }}
+                       border: '1px solid var(--line)', borderRadius: 4 }}
             />
             {unitLabel(unit)}
           </label>
@@ -105,7 +105,7 @@ export default function SewEditor({
             onChange={e => onNom(e.target.value)}
             placeholder={t('pattern.taller.sew_name_auto')}
             style={{ width: 150, fontSize: 'var(--fs-caption)', padding: '0.15rem 0.3rem',
-                     border: '1px solid var(--border)', borderRadius: 4 }}
+                     border: '1px solid var(--line)', borderRadius: 4 }}
           />
         </label>
 
@@ -126,7 +126,7 @@ export default function SewEditor({
           color del costat, el mateix que el xip i el tram al canvas. */}
       {trams.length > 0 && repetits.length === 0 && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem',
-                      fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>
+                      fontSize: 'var(--fs-caption)', color: 'var(--text-soft)' }}>
           <span style={{
             width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
             background: costatActiu === 'a' ? KONVA_COL.sewA : KONVA_COL.sewB,
@@ -154,7 +154,7 @@ export default function SewEditor({
         // El buit-estat no és un mur: és la porta al pas que falta.
         <div style={{
           display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap',
-          color: 'var(--text-muted)', padding: '0.2rem 0',
+          color: 'var(--text-soft)', padding: '0.2rem 0',
         }}>
           <i className="ti ti-info-circle" />
           <span style={{ flex: 1 }}>{t('pattern.taller.sew_no_segments')}</span>
@@ -175,7 +175,7 @@ export default function SewEditor({
           {Object.entries(perPeca).map(([peca, llista]) => (
             <div key={peca} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
               <span style={{
-                color: 'var(--text-muted)', fontFamily: 'var(--mono)',
+                color: 'var(--text-soft)', fontFamily: 'var(--mono)',
                 textTransform: 'uppercase', letterSpacing: '0.03em',
               }}>
                 {peca}

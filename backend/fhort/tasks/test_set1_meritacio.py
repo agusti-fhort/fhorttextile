@@ -7,7 +7,13 @@ El que defensen aquests tests és el punt exacte on la diagnosi (§A3) diu que h
 tocar només el guard de runtime deixa que `reconcile_consumption` re-meriti les germanes, i el
 resultat és set=3 amb un retard. Per això els dos punts es proven junts:
 
-  1. Un conjunt de 3 parts, primera tasca a InProgress → UN `ConsumptionRecord` ancorat al SET
+F1.4 · D-10 (05/08/2026) — el GALLET ha canviat, la LLEI no. La meritació ja no es dispara amb
+la primera `→InProgress` (obrir una porta no factura) sinó amb la primera ESCRIPTURA
+(`services_batec.batec_escriptura`). Aquests tests protegeixen «SET = 1 mèrit», que segueix sent
+exactament igual de cert; el que s'ha actualitzat és per on s'hi entra. El test que fixa el gallet
+nou —i el negatiu «obrir no merita»— viu a `test_meritacio_batec.py`.
+
+  1. Un conjunt de 3 parts, primera ESCRIPTURA → UN `ConsumptionRecord` ancorat al SET
      (amb `code_snapshot` = `codi_base`, no el codi intern d'una peça) i CAP als models.
   2. Les tres germanes queden estampades amb `consumption_started_at` — que és exactament el
      que treu les peces del criteri de forat del reconcile.
@@ -24,7 +30,7 @@ from django_tenants.test.cases import TenantTestCase
 from fhort.models_app.models import ConsumptionRecord, GarmentSet, Model
 from fhort.pom.models import GarmentType
 from fhort.tasks.models import Customer, ModelTask, TaskType
-from fhort.tasks.services_c import transition_task
+from fhort.tasks.services_batec import batec_escriptura
 
 
 class MeritacioConjuntTest(TenantTestCase):
@@ -62,8 +68,13 @@ class MeritacioConjuntTest(TenantTestCase):
         return ModelTask.objects.create(model=model, task_type=self.tt, order=0,
                                         status='Pending', assignee=self.prof)
 
+    def _treballa(self, model):
+        """El gest que merita, a F1.4: escriure. El batec obre la tasca si cal (batec fort)."""
+        self._tasca(model)
+        return batec_escriptura(model, self.tt.code, self.prof)
+
     def test_un_sol_albara_ancorat_al_set(self):
-        transition_task(self._tasca(self.peces[0]), 'InProgress', self.prof)
+        self._treballa(self.peces[0])
 
         self.assertEqual(ConsumptionRecord.objects.count(), 1)
         rec = ConsumptionRecord.objects.get()
@@ -78,7 +89,7 @@ class MeritacioConjuntTest(TenantTestCase):
 
     def test_totes_les_germanes_queden_estampades(self):
         """El que treu les peces 02/03 del criteri de forat del reconcile."""
-        transition_task(self._tasca(self.peces[0]), 'InProgress', self.prof)
+        self._treballa(self.peces[0])
         for p in self.peces:
             p.refresh_from_db()
             self.assertIsNotNone(p.consumption_started_at, f'{p.codi_intern} sense marca')
@@ -86,13 +97,13 @@ class MeritacioConjuntTest(TenantTestCase):
         self.assertEqual(ConsumptionRecord.objects.filter(model__isnull=False).count(), 0)
 
     def test_segona_peca_no_merita_de_nou(self):
-        transition_task(self._tasca(self.peces[0]), 'InProgress', self.prof)
-        transition_task(self._tasca(self.peces[1]), 'InProgress', self.prof)
+        self._treballa(self.peces[0])
+        self._treballa(self.peces[1])
         self.assertEqual(ConsumptionRecord.objects.count(), 1)
 
     def test_reconcile_no_re_merita(self):
         """LA TRAMPA de §A3: el reconcile no pot tornar a meritar ni el set ni les germanes."""
-        transition_task(self._tasca(self.peces[0]), 'InProgress', self.prof)
+        self._treballa(self.peces[0])
         self.assertEqual(ConsumptionRecord.objects.count(), 1)
 
         out = StringIO()
@@ -101,8 +112,7 @@ class MeritacioConjuntTest(TenantTestCase):
 
     def test_reconcile_merita_un_conjunt_orfe_un_sol_cop(self):
         """Forat heretat: activitat a les peces i cap marca enlloc → UN albarà, al SET."""
-        t = self._tasca(self.peces[0])
-        transition_task(t, 'InProgress', self.prof)
+        self._treballa(self.peces[0])
         # Simulem l'estat pre-sprint: activitat real, però cap marca ni albarà.
         ConsumptionRecord.objects.all().delete()
         GarmentSet.objects.filter(pk=self.gs.pk).update(consumption_started_at=None)
@@ -147,9 +157,9 @@ class MeritacioModelSolTest(TenantTestCase):
             sequencial=9, customer=self.customer, nom_prenda='Samarreta')
 
     def test_model_sol_merita_com_sempre(self):
-        task = ModelTask.objects.create(model=self.model, task_type=self.tt, order=0,
-                                        status='Pending', assignee=self.prof)
-        transition_task(task, 'InProgress', self.prof)
+        ModelTask.objects.create(model=self.model, task_type=self.tt, order=0,
+                                 status='Pending', assignee=self.prof)
+        batec_escriptura(self.model, self.tt.code, self.prof)
         rec = ConsumptionRecord.objects.get()
         self.assertEqual(rec.model_id, self.model.id)
         self.assertIsNone(rec.garment_set_id)

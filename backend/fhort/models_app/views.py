@@ -17,9 +17,14 @@ from fhort.pom.services import SealedGradingVersionError, _te_regles
 from fhort.pom.grading_regime import (
     CODI_LINEAR_ZERO, MISSATGE_LINEAR_ZERO, es_linear_degenerada,
 )
+# F1.3 — el batec d'escriptura: escriure sobre un model és el senyal de «hi estic
+# treballant» (D-2). El decorador bat NOMÉS en 2xx i mai llança.
+from fhort.tasks.services_batec import (SUP_ESCALAT, SUP_FITXA, SUP_MESURES, SUP_PRESA,
+                                        bat_escriptura, batec_de_request)
 from fhort.pom.models import MeasurementLayer
 from fhort.pom.plausibilitat import CODI_MESURA_FORA_RANG, mesura_fora_de_rang
-from .models import BaseMeasurement, ConsumptionRecord, GarmentSet, Model, ModelFitxer, Watchpoint
+from .models import (BaseMeasurement, ConsumptionRecord, GarmentSet, Model, ModelFitxer,
+                     ModelGarment, Watchpoint)
 from .services_fitxers import DOWNLOAD_SALT, DOWNLOAD_TTL
 from .serializers import (
     BaseMeasurementSerializer,
@@ -133,7 +138,16 @@ class ModelViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_class = ModelFilter
     search_fields = ['codi_intern', 'codi_client', 'nom_prenda']
-    ordering_fields = ['prioritat', 'data_objectiu', 'data_entrada']
+    # A5 · llista canònica (NORMA_LAYOUT §8e): «capçaleres th ORDENABLES amb icona d'ordenació».
+    # Una capçalera que ofereix ordenar i el backend rebutja (DRF ignora en silenci el camp que
+    # no és a la llista) és pitjor que no oferir-ho. S'hi afegeixen NOMÉS els camps que la
+    # graella pinta —tots columnes reals de `Model`, cap anotació ni cap camp calculat—; la
+    # columna «Estat» no hi entra perquè avui no té dada (Kanban comercial pendent).
+    ordering_fields = [
+        'prioritat', 'data_objectiu', 'data_entrada',
+        'codi_intern', 'codi_client', 'nom_prenda', 'collection', 'temporada', 'any',
+        'fase_actual',
+    ]
     ordering = ['-prioritat']
     queryset = Model.objects.all()
 
@@ -503,7 +517,9 @@ class BaseMeasurementViewSet(viewsets.ModelViewSet):
         .all()
     )
     filter_backends = [DjangoFilterBackend, OrderingFilter]
-    filterset_fields = ['model', 'pom', 'is_active', 'origen']
+    # SET-2/T5 — `garment` entra al filtre perquè el client pugui demanar les mesures d'UNA
+    # peça. Sense ell, l'única manera de separar-les seria filtrar a mà a la vora del payload.
+    filterset_fields = ['model', 'pom', 'is_active', 'origen', 'garment']
     ordering_fields = ['updated_at', 'id']
     ordering = ['model', 'id']
 
@@ -522,6 +538,10 @@ class BaseMeasurementViewSet(viewsets.ModelViewSet):
         # _changed_by takes priority over the original created_by for edits.
         serializer.instance._changed_by = self.request.user
         serializer.save()
+        # F1.3 — editar una cel·la de la graella de mides ÉS treballar. El `model_id` no ve del
+        # camí sinó de la fila (`BaseMeasurement.model`), i és per això que aquesta superfície
+        # —la que més s'escriu— no tenia rellotge fins avui.
+        batec_de_request(self.request, serializer.instance.model_id, SUP_MESURES)
 
 
 
@@ -565,7 +585,46 @@ def next_model_ref(request):
     return Response({'codi_intern': codi, 'next_number': next_num})
 
 
-def _validar_ruleset_assignable(rs, *, size_system_id=None, customer_id=None, confirmat=False):
+def comptar_regles_residents(model):
+    """D-31.4 — quantes regles residents cauran si s'assigna un ruleset, i de quin origen.
+
+    → `(total, {origen: n})`. Un dict buit vol dir que no hi ha res a perdre.
+
+    L'origen no és decoratiu: una `IMPORTED` ve del document del client i es pot tornar a
+    importar; una `MANUAL` només existeix al cap de qui la va escriure. Qui confirma
+    l'esborrat ha de poder distingir-les abans de dir que sí, no després.
+    """
+    from django.db.models import Count
+    files = (model.grading_rules.values('origen')
+             .annotate(n=Count('id')).order_by('origen'))
+    per_origen = {f['origen']: f['n'] for f in files}
+    return sum(per_origen.values()), per_origen
+
+
+def comptar_regles_residents_per_garment(model):
+    """SET-2/R11 — les mateixes regles residents, comptades per PEÇA.
+
+    → `{garment: n}`, amb `''` per a la peça mare. Germà de `comptar_regles_residents`,
+    que les compta per ORIGEN: són dos talls del mateix conjunt i cadascun respon una
+    pregunta distinta del diàleg de confirmació —«què perdré» (origen) i «de quina prenda»
+    (peça)—. Es deixen separats a posta: fer que un sol comptador tornés els dos talls
+    hauria canviat l'aritat de retorn de `comptar_regles_residents`, que té QUATRE
+    cridadors i dos en desempaqueten el parell (censat el 2026-08-11:
+    `views.py:679`, `:1110`, `:1142` i `migra_brownie_ruleset.py:142`).
+
+    Per què el diàleg ho necessita: amb dues peces vives, «aquest model té 15 regles
+    pròpies i les perdràs» no diu prou. Perdre-les totes i perdre les d'una sola prenda
+    són dos gestos molt diferents, i qui confirma ha de poder distingir-los ABANS de dir
+    que sí, no després — el mateix argument que va fer néixer `per_origen`.
+    """
+    from django.db.models import Count
+    files = (model.grading_rules.values('garment')
+             .annotate(n=Count('id')).order_by('garment'))
+    return {f['garment']: f['n'] for f in files}
+
+
+def _validar_ruleset_assignable(rs, *, size_system_id=None, customer_id=None, confirmat=False,
+                                model=None, confirmat_residents=False, preservades=0):
     """D1 — porta d'entrada de l'assignació d'un GradingRuleSet a un model.
 
     Assignar un ruleset dispara un wipe-and-recreate de les regles residents
@@ -581,6 +640,18 @@ def _validar_ruleset_assignable(rs, *, size_system_id=None, customer_id=None, co
       - customer divergent        → AVÍS CONSCIENT (409) fins que arribi `confirmat`.
                                     MAI bloqueig: aplicar la forma d'un altre client és
                                     un flux de taller legítim.
+      - regles residents          → AVÍS CONSCIENT (409) fins que arribi `confirmat_residents`
+                                    (D-31.4). Tampoc bloqueig: migrar un model al catàleg és
+                                    legítim; el que no és legítim és fer-ho sense saber-ho.
+
+    ⚠️ `model` és opcional PERQUÈ EL CAMÍ DE CREACIÓ NO EN TÉ: un model que encara no existeix
+    no pot tenir regles residents, i el cas D-31.4 no s'hi ha d'activar mai.
+
+    ⚠️ ELS DOS FLAGS SÓN SEPARATS I NO ES REUTILITZEN L'UN PER L'ALTRE. Acceptar el grading
+    d'un altre client no és acceptar que s'esborrin 88 regles pròpies. Amb un sol flag, un
+    consentiment n'arrossegaria l'altre en silenci — i el silenci és exactament el defecte que
+    D-31.4 tanca. Si els dos casos concorren, es retornen d'un en un: el client confirma, torna
+    a demanar, i troba el segon. Cap consentiment implícit.
     """
     from fhort.pom.models import GradingRule
 
@@ -618,6 +689,59 @@ def _validar_ruleset_assignable(rs, *, size_system_id=None, customer_id=None, co
             'message': (f"El grading «{rs.nom}» és d'un altre client. Es pot fer servir "
                         f"igualment, però és una decisió conscient: confirma-ho per continuar."),
         }, 409)
+
+    # D-31.4 — LES REGLES RESIDENTS QUE CAURAN. Va l'ÚLTIM dels quatre a posta: si el ruleset
+    # no és assignable (buit, run divergent) no té sentit avisar del que s'hi perdria, perquè
+    # no s'arribarà a assignar mai.
+    #
+    # 6.1 — `preservades` són les `MANUAL` d'autoria que sobreviuran al wipe. Es resten del que
+    # es demana permís per destruir, i si no queda res a destruir NO ES DEMANA RES: el permís i
+    # la destrucció han de mirar el mateix (F1-bis), i això val en els dos sentits.
+    if model is not None and not confirmat_residents:
+        total_abans, per_origen = comptar_regles_residents(model)
+        total = total_abans - preservades
+        if total > 0:
+            per_origen = dict(per_origen)
+            if preservades:
+                restant = per_origen.get('MANUAL', 0) - preservades
+                if restant > 0:
+                    per_origen['MANUAL'] = restant
+                else:
+                    per_origen.pop('MANUAL', None)
+            n_imported = per_origen.get('IMPORTED', 0)
+            detall = ' · '.join(f'{n} {o}' for o, n in sorted(per_origen.items()))
+            frase_imported = (
+                f" {n_imported} d'elles vénen del document del client (IMPORTED)."
+                if n_imported else '')
+            return ({
+                'conflict': True,
+                'tipus': 'esborrat_residents',
+                'codi': 'GRADING_RESIDENTS_WIPE',
+                'grading_rule_set_id': rs.id,
+                'grading_rule_set_nom': rs.nom,
+                'model_id': model.id,
+                'residents': total,
+                'per_origen': per_origen,
+                # SET-2/R11 — DE QUINA PEÇA parla cadascuna. Clau NOVA i additiva, com
+                # `preservades`: el front que no la conegui segueix llegint `residents`
+                # i `per_origen` com sempre.
+                'per_garment': comptar_regles_residents_per_garment(model),
+                # 6.1 — les que es queden. Clau NOVA i additiva: el front que no la conegui
+                # segueix llegint `residents` i `per_origen` com sempre.
+                'preservades': preservades,
+                # Redundant amb `per_origen` I A POSTA: la llei diu que IMPORTED s'ha de poder
+                # distingir, i una clau de primer nivell no es pot passar per alt llegint el
+                # payload de pressa. Perdre una regla escrita a mà no és el mateix que perdre'n
+                # una que es pot tornar a importar.
+                'imported': n_imported,
+                'message': (
+                    f"Aquest model té {total} regles de graduació pròpies ({detall}). "
+                    f"Assignar-li «{rs.nom}» les esborrarà i el model passarà a graduar "
+                    f"amb les del joc.{frase_imported}"
+                    + (f" Les {preservades} escrites a mà (MANUAL) es conserven."
+                       if preservades else '')
+                    + " Confirma-ho per continuar."),
+            }, 409)
 
     return None
 
@@ -955,6 +1079,20 @@ def update_model_step2(request, model_id):
         return Response({'error': 'Model no trobat'}, status=404)
 
     d = request.data
+    # ── F1-bis (Agus, 06/08 vespre) · EL PERMÍS I LA DESTRUCCIÓ MIREN EL MATEIX ──────────────
+    # EL JOC QUE EL MODEL TENIA ABANS que el resolutor toqui res. Sense aquesta foto, «ha
+    # canviat el joc?» no es pot respondre —a partir del `setattr` de sota el model ja porta el
+    # valor nou— i era exactament aquí que s'obria el forat: el permís (409 de D-31.4) mirava el
+    # PAYLOAD (`d.get('grading_rule_set_id')`) i la destrucció mirava l'ESTAT DEL MODEL
+    # (`model.grading_rule_set_id`). El predicat destructiu era el més ample, o sigui que
+    # QUALSEVOL `update-step2` sobre un model amb joc —un canvi de talla base, un canvi de
+    # construcció, res a veure amb la graduació— reescrivia les residents i es menjava les
+    # `origen='MANUAL'` sense 409, sense Watchpoint i sense que ningú hagués parlat de graduar.
+    grs_abans = model.grading_rule_set_id
+    # 6.1 — l'OBJECTE, no només l'id: per decidir si les `MANUAL` són autoria cal llegir-ne
+    # l'`origen`, i s'ha de capturar ABANS del `setattr` (a partir d'aquí l'atribut ja resol el
+    # joc NOU). `None` si el model no en tenia cap, i és informació, no absència.
+    grs_abans_obj = model.grading_rule_set
     # Pas 5A — reutilitza el mateix resolutor que la creació (inclou garment_type_item_id).
     # S24b: se li passa el `model` perquè pugui ordenar el run contra el SizeSystem que ja té
     # quan el PATCH porta `size_run` sense `size_system_id`.
@@ -966,56 +1104,190 @@ def update_model_step2(request, model_id):
     if d.get('collection') is not None:
         model.collection = d['collection'] or ''
 
+    # ── LES DUES PORTES QUE DESTRUEIXEN REGLES, i el que les separa de les que no en toquen cap.
+    # `canvia_joc` és el predicat ÚNIC: el joc entra al payload **i** el valor és un altre. Un
+    # PATCH que no parla de graduació —o que reenvia el joc que el model ja té— no toca cap regla.
+    joc_demanat = d.get('grading_rule_set_id') or None
+    desacobla_joc = 'grading_rule_set_id' in d and not joc_demanat and bool(grs_abans)
+    canvia_joc = bool(joc_demanat) and model.grading_rule_set_id != grs_abans
+    confirmat_residents = bool(d.get('confirmar_esborrat_residents'))
+    residents_perdudes = (0, {})
+    motiu_watchpoint = None
+    # 6.1 — els POMs de les `MANUAL` que sobreviuran. Buit per defecte: la porta de desacoblar
+    # («Sense graduació») segueix esborrant-ho tot, com abans. El gest hi diu explícitament que
+    # el model es queda SENSE graduació, i deixar-hi residents òrfenes el faria graduar igual
+    # (`_load_grading_rules` és all-or-nothing) — que és el contrari del que l'usuari ha demanat.
+    poms_preservats = set()
+
     # WIZARD pas 4 «Sense graduació» en EDICIÓ: buidatge EXPLÍCIT del ruleset. El resolutor només
     # ASSIGNA quan grading_rule_set_id és truthy (mai neteja); aquí, si la clau ve present i buida
     # (null), es desacobla la graduació i s'esborren les regles residents (queda estat "sense graduació",
     # vàlid). Idempotent i acotat a la intenció explícita del pas 4 — cap efecte si la clau no ve.
-    if 'grading_rule_set_id' in d and not d.get('grading_rule_set_id') and model.grading_rule_set_id:
+    #
+    # D-31.4 · LA SEGONA PORTA (Agus, 06/08 vespre). «Sense graduació» diu que desacobla el JOC;
+    # no diu que s'endugui les regles que el tècnic ha escrit A MÀ, i qui prem el botó espera
+    # quedar-se-les. Com que el gest les mata, ha de demanar permís amb el recompte al davant —i
+    # no pot sortir més barat que canviar de joc, que ja el demanava.
+    # El `tipus` és el MATEIX ('esborrat_residents') A POSTA: el fet és idèntic —les residents
+    # cauen— i el front ja el sap gestionar (`useConfirmacioRuleset.FLAG_PER_TIPUS`, mateix flag,
+    # mateix resum per origen). El que canvia és la CAUSA, i la causa viu al `message`, que el
+    # redacta el backend perquè és qui sap el recompte.
+    if desacobla_joc:
+        _total, _per_origen = comptar_regles_residents(model)
+        if _total and not confirmat_residents:
+            _detall = ' · '.join(f'{n} {o}' for o, n in sorted(_per_origen.items()))
+            _n_imported = _per_origen.get('IMPORTED', 0)
+            return Response({
+                'conflict': True,
+                'tipus': 'esborrat_residents',
+                'codi': 'GRADING_RESIDENTS_WIPE',
+                'model_id': model.id,
+                'residents': _total,
+                'per_origen': _per_origen,
+                # SET-2/R11 — el MATEIX camp que l'altre 409 d'aquest `tipus`. Les dues
+                # portes alimenten el MATEIX diàleg (`useConfirmacioRuleset`, mateix
+                # `tipus` a posta), o sigui que servir-lo en una i no en l'altra deixaria
+                # el diàleg mut segons per on s'hi hagi arribat.
+                'per_garment': comptar_regles_residents_per_garment(model),
+                'imported': _n_imported,
+                'message': (
+                    f"Aquest model té {_total} regles de graduació pròpies ({_detall}). "
+                    f"Deixar-lo sense graduació les esborrarà totes."
+                    + (f" {_n_imported} d'elles vénen del document del client (IMPORTED)."
+                       if _n_imported else '')
+                    + " Confirma-ho per continuar."),
+            }, status=409)
         model.grading_rule_set = None
         model.grading_rules.all().delete()
+        residents_perdudes = (_total, _per_origen)
+        motiu_watchpoint = 'desacoblat_graduacio'
 
     # D1 — valida ABANS de desar i abans del wipe-and-recreate. Es valida contra els valors
     # POSTERIORS a l'assignació (el mateix PATCH pot canviar size_system), i només quan el
-    # ruleset ve al payload: re-desar un model sense tocar la graduació no ha de rebotar.
-    if d.get('grading_rule_set_id') and model.grading_rule_set_id:
+    # ruleset CANVIA de debò: re-desar un model sense tocar la graduació —o reenviant el joc
+    # que ja hi és— no ha de rebotar ni ha de destruir res.
+    if canvia_joc:
+        # D-31.4 — el recompte es pren AQUÍ, abans de validar i abans de desar: a partir de
+        # `model.save()` el wipe-and-recreate de :1001 ja les haurà esborrades i el rastre no
+        # podria dir quantes n'hi havia.
+        residents_perdudes = comptar_regles_residents(model)
+        motiu_watchpoint = 'esborrat_residents'
+        # 6.1 — quines sobreviuran. Es passa al validador perquè EL PERMÍS I LA DESTRUCCIÓ
+        # MIRIN EL MATEIX (la llei de F1-bis): demanar permís per esborrar 4 regles que no
+        # s'esborraran és la mateixa mentida, amb el signe canviat.
+        from fhort.models_app.services import poms_manual_a_preservar
+        poms_preservats = poms_manual_a_preservar(model, grs_abans_obj)
         _err = _validar_ruleset_assignable(
             model.grading_rule_set,
             size_system_id=model.size_system_id,
             customer_id=model.customer_id,
             confirmat=bool(d.get('confirmar_altre_client')),
+            model=model,
+            confirmat_residents=confirmat_residents,
+            preservades=len(poms_preservats),
         )
         if _err is not None:
             payload, status_code = _err
             return Response(payload, status=status_code)
 
     model.save()
-    # PG-2 Cas B: re-materialitza si hi ha ruleset (wipe-and-recreate cobreix canvi de profile).
+    # PG-2 Cas B: re-materialitza NOMÉS quan el joc canvia (F1-bis). El wipe-and-recreate cobreix
+    # el canvi de profile; el que no pot cobrir és un PATCH que no parla de graduació.
     # L'atomic embolcalla només la materialització → si peta, el model queda sense MGR i gradua
     # pel fallback PG-1 (ruleset extern). Degradació gràcil INTENCIONAL, no descuit.
     n_regles = None
-    if model.grading_rule_set_id:
+    if canvia_joc:
         from django.db import transaction
         from fhort.models_app.services import (materialize_model_grading_rules,
                                                origen_mgr_des_de_ruleset)
         with transaction.atomic():
             n_regles = materialize_model_grading_rules(
                 model, model.grading_rule_set.regles.all(),
-                origen=origen_mgr_des_de_ruleset(model.grading_rule_set))
+                origen=origen_mgr_des_de_ruleset(model.grading_rule_set),
+                joc_anterior=grs_abans_obj)
         # R1 — el retorn d'aquesta funció es DESCARTAVA. Materialitzar 0 regles (ruleset buit)
         # esborrava les residents i tornava un 200 mut: exactament el que va buidar el 163.
         # Amb la validació D1 això ja no hauria de poder passar per l'endpoint; si passa igual
         # (dades tocades per un altre camí), que quedi rastre i que la resposta ho digui.
+        # 6.1 — «0 materialitzades» ja NO vol dir «sense residents»: pot voler dir que totes les
+        # del joc queien sobre POMs que el tècnic havia escrit a mà, i que per tant hi manen. Un
+        # rastre que menteix és pitjor que cap rastre, i aquí el matís canvia el diagnòstic.
         if n_regles == 0:
             import logging
+            _cua = (f"— totes les del joc cauen sobre POMs amb regla MANUAL preservada "
+                    f"({len(poms_preservats)}), que és qui gradua."
+                    if poms_preservats else
+                    "— el model queda SENSE regles residents.")
             logging.getLogger(__name__).warning(
                 f"update_model_step2: model {model.codi_intern} (id={model.id}) ha "
                 f"materialitzat 0 regles des del GradingRuleSet {model.grading_rule_set_id} "
-                f"— el model queda SENSE regles residents."
+                + _cua
             )
+    # D-31.4 · EL RASTRE. La confirmació és una decisió, i una decisió que destrueix feina ha de
+    # deixar constància que sobrevisqui a la sessió del navegador. Watchpoint i no un log: el log
+    # el llegeix qui el va a buscar, i el Watchpoint viatja AMB EL MODEL a través dels gates, que
+    # és on el trobarà el tècnic que d'aquí a un mes es pregunti on han anat les seves regles.
+    # Neix `open` (default del model) i el tanca qui hagi comprovat que la graduació nova és bona.
+    n_residents, per_origen = residents_perdudes
+    # 6.1 — el rastre ha de dir el que ha passat, no el que hauria passat abans. `n_residents`
+    # és el recompte PREVI (i es queda: és el que hi havia); el que s'ha destruït de debò és
+    # aquest, i el que s'ha salvat surt a part. Sense aquesta resta, el Watchpoint hauria
+    # començat a dir «esborrades 2» d'un gest que n'ha esborrat 1.
+    n_preservades = len(poms_preservats)
+    n_esborrades = n_residents - n_preservades
+    # …i la condició mira les ESBORRADES, no les que hi havia: un Watchpoint existeix per
+    # respondre «on han anat les meves regles», i si no n'ha anat cap enlloc no hi ha res a
+    # respondre. Abans de 6.1 les dues xifres eren sempre la mateixa i la distinció no existia.
+    if n_esborrades:
+        from fhort.models_app.models import Watchpoint
+        _perfil = getattr(request.user, 'profile', None)
+        _detall = ' · '.join(f'{n} {o}' for o, n in sorted(per_origen.items()))
+        if motiu_watchpoint == 'desacoblat_graduacio':
+            # La segona porta deixa el MATEIX rastre que la primera: el tècnic que d'aquí a un
+            # mes es pregunti on han anat les seves regles ha de trobar la resposta al model,
+            # tant si les va matar un canvi de joc com si les va matar un «Sense graduació».
+            _text = (f"Desacoblada la graduació del model (joc #{grs_abans}), esborrant "
+                     f"{n_residents} regles pròpies ({_detall}). El model queda SENSE "
+                     f"graduació. Verifica-ho abans d'entregar.")
+            _dades = {
+                'tipus': 'desacoblat_graduacio',
+                'grading_rule_set_id': grs_abans,
+                'residents': n_residents,
+                'per_origen': per_origen,
+                'imported': per_origen.get('IMPORTED', 0),
+            }
+        else:
+            _text = (f"Assignat el joc de regles «{model.grading_rule_set.nom}» "
+                     f"(#{model.grading_rule_set_id}) esborrant {n_esborrades} regles pròpies "
+                     f"del model ({_detall})."
+                     + (f" {n_preservades} escrites a mà (MANUAL) s'han conservat."
+                        if n_preservades else '')
+                     + " Verifica la graduació abans d'entregar.")
+            _dades = {
+                'tipus': 'esborrat_residents',
+                'grading_rule_set_id': model.grading_rule_set_id,
+                'grading_rule_set_nom': model.grading_rule_set.nom,
+                # `residents` = les que hi HAVIA (l'acta d'abans, com sempre).
+                # `esborrades`/`preservades` = què n'ha passat (6.1).
+                'residents': n_residents,
+                'esborrades': n_esborrades,
+                'preservades': n_preservades,
+                'per_origen': per_origen,
+                'imported': per_origen.get('IMPORTED', 0),
+                'regles_materialitzades': n_regles,
+            }
+        Watchpoint.objects.create(model=model, task=None, created_by=_perfil,
+                                  text=_text, dades=_dades)
+
     return Response({
         'id': model.id,
         'codi_intern': model.codi_intern,
         'regles_materialitzades': n_regles,
+        # Que la resposta ho digui: qui ha confirmat ha de veure què ha passat de debò, no
+        # només que la crida ha anat bé. 6.1: `residents_esborrades` passa a ser el que s'ha
+        # esborrat DE DEBÒ, i les salvades van a la clau nova.
+        'residents_esborrades': n_esborrades,
+        'residents_preservades': n_preservades,
     })
 
 
@@ -1369,6 +1641,41 @@ def copiar_de_model_view(request, model_id, src_id):
 
     warnings = []
 
+    # ── SET-2/T10 · LES PECES VIATGEN PRIMER, i abans que res que les anomeni.
+    #
+    # `BaseMeasurement.garment` ja viatja des de T5 («la còpia COPIA»), però el codi que
+    # hi ha a dins no volia dir res al destí: `ModelGarment` no es copiava, o sigui que
+    # el model copiat es quedava amb mesures de la peça '02' i CAP peça '02' — codis
+    # orfes, i amb ells els overrides de run/ruleset/talla base de la peça, que
+    # silenciosament queien als del model.
+    #
+    # VIATGEN AMB QUALSEVOL DELS TRES FLAGS que les poden anomenar (run, valors,
+    # graduació) i no amb un de sol: són l'ESQUELET del model —quines prendes té—, i
+    # copiar-ne les mesures o la configuració sense elles és el que fabrica l'orfe.
+    # `copy_files` no hi entra: un croquis no parla de peces.
+    #
+    # Idempotent per `(model, codi)`, com la unicitat: una segona còpia ACTUALITZA la
+    # peça existent al destí en comptes de petar. No s'esborra cap peça que el destí
+    # tingui i l'origen no: esborrar-la deixaria òrfenes les SEVES mesures, i aquesta
+    # porta és MUDA (no demana permís) — el que no sap desfer, no ho desfà.
+    if copy_run or copy_values or copy_grading:
+        for peca in src.garments.all():
+            ModelGarment.objects.update_or_create(
+                model=dst, codi=peca.codi,
+                defaults={
+                    'nom': peca.nom,
+                    'ordre': peca.ordre,
+                    # Els overrides van SENCERS, NULL inclòs: un NULL no és «no ho sé»,
+                    # és «hereta del model», i és una declaració tan copiable com
+                    # qualsevol altra. Copiar-ne només els informats convertiria una
+                    # herència en una declaració.
+                    'size_system_id': peca.size_system_id,
+                    'grading_rule_set_id': peca.grading_rule_set_id,
+                    'size_run_model': peca.size_run_model,
+                    'base_size_label': peca.base_size_label,
+                },
+            )
+
     # ── copy_run. El destí amb mesures pròpies és sobirà del seu marc: el flag s'ignora.
     dst_te_mesures = BaseMeasurement.objects.filter(model=dst).exists()
     run_copied = False
@@ -1429,12 +1736,15 @@ def copiar_de_model_view(request, model_id, src_id):
             # literal. Un model copiat d'un altre ha de tenir les mateixes mesures, i «les
             # mateixes» inclou de quina matèria i de quina repetició parla cadascuna.
             existent = BaseMeasurement.objects.filter(
-                model=dst, pom_id=bm.pom_id, capa=bm.capa, instancia=bm.instancia).first()
+                model=dst, pom_id=bm.pom_id, capa=bm.capa, instancia=bm.instancia,
+                garment=bm.garment).first()
 
             if existent is None:
                 nova = BaseMeasurement(
                     model=dst, pom_id=bm.pom_id,
-                    capa=bm.capa, instancia=bm.instancia,
+                    # SET-2/T5 — el tercer eix segueix el mateix rastre: la còpia COPIA, i
+                    # «les mateixes mesures» inclou de quina PRENDA parla cadascuna.
+                    capa=bm.capa, instancia=bm.instancia, garment=bm.garment,
                     base_value_cm=bm.base_value_cm if te_valor else None,
                     # `notes` NO viatja: és text lliure escrit SOBRE l'altre model (p.ex. «el
                     # proveïdor va confirmar 62 cm en aquesta peça») i copiat aquí seria una
@@ -1473,16 +1783,49 @@ def copiar_de_model_view(request, model_id, src_id):
         #    re-materialitzar. NO es copien overrides ni watchpoints.
         if copy_grading and src.grading_rule_set_id:
             from fhort.models_app.services import (materialize_model_grading_rules,
-                                                   origen_mgr_des_de_ruleset)
+                                                   origen_mgr_des_de_ruleset,
+                                                   poms_manual_a_preservar)
+            from fhort.models_app.services_garment import valor_efectiu
+            # 6.1 — el joc que el DESTÍ tenia, capturat abans del `save()` (a partir d'aquí ja
+            # porta el de l'origen). Aquesta porta és MUDA —no compta residents, no demana
+            # permís, no deixa Watchpoint—, i per això la preservació hi val doble: és l'única
+            # protecció que hi arriba.
+            grs_dst_abans = dst.grading_rule_set
+            n_preservades_dst = len(poms_manual_a_preservar(dst, grs_dst_abans))
             dst.grading_rule_set_id = src.grading_rule_set_id
             dst.save(update_fields=['grading_rule_set'])
             grading_set = src.grading_rule_set_id
+            # SET-2/T10 — UNA MATERIALITZACIÓ PER PEÇA. `materialize_model_grading_rules`
+            # ja fa el wipe per `(model, garment)` des de T3, però aquí se li deia una
+            # sola vegada amb el `garment` per defecte: només la MARE quedava sembrada, i
+            # les peces del model copiat es quedaven sense cap regla resident —mudes— o,
+            # pitjor, amb les que el destí ja tingués d'una còpia anterior.
+            #
+            # Cada peça se sembra des del SEU joc EFECTIU (`valor_efectiu`, el punt únic
+            # de D5): si la peça no en declara cap, hereta el del model —que és el que
+            # acabem de copiar de l'origen— i queda sembrada igual que la mare.
             n_regles = materialize_model_grading_rules(
                 dst, src.grading_rule_set.regles.all(),
-                origen=origen_mgr_des_de_ruleset(src.grading_rule_set))
-            if n_regles == 0:
+                origen=origen_mgr_des_de_ruleset(src.grading_rule_set),
+                joc_anterior=grs_dst_abans)
+            for peca in dst.garments.all():
+                joc_peca = valor_efectiu(dst, peca, 'grading_rule_set')
+                if joc_peca is None:
+                    continue
+                n_regles += materialize_model_grading_rules(
+                    dst, joc_peca.regles.all(),
+                    origen=origen_mgr_des_de_ruleset(joc_peca),
+                    joc_anterior=grs_dst_abans, garment=peca.codi)
+            if n_preservades_dst:
+                warnings.append(
+                    f"{n_preservades_dst} regles de graduació escrites a mà (MANUAL) al model "
+                    f"de destí s'han conservat i manen sobre les del joc copiat.")
+            if n_regles == 0 and not n_preservades_dst:
                 # R1 (el forat que va buidar el 163): un ruleset buit esborra les residents i
                 # torna un 200 mut. Aquí no: queda al log i a la resposta.
+                # 6.1 — amb MANUAL preservades, «0 materialitzades» no vol dir «sense
+                # graduació»: vol dir que mana el tècnic. El warning d'això ja l'ha posat la
+                # preservació més amunt, i repetir-hi «SENSE regles residents» seria mentir.
                 logging.getLogger(__name__).warning(
                     "copiar_de_model: model %s (id=%s) ha materialitzat 0 regles des del "
                     "GradingRuleSet %s — el model queda SENSE regles residents.",
@@ -1555,6 +1898,7 @@ def copiar_de_model_view(request, model_id, src_id):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@bat_escriptura(SUP_MESURES)
 def close_table_view(request, model_id):
     """POST /api/v1/models/<id>/tancar-taula/ — Sprint B · tancar la taula de mides.
 
@@ -1579,11 +1923,12 @@ def close_table_view(request, model_id):
     from fhort.pom.services import get_or_create_size_fitting, close_base
     profile = getattr(request.user, 'profile', None)
     try:
-        # Atòmic (B4): si es tanca la taula, es tanca la tasca. Tot o res.
+        # Atòmic (B4). F1.2 — «tancar taula» tanca la TAULA (close_base), no la tasca: el Stop
+        # humà és l'únic que tanca (D-2). Aquí la tasca només s'assegura oberta.
         with transaction.atomic():
             sf = get_or_create_size_fitting(model, request.user.id)
             result = close_base(sf.id, request.user.id)
-            pom_task = _close_pom_task_for_model(model, profile)
+            pom_task = _assegura_pom_task_oberta(model, profile)
     except ValueError as e:
         return Response({'error': str(e)}, status=400)
     except Exception as e:
@@ -1594,29 +1939,42 @@ def close_table_view(request, model_id):
     return Response({'sf_id': sf.id, 'pom_task': pom_task, **result})
 
 
-def _close_pom_task_for_model(model, profile):
-    """B4 · en tancar la taula, la tasca POM del model passa a Done via transition_task
-    (l'única porta: status=Done, finished_at, tanca timer, record_actual_time, log).
-    Done només és vàlid des de InProgress → si està Pending/Paused, hi passem primer.
-    Sense tasca pom → no fa res. Ja Done → idempotent."""
-    from fhort.tasks.models import ModelTask
-    from fhort.tasks.services_c import transition_task
+def _assegura_pom_task_oberta(model, profile):
+    """F1.2 · DESAR NO TANCA MAI (D-2). Desar assegura que la tasca està OBERTA.
 
-    task = (ModelTask.objects
-            .filter(model=model, task_type__code='pom')
-            .order_by('id').first())
+    Fins avui aquesta funció tancava la tasca `pom` a `Done` a cada desat, i el resultat mesurat
+    era el ping-pong: 28 de 49 transicions `→Done` eren repeticions sobre una tasca ja tancada, i
+    tot el que el tècnic feia entre «Gravar» i el gest següent no tenia rellotge (la feina seguia,
+    la tasca no). El Stop humà és ara l'ÚNIC que tanca.
+
+    Obrir-si-cal no és un efecte secundari: **és el batec fort**. Qui desa està treballant, i una
+    tasca `Pending`/`Paused` que rep un desat ha d'estar `InProgress`.
+
+    Retorna `{'oberta': bool, 'reason': str|None, 'task_id': int|None}`. Cap consumidor de
+    frontend llegeix aquest dict (verificat); qui el llegeix és `gravar_pom_view`, per al seu
+    gate `no_pom_task`.
+    """
+    from fhort.tasks.services_c import TransitionError, transition_task
+    from fhort.tasks.services_r import tasca_vigent
+
+    # F1.0 — abans: `.order_by('id').first()`, o sigui LA MÉS ANTIGA. Amb una ronda oberta això
+    # tancava la tasca de la ronda 1 mentre el tècnic treballava la 2 (§S-4 de la diagnosi).
+    task = tasca_vigent(model, 'pom')
     if not task:
-        return {'closed': False, 'reason': 'no_pom_task'}
-    if task.status == 'Done':
-        return {'closed': False, 'reason': 'already_done', 'task_id': task.id}
+        return {'oberta': False, 'reason': 'no_pom_task', 'task_id': None}
+    if task.status == 'InProgress':
+        return {'oberta': True, 'reason': 'ja_oberta', 'task_id': task.id}
 
-    # Done només es pot assolir des de InProgress (ALLOWED a services_c). Pending/Paused
-    # hi passen primer perquè la transició no peti.
-    if task.status in ('Pending', 'Paused'):
+    # Pending/Paused → oberta. Done → reobertura (rectificació): és una decisió del tècnic que
+    # ha tornat a desar sobre feina tancada, i el log l'ha de veure com el que és.
+    try:
         transition_task(task, 'InProgress', profile)
-        task.refresh_from_db()
-    transition_task(task, 'Done', profile)
-    return {'closed': True, 'task_id': task.id}
+    except TransitionError as e:
+        # L'única paret real aquí és l'albarà emès (D-5): no es reobre, s'obre una RONDA. Es
+        # retorna el `code` perquè la porta HTTP pugui dir-ho i el front oferir la sortida.
+        return {'oberta': False, 'reason': getattr(e, 'code', None) or 'transicio_refusada',
+                'task_id': task.id, 'error': str(e)}
+    return {'oberta': True, 'reason': 'oberta', 'task_id': task.id}
 
 
 @api_view(['GET'])
@@ -1636,9 +1994,24 @@ def measurements_table_view(request, model_id):
     base_measurements = BaseMeasurement.objects.filter(
         model=model,
         is_active=True,
-    ).select_related('pom', 'pom__pom_global').order_by('ordre', 'pom__codi_client')
+    ).select_related('pom', 'pom__pom_global').order_by(
+        'ordre', 'pom__codi_client', 'capa', 'instancia')
 
+    # C4 — EL MAPA DE GRADUATS CREIX A LA IDENTITAT SENCERA.
+    #
+    # Aquesta vista MAI no va tenir àncora al queryset: les files sempre han sortit totes
+    # (una per `BaseMeasurement`). El seu defecte era l'altre —i pitjor de veure—: `graded_by_pom`
+    # i `deltas` són diccionaris per `pom_id` pelat, o sigui que amb dues germanes la pantalla
+    # ensenyava LES DUES FILES i totes dues llegien la mateixa entrada. Una de les dues sortia
+    # amb el graduat i el delta de la seva germana com si fossin seus.
+    #
+    # Absència vs. valor equivocat: les cinc superfícies ancorades AMAGAVEN; aquesta COL·LAPSAVA.
+    # És pitjor perquè no hi ha res a la pantalla que suggereixi que falta o sobra res.
     graded_by_pom = {}
+    # T4 — declarades FORA del `try`: si la resolució de la versió peta, la resposta ha de sortir
+    # igualment amb la data a `None`, no amb un `NameError` (mateixa acta que `_regla_de`).
+    grading_version_data = None
+    grading_version_number = None
     try:
         from fhort.fitting.models import GradedSpec
         from fhort.fitting.services import (
@@ -1650,24 +2023,53 @@ def measurements_table_view(request, model_id):
         if sf:
             gv = vigent_grading_version(sf)
             if gv:
+                # Q8-ter/T4 — LA DATA DE LA CORBA VIGENT. La fitxa ha de dir de QUIN DIA és cada
+                # taula, i la de graduació no en té cap altra: la seva font és aquesta versió, i
+                # `data` és quan es va crear (l'última propagació la torna a crear —
+                # `bump_grading_version_and_generate`—, o sigui que és la marca de l'últim canvi).
+                # Camp ADDITIU: `gv` ja es resolia aquí mateix per omplir `graded_by_pom`, o sigui
+                # que no hi ha ni una consulta nova.
+                grading_version_data = gv.data.isoformat() if gv.data else None
+                grading_version_number = gv.version_number
                 for spec in GradedSpec.objects.filter(grading_version=gv):
-                    pom_id = spec.pom_id
-                    if pom_id not in graded_by_pom:
-                        graded_by_pom[pom_id] = {}
-                    graded_by_pom[pom_id][spec.size_label] = (
+                    # SET-2/T6a — l'eix de la peça entra al mapa alhora que a la `clau` de la
+                    # fila (just a sota): si un cresqués i l'altre no, la fila de la 02
+                    # buscaria amb quatre trams en un mapa de tres i es quedaria sense corba
+                    # graduada, o —pitjor— dues peces es disputarien la mateixa entrada i una
+                    # ensenyaria la corba de l'altra com si fos seva.
+                    ident = (spec.pom_id, spec.capa, spec.instancia, spec.garment)
+                    if ident not in graded_by_pom:
+                        graded_by_pom[ident] = {}
+                    graded_by_pom[ident][spec.size_label] = (
                         float(spec.graded_value_cm) if spec.graded_value_cm is not None else None
                     )
     except Exception:
         pass
 
-    # Règim per POM (logica/increments/break) per a l'editor propagat: resolutor canònic
+    # Règim per PEÇA I POM (logica/increments/break) per a l'editor propagat: resolutor canònic
     # (ModelGradingRule resident → fallback GradingRule del rule_set), batched una sola vegada.
-    rules_by_pom = {}
+    #
+    # ✅ SET-2/F1 · Q1-bis — LA CINQUENA BOCA, censada i tancada. L'acta de
+    # `_load_grading_rules` (`pom/services.py:774-806`) n'enumerava els consumidors i deia que
+    # la línia que separa els adaptats dels que es queden NO és l'app on viuen sinó **si
+    # escriuen**. Aquesta es va classificar com a presentació, i no ho és del tot: aquesta
+    # taula és la FONT de l'Escalat, i el que la pantalla pinta és el que el tècnic edita
+    # després. Amb la llei de la mare a la fila de la 02, la pantalla i el motor
+    # (`generate_graded_specs`, que ja reparteix per peça des de T4) deien coses diferents
+    # sobre la mateixa fila.
+    # ⚠️ `_regla_de` s'importa FORA del `try`: és una funció pura i, si quedés a dins, un
+    # error de càrrega de les regles la deixaria sense definir i la construcció de files
+    # petaria amb un `NameError` — canviar un règim buit per un 500.
+    from fhort.pom.services import _regla_de
+    rules_by_garment = {}
     try:
-        from fhort.pom.services import _load_grading_rules
-        rules_by_pom = _load_grading_rules(model)
+        from fhort.pom.services import _load_grading_rules_per_garment
+        rules_by_garment = _load_grading_rules_per_garment(model)
     except Exception:
-        rules_by_pom = {}
+        rules_by_garment = {}
+    # P0.5d — per poder dir si la regla que serveix cada fila viu al MODEL o al JOC. El
+    # resolutor torna l'una o l'altra classe i aquí és l'únic lloc on encara se sap.
+    from fhort.models_app.models import ModelGradingRule
 
     # LES REGLES QUE AQUESTA TAULA DIU SÓN LES DEL MODEL, I NOMÉS LES SEVES (31/07).
     #
@@ -1687,6 +2089,7 @@ def measurements_table_view(request, model_id):
         return float(v) if v is not None else None
 
     # C3 — nomenclatura del CLIENT del model, mateix resolutor que la resta de superfícies.
+    from fhort.pom.identitat import clau_mesura
     from fhort.pom.nomenclatura import alies_per_pom, camps_de
     alias_by_pom = alies_per_pom(model.customer_id)
 
@@ -1694,11 +2097,24 @@ def measurements_table_view(request, model_id):
     for bm in base_measurements:
         pom = bm.pom
         pg = getattr(pom, 'pom_global', None)
-        rule = rules_by_pom.get(pom.id)
+        # ✅ SET-2/F1 · Q1-bis — LA REGLA DE LA SEVA PEÇA. Era `rules_by_pom.get(pom.id)`:
+        # amb la mare i la 02 compartint POM, les dues files rebien la MATEIXA llei i el
+        # contenidor de la 02 ensenyava el règim, la Δ i el break de la mare. Aquesta taula
+        # alimenta l'Escalat i la CONSULTA de Mesures, o sigui que era la boca que feia que
+        # la pantalla i el motor no diguessin el mateix.
+        rule = _regla_de(rules_by_garment, pom.id, bm.garment)
         rows.append({
             'id': bm.id,
             'ordre': bm.ordre,
             'pom_id': pom.id,
+            # C4 — els dos eixos al contracte. Aquesta taula sempre ha pintat una fila per
+            # germana; el que li faltava era dir QUINA és cada fila, i és el que fan aquests
+            # dos camps més la `clau` de sota (la que enllaça amb `deltes`).
+            'capa': bm.capa,
+            'instancia': bm.instancia,
+            'clau': clau_mesura(pom.id, bm.capa, bm.instancia, bm.garment),
+            # SET-2/T6a — l'eix de la fila al contracte, al costat dels dos de germanor.
+            'garment': bm.garment,
             'pom_code': pom.codi_client,
             **camps_de(alias_by_pom, pom.id),
             'nom_fitxa': bm.nom_fitxa or '',
@@ -1720,12 +2136,32 @@ def measurements_table_view(request, model_id):
             'is_key': bm.is_key,
             'origen': bm.origen,
             'notes': bm.notes or '',
-            'graded': graded_by_pom.get(pom.id, {}),
+            'graded': graded_by_pom.get((pom.id, bm.capa, bm.instancia, bm.garment), {}),
             # Règim (additiu; consumidors antics ignoren camps desconeguts).
             'logica': getattr(rule, 'logica', None) if rule else None,
             'increment_base': _flt(getattr(rule, 'increment_base', None)) if rule else None,
             'increment_break': _flt(getattr(rule, 'increment_break', None)) if rule else None,
             'talla_break_label': getattr(rule, 'talla_break_label', None) if rule else None,
+            # P0.5d — D'ON VE LA REGLA, perquè la superfície de Graduació ho ha de poder dir.
+            #
+            # CALEN ELS DOS CAMPS, i el primer cop només en vaig posar un. `origen` sol MENTIA
+            # al cas de fallback: `pom.GradingRule` —la regla del JOC— **no té camp `origen`**
+            # (verificat a `pom/models.py:1230`), o sigui que quan el model gradua de debò pel
+            # joc, `getattr` retorna `None`, i el front llegia «no és MANUAL... doncs del model».
+            # Just al revés. Provocat en transacció sobre el model 169: 13 files resoltes pel
+            # joc, totes retornant `regla_origen=None` i pintant «del model».
+            #
+            # El senyal fiable és DE QUINA TAULA ha sortit la regla, que és una cosa que aquest
+            # codi sap del cert perquè `_load_grading_rules` retorna l'una o l'altra:
+            #   · `regla_es_resident=False` → ve del JOC en directe (fallback, cap resident)
+            #   · `regla_es_resident=True`  → viu al MODEL, i llavors `regla_origen` diu si
+            #                                 l'ha escrita algú (MANUAL) o si és una còpia
+            #                                 materialitzada del joc (CLIENT_RUN/CANONICAL/…)
+            #   · `None` a tots dos          → fila sense regla (les «—»)
+            #
+            # Camps additius: cap consumidor existent els llegeix i cap camp canvia de valor.
+            'regla_origen': getattr(rule, 'origen', None) if rule else None,
+            'regla_es_resident': isinstance(rule, ModelGradingRule) if rule else None,
         })
 
     base_size = model.base_size_label
@@ -1743,15 +2179,22 @@ def measurements_table_view(request, model_id):
     ]
 
     # Δ = mean of increments between consecutive sizes with data; None if <2 values.
+    #
+    # C4 — LA CLAU DEL DICT ÉS LA IDENTITAT DE LA MESURA, NO EL POM. Amb `str(pom_id)`, dues
+    # germanes escrivien a la mateixa entrada i la segona esborrava el delta de la primera:
+    # `deltes` tenia dues entrades per a quatre files, i dues files de la pantalla ensenyaven
+    # un delta que no era el seu. La clau ve de `pom.identitat.clau_mesura`, la mateixa forma
+    # que fa servir `pom/grading_views.cells` — l'altre lector que publica la mesura com a
+    # clau d'objecte JSON.
     deltas = {}
     for r in rows:
         values = [_size_value(r, s) for s in sizes_with_data]
         values = [v for v in values if v is not None]
         if len(values) >= 2:
             increments = [values[i + 1] - values[i] for i in range(len(values) - 1)]
-            deltas[str(r['pom_id'])] = round(sum(increments) / len(increments), 2)
+            deltas[r['clau']] = round(sum(increments) / len(increments), 2)
         else:
-            deltas[str(r['pom_id'])] = None
+            deltas[r['clau']] = None
 
     # Taula tancada? (SizeFitting estat='Tancat' → vista de només lectura al frontend)
     tancat = False
@@ -1772,6 +2215,9 @@ def measurements_table_view(request, model_id):
         'rows': rows,
         'total_poms': len(rows),
         'tancat': tancat,
+        # T4 — additius: cap consumidor existent els llegeix i cap camp canvia de valor.
+        'grading_version_data': grading_version_data,
+        'grading_version_number': grading_version_number,
     })
 
 
@@ -1788,7 +2234,11 @@ def set_measurements_view(request, model_id):
     # BaseMeasurement actius del model el pom dels quals NO hi és → soft-delete (is_active=False),
     # com fa el xat IA, per persistir la X d'eliminar fila. None = client antic, no desactivar.
     keep_pom_ids = request.data.get('keep_pom_ids', None)
-    if not measurements and keep_pom_ids is None:
+    # C4/BLOC 1-TER — `keep_mesures` és la mateixa llista amb la IDENTITAT de cada fila
+    # (`{pom_id, capa, instancia}`) en comptes del `pom_id` pelat. Els dos conviuen: v.
+    # `_poda_mesures` per què el vell no es pot reinterpretar.
+    keep_mesures = request.data.get('keep_mesures', None)
+    if not measurements and keep_pom_ids is None and keep_mesures is None:
         return Response({'error': 'measurements és obligatori'}, status=400)
 
     from fhort.pom.models import POMMaster
@@ -1796,6 +2246,24 @@ def set_measurements_view(request, model_id):
 
     created = updated = deactivated = 0
     errors = []
+
+    # C4/BLOC 1-BIS — mateix guard que a `gravar_pom_view`: dues entrades del MATEIX request
+    # que escriuen a la mateixa fila són un error de petició, no una escriptura. Executar-ho
+    # seria «l'última guanya» dins del bucle.
+    identitats = set()
+    for m in measurements:
+        pom_id = m.get('pom_id')
+        if not pom_id:
+            continue
+        ident = (int(pom_id),) + _identitat_de_mesura(m)
+        if ident in identitats:
+            capa, instancia = ident[1], ident[2]
+            return Response({'errors': [
+                f'POM {pom_id} (capa={capa or "exterior"}, instància={instancia or "única"}): '
+                'la petició porta dues mesures per a la mateixa fila i no es pot decidir '
+                'quina val'
+            ]}, status=400)
+        identitats.add(ident)
 
     with transaction.atomic():
         for m in measurements:
@@ -1806,36 +2274,41 @@ def set_measurements_view(request, model_id):
                 continue
             try:
                 pom = POMMaster.objects.get(id=pom_id)
-                # FASE_3/C1-ins — literals (v. `_write_base`).
-                _, was_created = BaseMeasurement.objects.update_or_create(
-                    model=model, pom=pom,
-                    capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
-                    defaults={
-                        'base_value_cm': float(value),
-                        'notes': m.get('notes', ''),
-                        'nom_fitxa': m.get('nom_fitxa', '') or '',
-                        'origen': 'MANUAL',
-                        # Re-entrar un valor reactiva una fila prèviament eliminada.
-                        'is_active': True,
-                        # Sprint 5B.1: copy tolerance from the catalogue POM.
-                        'tolerancia_minus': pom.tolerancia_default_minus,
-                        'tolerancia_plus': pom.tolerancia_default_plus,
-                    }
-                )
-                if was_created: created += 1
+                # C4/BLOC 1-BIS — la fila es resol per la IDENTITAT SENCERA (els eixos vénen
+                # del payload; qui no els digui rep el literal de sempre). Amb el literal fix
+                # que hi havia, dues germanes queien sobre la mateixa fila.
+                capa, instancia, garment = _identitat_de_mesura(m)
+                # L'ORIGEN I LES TOLERÀNCIES NO SÓN EFECTE SECUNDARI D'AQUESTA ESCRIPTURA
+                # (v. `_procedencia_de_mesura`): abans anaven als `defaults` de l'upsert i
+                # això les reescrivia a CADA fila del payload, canviés el valor o no.
+                bm = BaseMeasurement.objects.filter(
+                    model=model, pom=pom, capa=capa, instancia=instancia,
+                    garment=garment).first()
+                es_nova = bm is None
+                if es_nova:
+                    bm = BaseMeasurement(model=model, pom=pom, capa=capa,
+                                         instancia=instancia, garment=garment)
+                valor_nou = float(value)
+                _procedencia_de_mesura(bm, m, pom, valor_nou, es_nova)
+                bm.base_value_cm = valor_nou
+                bm.notes = m.get('notes', '')
+                bm.nom_fitxa = m.get('nom_fitxa', '') or ''
+                # Re-entrar un valor reactiva una fila prèviament eliminada.
+                bm.is_active = True
+                bm.save()
+                if es_nova: created += 1
                 else: updated += 1
             except POMMaster.DoesNotExist:
                 errors.append(f'POMMaster {pom_id} no trobat')
 
-        if keep_pom_ids is not None:
-            keep = [int(x) for x in keep_pom_ids]
-            # FASE_3/C1-ins — la poda és per FILA, no per POM (v. el germà bessó
-            # d'aquesta mateixa poda a `set_grading_view`, amb l'argument sencer).
-            deactivated = (BaseMeasurement.objects
-                           .filter(model=model, is_active=True,
-                                   capa=MeasurementLayer.SLUG_DEFECTE, instancia='')
-                           .exclude(pom_id__in=keep)
-                           .update(is_active=False))
+        if keep_mesures is not None or keep_pom_ids is not None:
+            # C4/BLOC 1-TER — la poda resol per FILA quan el client diu els eixos, i conserva
+            # el comportament d'abans quan no els diu. L'argument sencer viu a `_poda_mesures`,
+            # que és també el que fa servir `gravar_pom_view`: dues portes, una sola llei.
+            # SET-2/#12b — `garments` (opcional): l'abast EXPLÍCIT de la poda, per al
+            # contenidor que es desa buit i no pot anomenar cap fila. V. `_poda_mesures`.
+            deactivated = _poda_mesures(model, keep_mesures, keep_pom_ids,
+                                        _abast_de_poda(request.data))
 
     # NOTE: set-measurements només fa upsert de BaseMeasurement (+ el log via signal). La generació
     # de GradedSpec viu EXCLUSIVAMENT a generar-grading → generate_graded_specs (l'únic camí que
@@ -1848,6 +2321,7 @@ def set_measurements_view(request, model_id):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@bat_escriptura(SUP_MESURES)
 def gravar_pom_view(request, model_id):
     """POST /api/v1/models/<id>/gravar-pom/
 
@@ -1866,7 +2340,10 @@ def gravar_pom_view(request, model_id):
     measurements = request.data.get('measurements', [])
     rules = request.data.get('rules', [])
     keep_pom_ids = request.data.get('keep_pom_ids', None)
-    if not measurements and keep_pom_ids is None:
+    # C4/BLOC 1-TER — v. `_poda_mesures`: la llista amb els eixos poda per FILA; la de
+    # `pom_id` pelats conserva el comportament d'abans.
+    keep_mesures = request.data.get('keep_mesures', None)
+    if not measurements and keep_pom_ids is None and keep_mesures is None:
         return Response({'error': 'measurements és obligatori'}, status=400)
 
     from fhort.pom.models import GradingRule, POMMaster
@@ -1896,9 +2373,12 @@ def gravar_pom_view(request, model_id):
         run = [s.strip() for s in model.size_run_model.replace(';', '·').split('·') if s.strip()]
         return run.index(label) if label in run else None
 
+    from fhort.pom.nomenclatura import colisio_de_codi
+
     errors = []
     fora_rang = []
     prepared = []
+    identitats = set()
     for m in measurements:
         pom_id = m.get('pom_id')
         value = _to_float(m.get('base_value_cm'), 'base_value_cm', errors)
@@ -1913,7 +2393,46 @@ def gravar_pom_view(request, model_id):
         if fora:
             fora_rang.append(f'POM {pom_id}: {fora}')
             continue
-        prepared.append((m, value))
+
+        # C4/BLOC 1-BIS — LA IDENTITAT DE LA FILA SURT DEL PAYLOAD (v. `_identitat_de_mesura`).
+        capa, instancia, garment = _identitat_de_mesura(m)
+        ident = (int(pom_id), capa, instancia, garment)
+        if ident in identitats:
+            # 🔴 DUES ENTRADES DEL MATEIX REQUEST QUE ESCRIUEN A LA MATEIXA FILA. Executar-ho
+            # seria «l'última guanya» dins del propi bucle —el valor de la primera no arribaria
+            # mai a la BD i ningú no ho sabria—, i és exactament el mode de fallada que aquest
+            # tram existeix per matar. No es tria: es rebutja la petició sencera.
+            errors.append(
+                f'POM {pom_id} (capa={capa or "exterior"}, instància={instancia or "única"}): '
+                'la petició porta dues mesures per a la mateixa fila i no es pot decidir '
+                'quina val'
+            )
+            continue
+        identitats.add(ident)
+
+        # LA NOMENCLATURA PASSA LA MATEIXA VALIDACIÓ QUE CREAR UN POM PROPI (Agus, 06/08).
+        #
+        # El NOM del model és lliure —sobirania: el client li diu com vol— però la NOMENCLATURA
+        # és un codi, i un codi que ja significa una altra cosa al catàleg d'aquest client no és
+        # una tria d'estil, és una col·lisió. Mateix resolutor i mateix missatge que
+        # `create_model_pom_view`: la persona ha de llegir el mateix vingui d'on vingui.
+        #
+        # `excloent_pom_id` és el que fa que rebatejar una fila amb un codi que ja és el SEU
+        # propi àlies no rebori: no xoca amb ningú, xoca amb ella mateixa.
+        nomen = (m.get('nom_fitxa') or '').strip()
+        if nomen and model.customer_id:
+            _xoc, _etiqueta = colisio_de_codi(model.customer_id, nomen,
+                                              excloent_pom_id=int(pom_id))
+            if _xoc is not None:
+                errors.append(
+                    f'POM {pom_id}: la nomenclatura «{nomen}» ja és {_etiqueta} al catàleg '
+                    f'd\'aquest client'
+                )
+                continue
+        # SET-2/#12c — l'eix viatja fins a l'escriptura. Fins aquí el `garment` es llegia
+        # (v. el guard de duplicats, unes línies més amunt) i es llençava: la tupla el
+        # deixava fora i l'upsert de sota resolia sense ell.
+        prepared.append((m, value, capa, instancia, garment))
 
     # El rang físic té resposta pròpia (422) i mai es barreja amb els errors de forma (400):
     # un número impossible no és una petició mal escrita, és una dada que no pot existir.
@@ -1932,33 +2451,59 @@ def gravar_pom_view(request, model_id):
                 model=model, is_active=True, base_value_cm__isnull=False,
             ).exists()
 
-            for m, value in prepared:
+            # ⚠️ **L'ORDRE DE LES FILES ÉS DADA DE L'USUARI, I AQUESTA PORTA EL LLENÇAVA**
+            # (QA Agus 09/08). El carril té drag&drop i la tècnica ordena les cotes per
+            # conveniència de mesura —l'ordre en què les prendrà amb la peça a la mà—, però
+            # `gravar-pom` no escrivia `ordre` enlloc: totes les files del 1320 tenien `ordre=0`,
+            # el default del camp. L'endpoint de reordenar (`base-measurements/reorder/`) sí que
+            # el desa, però només el crida la superfície de PRESA; el carril de gènesi desa per
+            # aquí, i per aquí l'ordre no existia.
+            #
+            # `measurements` ja arriba en l'ordre de la taula (és el que el client pinta), o sigui
+            # que la posició a la llista ÉS l'ordre: no cal cap camp nou al payload ni cap gest
+            # més. `enumerate` sobre `prepared`, que conserva l'ordre d'entrada.
+            for pos, (m, value, capa, instancia, garment) in enumerate(prepared):
                 try:
                     pom = POMMaster.objects.get(id=m.get('pom_id'))
                 except POMMaster.DoesNotExist:
                     errors.append(f"POMMaster {m.get('pom_id')} no trobat")
                     continue
 
-                # FASE_3/C1-ins — literals: el body és `{'pom_id': …}` i no porta eixos
-                # (v. `_write_base`, l'explicació canònica).
+                # C4/BLOC 1-BIS — la fila es resol per la IDENTITAT SENCERA. Amb el literal
+                # `(exterior, '')` que hi havia, dues germanes de la taula queien sobre la
+                # mateixa fila i la segona escrivia damunt la primera. Els eixos vénen del
+                # payload (v. `_identitat_de_mesura`); qui no els digui rep el literal de
+                # sempre, i el `.first()` deixa de poder triar perquè la clau ja és única.
+                # SET-2/#12c — LA PRENDA ENTRA A LA RESOLUCIÓ, com a l'upsert germà de
+                # `set_measurements_view`. El `garment` ja arribava per aquesta funció —el
+                # guard de duplicats del mateix request l'usa des de T2— però es perdia abans
+                # d'escriure: el filtre no el deia i el constructor tampoc. Amb la mare i la
+                # 02 al MATEIX POM (el cas normal: el pit del top i el pit de la calceta són
+                # el mateix POM) el `.first()` podia caure sobre la fila de l'altra prenda i
+                # sobreescriure-la, i tota fila nova naixia a la mare pel default del camp.
+                # És la porta de la DEFINICIÓ de POM: la primera vegada que una taula de
+                # mesures es desa passa per aquí.
                 bm = BaseMeasurement.objects.filter(
                     model=model, pom=pom,
-                    capa=MeasurementLayer.SLUG_DEFECTE, instancia='').first()
-                if bm is None:
+                    capa=capa, instancia=instancia, garment=garment).first()
+                es_nova = bm is None
+                if es_nova:
                     bm = BaseMeasurement(
                         model=model, pom=pom,
-                        capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
+                        capa=capa, instancia=instancia, garment=garment,
                         created_by=request.user)
                     created += 1
                 else:
                     updated += 1
+                # Mateixa llei que l'altra porta (v. `_procedencia_de_mesura`): l'origen i les
+                # toleràncies NO són efecte secundari de desar la taula. Es calcula ABANS
+                # d'escriure el valor nou, perquè la regla compara amb el que hi havia.
+                _procedencia_de_mesura(bm, m, pom, value, es_nova)
                 bm.base_value_cm = value
                 bm.notes = m.get('notes', '') or ''
                 bm.nom_fitxa = m.get('nom_fitxa', '') or ''
-                bm.origen = 'MANUAL'
+                bm.ordre = pos                      # v. la nota del `for`: la posició ÉS l'ordre
                 bm.is_active = True
-                bm.tolerancia_minus = pom.tolerancia_default_minus
-                bm.tolerancia_plus = pom.tolerancia_default_plus
                 bm._changed_by = request.user
                 bm._motiu = 'gravar_pom'
                 bm.save()
@@ -1966,20 +2511,13 @@ def gravar_pom_view(request, model_id):
             if errors:
                 raise ValueError('; '.join(errors))
 
-            if keep_pom_ids is not None:
-                keep = [int(x) for x in keep_pom_ids]
-                # FASE_3/C1-ins — LA PODA NO ÉS PER POM: la identitat de la baixa és la
-                # FILA. `keep_pom_ids` és una llista de `pom_id` pelats que ve del front, i
-                # amb dues germanes vives podar per POM en mataria una que ningú no ha tret
-                # de la taula — un esborrat silenciós, que és el mode de fallada que tot
-                # aquest tram existeix per matar. Mentre el contracte no porti eixos
-                # (C4-ins), la poda es limita a l'exterior de la instància única: la fila
-                # que el front SÍ que està mirant.
-                deactivated = (BaseMeasurement.objects
-                               .filter(model=model, is_active=True,
-                                       capa=MeasurementLayer.SLUG_DEFECTE, instancia='')
-                               .exclude(pom_id__in=keep)
-                               .update(is_active=False))
+            if keep_mesures is not None or keep_pom_ids is not None:
+                # C4/BLOC 1-TER — mateixa llei que l'altra porta (v. `_poda_mesures`). El
+                # contracte ja porta els eixos i la baixa és per FILA; el client que només
+                # sap dir `pom_id` conserva el comportament d'abans, que és no matar-ne cap.
+                # SET-2/#12b — mateixa vora d'abast explícit que a `set_measurements_view`.
+                deactivated = _poda_mesures(model, keep_mesures, keep_pom_ids,
+                                            _abast_de_poda(request.data))
 
             valid_logiques = {code for code, _ in GradingRule.LOGICA_CHOICES}
             for r in rules:
@@ -2004,6 +2542,10 @@ def gravar_pom_view(request, model_id):
                         increment_break=(src.increment_break if src else None),
                         talla_break_label=(src.talla_break_label if src else None),
                         talla_break_pos=(src.talla_break_pos if src else None),
+                        # M3 — mateix criteri que `set_pom_regim_view` (vegeu-hi la nota): la
+                        # fila que neix del fallback del catàleg ve d'aquell joc; la que neix
+                        # de zero, de ningú. Una fila que ja existia no es re-etiqueta.
+                        derivat_de_rule_set_id=(src.rule_set_id if src else None),
                     )
                 if logica is not None:
                     rule.logica = logica
@@ -2035,11 +2577,40 @@ def gravar_pom_view(request, model_id):
             ).exists():
                 raise ValueError('Cal introduir mides abans de gravar POM')
 
-            pom_task = _close_pom_task_for_model(model, profile)
+            pom_task = _assegura_pom_task_oberta(model, profile)
             if pom_task.get('reason') == 'no_pom_task':
                 raise ValueError('Cal obrir la tasca POM abans de gravar-la')
     except ValueError as e:
         return Response({'error': str(e)}, status=400)
+
+    # ⚠️ **LA TAULA DE TALLES NO LA GENERAVA NINGÚ DEL FLUX** (QA Agus 09/08, bloquejant).
+    #
+    # «Mesurar prenda» refusa amb «el model no té cap GradingVersion activa» un model que té run,
+    # talla base, mesures i graduació: tot el que cal per graduar-lo. Qui la generava era
+    # `generar-grading`, i al front l'ÚNIC que el crida és el botó **Propagar** — o sigui que la
+    # taula existia només si algú premia un botó que no diu que serveixi per a això. Al wizard
+    # vell el recorregut hi passava per damunt; el Resum partit no hi passa, i el pas va quedar
+    # orfe. No és que el gate estigui mal posat: és que ningú no complia la seva condició.
+    #
+    # El moment que toca és AQUEST i no el de desar talles ni el de desar graduació: graduar
+    # necessita les TRES coses alhora —regles, run i mesures base—, i les mesures base neixen
+    # aquí. Als altres dos moments el model encara no en té cap i generar seria generar el buit.
+    # És idempotent (`generate_graded_specs` reutilitza la versió vigent, no fa bump: propagar
+    # segueix sent l'acte conscient que crea la v+1) i **no pot tombar el desat**: la gènesi POM
+    # ja ha quedat persistida i commitada més amunt; si graduar peta, es diu al payload i s'entra
+    # a Mesures pel camí de sempre, no es perd la feina de la tècnica.
+    taula = None
+    try:
+        if _te_regles(model) and model.size_run_model and model.base_size_label:
+            from fhort.pom.services import generate_graded_specs, get_or_create_size_fitting
+            sf = get_or_create_size_fitting(model, actor_profile_id=getattr(profile, 'id', None))
+            taula = {'size_fitting': sf.id, 'specs': generate_graded_specs(sf.id)}
+    except Exception as e:                       # noqa: BLE001 — mai ha de tombar el desat
+        import logging
+        logging.getLogger(__name__).warning(
+            'gravar_pom: no s\'ha pogut generar la taula de talles del model %s: %s',
+            model.codi_intern, e)
+        taula = {'error': str(e)}
 
     return Response({
         'created': created,
@@ -2048,6 +2619,8 @@ def gravar_pom_view(request, model_id):
         'rules_saved': rules_saved,
         'reseed': had_base_before,
         'pom_task': pom_task,
+        #: La taula de talles generada en el mateix acte (o el motiu pel qual no s'ha pogut).
+        'taula_talles': taula,
     }, status=200)
 
 
@@ -2078,6 +2651,14 @@ def reorder_measurements_view(request, model_id):
 @permission_classes([IsAuthenticated])
 @parser_classes([MultiPartParser, FormParser])
 def upload_file_view(request, model_id):
+    """F1.3 · AQUESTA PORTA NO BAT, I ÉS UNA DECISIÓ, NO UN OBLIT.
+
+    Pujar un fitxer a un model no diu a QUINA feina pertany: no hi ha cap `TaskType` amb l'eina
+    de «fitxers» (el catàleg mapeja `mesures`/`escalat`/`fitxa`/`patro`, i cap d'ells és això).
+    Un adjunt pot ser d'una fitxa, d'un patró, d'un fitting o de res. Batre-hi obligaria a triar
+    una superfície a l'atzar i imputar temps a la tasca equivocada — pitjor que no imputar-ne.
+    Si algun dia un `TaskType` reclama els adjunts, el batec entra aquí amb el seu `code`.
+    """
     try:
         model = Model.objects.get(id=model_id)
     except Model.DoesNotExist:
@@ -2354,19 +2935,38 @@ def measurements_chat_view(request, model_id):
                         codi_client__iexact=accio['pom_codi']
                     ).first()
                     if pom and accio.get('valor') is not None:
-                        # FASE_3/C1-ins — literals (v. `_write_base`).
-                        bm, created = BaseMeasurement.objects.update_or_create(
+                        # L'ORIGEN I LES TOLERÀNCIES NO SÓN EFECTE SECUNDARI D'AQUESTA
+                        # ESCRIPTURA — la mateixa llei que ja tenen les altres dues portes
+                        # (`set_measurements_view` i `gravar_pom_view`), aquí pendent des del
+                        # 05/08. Amb l'`update_or_create` d'abans, els `defaults` s'apliquen
+                        # TAMBÉ quan la fila ja hi és: un AFEGIR sobre una mesura que ja
+                        # existia la reescrivia a `MANUAL` —encara que vingués d'una presa de
+                        # size check i el valor fos el mateix— i li tornava les toleràncies
+                        # del catàleg, esborrant les que algú hagués afinat. I aquest camí és
+                        # el pitjor lloc per fabricar un `MANUAL` fals: qui ho ha teclejat és
+                        # una IA, i `origen` no és append-only (el registre que salva els
+                        # mobles és `MeasurementChangeLog`).
+                        #
+                        # FASE_3/C1-ins — literals dels eixos (v. `_write_base`).
+                        bm = BaseMeasurement.objects.filter(
                             model=model, pom=pom,
-                            capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
-                            defaults={
-                                'base_value_cm': float(accio['valor']),
-                                'origen': 'MANUAL',
-                                'ordre': base_measurements.count(),
-                                # Sprint 5B.1: copy tolerance from the catalogue POM.
-                                'tolerancia_minus': pom.tolerancia_default_minus,
-                                'tolerancia_plus': pom.tolerancia_default_plus,
-                            },
-                        )
+                            capa=MeasurementLayer.SLUG_DEFECTE, instancia='').first()
+                        created = bm is None
+                        if created:
+                            bm = BaseMeasurement(
+                                model=model, pom=pom,
+                                capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
+                                # L'ordre és de naixement: reasignar-lo a cada AFEGIR movia
+                                # al final una fila que ja tenia el seu lloc a la taula.
+                                ordre=base_measurements.count())
+                        valor_nou = float(accio['valor'])
+                        # El payload del xat no parla d'origen (no és al contracte d'acció de
+                        # la IA), o sigui que mana la regla de defecte: neix → MANUAL; ja hi
+                        # era i el valor canvia → MANUAL; ja hi era i el valor és el mateix →
+                        # no es toca res.
+                        _procedencia_de_mesura(bm, {}, pom, valor_nou, created)
+                        bm.base_value_cm = valor_nou
+                        bm.save()
                         accions_executades.append(
                             f"{'Afegit' if created else 'Actualitzat'} {pom.codi_client}"
                         )
@@ -2399,6 +2999,7 @@ def measurements_chat_view(request, model_id):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@bat_escriptura(SUP_ESCALAT)
 def generate_grading_view(request, model_id):
     try:
         model = Model.objects.get(id=model_id)
@@ -2560,13 +3161,28 @@ def generate_grading_view(request, model_id):
         pg = getattr(pom, 'pom_global', None)
         graded = {}
         if gv:
-            for spec in GradedSpec.objects.filter(grading_version=gv, pom=pom):
+            # C4/BLOC 2 — LA CORBA ÉS DE LA MESURA, NO DEL POM. Aquesta consulta filtrava per
+            # `(grading_version, pom)` i les germanes hi queien totes al mateix
+            # `graded[size_label]`: guanyava l'última llegida, i la fila d'exterior ensenyava
+            # la corba del folre.
+            #
+            # MESURAT A ROSALIA (model 188), amb les germanes vives i G1 retirat:
+            #     A     base 37.0 → graded S 35.5   ← la corba d'A-FOL
+            #     AH-L  base 23.2 → graded S 23.0   ← la corba d'AH-R
+            # La BD era correcta i `taula-mesures` també: només mentia aquest payload. És
+            # l'onzena superfície, i el cens de C4 en tenia deu.
+            for spec in GradedSpec.objects.filter(grading_version=gv, pom=pom,
+                                                  capa=bm.capa, instancia=bm.instancia):
                 graded[spec.size_label] = (
                     float(spec.graded_value_cm) if spec.graded_value_cm is not None else None
                 )
         rows.append({
             'id': bm.id,
             'pom_id': pom.id,
+            # Els dos eixos al contracte: `pom_id` no és únic dins de `rows`, i `id` (la PK de
+            # la mesura) és l'àncora forta de cada element.
+            'capa': bm.capa,
+            'instancia': bm.instancia,
             'pom_code': pom.codi_client,
             'nom_fitxa': bm.nom_fitxa or '',
             'nom_ca': pg.nom_ca if pg else pom.nom_client,
@@ -2722,8 +3338,13 @@ def set_size_override_view(request, model_id):
 
 @api_view(['POST'])
 @permission_classes([_ExecuteTasksCap])
+@bat_escriptura(SUP_ESCALAT)
 def escalat_ajustar_talla_view(request, model_id):
-    """POST /api/v1/models/<model_id>/escalat/ajustar-talla/  Body: {pom_id, talla, valor}
+    """POST /api/v1/models/<model_id>/escalat/ajustar-talla/
+
+    Body: `{pom_id, talla, valor, capa?, instancia?, garment?}` — els tres eixos identifiquen
+    LA MESURA (v. `_identitat_de_mesura`); qui no els diu rep el literal de sempre, que és
+    l'exterior de la instància única de la peça MARE.
 
     Convergència amb el fitting (piece-fitting-lines/propagar): ancora la talla editada i PROPAGA
     EL DELTA per regla a les germanes, com fa el fitting amb propaga_ancoratges. A nivell de MODEL
@@ -2741,7 +3362,8 @@ def escalat_ajustar_talla_view(request, model_id):
     """
     from fhort.models_app.models import ModelGradingOverride, MeasurementChangeLog
     from fhort.pom.models import POMMaster
-    from fhort.pom.services import generate_graded_specs, _load_grading_rules, escala_del_model
+    from fhort.pom.services import (generate_graded_specs, _load_grading_rules_per_garment,
+                                    _regla_de, escala_del_model)
     from fhort.pom.grading_utils import propaga_ancoratges
     from fhort.fitting.services import _resolve_working_size_fitting, vigent_grading_version
     from fhort.fitting.models import GradedSpec
@@ -2753,6 +3375,13 @@ def escalat_ajustar_talla_view(request, model_id):
 
     data = request.data or {}
     pom_id = data.get('pom_id')
+    # C4/BLOC 2 — QUINA GERMANA S'AJUSTA. Aquesta vista escriu a QUATRE taules
+    # (`BaseMeasurement` via `_write_base`, `ModelGradingOverride` dues vegades i
+    # `MeasurementChangeLog`) i les quatre anaven amb el literal `(exterior, '')`: ajustar la
+    # talla de la sisa dreta movia la base de l'esquerra, li esborrava els overrides i deixava
+    # l'apunt del canvi atribuït a l'altra al registre append-only.
+    # Punt únic compartit amb els dos upserts, les dues podes i `desactivar_pom`.
+    capa, instancia, garment = _identitat_de_mesura(data)
     talla = (data.get('talla') or '').strip()
     valor = data.get('valor')
     if pom_id is None or not talla:
@@ -2794,7 +3423,20 @@ def escalat_ajustar_talla_view(request, model_id):
         if fora:
             return Response({'error': fora, 'codi': CODI_MESURA_FORA_RANG}, status=422)
 
-        rule = _load_grading_rules(model).get(pom.id)
+        # ✅ SET-2/F1 · Q1-bis — LA LLEI DE LA PEÇA, NO LA DE LA MARE.
+        # Això era `_load_grading_rules(model).get(pom.id)`, la 4a de les cinc boques que
+        # serveixen la regla de la peça mare (acta a `pom/services.py:774-806`). Aquella
+        # acta ja deia que la línia que separa els consumidors adaptats dels que es queden
+        # NO és l'app on viuen sinó **si escriuen** — i aquest DECIDEIX UNA ESCRIPTURA:
+        # `propaga_ancoratges` deriva la nova base a partir del delta de la regla. Amb la
+        # llei de la mare, ajustar una talla de la 02 li aplicava un increment que no és
+        # seu (D4 diu que poden divergir) i escrivia el resultat a la seva base.
+        #
+        # 🚨 PER QUÈ VA AL MATEIX COMMIT QUE EL LOOKUP: mentre `_write_base` petava amb
+        # `MultipleObjectsReturned`, el 500 TAPAVA aquest defecte. Arreglar el lookup sol
+        # hauria convertit un error sorollós en un valor mal calculat i MUT. És la llei
+        # S42 girada: tancar una escriptura ARMA el seu lector.
+        rule = _regla_de(_load_grading_rules_per_garment(model), pom.id, garment)
         logica = getattr(rule, 'logica', None) if rule else None
         canonic = getattr(rule, 'increment_base', None) is not None if rule else False
         # LINEAR/canònic → propaga per regla (com el fitting, que sobreescriu TOTES les germanes);
@@ -2820,37 +3462,46 @@ def escalat_ajustar_talla_view(request, model_id):
                 if nova_base is None:
                     return Response({'error': "No s'ha pogut derivar la base des de la talla ancorada."}, status=400)
                 _write_base(model, pom, round(float(nova_base), 2), auth_user,
-                            f'Escalat · ajust talla {talla} (propaga per regla)')
+                            f'Escalat · ajust talla {talla} (propaga per regla)',
+                            capa=capa, instancia=instancia, garment=garment)
                 # La corba de la regla mana: neteja els pins per cel·la del POM (el fitting sobreescriu
                 # els valor_real de les germanes; aquí l'equivalent és treure els overrides residuals).
-                # FASE_3/C1-ins — l'esborrat tampoc no és per POM. Aquest `delete()` neteja
-                # els overrides de la mesura que es torna a propagar; sense els eixos
-                # s'enduria també els de les germanes, que ningú no ha tocat.
+                # L'esborrat tampoc no és per POM: neteja els overrides de LA MESURA que es
+                # torna a propagar. C4/BLOC 2 — els eixos vénen del cos; sense ells s'enduria
+                # els de les germanes, que ningú no ha tocat.
+                # SET-2/F1 — i la PEÇA: `unique_together` d'aquesta taula ja la porta
+                # (`models.py:1089`), o sigui que sense l'eix aquest `.delete()` s'enduia
+                # els pins de l'ALTRA peça, que ningú no ha tocat tampoc.
                 ModelGradingOverride.objects.filter(
                     model=model, pom=pom,
-                    capa=MeasurementLayer.SLUG_DEFECTE, instancia='').delete()
+                    capa=capa, instancia=instancia, garment=garment).delete()
                 propagat, motiu = True, (logica or 'CANONIC')
             elif talla == base_size:
                 # Base sense règim LINEAR: desa la base; germanes intactes (mirall del fitting STEP).
-                _write_base(model, pom, valor, auth_user, f'Escalat · base {talla}')
+                _write_base(model, pom, valor, auth_user, f'Escalat · base {talla}',
+                            capa=capa, instancia=instancia, garment=garment)
                 propagat, motiu = False, (logica or 'BASE')
             else:
                 # STEP/FIXED/ZERO o sense regla → override puntual (germanes intactes, com el fitting).
-                # FASE_3/C1-ins — literals als tres punts (v. el bloc germà d'`_editar_talla`).
+                # C4/BLOC 2 — els tres punts van per la identitat de la mesura, no pel POM.
+                # SET-2/F1 — els TRES eixos als tres punts. Sense la peça, l'`update_or_create`
+                # naixia sempre a la mare (la clau única de la taula la porta) i el
+                # `MeasurementChangeLog` —que és APPEND-ONLY— quedava amb l'apunt atribuït a
+                # una peça que no era: un error que no es pot corregir mai.
                 prev = (ModelGradingOverride.objects
                         .filter(model=model, pom=pom, size_label=talla,
-                                capa=MeasurementLayer.SLUG_DEFECTE, instancia='')
+                                capa=capa, instancia=instancia, garment=garment)
                         .values_list('value_cm', flat=True).first())
                 ModelGradingOverride.objects.update_or_create(
                     model=model, pom=pom, size_label=talla,
-                    capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
+                    capa=capa, instancia=instancia, garment=garment,
                     defaults={'value_cm': valor, 'motiu': 'Escalat · ajust talla (sense propagació)',
                               'fitting_ref': None, 'created_by': profile},
                 )
                 if prev is None or abs(float(prev) - valor) > 1e-9:
                     MeasurementChangeLog.objects.create(
                         model=model, pom=pom, base_measurement=None,
-                        capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
+                        capa=capa, instancia=instancia, garment=garment,
                         valor_anterior=(float(prev) if prev is not None else None), valor_nou=valor,
                         context='manual', motiu=f'Escalat talla {talla}', created_by=auth_user)
                 propagat, motiu = False, (logica or 'sense_regla')
@@ -2866,20 +3517,237 @@ def escalat_ajustar_talla_view(request, model_id):
                 transaction.set_rollback(True)
                 return Response({'error': str(e)}, status=400)
 
-    # Files actualitzades del POM (mirall de 'linies' de /propagar): {id, valor_real} per talla.
+    # Files actualitzades de LA MESURA (mirall de 'linies' de /propagar): {id, valor_real} per
+    # talla. C4/BLOC 2 — dues coses aquí, i totes dues es veien a la pantalla:
+    #
+    # ① la consulta filtra per la germana. Per `(grading_version, pom)` sol, els specs de les
+    #    dues germanes queien al mateix `graded[size_label]` i la resposta tornava la corba de
+    #    l'última llegida — o sigui que després d'ajustar la sisa dreta, la fila ensenyava les
+    #    xifres de l'esquerra.
+    #
+    # ② l'`id` és la CLAU DE LA MESURA, no `{pom_id}:{talla}`. `MeasureGrid` fa servir aquest
+    #    `id` per indexar el seu buffer de cel·les, que va per `lineId`, i el `lineId` de
+    #    l'Escalat va passar a `{clau}:{talla}` al bloc 3 (`a0f588f9`). Des d'aleshores els dos
+    #    formats no casaven i el refresc de les talles propagades NO ARRIBAVA A LA PANTALLA:
+    #    l'escriptura es feia, la corba es re-derivava, i les cel·les germanes es quedaven amb
+    #    el valor vell fins a recarregar. Sense error i sense avís.
+    #    La forma la decideix `pom/identitat.clau_mesura`, l'únic lloc que sap com s'aplana.
+    #
+    # ③ ✅ SET-2/F1 — LA PEÇA, I EL TRAM PROPI ÉS AQUEST. El que hi havia deia: «obrir el
+    #    contracte d'ESCRIPTURA al garment és un tram propi; això NO ho és», i el filtre
+    #    anava amb el literal `''`. El contracte ja està obert (la pantalla el sap dir i
+    #    `_identitat_de_mesura` el resol), o sigui que el literal se'n va.
+    #
+    #    Aquesta és la SUPERFÍCIE DE RESPONSE LITERAL de la vista: `linies` es construeix
+    #    aquí mateix, sense serializer, i `MeasureGrid` indexa el seu buffer de cel·les per
+    #    aquest `id`. Amb l'eix cuit a `''`, el refresc d'una fila de la 02 no arribava mai
+    #    a la seva cel·la —l'escriptura es feia, la corba es re-derivava, i la pantalla es
+    #    quedava amb el valor vell fins a recarregar—: el mode de fallada mut que ② descriu
+    #    per al `lineId`, un eix més tard.
+    from fhort.pom.identitat import clau_mesura
     gv = vigent_grading_version(sf)
     graded = {}
     if gv:
-        for spec in GradedSpec.objects.filter(grading_version=gv, pom=pom):
+        for spec in GradedSpec.objects.filter(grading_version=gv, pom=pom,
+                                              capa=capa, instancia=instancia,
+                                              garment=garment):
             graded[spec.size_label] = (
                 float(spec.graded_value_cm) if spec.graded_value_cm is not None else None)
-    linies = [{'id': f'{pom.id}:{s}', 'valor_real': graded.get(s)} for s in size_run]
+    clau = clau_mesura(pom.id, capa, instancia, garment)
+    linies = [{'id': f'{clau}:{s}', 'valor_real': graded.get(s)} for s in size_run]
     return Response({'ok': True, 'propagat': propagat, 'motiu': motiu,
                      'grading_version_id': gv.id if gv else None, 'linies': linies}, status=200)
 
 
-def _write_base(model, pom, valor, auth_user, motiu):
-    """Escriu BaseMeasurement(model, pom, exterior, instància única) i deixa que F1 registri.
+def _abast_de_poda(data):
+    """Les prendes que un desat declara que està podant, o `None` si no ho declara. Punt únic.
+
+    SET-2/#12b — la vora d'ABAST EXPLÍCIT. Normalment l'abast es dedueix de les files que el
+    payload anomena (v. `_poda_mesures`), i no cal dir res: un contenidor que envia files ja
+    diu de quina prenda parla. L'únic gest que la derivació no pot resoldre és el contenidor
+    que es desa BUIT —cap fila, cap eix, i tanmateix una ordre de buidar-lo—, i per a aquell
+    el client ha de poder dir qui és.
+
+    És deliberadament un camp del COS i no un paràmetre d'URL: viatja amb el desat, dins de la
+    mateixa transacció que el provoca. I és opcional per la mateixa raó que `keep_mesures` ho
+    va ser al seu dia: un client que no el digui ha de seguir fent exactament el que feia.
+    """
+    g = (data or {}).get('garments')
+    if not isinstance(g, (list, tuple)):
+        return None
+    return [str(x or '') for x in g]
+
+
+def _poda_mesures(model, keep_mesures, keep_pom_ids, garments=None):
+    """Desactiva les mesures actives del model que el client NO ha dit que conserva.
+
+    ── C4/BLOC 1-TER · LA PODA RESOL PER FILA, I EL CLIENT VELL NO EN MATA CAP ─────────
+    Les dues portes que podaven (`set_measurements_view` i `gravar_pom_view`) ho feien amb
+    `keep_pom_ids`, una llista d'ENTERS, i ancorades a `(exterior, '')`. L'àncora no era un
+    defecte de lectura: era el gest d'esborrar que no arribava. Amb dues germanes a la taula,
+    treure la fila del folre i desar no feia res —la consulta no la mirava— i l'usuari no
+    tenia manera de saber-ho.
+
+    Desancorar-la sense tocar el contracte no ho arregla, l'empitjora. Un `pom_id` pelat no
+    pot dir «conserva el folre i treu l'exterior»: només diu de quins POMs es parla. Amb la
+    llista d'enters només hi ha dues lectures possibles, i totes dues són dolentes —o cap
+    germana es pot esborrar mai, o esborrar-ne una les mata totes.
+
+    LA SORTIDA ÉS QUE EL CONTRACTE PORTI LA IDENTITAT, igual que a l'upsert:
+
+      · `keep_mesures` — llista de `{pom_id, capa, instancia}`. La poda hi resol per la fila
+        sencera: sobreviu qui hi és, cau qui no. És el camí del client d'avui.
+      · `keep_pom_ids` sol — el client ANTIC. Es conserva EXACTAMENT el comportament d'abans:
+        poda limitada a l'exterior de la instància única.
+
+    ⚠️ I la segona no és una mancança que algú hagi d'«arreglar» després. **Una llista de POMs
+    no diu que cap germana s'hagi de treure.** Interpretar-ne el silenci com una ordre
+    d'esborrar seria decidir per un client que no ha dit res —exactament el que aquest tram ha
+    prohibit a l'upsert—, i el preu de l'error no és una cel·la mal pintada: és una mesura
+    donada de baixa que ningú no ha demanat.
+
+    ── SET-2/#12b · I L'ABAST DE LA PODA ÉS EL DE LES PECES QUE EL PAYLOAD NOMENA ──────
+    La branca de `keep_mesures` resolia per fila però mirava TOTES les files vives del model,
+    i això només era correcte mentre la taula fos una de sola. Amb la taula partida per peça
+    (S2, pas 3) un desat porta les files del SEU contenidor i prou: desar el de la mare
+    hauria donat de baixa les files del Pantaló —amb l'eix al payload i tot—, perquè no
+    sortien a la llista. Mesurat contra dades vives per S2, amb rollback: 1 baixa, la fila
+    de la 02 morta.
+
+    És la MATEIXA llei que T5 va aplicar a la branca de la clau curta, un contracte més
+    amunt: **una llista de files no és una ordre d'esborrar la feina d'una altra prenda**. Qui
+    no surt a la llista cau NOMÉS si la seva peça és una de les que la llista anomena; les
+    files de les altres prendes no són ni candidates.
+
+    ⚠️ Això REVISA una decisió de T5 (`test_set2_t5_escriptors`, 10/08), que llegia
+    `keep_mesures` com «tot el que queda al MODEL». Ara es llegeix com «tot el que queda al
+    CONTENIDOR», que és el que el client realment sap dir. El test d'aquell dia s'ha adaptat
+    amb el motiu datat.
+
+    `garments` — l'abast EXPLÍCIT, per al cas que la derivació no pot resoldre: un contenidor
+    que es desa BUIT no anomena cap peça i el payload no diu de qui és. Sense ell no es poda
+    res (no s'endevina mai de qui és el silenci); amb ell, el contenidor diu qui és i pot
+    buidar-se sencer. Cap client l'envia encara: és la vora que S2 necessitarà al pas 3.
+
+    Torna el nombre de files desactivades.
+    """
+    from fhort.models_app.models import BaseMeasurement
+    from fhort.pom.models import MeasurementLayer
+
+    vives = BaseMeasurement.objects.filter(model=model, is_active=True)
+
+    if keep_mesures is not None:
+        conserva = {(int(k['pom_id']),) + _identitat_de_mesura(k)
+                    for k in keep_mesures if k.get('pom_id')}
+        # L'ABAST: el que diu el client si el diu, i si no el que les files NOMENEN. Un
+        # conjunt buit —cap fila i cap abast explícit— no és «totes»: és «no ho sé», i
+        # d'un «no ho sé» no en surt cap baixa.
+        if garments is not None:
+            abast = {str(g or '') for g in garments}
+        else:
+            abast = {ident[3] for ident in conserva}
+        # `.exclude()` no pot expressar una clau composta: es resol en Python sobre les files
+        # vives del model, que són poques i ja s'han de llegir igualment.
+        baixes = [bm.id for bm in vives
+                  if bm.garment in abast
+                  and (bm.pom_id, bm.capa, bm.instancia, bm.garment) not in conserva]
+        return BaseMeasurement.objects.filter(id__in=baixes).update(is_active=False) if baixes else 0
+
+    # ── SET-2/T5 · LA BRANCA DE LA CLAU CURTA, I PER QUÈ HI ENTRA `garment=''` ─────────
+    # Aquesta branca DESACTIVA tot el que no sigui a `keep_pom_ids`, i el cridador que hi
+    # arriba només sap dir POMs: no sap de capes, ni d'instàncies, ni de peces. Per això ja
+    # s'acotava a l'exterior de la instància única — desactivar la germana d'un eix que el
+    # client no ha nomenat seria decidir per ell.
+    # El `garment=''` és la MATEIXA llei amb l'eix nou, i sense ell el dany era el més gros
+    # del tram: una crida amb clau curta —les que fa avui el 100% del corpus— hauria donat
+    # de baixa les files de TOTES les peces del model, no només les de la mare. Esborra
+    # feina i no crida: ningú peta, les mesures simplement deixen de comptar.
+    # Una llista de POMs no diu que cap peça s'hagi de treure.
+    keep = [int(x) for x in keep_pom_ids]
+    return (vives
+            .filter(capa=MeasurementLayer.SLUG_DEFECTE, instancia='', garment='')
+            .exclude(pom_id__in=keep)
+            .update(is_active=False))
+
+
+def _identitat_de_mesura(m):
+    """Els dos eixos d'una mesura tal com arriben pel cos d'una petició. Punt únic.
+
+    ── C4/BLOC 1-BIS · EL CONTRACTE D'ESCRIPTURA S'OBRE ────────────────────────────────
+    Fins ara els escriptors que reben el POM per HTTP declaraven els eixos amb el literal
+    del cas (`_write_base` en té l'acta), perquè el cos era `{'pom_id': …}` i prou. Amb dues
+    germanes vives això deixa de ser una declaració i passa a ser una col·lisió: dues files
+    de la taula hi cauen a sobre i la segona escriu el seu valor damunt de la primera.
+
+    Ara el client els pot dir, i els diu com a DOS CAMPS —no com la cadena aplanada
+    `{pom}|{capa}|{inst}`—, que és el que mana `pom/identitat.py`: la cadena serveix la vora
+    del payload on la mesura ha de ser clau d'un objecte JSON, i escriure no és aquest cas.
+
+    QUI NO ELS DIU REP EL LITERAL DE SEMPRE, i això és deliberat: un client antic (o una
+    fila que encara no s'ha desat mai, que no té eixos perquè no té mesura) segueix escrivint
+    a l'exterior de la instància única, exactament com abans. El que NO es fa mai és mirar
+    quines files hi ha i triar-ne una: això seria el desempat a l'atzar que tot aquest tram
+    persegueix. El default és explícit i no depèn de les dades.
+
+    ⚠️ Un `None` explícit al cos es tracta com el valor buit, no com el text «None»: les
+    columnes són NOT NULL amb default i un client que enviï `null` vol dir «la de sempre».
+    """
+    from fhort.pom.models import MeasurementLayer
+    return (m.get('capa') or MeasurementLayer.SLUG_DEFECTE,
+            m.get('instancia') or '',
+            m.get('garment') or '')
+
+
+#: Sentinella per distingir «el payload no en diu res» de «el payload diu None».
+_NO_DIT = object()
+
+
+def _procedencia_de_mesura(bm, m, pom, valor_nou, es_nova):
+    """L'ORIGEN I LES TOLERÀNCIES D'UNA FILA: què s'hi toca i, sobretot, què NO (Agus, 05/08).
+
+    ── EL DEFECTE ─────────────────────────────────────────────────────────────────────
+    Les dues portes d'escriptura massiva d'aquest fitxer (`set_measurements_view` i
+    `gravar_pom_view`) forçaven `origen='MANUAL'` i reescrivien les dues toleràncies des del
+    catàleg a **cada fila del payload**, hi hagués canviat el valor o no. Efecte: qualsevol
+    escriptura que passés per allà —encara que només vingués a moure una fila de capa o a
+    reenviar la taula sencera sense tocar cap xifra— convertia en `MANUAL` una base que una
+    sessió de size check havia deixat `CHECKED`, i li tornava les toleràncies del catàleg
+    esborrant les que algú hagués afinat.
+
+    ── PER QUÈ IMPORTA ────────────────────────────────────────────────────────────────
+    Trenca la PRECEDÈNCIA TEMPORAL: l'última mesura escrita és la veritat i el seu origen ha
+    de ser el que li correspon. Un `MANUAL` fals diu «això ho va teclejar algú» sobre una
+    xifra que va sortir d'una presa de proto, i qui després auditi «qui va mesurar això» rep
+    una resposta falsa que ja no es pot desfer —`origen` el sobreescriu el canvi següent i
+    no és append-only (`MeasurementChangeLog` sí, i és qui salva els mobles).
+
+    ── LA REGLA ───────────────────────────────────────────────────────────────────────
+    · Si el payload ho diu EXPLÍCITAMENT, mana el payload. Sempre.
+    · Si no ho diu i la fila NEIX, `MANUAL` i les toleràncies del catàleg: és el naixement,
+      no hi ha res a trepitjar.
+    · Si no ho diu i la fila JA HI ÉS:
+        - amb el valor CANVIAT → `MANUAL` (algú l'acaba de teclejar: l'origen li correspon);
+        - amb el valor IGUAL   → **no es toca res**. Aquesta escriptura no ha mesurat res.
+    Les toleràncies, un cop la fila existeix, no es reescriuen mai des del catàleg: són
+    patrimoni de la fila i el catàleg només les sembra.
+    """
+    origen = m.get('origen', _NO_DIT)
+    if origen is not _NO_DIT and origen:
+        bm.origen = origen
+    elif es_nova or bm.base_value_cm != valor_nou:
+        bm.origen = 'MANUAL'
+
+    for camp, defecte in (('tolerancia_minus', pom.tolerancia_default_minus),
+                          ('tolerancia_plus', pom.tolerancia_default_plus)):
+        dit = m.get(camp, _NO_DIT)
+        if dit is not _NO_DIT:
+            setattr(bm, camp, dit)
+        elif es_nova:
+            setattr(bm, camp, defecte)
+
+
+def _write_base(model, pom, valor, auth_user, motiu, capa=None, instancia='', garment=''):
+    """Escriu el BaseMeasurement de LA MESURA indicada i deixa que F1 registri.
 
     ── FASE_3/C1-ins · L'EXPLICACIÓ CANÒNICA DELS LITERALS D'AQUEST FITXER ──────────────
     Els escriptors de `models_app/views.py` que reben el POM per HTTP (`{'pom_id': …}`) no
@@ -2894,13 +3762,34 @@ def _write_base(model, pom, valor, auth_user, motiu):
     quina escriu. I quan C4-ins obri el contracte, el lloc on posar el valor real ja hi és:
     només canvia d'on ve.
 
+    ✅ C4/BLOC 2 — ELS EIXOS SÓN PARÀMETRE. El contracte d'entrada ja els porta, o sigui que
+    la crida pot dir de quina germana parla en comptes de declarar-la. Qui no els passi rep el
+    literal de sempre —l'exterior de la instància única—, que és el que feien tots els punts
+    d'aquest fitxer fins ara i el que han de seguir fent mentre la seva porta no els sàpiga dir.
+
     Els altres punts d'aquest fitxer porten una nota d'una línia que apunta aquí.
+
+    ✅ SET-2/F1 — I EL TERCER EIX, QUE ERA EL QUE PETAVA. El docstring de sobre descrivia
+    el mode de fallada del lookup curt («o bé n'agafa una a l'atzar o bé peta amb
+    `MultipleObjectsReturned`») per a `capa`/`instancia`, i era paraula per paraula el que
+    passava amb `garment`: dues files vives que només difereixen per la peça hi cauen totes
+    dues a sobre i el `get_or_create` fa `.get()` sobre un queryset de 2. Mesurat a
+    staging: POM 962 del model 1379 i POM 904 del 1320 → **500 determinista**, no una cursa.
+
+    🚨 **`is_active` NO ENTRA AL LOOKUP.** La lectura temptadora de la diagnosi («una poda
+    no cura el 500») porta a afegir-hi `is_active=True`, i seria canviar un 500 per un
+    altre: la clau única és `(model, pom, capa, instancia, garment)` i NO inclou
+    `is_active`, o sigui que amb la fila de la peça PODADA el lookup no la trobaria i
+    intentaria crear-ne una segona amb la mateixa clau → `IntegrityError`. La clau sencera
+    ja garanteix com a màxim UNA fila; l'eix sol cura el 500. I reviure la fila podada en
+    escriure-hi és el comportament correcte: qui n'ajusta la talla la vol viva.
     """
     from fhort.models_app.models import BaseMeasurement
     from fhort.pom.models import MeasurementLayer
     bm, _created = BaseMeasurement.objects.get_or_create(
         model=model, pom=pom,
-        capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
+        capa=capa or MeasurementLayer.SLUG_DEFECTE, instancia=instancia or '',
+        garment=garment or '',
         defaults={'base_value_cm': valor, 'origen': 'STANDARD'})
     bm.base_value_cm = valor
     bm._changed_by = auth_user
@@ -2938,7 +3827,41 @@ def grading_status_view(request, model_id):
     # mut del 400. És EL MATEIX predicat que el gate dur de `generate_grading_view` (:2354) i que
     # el del motor: un sol `_te_regles`, com mana G6/0b — dos predicats serien dues veritats.
     from fhort.pom.services import _te_regles
+    # STEPPER DE MESURES (§6 · Agus 09/08). Les quatre portes de Mesures es pinten pel seu ESTAT
+    # —fet · disponible · bloquejat amb motiu— i l'estat el sap el backend, no la pantalla. Es
+    # diuen aquí i no en un endpoint nou perquè aquesta ja és LA vista d'estat d'aquest circuit:
+    # dos endpoints per a la mateixa pregunta acabarien donant dues respostes.
+    #   · te_mesures — hi ha alguna mesura base amb valor (el pas «Editar POM» està fet);
+    #   · te_taula   — hi ha versió activa amb specs, que és el que «Mesurar prenda» exigeix i el
+    #                  que el model 1320 no tenia (el gate deia la veritat: no hi era).
+    #
+    # B4 (10/08) — I ELS DOS FETS QUE FALTAVEN, que és el que feia que el stepper i el Dashboard
+    # es contradiguessin. El Dashboard deia «Mesurar prenda: Feta» i «Escalat: Feta» i el stepper
+    # pintava les dues portes com si res: no és que discrepessin, és que el stepper **no tenia
+    # cap fet per a aquests dos passos** i per tant no podia dir-ne res. Cap dels dos mentia.
+    #
+    # QUINA MANA, ara que totes dues poden parlar: **el FET del model**. Una `ModelTask` és el
+    # testimoni de la FEINA —algú la pot marcar Feta sense que hi hagi res al model, i el seu
+    # llistat va escopat per `view_team_tasks`, o sigui que depèn de qui mira—; el stepper diu
+    # ON ÉS EL MODEL, i això no pot dependre ni d'un gest ni d'un permís. És la mateixa llei que
+    # ja mana al gate d'entrada del tab Mesures (`pom_task_done` del MODEL, no de la llista) i
+    # la que diu `CLAUDE.md`: la conformitat es mesura.
+    #   · te_presa      — hi ha algun fitting amb contingut (algú ha mesurat una peça de debò,
+    #                     no una graella oberta i no tocada). MATEIX predicat que el Repàs i la
+    #                     Comprovació: `fitting.esdeveniments`.
+    #   · te_propagacio — àlies de `te_dades_propagades` per al stepper, perquè el pas ④ es
+    #                     pinti amb el mateix vocabulari que els altres tres i no calgui que la
+    #                     pantalla sàpiga que dos noms són la mateixa cosa.
+    from fhort.fitting.esdeveniments import peces_amb_contingut
+    te_mesures = BaseMeasurement.objects.filter(
+        model=model, is_active=True, base_value_cm__isnull=False).exists()
+    te_taula = bool(gv and gv.is_active and GradedSpec.objects.filter(
+        grading_version=gv, is_active=True).exists())
     return Response({
+        'te_mesures': te_mesures,
+        'te_taula': te_taula,
+        'te_presa': bool(peces_amb_contingut(model.id)),
+        'te_propagacio': te_dades,
         'te_dades_propagades': te_dades,
         'segellada': bool(gv and gv.aprovada),
         'version_number': gv.version_number if gv else None,
@@ -2949,6 +3872,7 @@ def grading_status_view(request, model_id):
 
 @api_view(['POST'])
 @permission_classes([_ExecuteTasksCap])
+@bat_escriptura(SUP_MESURES)
 def base_measurements_reorder_view(request, model_id):
     """POST /api/v1/models/<model_id>/base-measurements/reorder/  Body: {ids: [bm_id, ...] ordenats}
 
@@ -3032,6 +3956,7 @@ def base_measurement_noms_view(request, bm_id):
     for camp, valor in canvis.items():
         setattr(bm, camp, valor)
     bm.save(update_fields=[*canvis.keys(), 'updated_at'])
+    batec_de_request(request, bm.model_id, SUP_MESURES)   # F1.3 — batejar una fila és treballar
 
     return Response({
         'id': bm.id,
@@ -3150,6 +4075,21 @@ def base_stages_view(request, model_id):
             'tol_plus': tp,
             'base_value_cm': float(bm.base_value_cm) if bm.base_value_cm is not None else None,
             'base_measurement_id': bm.id,
+            # C4/BLOC 2 — ELS DOS EIXOS AL CONTRACTE. El quart lector de la mateixa espècie que
+            # A1/A2/A3: resol la identitat sencera aquí dins (`clau_bm`, i `displayed` per
+            # `(pom, capa, instancia)`) i després no la deia.
+            #
+            # Aquí no és només llegir. Aquesta vista alimenta la graella de MESURES, que és
+            # l'única superfície amb poda (`measureSources.supportsPoda`): sense els eixos, el
+            # front no pot dir QUINA germana treu, i `desactivar_pom` no té com saber-ho.
+            'capa': bm.capa,
+            'instancia': bm.instancia,
+            # SET-2/R11 — I EL TERCER EIX, pel mateix argument literal, un eix més tard:
+            # aquesta vista alimenta Comprovació i la graella de Mesures, i sense ell la
+            # pantalla no pot distingir dues prendes. És l'eix d'una FILA —dada factual,
+            # de quina peça és aquesta mesura— i per tant entra per l'acta de T6a
+            # («servir l'eix d'una fila és sempre legítim»), no per la de la resolució.
+            'garment': bm.garment,
             'takes': takes,
         })
 
@@ -4059,6 +4999,7 @@ def acte_canonic_base_set_view(request, base_set_id):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@bat_escriptura(SUP_MESURES)
 def desactivar_pom_view(request, model_id, pom_id):
     """C1 (PRINCIPI DEL SOROLL, 2026-07-22) — PODA d'un POM del model. SOFT, mai DELETE.
 
@@ -4073,28 +5014,32 @@ def desactivar_pom_view(request, model_id, pom_id):
 
     Body opcional: {motiu: str}.
 
-    ⚠️ C3/E5 — ANCORAT A LA MESURA ÚNICA, I ÉS DEUTE DECLARAT DE C4.
-    El filtre era `(model_id, pom_id, is_active)` seguit d'un `.first()`: amb germanes vives en
-    desactivava UNA, i quina ho decidia l'ordenació — el `Meta.ordering` de `BaseMeasurement`
-    no inclou `instancia` (models.py:759), o sigui que entre dues germanes de la mateixa capa
-    el desempat el feia el planner de Postgres. I l'escriptura SÍ deixa entrada al
-    `MeasurementChangeLog` (via `_desactivat`): una fila MAL ATRIBUÏDA en una taula
-    append-only, que no es podrà corregir mai.
+    ✅ C4/BLOC 2 — EL DEUTE PAGAT: LA RUTA JA DIU DE QUINA GERMANA PARLA.
+    El que hi havia deia: «quan la ruta sàpiga dir la capa i la instància, aquest ancoratge
+    se'n va». Ara ho sap, i se n'ha anat.
 
-    No es pot arreglar del tot aquesta nit: **el contracte de la ruta només porta `pom_id`**
-    (`models_app/urls.py:233`), i fer-hi entrar els eixos és tocar la interfície, que és C4 amb
-    maqueta (llei 3c.5). El que sí es pot fer, i es fa, és deixar de triar a l'atzar: s'ancora
-    explícitament a la mesura única ('exterior', ''), com ja fan altres lectors de la cadena.
-    Amb les comportes vives és exactament la mateixa fila que abans; la diferència és que ara
-    ho diu, en comptes de deixar-ho al planner.
-    DEUTE C4: quan la ruta sàpiga dir la capa i la instància, aquest ancoratge se'n va.
+    Els eixos entren pel COS, no pel camí. El camí segueix sent
+    `/models/<model_id>/pom/<pom_id>/desactivar/` perquè aquesta petició ja és un POST amb cos
+    (`{motiu}`) i perquè una `instancia` buida —el cas normal— no té representació honesta dins
+    d'una URL: `.../pom/12//desactivar/` i `.../pom/12/-/desactivar/` són dues maneres
+    d'escriure el mateix i totes dues conviden a equivocar-se. La resolució passa per
+    `_identitat_de_mesura`, el mateix punt únic que fan servir els dos upserts i les dues podes.
+
+    QUI NO ELS DIU rep el literal de sempre —l'exterior de la instància única—, exactament com
+    abans d'aquest canvi. No es mira mai quines files hi ha per triar-ne una: aquell desempat
+    a l'atzar (el `Meta.ordering` de `BaseMeasurement` no inclou `instancia`, models.py:759) és
+    el que aquest tram existeix per matar, i aquí el preu era especialment alt perquè
+    l'escriptura deixa entrada al `MeasurementChangeLog` via `_desactivat`: una fila MAL
+    ATRIBUÏDA en una taula append-only, que no es podrà corregir mai.
+
+    Body: `{motiu?: str, capa?: str, instancia?: str}`.
     """
     from fhort.models_app.models import BaseMeasurement
-    from fhort.pom.models import MeasurementLayer
 
+    capa, instancia, garment = _identitat_de_mesura(request.data)
     bm = (BaseMeasurement.objects
           .filter(model_id=model_id, pom_id=pom_id, is_active=True,
-                  capa=MeasurementLayer.SLUG_DEFECTE, instancia='')
+                  capa=capa, instancia=instancia, garment=garment)
           .select_related('pom').first())
     if bm is None:
         return Response({'detail': 'Mesura no trobada (o ja inactiva) per a aquest model.'},
@@ -4109,6 +5054,16 @@ def desactivar_pom_view(request, model_id, pom_id):
     return Response({
         'model': int(model_id),
         'pom': int(pom_id),
+        # C4/BLOC 2 — la resposta diu QUINA fila ha caigut. Amb germanes vives, «s'ha podat el
+        # POM 12» no és una resposta: n'hi ha dues i el client ha de poder confirmar que la que
+        # ha marxat és la que ell mirava.
+        # S42/F1 — i la PRENDA amb elles. El filtre d'aquesta vista ja resol els QUATRE eixos
+        # des de F5+, però la resposta n'emetia dos: amb dues peces vives, «s'ha podat la
+        # capa exterior de la instància única» segueix sense dir QUINA fila ha caigut, que és
+        # justament el que el comentari de sobre diu que aquesta resposta serveix per fer.
+        'capa': bm.capa,
+        'instancia': bm.instancia,
+        'garment': bm.garment,
         'base_measurement': bm.id,
         'is_active': False,
         'codi': bm.nom_fitxa or bm.pom.codi_client or '',
@@ -4163,6 +5118,7 @@ def _sembra_step_des_dels_specs(model, pom_id):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@bat_escriptura(SUP_ESCALAT)
 def set_pom_regim_view(request, model_id, pom_id):
     """PG-4b-3a / P3 — UPSERT de la REGLA resident (ModelGradingRule) per (model, pom).
 
@@ -4205,15 +5161,28 @@ def set_pom_regim_view(request, model_id, pom_id):
     if model is None:
         return Response({'detail': 'Model no trobat.'}, status=404)
 
+    # SET-2/#12d — DE QUINA PRENDA ÉS LA REGLA. La clau de `ModelGradingRule` és
+    # `(model, pom, garment)` des de T3 i la comporta que la congelava va caure al #12, però
+    # aquest contracte encara identificava la regla amb el `pom_id` pelat: editar-la des del
+    # contenidor de la 02 escrivia sobre la de la mare. L'eix surt del punt únic de la casa
+    # (`_identitat_de_mesura`), i qui no el diu —el 100% dels clients d'avui— rep la mare,
+    # exactament com abans.
+    garment = _identitat_de_mesura(data)[2]
+
     with transaction.atomic():
-        rule = ModelGradingRule.objects.filter(model=model, pom_id=pom_id).first()
+        rule = ModelGradingRule.objects.filter(
+            model=model, pom_id=pom_id, garment=garment).first()
         if rule is None:
             # Sembra des del fallback del catàleg si n'hi ha; si no, regla nova (autoria de zero).
+            # ⚠️ El joc del CATÀLEG no porta `garment` i no en pot portar: és una llei
+            # reutilitzable, mai propietat d'un model ni d'una prenda (v. `pom.GradingRule`).
+            # La sembra, doncs, es busca igual per a totes dues prendes; el que neix amb l'eix
+            # és la resident.
             src = (GradingRule.objects.filter(
                        rule_set_id=model.grading_rule_set_id, pom_id=pom_id).first()
                    if model.grading_rule_set_id else None)
             rule = ModelGradingRule(
-                model=model, pom_id=pom_id, actiu=True,
+                model=model, pom_id=pom_id, garment=garment, actiu=True,
                 logica=(src.logica if src else 'LINEAR'),
                 increment=(src.increment if src else 0),
                 valors_step=(src.valors_step if src else None),
@@ -4221,7 +5190,14 @@ def set_pom_regim_view(request, model_id, pom_id):
                 increment_break=(src.increment_break if src else None),
                 talla_break_label=(src.talla_break_label if src else None),
                 talla_break_pos=(src.talla_break_pos if src else None),
+                # M3 — el criteri d'aquest upsert, i el sap ell mateix: si la fila NEIX del
+                # fallback del catàleg (`src`), ve d'aquell joc, per molt que el `MANUAL` de
+                # sota li digui el contrari —és exactament la mentida que M3 desfà. Si neix
+                # sense `src`, és autoria de zero i el camp es queda NULL.
+                derivat_de_rule_set_id=(src.rule_set_id if src else None),
             )
+        # Si la fila JA EXISTIA no es toca `derivat_de_rule_set`: editar-la no canvia d'on va
+        # néixer. El camp diu la PROCEDÈNCIA, no qui l'ha tocada l'últim (això és `origen`).
 
         if logica is not None:
             rule.logica = logica
@@ -4266,6 +5242,11 @@ def set_pom_regim_view(request, model_id, pom_id):
     return Response({
         'model': model.id,
         'pom': rule.pom_id,
+        # SET-2/#12d — la resposta diu QUINA regla ha canviat. Amb dues prendes, «s'ha desat
+        # la regla del POM 12» no és una resposta: n'hi pot haver dues i el client ha de poder
+        # confirmar que la que ha canviat és la que ell mirava. Mateixa llei que la resposta
+        # de `desactivar_pom` a C4/BLOC 2.
+        'garment': rule.garment,
         'logica': rule.logica,
         'origen': rule.origen,
         'increment_base': float(rule.increment_base) if rule.increment_base is not None else None,

@@ -10,18 +10,24 @@ logger = logging.getLogger(__name__)
 # Transicions permeses (from -> {to})
 ALLOWED = {
     'Pending':    {'InProgress'},
+    # ⚠️ `Paused → Done` NO hi és, i és una DECISIÓ (Patró C · Agus · 28/07, fixada a
+    # `test_stop_encadenat`): la màquina d'estats no es toca i el Stop sobre una tasca pausada
+    # és play+stop ENCADENAT, dues transicions legals en un sol gest d'usuari.
     'Paused':     {'InProgress'},
     'InProgress': {'Paused', 'Done'},
     'Done':       {'InProgress'},   # reobertura = rectificació
 }
 
 
-def _open_timer(task, profile):
+def _open_timer(task, profile, origen=TimerEntrada.ORIGEN_MESURAT):
     # Invariant ≤1 timer obert per tasca: tanca qualsevol obert previ abans d'obrir-ne un de nou
     # (defensa contra fuites; en condicions normals no n'hi ha cap d'obert en entrar a InProgress).
+    #
+    # T3 — `origen` viatja des de la porta: un tram DECLARAT neix declarat, no es converteix
+    # després. El default deixa tots els camins d'abans exactament com estaven.
     _close_open_timer(task)
-    TimerEntrada.objects.create(model_task=task, tecnic=profile,
-                                inici=timezone.now(), actiu=True)
+    return TimerEntrada.objects.create(model_task=task, tecnic=profile,
+                                       inici=timezone.now(), actiu=True, origen=origen)
 
 
 def _close_open_timer(task):
@@ -35,14 +41,66 @@ def _close_open_timer(task):
         t.save(update_fields=['fi', 'minuts', 'actiu'])
 
 
+def te_paret_albara(task):
+    """La tasca té línia en un albarà EMÈS? (D-5 · v2)
+
+    Punt únic: la fan servir `transition_task` —que la converteix en rebuig de la reobertura— i
+    el batec d'escriptura, que ha de poder DIR-LA sense intentar la transició. Escrita dues
+    vegades, el dia que el criteri canviï (avui `ISSUED`/`INVOICED`) només en canviaria una.
+    """
+    return task.delivery_note_lines.filter(
+        delivery_note__status__in=['ISSUED', 'INVOICED']).exists()
+
+
 def _log(task, frm, to, profile, auto=None):
     # `auto` viatja fins al log perquè digui la veritat: null = gest del tècnic, slug = guard.
     TaskTransition.objects.create(model_task=task, from_status=frm, to_status=to, by=profile,
                                   auto=auto)
 
 
+def _aplica_exclusio_tecnic(profile, task):
+    """D-6 — UN TÈCNIC, UN SOL TRAM OBERT. Punt únic per a TOTES les portes que li'n obren un.
+
+    F1.5 va ancorar l'exclusió a QUI TREBALLA (`TimerEntrada.tecnic`) i no a qui la té assignada
+    (`assignee` és planificació), i la va tancar a `transition_task`. Però el RELLEU no hi passa:
+    `claim` i la branca de handoff d'`open-task` criden `traspassa_tram` sense cap transició —«el
+    relleu no canvia l'estat»—, i `_open_timer` només tanca els trams D'AQUESTA TASCA. Un tècnic
+    amb feina oberta que es quedava la tasca d'un altre acabava amb DOS trams oberts: el mateix
+    mal que F1.5 va matar, viu per l'altra porta, i el temps tornava a ser imputable a dos llocs
+    alhora (que és el que contamina `record_actual_time` i el Welford, D-3).
+
+    Tanca els trams oberts del tècnic en QUALSEVOL altra tasca i pausa les que estaven En curs.
+    La pausa va MARCADA (`auto='exclusio_inprogress'`): no és un gest del tècnic sobre aquella
+    tasca —ell n'ha obert una altra i el sistema li ha tancat aquesta—, i sense la marca el log
+    li atribuiria una pausa que no va fer.
+
+    Retorna el pk de l'última tasca pausada (o None), per a qui vulgui dir-ho a la resposta.
+    """
+    paused_task_id = None
+    obertes = (ModelTask.objects
+               .filter(timers__tecnic=profile, timers__fi__isnull=True, timers__actiu=True)
+               .exclude(pk=task.pk).distinct())
+    for other in obertes:
+        _close_open_timer(other)
+        if other.status == 'InProgress':
+            other.status = 'Paused'
+            other.save(update_fields=['status', 'updated_at'])
+            _log(other, 'InProgress', 'Paused', profile, auto='exclusio_inprogress')
+        paused_task_id = other.pk
+    return paused_task_id
+
+
 class TransitionError(Exception):
-    pass
+    """Rebuig d'una transició de tasca.
+
+    Porta un `code` opcional perquè la porta HTTP el pugui reenviar i el client sàpiga QUINA
+    paret ha tocat. Sense `code` el rebuig és genèric i el client cau al missatge de sempre:
+    afegir-ne un no obliga ningú a canviar res.
+    """
+
+    def __init__(self, message, code=None):
+        super().__init__(message)
+        self.code = code
 
 
 def _is_off_recipe(task, work_order):
@@ -175,7 +233,8 @@ def _meritar_conjunt(model, now):
 
 
 @transaction.atomic
-def transition_task(task, to_status, profile, force=False, auto=None):
+def transition_task(task, to_status, profile, force=False, auto=None,
+                    origen=TimerEntrada.ORIGEN_MESURAT):
     """Aplica una transició d'estat. Imposa 'una sola InProgress per tècnic' (global):
     en entrar a InProgress, pausa l'altra InProgress del mateix tècnic (tanca timer + log).
     Retorna dict amb la tasca i, si escau, la pausada automàticament.
@@ -194,27 +253,35 @@ def transition_task(task, to_status, profile, force=False, auto=None):
     # reobrir (rectificació = extra nova que genera línia al proper albarà). DRAFT NO bloqueja
     # (encara es pot desfer esborrant el DRAFT). Limitat estrictament a Done→InProgress.
     if not force and frm == 'Done' and to_status == 'InProgress':
-        if task.delivery_note_lines.filter(
-                delivery_note__status__in=['ISSUED', 'INVOICED']).exists():
-            raise TransitionError('No es pot reobrir una tasca ja albaranada (albarà emès).')
+        if te_paret_albara(task):
+            # El `code` és el que fa que el client pugui dir el MOTIU. Sense ell, aquest rebuig
+            # arribava com un 409 mut i el tècnic veia «no s'ha pogut obrir la tasca» sense saber
+            # que la paret és l'albarà: 7 intents en dues hores sobre el mateix model (188), tots
+            # amb el mateix toast (v. DIAGNOSI_CICLE_TASCA_COMPLET §M-2).
+            raise TransitionError('No es pot reobrir una tasca ja albaranada (albarà emès).',
+                                  code='tasca_albaranada')
 
     paused_task_id = None
     now = timezone.now()
 
     if to_status == 'InProgress':
-        # Regla: una sola InProgress per tècnic (a qualsevol model)
-        other = (ModelTask.objects.filter(assignee=profile, status='InProgress')
-                 .exclude(pk=task.pk).first())
-        if other:
-            _close_open_timer(other)
-            other.status = 'Paused'
-            other.save(update_fields=['status', 'updated_at'])
-            # Aquesta pausa tampoc no és un gest sobre `other`: el tècnic n'ha obert una altra i el
-            # sistema li ha tancat aquesta. Sense marca, el log li atribuïa una pausa que no va fer.
-            _log(other, 'InProgress', 'Paused', profile, auto='exclusio_inprogress')
-            paused_task_id = other.pk
-        # Obrir timer de la tasca que entra
-        _open_timer(task, profile)
+        # F1.5 · D-6 — Regla: una sola InProgress per tècnic (a qualsevol model), i ara ancorada
+        # a QUI TREBALLA i no a qui la té assignada.
+        #
+        # `assignee` és un camp de PLANIFICACIÓ; el rellotge s'ancora a `TimerEntrada.tecnic`, que
+        # és qui hi és de debò. I com que aquesta funció només escriu `assignee` quan és `None`
+        # (unes línies més avall), els dos eixos divergien sols: sempre que actor ≠ assignat, la
+        # consulta d'exclusió no veia la tasca oberta i el tècnic n'acabava amb dues alhora.
+        # No és teòric — hi ha el cas a la BD: timers 116 i 117, tècnic 1, 24/06, solapats
+        # 122 min i 0 min (§Q5.2 de la diagnosi del cicle).
+        #
+        # Mirant els TRAMS OBERTS la invariant torna a ser certa per construcció: el que tanca
+        # l'exclusió és exactament el que el rellotge considera «obert».
+        # V3 (06/08) — el bucle viu ara a `_aplica_exclusio_tecnic`, perquè el RELLEU també hi
+        # ha de passar i tenir-lo escrit dues vegades hauria deixat divergir les dues portes.
+        paused_task_id = _aplica_exclusio_tecnic(profile, task)
+        # Obrir timer de la tasca que entra (T3: `origen` el decideix qui obre la porta)
+        _open_timer(task, profile, origen=origen)
         if task.started_at is None:
             task.started_at = now
         if frm == 'Done':
@@ -241,21 +308,21 @@ def transition_task(task, to_status, profile, force=False, auto=None):
         # MÓN TÈCNIC (sagrat): la fase passa a Dev com avui, fora de tota lògica de facturació.
         Model.objects.filter(pk=task.model_id, fase_actual='Pending').update(fase_actual='Dev')
 
-        # MERITACIÓ SaaS (FHORT→tenant). N10: no-fatal, aïllat — mai bloqueja la transició
-        # del tècnic. Llei DUES FACTURACIONS SEPARADES: aquest atomic NO conté res del
-        # mòdul comercial; un error de commerce no pot revertir una meritació amb èxit.
-        try:
-            with transaction.atomic():
-                model = Model.objects.select_related('customer', 'garment_set').get(
-                    pk=task.model_id)
-                if model.garment_set_id:
-                    _meritar_conjunt(model, now)
-                else:
-                    _meritar_model(model, now)
-        except Exception:
-            logger.exception("meritacio fallida model=%s task=%s", task.model_id, task.pk)
-            # NO re-raise: el tecnic ja te la transicio feta; el forat es reconcilia despres
-            # amb `reconcile_consumption`.
+        # F1.4 · D-10 — AQUÍ hi havia la MERITACIÓ SaaS, i ja no hi és.
+        #
+        # El fet facturable era «algú ha obert una porta»: la primera `→InProgress` de qualsevol
+        # tasca meritava el model, emetia l'event a `public` i reancorava el pla. Tocar una porta
+        # tres segons per error facturava (verificat: els 21 ConsumptionRecord del tenant tenien
+        # `merited_at == started_at` de la primera tasca).
+        #
+        # Ara el fet facturable és «algú hi ha ESCRIT»: el gallet viu a
+        # `services_batec.batec_escriptura`, que és l'únic lloc que sap que hi ha hagut feina
+        # real i no només una pestanya oberta. Les funcions `_meritar_model` / `_meritar_conjunt`
+        # / `_emetre_meritacio` NO s'han tocat: han canviat de gallet, no de disseny, i el guard
+        # d'idempotència segueix sent el seu `UPDATE ... WHERE consumption_started_at IS NULL`.
+        #
+        # El que ES QUEDA aquí és el món tècnic (`fase_actual='Dev'`, a dalt) i l'encàrrec
+        # (`assign_work_order`, a sota): ni l'un ni l'altre són facturació SaaS.
 
         # B4a — ENCÀRREC (mòdul comercial, studio→tercers). Món separat: savepoint propi, i
         # s'intenta encara que la meritació hagi fallat (són independents). Assigna work_order
@@ -292,6 +359,42 @@ def transition_task(task, to_status, profile, force=False, auto=None):
         sync_estat_segur(_model, SENTIT_MADURESA)
 
     return {'task_id': task.pk, 'status': to_status, 'paused_task_id': paused_task_id}
+
+
+def traspassa_tram(task, profile):
+    """F1.5 · D-7 — El relleu d'una tasca EN CURS, fet visible.
+
+    Fins avui, endur-se una tasca d'un altre (per `open-task` o per `claim`) reassignava
+    l'`assignee` i prou: el tram del tècnic anterior **quedava obert**, seguint-li imputant temps
+    a ell, i el nou treballava sense rellotge propi. Al log no en quedava cap fila — el relleu era
+    l'únic moviment del sistema que no deixava rastre.
+
+    Aquí es tanca el tram de qui la tenia, se n'obre un per a qui l'agafa, i s'escriu un
+    `TaskTransition` marcat `auto='handoff'` perquè el log digui QUÈ ha passat sense atribuir a
+    ningú un gest que no ha fet. L'estat de la tasca no es toca: seguia `InProgress` i hi segueix
+    — el que canvia és de qui és el rellotge.
+
+    V3 (06/08) — I L'EXCLUSIÓ TAMBÉ VAL PER AL QUE ARRIBA. `_open_timer` només tanca els trams
+    D'AQUESTA TASCA: un tècnic que ja treballava en una altra i es quedava aquesta n'acabava amb
+    DOS d'oberts, perquè el bucle d'exclusió vivia només a la branca `InProgress` de
+    `transition_task` i el relleu no hi passa (no canvia l'estat, i és correcte que no el canviï).
+    Ara el relleu crida el mateix `_aplica_exclusio_tecnic` que obrir una tasca: la feina que el
+    tècnic tenia oberta queda PAUSADA i marcada (`auto='exclusio_inprogress'`), i el rastre del
+    relleu (`auto='handoff'`) segueix intacte, que són dos fets diferents i s'han de poder llegir
+    per separat.
+
+    Retorna el pk del tècnic anterior (o None si la tasca no tenia cap tram obert).
+    """
+    anterior = (TimerEntrada.objects
+                .filter(model_task=task, fi__isnull=True, actiu=True)
+                .values_list('tecnic_id', flat=True).first())
+    if anterior == profile.pk:
+        return None                      # ja és seva: cap relleu
+    _aplica_exclusio_tecnic(profile, task)   # la feina que el nou tenia oberta, pausada
+    _open_timer(task, profile)           # tanca TOTS els oberts i n'obre un per al nou
+    if anterior is not None:
+        _log(task, task.status, task.status, profile, auto='handoff')
+    return anterior
 
 
 def rectification_count(task) -> int:

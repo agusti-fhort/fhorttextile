@@ -113,37 +113,246 @@ def suggested_poms_view(request):
 @permission_classes([IsAuthenticated])
 def search_poms_view(request):
     """
-    GET /api/v1/poms/cerca/?q=chest
+    GET /api/v1/poms/cerca/?q=chest[&model=<id>][&page_size=N]
     Search POMs in the tenant catalog by code or name.
-    Return max 20 results for autocomplete.
     """
     q = request.query_params.get('q', '').strip()
-    if len(q) < 2:
-        return Response({'results': []})
+
+    # ⚠️ **SENSE TEXT NO ES TORNAVA RES, I AIXÒ NO ÉS «CERCAR»: ÉS OBLIGAR A ENDEVINAR.**
+    # (QA Agus 09/08, segona volta.) Era `if not q: return {'results': []}`, o sigui que el
+    # catàleg només existia per a qui ja en sabia el nom. Qui obre el carril per veure QUÈ hi ha
+    # —el cas de qui encara no coneix la nomenclatura d'aquest client— es trobava un buit i en
+    # deduïa que no hi havia catàleg. És la mateixa cadena que va fabricar el duplicat: el que no
+    # es veu es torna a crear.
+    #
+    # Amb la consulta buida no es filtra res i es torna el CATÀLEG SENCER (els 142 + els àlies
+    # del client), amb el mateix sostre declarat que la resta: `count` i `truncat` diuen quants
+    # n'hi ha i si en falten. Ordenar no és amagar (D-31.3).
+    cataleg_sencer = not q
+
+    # ⚠️ **EL MÍNIM DE DOS CARÀCTERS FEIA INABASTABLE MIG CATÀLEG** (QA Agus 09/08).
+    #
+    # Era `len(q) < 2 → cap resultat`, i el catàleg v4 de Brownie té **22 POMs amb codi d'UN sol
+    # caràcter** (A, B, C, D, E, **F**, I, J, K…) més 13 àlies igual de curts. Escriure «F» al
+    # carril —que és exactament com es diu aquella cota— no tornava res, i el POM semblava no
+    # existir. D'aquí va sortir un duplicat creat a mà.
+    #
+    # Amb un sol caràcter la cerca es fa NOMÉS PER CODI (i per prefix): qui escriu «F» en un
+    # carril que va per nomenclatura demana el codi F, no totes les mesures que porten una efa
+    # al mig del nom. Amb dos o més, la cerca és la de sempre, per codi I per nom.
+    nomes_codi = len(q) == 1
+
+    # EL SOSTRE ES DIU I ES POT MOURE. Era `[:20]` incrustat dues vegades i el client n'enviava
+    # un altre (`page_size=10`) que ningú llegia: la llista es tallava en silenci i no hi havia
+    # manera de saber si el que buscaves no hi era o només no hi cabia. Ara el `page_size` mana
+    # i la resposta diu `count`/`truncat` (v. el final de la vista).
+    try:
+        limit = max(1, min(int(request.query_params.get('page_size') or 25), 100))
+    except (TypeError, ValueError):
+        limit = 25
 
     try:
-        from fhort.pom.models import POMMaster
-        from django.db.models import Q
+        from fhort.pom.models import CustomerPOMAlias, POMMaster
+        from django.db.models import Case, IntegerField, Q, Value, When
 
-        poms = POMMaster.objects.filter(
-            actiu=True
-        ).filter(
+        # ─────────────────────────────────────────────────────────────────────────────────
+        # ELS POMS ES VAN A BUSCAR AL CATÀLEG DEL CLIENT. ENLLOC MÉS. (Agus, 06/08)
+        # ─────────────────────────────────────────────────────────────────────────────────
+        #
+        # Aquesta vista cercava per `POMMaster.codi_client`, i aquell camp **es diu "client"
+        # però és el codi de la CASA**. El codi DEL CLIENT viu només a
+        # `CustomerPOMAlias.client_code`. Conseqüència mesurada al schema `fhort`: un model de
+        # Brownie veia els 393 POMs del tenant —inclosos els 240 de Losan— i, buscant «U1», se
+        # li oferien `U1 JETTING WIDTH` (de LOS) i `U1 Height sequins piece` (un orfe creat per
+        # un import), però NO `BTN SP Button spacing`, que és el que Brownie anomena U1.
+        #
+        # Amb `?model=` (el cas del cercador de Definició POM) la cerca resol TAMBÉ contra els
+        # àlies del client D'AQUEST MODEL: el seu codi, la seva descripció internacional i la
+        # seva descripció local. Això respon una pregunta que el catàleg de la casa sol no pot
+        # respondre: «com anomena aquest client aquesta mesura?».
+        #
+        # ⚠️ **PERÒ ÉS UNA UNIÓ, NO UN FILTRE** (QA Agus 09/08, i és un defecte pagat en dades).
+        #
+        # Amb `?model=` la cerca es feia NOMÉS contra els àlies, i llavors un POM del catàleg
+        # que aquest client encara no ha batejat **no existeix per al cercador**. Mesurat al
+        # schema `fhort` amb el catàleg v4: 143 POMs actius i només 64 amb àlies de Brownie →
+        # **79 invisibles**. Entre ells `EK · Neck width`, que és exactament el que es va anar a
+        # buscar, no es va trobar, i es va acabar creant un duplicat (POM 1047). El cercador que
+        # amaga dos terços del catàleg no protegeix de res: FABRICA duplicats.
+        #
+        # I hi havia un segon forat de la mateixa forma: contra els àlies només es miraven els
+        # camps de l'àlies, o sigui que un POM SÍ batejat pel client tampoc no es trobava pel
+        # seu nom canònic. Qui escriu «neck» al carril vol totes dues coses.
+        #
+        # Per això ara sempre hi ha les DUES consultes i el resultat és la seva unió, amb els
+        # àlies al davant: la proximitat ordena, no exclou. Sense `?model=` només hi ha la
+        # canònica, perquè no hi ha client de qui parlar.
+        model_id = request.query_params.get('model')
+        customer_id = None
+        if model_id:
+            from fhort.models_app.models import Model as ModelPeça
+            customer_id = (ModelPeça.objects.filter(pk=model_id)
+                           .values_list('customer_id', flat=True).first())
+
+        # (a) EL CATÀLEG DE LA CASA — sempre. Codi i nom propis, i el canònic del sector si el POM
+        #     hi està lligat.
+        filtre_canonic = (
+            Q() if cataleg_sencer else
+            Q(codi_client__istartswith=q) if nomes_codi else
             Q(codi_client__icontains=q) |
             Q(nom_client__icontains=q) |
             Q(pom_global__nom_ca__icontains=q) |
             Q(pom_global__nom_en__icontains=q)
-        ).select_related('pom_global', 'categoria')[:20]
+        )
+        ids_canonic = list(POMMaster.objects.filter(actiu=True).filter(filtre_canonic)
+                           # El codi EXACTE primer: qui escriu «F» vol la F, i després les seves
+                           # germanes (F1, F2, FB…). Sense això la F queia enmig d'una llista
+                           # alfabètica de setze codis que comencen igual.
+                           .annotate(_exacte=Case(When(codi_client__iexact=q, then=Value(0)),
+                                                  default=Value(1), output_field=IntegerField()))
+                           .order_by('_exacte', 'codi_client').values_list('id', flat=True))
 
-        data = [{
-            'id': p.id,
-            'codi_client': p.codi_client,
-            'nom_client': p.nom_client,
-            'nom_ca': p.pom_global.nom_ca if p.pom_global_id else '',
-            'nom_en': p.pom_global.nom_en if p.pom_global_id else '',
-            'categoria_nom': p.categoria.nom_ca if p.categoria_id else '',
-        } for p in poms]
+        # (b) EL VOCABULARI DEL CLIENT — només amb model al davant. Un client pot tenir diversos
+        #     codis per al mateix POM (la unicitat és (customer, client_code)), així que es
+        #     dedupliquen per `pom_id` conservant l'ordre d'aparició.
+        ids_alies = []
+        if customer_id:
+            filtre_alies = (
+                Q() if cataleg_sencer else
+                Q(client_code__istartswith=q) if nomes_codi else
+                Q(client_code__icontains=q) |
+                Q(description_en__icontains=q) |
+                Q(description_local__icontains=q)
+            )
+            ids_alies = list(CustomerPOMAlias.objects
+                             .filter(customer_id=customer_id, pom__isnull=False)
+                             .filter(filtre_alies)
+                             .annotate(_exacte=Case(When(client_code__iexact=q, then=Value(0)),
+                                                    default=Value(1), output_field=IntegerField()))
+                             .order_by('_exacte', 'pendent_revisio', 'client_code')
+                             .values_list('pom_id', flat=True))
 
-        return Response({'results': data})
+        # EL NIVELL DE PROXIMITAT (v8.1 · cercador agrupat). Amb `?model=`, cada resultat diu si
+        # el POM ve de l'ITEM d'aquest model, de la seva FAMÍLIA (un altre item del mateix
+        # GarmentType) o del CATÀLEG del client. Sense `?model=` tots surten com a 'cataleg': el
+        # nivell és una relació amb un model concret, i inventar-la sense model seria mentir.
+        #
+        # Es resol amb DUES consultes de `pom_id` i no per resultat: vint resultats × dues
+        # comprovacions serien quaranta viatges a la BD per pintar una llista desplegable.
+        ids_item, ids_familia = set(), set()
+        if model_id:
+            from fhort.pom.models import GarmentPOMMap
+            m = (ModelPeça.objects
+                 .filter(pk=model_id)
+                 .values('garment_type_item_id', 'garment_type_item__garment_type_id')
+                 .first())
+            if m and m['garment_type_item_id']:
+                ids_item = set(GarmentPOMMap.objects
+                               .filter(garment_type_item_id=m['garment_type_item_id'])
+                               .values_list('pom_id', flat=True))
+                gt = m['garment_type_item__garment_type_id']
+                if gt:
+                    ids_familia = set(GarmentPOMMap.objects
+                                      .filter(garment_type_item__garment_type_id=gt)
+                                      .values_list('pom_id', flat=True)) - ids_item
+
+        def _nivell(pom_id):
+            if pom_id in ids_item:
+                return 'item'
+            if pom_id in ids_familia:
+                return 'type'
+            return 'cataleg'
+
+        # ══ EL CERCADOR NO FUSIONA ENTITATS: DUES POBLACIONS, SEMPRE (Agus, 09/08) ═══════
+        #
+        # El canònic `F · Centre front length from HPS` i l'àlies `FB2` de Brownie **SÓN DUES
+        # COSES**, i abans se n'oferia UNA: la unió deduplicava per `pom_id` i la presentació
+        # tapava el canònic amb els camps de l'àlies. Qui tenia el catàleg de la casa al davant
+        # i escrivia «F» no podia saber que aquell `FB2` el contenia; qui cercava pel nom
+        # canònic rebia una fila que no deia el nom canònic enlloc. Dir-ho amb una sola fila
+        # obligava el lector a saber-ho ja — i qui no ho sabia, duplicava.
+        #
+        # Ara el desplegable presenta SEMPRE dues poblacions, i cap fila és combinada:
+        #   · CATÀLEG DEL CLIENT — els àlies del client d'aquest model, amb el SEU codi i la SEVA
+        #     redacció, i la segona línia dient a quin canònic apunten;
+        #   · CATÀLEG DE LA CASA — els canònics, cadascun com a ELL MATEIX (codi + nom canònic).
+        #
+        # Un POM amb àlies hi surt DUES vegades, una per secció, i **totes dues resolen al mateix
+        # `pom_id`**: no es demana a ningú que sàpiga que són la mateixa cosa, es deixa que hi
+        # arribi per qualsevol de les dues portes.
+        #
+        # Com a molt UNA fila d'àlies per POM: `alies_per_pom` en dona un per POM (és el que
+        # PINTA la nomenclatura del client) i un client amb dos codis per al mateix POM no ha de
+        # generar dues files calcades.
+        from fhort.pom.nomenclatura import alies_per_pom, camps_de
+        alias_by_pom = alies_per_pom(customer_id)
+        CAMPS_ALIES = list(camps_de(alias_by_pom, None).keys())
+
+        q_cf = q.casefold()
+
+        def _rang_exacte(*codis):
+            """0 si el que s'ha escrit ÉS un d'aquests codis. Es miren ELS DOS (casa i client):
+            el tècnic pot escriure qualsevol dels dos i en tots dos casos vol aquella fila la
+            primera. Amb el camp buit no hi ha res «exacte» a premiar."""
+            if not q_cf:
+                return 1
+            return 0 if q_cf in {(c or '').casefold() for c in codis if c} else 1
+
+        ordre_niv = {'item': 0, 'type': 1, 'cataleg': 2}
+
+        def _fila(p, es_alies):
+            camps = camps_de(alias_by_pom, p.id)
+            fila = {
+                'id': p.id,                       # ← el MATEIX pom_id per les dues portes
+                'seccio': 'client' if es_alies else 'casa',
+                'codi_client': p.codi_client,     # el codi de la CASA (v. `nomenclatura`)
+                'nom_client': p.nom_client,
+                'nom_ca': p.pom_global.nom_ca if p.pom_global_id else '',
+                'nom_en': p.pom_global.nom_en if p.pom_global_id else '',
+                'categoria_nom': p.categoria.nom_ca if p.categoria_id else '',
+                'nivell': _nivell(p.id),
+            }
+            # LA FILA CANÒNICA VA SENSE CAP CAMP D'ÀLIES, i no és un descuit: si els portés, la
+            # presentació tornaria a pintar-hi el codi del client a sobre — que és exactament el
+            # defecte que això tanca. La fila de la casa és la casa.
+            fila.update(camps if es_alies else {c: '' for c in CAMPS_ALIES})
+            return fila
+
+        pids_alies = list(dict.fromkeys(ids_alies))
+        pids_canonic = list(dict.fromkeys(ids_canonic))
+        per_id = {p.id: p for p in POMMaster.objects
+                  .filter(id__in=set(pids_alies) | set(pids_canonic), actiu=True)
+                  .select_related('pom_global', 'categoria')}
+
+        sec_client = [_fila(per_id[i], True) for i in pids_alies if i in per_id]
+        sec_casa = [_fila(per_id[i], False) for i in pids_canonic if i in per_id]
+        # Es puntua i s'ordena DINS de cada secció: exacte primer, després la proximitat (el que
+        # l'item ja declara va davant), i el codi desempata perquè l'ordre sigui estable.
+        for seccio in (sec_client, sec_casa):
+            seccio.sort(key=lambda r: (_rang_exacte(r['codi_client'], r.get('client_code')),
+                                       ordre_niv[r['nivell']], (r['codi_client'] or '')))
+
+        # ⚠️ **EL SOSTRE ES REPARTEIX ENTRE LES DUES SECCIONS.** Tallant la llista sencera, amb
+        # el camp buit els 25 primers serien TOTS del client i la secció de la casa no existiria
+        # mai: una secció buida per aritmètica del tall es llegeix com «aquí no hi ha res», que
+        # és la mentida que aquest tram porta tres voltes tancant. Cada secció té la seva quota i
+        # la que no l'omple cedeix el que li sobra a l'altra.
+        quota = max(1, limit // 2)
+        pren_client = min(len(sec_client), max(quota, limit - len(sec_casa)))
+        pren_casa = min(len(sec_casa), limit - pren_client)
+        data = sec_client[:pren_client] + sec_casa[:pren_casa]
+        total = len(sec_client) + len(sec_casa)
+
+        # `count` és el total REAL i `truncat` diu si el sostre ha tallat. Sense això, «no hi és»
+        # i «no hi cabia» es deien igual — que és com es fabrica un duplicat. Ara cada SECCIÓ diu
+        # també el seu, perquè amb dues poblacions un total sol no permet saber quina s'ha tallat.
+        return Response({
+            'results': data, 'count': total, 'truncat': total > len(data),
+            'seccions': {
+                'client': {'count': len(sec_client), 'mostrats': pren_client},
+                'casa': {'count': len(sec_casa), 'mostrats': pren_casa},
+            },
+        })
     except Exception as e:
         return Response({'error': str(e)}, status=500)
 
@@ -203,7 +412,12 @@ def save_base_size_view(request, model_id):
                     # sota, que ja ho feia.
                     bm = BaseMeasurement.objects.filter(
                         model=model, pom_id=pom_id,
-                        capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
+                        # SET-2/T5 — i el garment. Sense ell, amb una segona peça viva el
+                        # `.first()` triava a l'atzar: el `Meta.ordering` de `BaseMeasurement`
+                        # (`['model','capa','ordre','pom']`) NO inclou ni la instància ni la
+                        # peça, o sigui que el desempat el feia el pla de Postgres. Aquest
+                        # camí escriu a la mare i ara ho diu.
+                        capa=MeasurementLayer.SLUG_DEFECTE, instancia='', garment='',
                     ).first()
                     if bm is None:
                         continue
@@ -244,6 +458,8 @@ def save_base_size_view(request, model_id):
                         pom_id=pom_id,
                         capa=MeasurementLayer.SLUG_DEFECTE,
                         instancia='',
+                        # SET-2/T5 — declarat, no implícit (v. `_identitat_de_mesura`).
+                        garment='',
                         defaults={
                             'base_value_cm': float(value),
                             'is_active': True,
@@ -362,10 +578,20 @@ def base_measurements_view(request, model_id):
         from fhort.models_app.models import BaseMeasurement, Model
         from fhort.pom.nomenclatura import alies_per_pom
 
+        # ⚠️ **AQUEST LECTOR LLENÇAVA L'ORDRE DE L'USUARI** (QA Agus 09/08). Ordenava per
+        # `categoria + codi` —alfabètic—, i per tant una taula que la tècnica havia ordenat amb
+        # el drag&drop del carril tornava a sortir per ordre de codi a la següent càrrega. La
+        # feina d'ordenar-la no es perdia «de vegades»: es perdia SEMPRE, i en silenci.
+        #
+        # `ordre` mana, com a la resta de lectors de mesures (`views.py` 860, 1278, 1359, 1590) i
+        # com la docstring de `base_measurements_reorder_view` ja donava per fet quan deia «totes
+        # les taules llegeixen order_by('ordre')» — era cert a tot arreu menys aquí.
+        # Categoria i codi es queden DARRERE, de desempat: amb `ordre` empatat (files nascudes
+        # abans que la porta el desés, totes a 0) la llista segueix sent la d'abans i no balla.
         bms = BaseMeasurement.objects.filter(
             model_id=model_id, is_active=True
         ).select_related('pom', 'pom__pom_global', 'pom__categoria').order_by(
-            'pom__categoria__display_order', 'pom__codi_client'
+            'ordre', 'pom__categoria__display_order', 'pom__codi_client'
         )
 
         # F1 (cota viva) — àlies de client per pom_id, resolt amb UN sol prefetch (mai
@@ -388,8 +614,14 @@ def base_measurements_view(request, model_id):
         # Precedència a la fitxa: si el model TÉ ruleset, el consumidor segueix el camí del
         # ruleset; aquest camp és el que el substitueix quan no n'hi ha.
         from fhort.models_app.models import ModelGradingRule
+        # SET-2/#12d — LA CLAU DE LA REGLA PORTA LA PRENDA, i aquí el dany era pitjor que a
+        # l'escriptor. `{r.pom_id: ...}` és un col·lapse: amb la mare i la 02 amb regla pròpia
+        # sobre el mateix POM, el diccionari en perdia una —guanyava l'última que retornés el
+        # planner— i les DUES files ensenyaven la mateixa llei, sense cap avís. És el mode de
+        # fallada que `_load_grading_rules` tenia abans de T4 i que la comporta de T3 existia
+        # per fer impossible; amb la comporta fora, tornava a ser assolible.
         regla_by_pom = {
-            r.pom_id: {
+            (r.pom_id, r.garment): {
                 'logica': r.logica,
                 'increment_base': r.increment_base,
                 'increment_break': r.increment_break,
@@ -399,11 +631,51 @@ def base_measurements_view(request, model_id):
             for r in ModelGradingRule.objects.filter(model_id=model_id, actiu=True)
         }
 
+        def _regla_de(pom_id, garment):
+            """La llei d'una fila: la SEVA si en té, i si no la de la mare (D5-bis).
+
+            «No en té» i «té la mateixa» no són el mateix estat —l'un es pot estrenar, l'altre
+            ja s'ha decidit— i la pantalla ha de poder distingir-los per dir si el que ensenya
+            és propi o heretat. Per això el `heretat` viatja DINS de l'objecte i no s'endevina
+            comparant valors, que és el que obligaria a fer si només s'hi servís la llei.
+            """
+            propia = regla_by_pom.get((pom_id, garment))
+            if propia is not None:
+                return {**propia, 'heretat': False}
+            if garment:
+                mare = regla_by_pom.get((pom_id, ''))
+                if mare is not None:
+                    return {**mare, 'heretat': True}
+            return None
+
         data = [{
             'id': bm.id,
             'pom_id': bm.pom_id,
-            # F1: la regla resident d'aquest POM (None si el model no en té cap).
-            'regla_model': regla_by_pom.get(bm.pom_id),
+            # C4/BLOC 1-BIS — ELS DOS EIXOS AL CONTRACTE. El queryset d'aquesta vista mai no
+            # ha filtrat per capa ni per instància: ja servia les germanes. El que no feia era
+            # dir de quina és cadascuna, i sense això `pom_id` no és una clau dins de
+            # `results`.
+            #
+            # Aquest endpoint alimenta TOT l'editor de fitxa (`TechSheetEditor.pomRows`), que
+            # hi munta mapes per `pom_id` per re-derivar l'etiqueta de les cotes vives i per
+            # col·locar-ne de noves. `new Map(...)` es queda l'ÚLTIMA entrada de cada clau: amb
+            # dues germanes, una cota es rellegia amb el nom de la que la consulta hagués
+            # retornat després —desempat del planner, no del document— i el primer desat de
+            # debò l'escrivia al `.ftt`.
+            #
+            # No s'hi afegeix cap identificador de fila: `id` (aquí sobre) JA és la PK del
+            # BaseMeasurement.
+            'capa': bm.capa,
+            # SET-2/#12d — EL TERCER EIX AL CONTRACTE, i pel mateix argument que els dos de
+            # sobre: aquesta vista mai no ha filtrat per prenda —ja servia les files de totes—
+            # i el que no feia era dir de quina és cadascuna. Amb `TechSheetEditor.pomRows`
+            # muntant `new Map(...)` per `pom_id`, dues files de prendes diferents es
+            # trepitgen exactament igual que s'hi trepitjaven les germanes de capa abans de C4.
+            'garment': bm.garment,
+            'instancia': bm.instancia,
+            # F1: la regla resident d'aquesta fila (None si no en té ni n'hereta cap).
+            # SET-2/#12d: la SEVA si en té, la de la mare si no (D5-bis), i ho diu (`heretat`).
+            'regla_model': _regla_de(bm.pom_id, bm.garment),
             'codi_client': bm.pom.codi_client,
             'nom_client': bm.pom.nom_client,
             'nom_ca': bm.pom.pom_global.nom_ca if bm.pom.pom_global_id else '',
@@ -430,6 +702,12 @@ def base_measurements_view(request, model_id):
             # F3 — secció d'origen ('01.- DRESS', 'Bodice:'…). '' quan el document no en
             # tenia. La fitxa tècnica la fa servir per partir la taula en una per peça.
             'seccio': bm.seccio or '',
+            # SET-2/T9 (2026-08-10) — aquest payload servirà l'eix de la PEÇA quan existeixi
+            # `ModelGarment`, i no abans: la resolució `garment.X or model.X` viu en UN SOL
+            # punt (D5) i aquesta és una de les vores on s'ha de veure. Servir aquí un eco cru
+            # de la columna `garment` faria dos orígens per al mateix camp a la mateixa vora.
+            # T9 no l'anticipa (per això no hi ha cap clau `garment`): l'editor de fitxa deriva
+            # les branques de les dades que ja rep, i avui totes són de la peça mare.
             'pom_abbreviation': bm.pom.pom_global.abbreviation if bm.pom.pom_global_id else '',
             'pom_code_global': bm.pom.pom_global.codi if bm.pom.pom_global_id else '',
             'pom_is_key': bool(bm.pom.pom_global.is_key) if bm.pom.pom_global_id else False,
@@ -487,6 +765,145 @@ def create_tenant_pom_view(request):
 
     except Exception as e:
         return Response({'error': str(e)}, status=500)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_model_pom_view(request, model_id):
+    """POST /api/v1/models/<model_id>/pom-propi/ — CREAR POM PROPI DEL MODEL.
+
+    Body: {nom, nomenclatura, categoria_id?, descripcio_local?}
+
+    EL GEST QUE FALTAVA. La llei diu que els POMs es van a buscar al catàleg del client i que no
+    s'encunyen codis lliures — però un model pot necessitar una mesura que el catàleg encara no
+    té («Height sequins piece», el cas real del MILEY). Sense una porta explícita, aquesta
+    necessitat es colava per on podia: l'import agafava el codi del document tal qual i creava un
+    POM orfe, i així va néixer el POM 440 amb `codi_client='U1'` quan Brownie ja tenia
+    `U1 → 342 Button spacing`. La feina d'aquesta vista és que aquell camí ja no calgui i que el
+    que abans passava en silenci ara passi amb nom, nomenclatura i validació.
+
+    EL POM NEIX AL CATÀLEG DEL CLIENT, no en un limbe (decisió d'Agus, 06/08). Es crea el
+    `POMMaster` i, sobretot, el `CustomerPOMAlias` amb `origen='MODEL'`: és el que el fa
+    EXISTIR per al client. Conseqüència volguda i acceptada — la validació de col·lisió el veurà
+    a partir d'ara, i un altre model del mateix client el podrà reutilitzar des del cercador.
+    Això és coneixement del client acumulant-se, que és el que ha de passar.
+
+    NO es toca `POMMaster`: cap camp nou, cap FK a una app SHARED. «Del model» és la provinença
+    de l'àlies, no una columna del catàleg de la casa.
+    """
+    from django.db import transaction
+    from fhort.models_app.models import Model
+    from fhort.pom.models import CustomerPOMAlias, POMMaster
+    from fhort.pom.nomenclatura import colisio_de_codi
+
+    nom = (request.data.get('nom') or '').strip()
+    codi = (request.data.get('nomenclatura') or '').strip()
+    if not nom or not codi:
+        return Response({'error': 'nom i nomenclatura són obligatoris',
+                         'codi': 'CAMPS_OBLIGATORIS'}, status=400)
+
+    model = Model.objects.filter(pk=model_id).values('id', 'customer_id', 'codi_intern').first()
+    if not model:
+        return Response({'error': 'Model no trobat'}, status=404)
+    customer_id = model['customer_id']
+    if not customer_id:
+        # Sense client no hi ha catàleg de client on posar-lo, i inventar-ne un seria tornar al
+        # POM orfe que aquesta vista existeix per evitar.
+        return Response({'error': 'Aquest model no té client assignat',
+                         'codi': 'MODEL_SENSE_CLIENT'}, status=400)
+
+    # ── LA VALIDACIÓ DE COL·LISIÓ ──────────────────────────────────────────────────────────
+    # «U1 hauria estat rebutjat: U1 és BUTTON SPACING al catàleg Brownie». 409 i no 400 perquè
+    # no és un camp mal escrit: és un conflicte amb una dada que ja hi és, i el que la persona
+    # necessita saber és AMB QUÈ xoca per triar un altre codi.
+    xoc, etiqueta = colisio_de_codi(customer_id, codi)
+    if xoc is not None:
+        return Response({
+            'codi': 'NOMENCLATURA_OCUPADA',
+            'nomenclatura': codi,
+            'pom_id': xoc.pk,
+            'pom_nom': etiqueta,
+            'message': f'«{codi}» ja és {etiqueta} al catàleg d\'aquest client.',
+        }, status=409)
+
+    # ── EL CODI DE LA COTA VA NET, I SI ESTÀ OCUPAT ES DIU ─────────────────────────────────
+    #
+    # ⚠️ Aquí es qualificava el codi amb el del client quan la casa ja el tenia: `EK` ocupat →
+    # la cota naixia com a **`BRW-EK`**. Està prohibit (Agus, 09/08): **el prefix de client
+    # pertany a la FITXA —a l'àlies, que ja hi és— i mai a la nomenclatura de la cota**. Un codi
+    # de casa qualificat amb un client és una tercera nomenclatura que ningú no ha demanat, i es
+    # llegeix a totes les pantalles com si formés part del nom de la mesura.
+    #
+    # Però el prefix no era estètica: tapava la constraint `uniq_pommaster_codi_client_ci`. Sense
+    # ell, `POMMaster.objects.create` peta amb IntegrityError i la persona rep un 500 sense saber
+    # per què. Així que la sortida no és inventar un codi: és **DIR AMB QUÈ XOCA**, que és el
+    # mateix consentiment informat que ja fa la validació de sobre contra el catàleg del client.
+    #
+    # I és la resposta ÚTIL, perquè el cas real és aquest: `EK · Neck width` ja existia i el
+    # cercador no el trobava (el mínim de dos caràcters i la cerca només per àlies). Qui arriba
+    # aquí amb un codi ocupat, la immensa majoria de vegades, està a punt de duplicar un POM que
+    # ja hi és — i el que necessita no és un codi nou, és que li ensenyin l'existent.
+    codi_casa = codi[:30]
+    ja_hi_es = POMMaster.objects.filter(codi_client__iexact=codi_casa).first()
+    if ja_hi_es is not None:
+        etiqueta_casa = (ja_hi_es.nom_client or codi_casa).strip()
+        return Response({
+            'codi': 'CODI_CASA_OCUPAT',
+            'nomenclatura': codi,
+            'pom_id': ja_hi_es.pk,
+            'pom_nom': etiqueta_casa,
+            'message': f'«{codi}» ja és {etiqueta_casa} al catàleg. Fes-lo servir des del '
+                       f'cercador, o dona-li una nomenclatura diferent.',
+        }, status=409)
+
+    with transaction.atomic():
+        pom = POMMaster.objects.create(
+            codi_client=codi_casa,
+            nom_client=nom,
+            categoria_id=request.data.get('categoria_id'),
+            # Neix PENDENT DE REVISIÓ a posta: l'ha creat un tècnic amb un model al davant, no
+            # el responsable del catàleg. És bo per treballar i encara no està consolidat.
+            pendent_revisio=True,
+            # LA REFERÈNCIA D'ORIGEN VA A `origen_import`, NO A `notes` (Agus, 06/08).
+            #
+            # Són dos senyals amb dos lectors, i cadascun al seu camp:
+            #   · `CustomerPOMAlias.origen='MODEL'` = PROVINENÇA, permanent. La llegeix el
+            #     cercador i qui pregunti d'on va sortir aquest àlies. Es queda per sempre.
+            #   · `POMMaster.pendent_revisio` = ESTAT DE REVISIÓ, transitori. El neteja la
+            #     Montse quan revisa, i llavors `origen='MODEL'` es queda com a història.
+            #
+            # `origen_import` és el camp fet per a això —el seu `help_text` diu literalment
+            # «Referència del model/fitxa des d'on s'ha creat aquest POM»— i és el que l'import
+            # ja omple (`extraction_views.py:1879`, amb el token de la sessió). Amb la referència
+            # a `notes` la cua de la Montse hauria de distingir «nascut d'un import» de «nascut
+            # d'un model» fent cerca de text lliure; amb el camp, mira UN lloc i sap quin és quin.
+            origen_import=f'model:{model["codi_intern"] or model_id}',
+            notes='',
+            actiu=True,
+        )
+        CustomerPOMAlias.objects.create(
+            customer_id=customer_id,
+            pom=pom,
+            client_code=codi,
+            description_en=nom,
+            description_local=(request.data.get('descripcio_local') or '').strip(),
+            origen='MODEL',
+            pendent_revisio=True,
+        )
+
+    # Mateixa forma que un resultat de `poms/cerca/`: qui l'ha creat el vol afegir a la taula tot
+    # seguit, i hauria de poder-ho fer sense una segona petició ni una segona forma de dada.
+    return Response({
+        'id': pom.id,
+        'codi_client': pom.codi_client,
+        'nom_client': pom.nom_client,
+        'nom_ca': '', 'nom_en': '',
+        'categoria_nom': pom.categoria.nom_ca if pom.categoria_id else '',
+        'nivell': 'model',
+        'client_code': codi,
+        'client_name_en': nom,
+        'client_name_local': (request.data.get('descripcio_local') or '').strip(),
+    }, status=201)
 
 
 @api_view(['PATCH'])

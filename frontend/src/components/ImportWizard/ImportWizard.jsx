@@ -1,8 +1,20 @@
-import { Fragment, useState, useMemo, useRef } from 'react'
+import { Fragment, useEffect, useState, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import Modal from '../ui/Modal'
+import { models, poms } from '../../api/endpoints'
 import FileDropCard from '../ui/FileDropCard'
+// P1 · la graella parla per FILA (`ordre`), no per POM. La lògica pura viu al costat, en un
+// mòdul que el runner de Node pot defensar: `node --test src/components/ImportWizard/`.
+import {
+  aplicaGrading, columnesBuides, comptaValors, construeixBaseValues, construeixMesures,
+  construeixTaula, teValorABase,
+} from './taulaMesures'
+import { sufixIdentitat } from '../../utils/capaInstancia'
+import ColumnatIdentitat from '../instancia/ColumnatIdentitat'
+import { agrupaPerPeca, capaEfectiva, estatDeLaPeca, filaAmbIdentitat, identitatEfectiva,
+         instanciaEfectiva, pecaEfectiva, pecaVisible } from './filaPas2'
+import { useDiccionariMesures } from '../../utils/diccionariMesuresFont'
 
 const API = import.meta.env.VITE_API_URL || ''
 
@@ -38,7 +50,6 @@ const STEPS = [
   { n: 5, labelKey: 'import_wizard.step.save' },
 ]
 
-const norm = (s) => (s || '').trim().toUpperCase()
 const GOLD = 'var(--gold, #c79a3a)'
 const BORDER = 'var(--border)'
 
@@ -76,66 +87,95 @@ function Stepper({ step }) {
   )
 }
 
-// ───────────────────────────── Talla chip ─────────────────────────────
-function TallaChip({ label, ok, onRemove }) {
-  const { t } = useTranslation()
-  return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 6,
-      padding: '4px 8px 4px 10px', borderRadius: 6, fontSize: 'var(--fs-body)', fontWeight: 500,
-      background: ok ? '#f0f9f0' : '#fff0f0',
-      border: `1px solid ${ok ? '#c0dd97' : '#f0c0c0'}`,
-      color: ok ? '#3b6d11' : '#a32d2d',
-    }}>
-      {ok ? '✓' : '✗'} {label}
-      {onRemove && (
-        <button onClick={onRemove} title={t('import_wizard.remove_size')}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit',
-                   fontSize: 'var(--fs-h3)', lineHeight: 1, padding: 0 }}>×</button>
-      )}
-    </span>
-  )
-}
-
 // ───────────────────────────── Picker del catàleg de POMs ─────────────────────────────
 // R3 · UN sol picker per als DOS llocs on el pas 2 tria un POM del catàleg: el botó
 // «+ Afegir POM del catàleg» del final de la llista i el panell de conflicte de fila. Abans
 // el primer era un <select> nu amb el catàleg sencer; ara tots dos cerquen per codi o nom.
-function PomCatalegPicker({ cataleg, onPick, autoFocus }) {
+function PomCatalegPicker({ modelId, onPick, autoFocus }) {
   const { t } = useTranslation()
   const [q, setQ] = useState('')
-  const tots = cataleg || []
-  const filtrats = useMemo(() => {
-    const n = norm(q)
-    return n ? tots.filter(c => norm(c.codi_client).includes(n) || norm(c.nom_client).includes(n)) : tots
-  }, [tots, q])
-  const visibles = filtrats.slice(0, 50)
+  const [dades, setDades] = useState(null)   // {results, count, truncat, seccions}
+  const [focusat, setFocusat] = useState(!!autoFocus)
+
+  // ⚠️ LA PORTA ERA `/api/v1/poms/` I NOMÉS EN SERVIA LA PRIMERA PÀGINA. Mesurat al tenant
+  // `fhort` (15/08): 142 POMs actius, 25 a la pàgina 1 → **117 invisibles**, i el filtre del
+  // camp corria sobre aquells 25. I el vocabulari del CLIENT no hi era gens: el codi que la
+  // fitxa porta escrit viu a `CustomerPOMAlias.client_code`, no a `POMMaster.codi_client` —que
+  // es diu «client» però és el codi de la CASA.
+  //
+  // El mateix defecte, amb el mateix mecanisme, el va pagar el cercador de la Definició manual
+  // (79 POMs invisibles de 143, i un duplicat fabricat: el POM 1047). La solució és la SEVA, no
+  // una de nova: `poms/cerca/`, que serveix les DUES poblacions en seccions amb el seu
+  // recompte, posa l'exacte al davant i cerca des d'UN sol caràcter (els 22 codis d'una lletra
+  // del catàleg v4). Amb `?model=` hi entra el vocabulari del client d'aquest model.
+  useEffect(() => {
+    const cerca = q.trim()
+    // Camp buit AMB EL FOCUS POSAT = catàleg SENCER. La lliçó de la Definició manual: qui obre
+    // el desplegable per veure QUÈ hi ha —el cas de qui encara no coneix la nomenclatura del
+    // client— es trobava un buit i en deduïa que no hi havia catàleg.
+    if (!cerca && !focusat) { setDades(null); return }
+    const timer = setTimeout(() => {
+      poms.cerca({ q: cerca, page_size: 50, ...(modelId ? { model: modelId } : {}) })
+        .then(r => setDades(r.data || null))
+        .catch(() => setDades(null))
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [q, modelId, focusat])
+
+  const files = dades?.results || []
+  const sec = dades?.seccions || {}
+  // Les dues poblacions es pinten AMB EL SEU RÈTOL i el seu recompte: un POM amb àlies hi surt
+  // dues vegades i totes dues porten al MATEIX `pom_id`. No es demana a ningú que sàpiga que
+  // són la mateixa cosa; se li deixa arribar-hi per qualsevol de les dues portes.
+  const grups = [
+    ['client', t('import_wizard.resol_sec_client'), sec.client],
+    ['casa', t('import_wizard.resol_sec_casa'), sec.casa],
+  ].filter(([clau]) => files.some(f => f.seccio === clau))
+
   return (
     <div>
-      <input value={q} autoFocus={autoFocus} onChange={e => setQ(e.target.value)}
+      <input value={q} autoFocus={autoFocus}
+        onFocus={() => setFocusat(true)} onChange={e => setQ(e.target.value)}
         placeholder={t('import_wizard.choose_pom')}
         style={{ width: '100%', maxWidth: 380, padding: '6px 9px', borderRadius: 6,
                  border: `1px solid ${BORDER}`, fontSize: 'var(--fs-body)', fontFamily: 'inherit' }} />
-      <div style={{ maxWidth: 380, maxHeight: 170, overflowY: 'auto', marginTop: 6,
+      <div style={{ maxWidth: 380, maxHeight: 210, overflowY: 'auto', marginTop: 6,
                     border: `1px solid ${BORDER}`, borderRadius: 6, background: 'var(--white)' }}>
-        {visibles.length === 0 && (
+        {files.length === 0 && (
           <div style={{ padding: '8px 10px', fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
             {t('import_wizard.resol_cap_resultat')}
           </div>
         )}
-        {visibles.map((c, i) => (
-          <button key={c.id} type="button" onClick={() => onPick(c)}
-            style={{ display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer',
-                     padding: '6px 10px', fontSize: 'var(--fs-body)', fontFamily: 'inherit',
-                     background: 'transparent', border: 'none',
-                     borderTop: i ? `1px solid ${BORDER}` : 'none' }}>
-            <b>{c.codi_client}</b> · {c.nom_client}
-          </button>
+        {grups.map(([clau, retol, comptes]) => (
+          <Fragment key={clau}>
+            <div style={{ padding: '4px 10px', background: 'var(--bg-muted)',
+                          fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-muted)',
+                          textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              {retol}{comptes ? ` · ${comptes.mostrats}/${comptes.count}` : ''}
+            </div>
+            {files.filter(f => f.seccio === clau).map(c => (
+              <button key={`${clau}-${c.id}`} type="button"
+                onClick={() => onPick({ id: c.id, codi_client: c.codi_client,
+                                        nom_client: c.nom_client })}
+                style={{ display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer',
+                         padding: '6px 10px', fontSize: 'var(--fs-body)', fontFamily: 'inherit',
+                         background: 'transparent', border: 'none',
+                         borderTop: `1px solid ${BORDER}` }}>
+                {/* A la secció del CLIENT mana el seu codi —és el que la fitxa porta escrit— i
+                    el de la casa queda al costat. A la de la casa, el de la casa. */}
+                <b>{clau === 'client' && c.client_code ? c.client_code : c.codi_client}</b>
+                {' · '}{c.nom_client}
+                {clau === 'client' && c.client_code && c.client_code !== c.codi_client && (
+                  <span style={{ color: 'var(--text-muted)' }}> → {c.codi_client}</span>
+                )}
+              </button>
+            ))}
+          </Fragment>
         ))}
       </div>
-      {filtrats.length > visibles.length && (
+      {dades?.truncat && (
         <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 4 }}>
-          {t('import_wizard.resol_mes_resultats', { n: filtrats.length - visibles.length })}
+          {t('import_wizard.resol_mes_resultats', { n: dades.count - files.length })}
         </div>
       )}
     </div>
@@ -147,9 +187,29 @@ function PomCatalegPicker({ cataleg, onPick, autoFocus }) {
 // catàleg. Aquí la fila té les TRES sortides a sobre —vincular a un candidat, triar del
 // catàleg, o crear-ne un de nou amb codi i nom editables— i la decisió segueix sent seva:
 // el backend no en tria cap, només diu qui es disputa el codi.
-function ResolPanel({ fila, conflicte, cataleg, crea, setCrea, onVincula, onCrea, onTanca }) {
+// SET-2/T8-ter · com es DIU una fila en un conflicte: «M · Short · exterior · única».
+// L'ordre és el de la identitat (codi → peça → capa → instància), el mateix que la casa fa servir
+// a la fila i a la fitxa. La peça hi va la segona perquè és la FRONTERA: és la resposta que fa
+// que dues files que semblen iguals no ho siguin.
+function descriuFila(d, peces, t) {
+  const peca = (peces || []).find(p => p.codi === (d.garment || ''))
+  const nomPeca = peca ? (peca.es_mare ? '' : (peca.nom || peca.codi)) : (d.garment || '')
+  return [d.codi, nomPeca, d.capa, d.instancia || '—'].filter(Boolean).join(' · ')
+}
+
+
+function ResolPanel({ fila, conflicte, res, modelId, crea, setCrea, onVincula, onCrea, onTanca,
+                     dicc, capa, instancia, onCapa, onInstancia, peces }) {
   const { t } = useTranslation()
   const candidats = conflicte?.candidats || []
+  // El RÈTOL VIU de la columna dreta: la decisió d'aquesta tramesa si n'hi ha, i si no, el
+  // vincle que la fila ja portava (una fila aparellada sola que s'obre només per dir de quina
+  // mesura del POM parla). Sense POM no hi ha rètol ni «Fet»: no hi ha res a confirmar.
+  const vincle = res
+    ? (res.accio === 'vincula'
+        ? t('import_wizard.resol_fet_vincula', { codi: res.pom_codi, nom: res.pom_nom })
+        : t('import_wizard.resol_fet_crea', { codi: res.codi, nom: res.nom }))
+    : (fila.pom_master_id ? `${fila.pom_codi} · ${fila.pom_nom || fila.descripcio || ''}` : null)
   const EYEBROW = { fontSize: 'var(--fs-label)', fontWeight: 600, textTransform: 'uppercase',
                     letterSpacing: '0.04em', color: 'var(--text-muted)', margin: '10px 0 6px' }
   const BTN = { padding: '5px 12px', borderRadius: 6, border: `1px solid ${GOLD}`, cursor: 'pointer',
@@ -170,8 +230,16 @@ function ResolPanel({ fila, conflicte, cataleg, crea, setCrea, onVincula, onCrea
       {conflicte?.error && (
         <div style={{ marginTop: 8, padding: '6px 10px', borderRadius: 6, fontSize: 'var(--fs-body)',
                       background: 'var(--err-bg)', color: 'var(--err)' }}>
-          {t([`import_wizard.resol_err_${conflicte.error}`, 'import_wizard.resol_err_generic'],
-             { codi: conflicte.codi || fila.codi_fitxa || '', ordre: (conflicte.ordre_ocupat ?? 0) + 1 })}
+          {/* SET-2/T8-ter · EL CONFLICTE ES RESOL VEIENT-LO. «Un POM no pot ser dues files» era
+              una acusació sense judici: no deia per què AQUESTA vegada, i amb la peça i la
+              instància a la identitat les dues files poden diferir en tres eixos. Ara van les
+              DUES amb nom, i el rètol el compon la mateixa funció que la resta de la casa. */}
+          {conflicte.aquesta && conflicte.ocupada
+            ? t('import_wizard.resol_err_pom_ja_usat_dues', {
+                aquesta: descriuFila(conflicte.aquesta, peces), ocupada: descriuFila(conflicte.ocupada, peces) })
+            : t([`import_wizard.resol_err_${conflicte.error}`, 'import_wizard.resol_err_generic'],
+                { codi: conflicte.codi || fila.codi_fitxa || '',
+                  ordre: (conflicte.ordre_ocupat ?? 0) + 1 })}
         </div>
       )}
 
@@ -203,8 +271,16 @@ function ResolPanel({ fila, conflicte, cataleg, crea, setCrea, onVincula, onCrea
         </>
       )}
 
+      {/* P2-quater · DUES COLUMNES: les dues meitats de la decisió es veuen ALHORA. Amb el
+          bloc d'instància a sota, el desplegable del cercador obert el deixava fora de vista, i
+          triar la instància demanava tancar abans el que s'estava mirant. A l'esquerra QUI és
+          (catàleg o codi nou), a la dreta DE QUINA de les seves mesures parla la fila.
+          `flexWrap` amb una base de 450px: en una finestra estreta cauen l'una sota l'altra
+          soles, que és el comportament que ja tenia. */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'flex-start' }}>
+      <div style={{ flex: '1 1 450px', minWidth: 0, maxWidth: 520 }}>
       <div style={EYEBROW}>{t('import_wizard.resol_cataleg_title')}</div>
-      <PomCatalegPicker cataleg={cataleg} autoFocus={candidats.length === 0}
+      <PomCatalegPicker modelId={modelId} autoFocus={candidats.length === 0}
         onPick={pm => onVincula({ id: pm.id, codi_client: pm.codi_client,
                                   nom_client: pm.nom_client, actiu: true })} />
 
@@ -233,13 +309,45 @@ function ResolPanel({ fila, conflicte, cataleg, crea, setCrea, onVincula, onCrea
       <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 6 }}>
         {t('import_wizard.resol_crea_hint')}
       </div>
+      </div>
+
+      {/* LA SEGONA MEITAT, SEMPRE A LA VISTA. Abans només es pintava amb la resolució ja presa,
+          i per això apareixia i desapareixia sota el desplegable; ara viu a la seva columna i
+          es pot triar abans o després de dir quin POM és — l'ordre el posa qui treballa, no la
+          pantalla. El rètol viu i el «Fet» sí que demanen que ja hi HAGI POM: una fila que
+          encara no en té no té res a confirmar. */}
+      <div style={{ flex: '1 1 320px', minWidth: 0 }}>
+        {/* Sense rètol de secció: el bloc ja porta la seva capçalera INSTÀNCIA, i escriure-la
+            dues vegades seguides fa dubtar de si són dues coses. */}
+        <div style={{ height: 10 }} />
+        <ColumnatIdentitat valor={instancia} capa={capa} dicc={dicc}
+          onTria={onInstancia} onCapa={onCapa} />
+        {vincle && (
+          <div style={{ marginTop: 10 }}>
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--ok)', marginBottom: 8 }}>
+              {vincle}<b>{sufixIdentitat({ capa, instancia }, dicc)}</b>
+            </div>
+            <button type="button" onClick={onTanca}
+              style={{ ...BTN, background: GOLD, color: 'var(--white)' }}>
+              {t('import_wizard.resol_fet_btn')}
+            </button>
+          </div>
+        )}
+      </div>
+      </div>
     </div>
   )
 }
 
-export default function ImportWizard({ model, onCancel, onComplete }) {
-  const { t } = useTranslation()
+export default function ImportWizard({ model, garment = '', garmentNom = '', onCancel, onComplete }) {
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
+  // P3 · LA IDENTITAT DE LA FILA, VISIBLE. `sufixIdentitat` és la porta única de la casa i
+  // torna '' per a la mesura única d'exterior: avui, doncs, la pantalla no canvia ni un píxel.
+  // Parla el dia que una fila porta germana — que és el dia que dues files diuen el mateix nom
+  // amb xifres diferents, el pitjor que pot ensenyar una taula de mesures.
+  const dicc = useDiccionariMesures()
+  const lang = (i18n.resolvedLanguage || i18n.language || 'ca').slice(0, 2)
   const token = localStorage.getItem('access_token')
   const authHeaders = { Authorization: `Bearer ${token}` }
 
@@ -268,7 +376,6 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
   const [pomsExtrets, setPomsExtrets] = useState(null)
   const [extraccioMeta, setExtraccioMeta] = useState(null)
   const [savingPoms, setSavingPoms] = useState(false)
-  const [cataleg, setCataleg] = useState(null)        // POMMaster catàleg (per afegir manual)
   const [showAddPom, setShowAddPom] = useState(false)
   // 409 `codi_duplicat`: el catàleg té 2+ POMs tenant-only amb el mateix codi i el backend no
   // pot triar. NO és un error del wizard (la sessió és intacta i re-desable): és una feina de
@@ -278,12 +385,34 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
   const [conflictes, setConflictes] = useState({})
   // R3 · decisions preses i encara no enviades: {ordre: {accio:'vincula'|'crea', ...}}.
   const [resolucions, setResolucions] = useState({})
+  // P2 · la IDENTITAT triada per fila (`{ordre: {capa, instancia}}`). Viu a part de
+  // `resolucions` perquè és una decisió d'un altre gènere —no diu QUIN POM és, sinó DE QUINA de
+  // les seves mesures parla la fila— i perquè una fila ja aparellada l'ha de poder triar sense
+  // re-vincular res. Al desar es fonen: el backend rep UNA resolució per fila, sencera.
+  // P2-quinquies · UN sol mapa per als DOS eixos: dos mapes paral·lels sobre la mateixa fila
+  // són dues veritats que un dia discrepen, que és el defecte que aquest tram persegueix.
+  const [identitats, setIdentitats] = useState({})
+  // SET-2/T8-ter — les peces del model, per al desplegable de la columna. Es demanen un cop i
+  // MAI bloquegen: sense elles la columna no es pinta i el pas 2 es comporta com abans (la
+  // mateixa llei que el diccionari d'identitat). La mare hi entra sempre com a primera opció:
+  // `peces_del_model` la publica com a fila sintètica (`es_mare`), que és exactament per a
+  // això —recórrer totes les prendes d'un model amb un sol bucle.
+  const [peces, setPeces] = useState([])
+  useEffect(() => {
+    if (!model?.id) return
+    let viu = true
+    models.peces(model.id)
+      .then(r => { if (viu) setPeces(r.data?.peces || r.data || []) })
+      .catch(() => { if (viu) setPeces([]) })
+    return () => { viu = false }
+  }, [model?.id])
+
   const [panellOrdre, setPanellOrdre] = useState(null)   // fila amb el panell obert (una alhora)
   const [crea, setCrea] = useState({ codi: '', nom: '' })
   const filaRefs = useRef({})
 
   // Pas 3 — taula de mesures
-  const [taula, setTaula] = useState({})              // {pom_master_id: {talla: valor}}
+  const [taula, setTaula] = useState({})              // {ordre: {talla: valor}} — P1: per FILA
   const [valorsMode, setValorsMode] = useState('absoluts')   // 1C-2b: mode dels valors de la fitxa
   const [gradingLoading, setGradingLoading] = useState(false)
   const [savingMesures, setSavingMesures] = useState(false)
@@ -312,7 +441,6 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
   // i el re-POST ha de tornar a portar la tria anterior o el mateix gat es tornaria a disparar.
   const decisionsRef = useRef({})
 
-  const docLabels = cribratge?.run_talles_document || []
   // Columnes del document sense parella model → avís (no bloqueja, tret de la base).
   const senseParella = useMemo(() => tallesSel.filter(d => !mapping[d]), [tallesSel, mapping])
   // 1↔1: talles del model aparellades més d'un cop.
@@ -336,6 +464,10 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
     fd.append('document', file)
     fd.append('model_id', model.id)
     fd.append('garment_type_item_code', model.garment_type_item_code || '')
+    // SET-2/T8 — LA PRENDA DE DESTÍ, i aquesta és l'ÚNICA porta per on entra al pipeline:
+    // a partir d'aquí el backend la llegeix de la sessió i cap altre pas la torna a enviar.
+    // `''` és la mare, que és el camí de sempre.
+    fd.append('garment', garment || '')
     try {
       const res = await fetch(`${API}/api/v1/import-sessions/cribratge/`, {
         method: 'POST', headers: authHeaders, body: fd,
@@ -442,7 +574,10 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
       setExtraccioMeta({ header: data.header, base_size: data.base_size, sizes: data.sizes,
                          grading_status: data.grading_status, avisos: data.avisos || [],
                          // F5 · informe del llibre: quines pestanyes hi ha i quina s'ha llegit.
-                         fulls: data.fulls || [], full: data.full || null })
+                         fulls: data.fulls || [], full: data.full || null,
+                         // SET-2/T8-ter · la proposta secció→peça i, sobretot, les seccions
+                         // que no en tenen: el pas 2 les ha de poder DIR.
+                         proposta_peces: data.proposta_peces || null })
       if (data.suggested_valors_mode === 'absoluts' || data.suggested_valors_mode === 'deltes')
         setValorsMode(data.suggested_valors_mode)
     } catch (e) {
@@ -476,26 +611,9 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
   // fila (resolució 'crea' amb codi i nom editables). El contracte `poms_tenant_only` del
   // backend segueix viu i cobert per tests; el que ja no hi ha és la via cega des d'aquí.
 
-  // El catàleg el necessiten dos consumidors (el botó d'afegir i el panell de resolució);
-  // es carrega un sol cop i qui el demana decideix què n'obre.
-  const carregaCataleg = async () => {
-    if (cataleg) return cataleg
-    try {
-      const res = await fetch(`${API}/api/v1/poms/`, { headers: authHeaders })
-      const data = await res.json().catch(() => ({}))
-      const llista = data.results || data || []
-      setCataleg(llista)
-      return llista
-    } catch (e) {
-      setError(t('import_wizard.err_catalog', { detail: String(e) }))
-      return null
-    }
-  }
-
-  const loadCataleg = async () => {
-    await carregaCataleg()
-    setShowAddPom(true)
-  }
+  // El catàleg ja NO es precarrega: cada picker el demana al cercador del servidor
+  // (`poms/cerca/`), que és qui sap servir les dues poblacions. La còpia local que hi havia
+  // aquí era la que només en tenia 25 de 142.
 
   // ── R3 · el conflicte es resol a la fila ──────────────────────────────────────
   const obrePanell = (p) => {
@@ -505,15 +623,17 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
       nom: (res?.accio === 'crea' ? res.nom : '') || p.descripcio || p.pom_nom || '',
     })
     setPanellOrdre(p.ordre)
-    carregaCataleg()
   }
 
-  const posaResolucio = (ordre, res) => {
+  // P2-ter/2 · `tanca` és de qui la crida. Des del panell, triar el POM ja NO el tanca: la
+  // decisió té dues meitats —quin POM és i de quina de les seves mesures parla la fila— i
+  // tancar a la primera obligava a reobrir per a la segona. El tanca «Fet».
+  const posaResolucio = (ordre, res, { tanca = true } = {}) => {
     setResolucions(prev => ({ ...prev, [ordre]: res }))
     setConflictes(prev => { const n = { ...prev }; delete n[ordre]; return n })
     setPomsExtrets(prev => prev.map(p =>
       p.ordre === ordre ? { ...p, actiu: true, tenant_only: false } : p))
-    setPanellOrdre(null)
+    if (tanca) setPanellOrdre(null)
   }
 
   const treuResolucio = (ordre) => {
@@ -548,8 +668,20 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
     const actius = pomsExtrets.filter(p => p.actiu)
     // Les resolucions manen: la fila que en porta una no viatja pels camins a cegues
     // (`poms_confirmats` amb el vincle vell, `poms_tenant_only` amb el codi del document).
-    const llistaRes = actius.filter(p => resolucions[p.ordre])
-      .map(p => ({ ordre: p.ordre, ...resolucions[p.ordre] }))
+    //
+    // P2 · LA INSTÀNCIA VIATJA PER AQUÍ, i no per un camp nou: dir «aquesta fila és el POM B a
+    // baix» és UNA decisió, no dues, i el backend ja la sap llegir sencera (`_pla_de_resolucions`).
+    // Una fila que només tria instància n'estrena una de `vincula` al POM que ja tenia.
+    const llistaRes = actius
+      .filter(p => resolucions[p.ordre] || (identitats[p.ordre] && p.pom_master_id))
+      .map(p => {
+        const base = resolucions[p.ordre]
+          || { accio: 'vincula', pom_master_id: p.pom_master_id,
+               pom_codi: p.pom_codi, pom_nom: p.pom_nom }
+        // Els DOS eixos hi entren només si s'han triat: una tramesa que no en parli deixa la
+        // fila com estava, i el backend hi posa els literals de sempre (exterior · única).
+        return { ordre: p.ordre, ...base, ...(identitats[p.ordre] || {}) }
+      })
     const ambRes = new Set(llistaRes.map(r => r.ordre))
     const ids = actius.filter(p => p.pom_master_id && !ambRes.has(p.ordre)).map(p => p.pom_master_id)
     const tenantOnly = actius
@@ -558,8 +690,21 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
     try {
       const res = await fetch(`${API}/api/v1/import-sessions/${sessionToken}/poms/`, {
         method: 'PATCH', headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        // P2 · `files_confirmades` diu QUINES FILES entren, per `ordre`. `poms_confirmats` es
+        // queda perquè té una altra feina: incorporar POMs del catàleg que el document no
+        // menciona, i aquells encara no tenen fila amb què demanar-se.
         body: JSON.stringify({ poms_confirmats: ids, poms_tenant_only: tenantOnly,
-                               resolucions: llistaRes }),
+                               resolucions: llistaRes,
+                               files_confirmades: actius.map(p => p.ordre),
+                               // SET-2/T8-ter · DE QUI ÉS CADA FILA — la que la CEL·LA MOSTRA.
+                               // Hi entren també les PROPOSADES: la secció del document és un
+                               // pre-marcat i enviar el pas l'accepta. Enviar-hi només les
+                               // verdes feia que el detector comparés com a mare una fila que
+                               // deia «Short» a la pantalla (QA 16/08).
+                               files_garment: pomsExtrets
+                                 .filter(p => estatDeLaPeca(p, identitats) !== 'defecte')
+                                 .map(p => ({ ordre: p.ordre,
+                                              garment: pecaEfectiva(p, identitats, garment || '') })) }),
       })
       const data = await res.json().catch(() => ({}))
       if (res.status === 409 && data.error === 'codi_duplicat') {
@@ -597,7 +742,9 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
       // assignats: les decisions pendents ja són dades i l'estat local de resolució mor aquí.
       const updated = data.poms_extrets || pomsExtrets
       setPomsExtrets(updated)
-      setResolucions({}); setConflictes({}); setPanellOrdre(null)
+      // …i la instància també: ha pujat a la fila (`capa`/`instancia` de `poms_extrets`) i
+      // llegir-la de dos llocs alhora és com neixen les discrepàncies que ningú no veu.
+      setResolucions({}); setConflictes({}); setPanellOrdre(null); setIdentitats({})
       buildTaula(updated)
       setStep(3)
     } catch (e) { setError(t('import_wizard.err_connection', { detail: String(e) })) }
@@ -615,42 +762,37 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
 
   // ── Pas 3 — taula de mesures
   const pomsTaula = (pomsExtrets || []).filter(p => p.actiu)  // files = POMs actius
-  const grupsTaula = agrupaPerSeccio(pomsTaula, p => p.seccio)     // F6
-  const taulaAmbSeccions = grupsTaula.some(g => g.seccio)
+  // SET-2/T8-ter · EL PAS 3 S'AGRUPA PER PEÇA, no per secció. La secció era el millor
+  // criteri mentre l'import fos d'una peça sola —era l'únic repartiment que el document
+  // insinuava—, però ara la peça és una decisió PRESA al pas 2 i el pas 3 l'ha de reflectir:
+  // el que el tècnic omple és la taula d'una prenda, i és el patró de contenidors de la casa.
+  // La secció segueix viva a la fila (i al `title` de la columna) com a rastre d'on venia.
+  const grupsTaula = agrupaPerPeca(
+    pomsTaula, p => pecaEfectiva(p, identitats, garment || ''), peces.map(pc => pc.codi))
+  const taulaAmbPeces = grupsTaula.length > 1
+  const nomDePeca = (codi) => {
+    const pc = peces.find(x => x.codi === codi)
+    if (pc) return pc.es_mare ? t('resum_wizard.model_base') : (pc.nom || pc.codi)
+    return codi || t('resum_wizard.model_base')
+  }
   // La columna base de la taula de mesures és la label DOCUMENT aparellada amb la talla base
   // del model (B5); si no, fallback a l'heurística anterior.
   const baseSize = baseDocLabel
     || ((extraccioMeta?.base_size && tallesSel.includes(extraccioMeta.base_size))
       ? extraccioMeta.base_size : tallesSel[0])
 
-  const buildTaula = (src) => {
-    const t = {}
-    for (const p of (src || pomsExtrets || []).filter(x => x.actiu)) {
-      const row = {}
-      for (const talla of tallesSel) {
-        const v = (p.values || {})[talla]
-        row[talla] = (v === undefined || v === null) ? '' : String(v)
-      }
-      t[p.pom_master_id] = row
-    }
-    setTaula(t)
-  }
+  const buildTaula = (src) => setTaula(construeixTaula(src || pomsExtrets, tallesSel))
 
-  const setCell = (pid, talla, val) =>
-    setTaula(prev => ({ ...prev, [pid]: { ...(prev[pid] || {}), [talla]: val } }))
+  const setCell = (clau, talla, val) =>
+    setTaula(prev => ({ ...prev, [clau]: { ...(prev[clau] || {}), [talla]: val } }))
 
   // Columnes (talles) completament buides → ofereix generar grading.
-  const emptyCols = tallesSel.filter(talla =>
-    pomsTaula.every(p => !(taula[p.pom_master_id]?.[talla] ?? '').toString().trim()))
-  const baseTeValors = pomsTaula.some(p => (taula[p.pom_master_id]?.[baseSize] ?? '').toString().trim())
+  const emptyCols = columnesBuides(pomsTaula, tallesSel, taula)
+  const baseTeValors = teValorABase(pomsTaula, taula, baseSize)
 
   const handleGenerarGrading = async () => {
     setGradingLoading(true); setError('')
-    const base_values = {}
-    for (const p of pomsTaula) {
-      const v = taula[p.pom_master_id]?.[baseSize]
-      if (v !== undefined && v !== '') base_values[p.pom_master_id] = v
-    }
+    const base_values = construeixBaseValues(pomsTaula, taula, baseSize)
     try {
       const res = await fetch(`${API}/api/v1/import-sessions/${sessionToken}/grading-preview/`, {
         method: 'POST', headers: { ...authHeaders, 'Content-Type': 'application/json' },
@@ -658,35 +800,16 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) { setError(data.error || t('import_wizard.err_status', { status: res.status })); setGradingLoading(false); return }
-      const grading = data.grading || {}
-      // Omple NOMÉS les cel·les buides; preserva els valors extrets del document.
-      setTaula(prev => {
-        const next = { ...prev }
-        for (const p of pomsTaula) {
-          const g = grading[String(p.pom_master_id)] || {}
-          const row = { ...(next[p.pom_master_id] || {}) }
-          for (const talla of tallesSel) {
-            if (!(row[talla] ?? '').toString().trim() && g[talla] !== undefined)
-              row[talla] = String(g[talla])
-          }
-          next[p.pom_master_id] = row
-        }
-        return next
-      })
+      // Omple NOMÉS les cel·les buides; preserva els valors extrets del document. La resposta
+      // arriba amb la mateixa clau amb què s'ha preguntat i el backend ho declara a `clau`.
+      setTaula(prev => aplicaGrading(prev, pomsTaula, tallesSel, data.grading || {}, data.clau))
     } catch (e) { setError(t('import_wizard.err_connection', { detail: String(e) })) }
     setGradingLoading(false)
   }
 
   const handleContinueMesures = async () => {
     setSavingMesures(true); setError('')
-    const mesures = []
-    for (const p of pomsTaula) {
-      for (const talla of tallesSel) {
-        const v = taula[p.pom_master_id]?.[talla]
-        if (v !== undefined && v !== '')
-          mesures.push({ pom_master_id: p.pom_master_id, talla_label: talla, valor: parseFloat(v) })
-      }
-    }
+    const mesures = construeixMesures(pomsTaula, tallesSel, taula)
     try {
       const res = await fetch(`${API}/api/v1/import-sessions/${sessionToken}/mesures/`, {
         method: 'PATCH', headers: { ...authHeaders, 'Content-Type': 'application/json' },
@@ -705,14 +828,7 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
   // size_map_create_view; aquí només preparem el prefill i naveguem.
   const goCrearLibrary = async () => {
     setSavingMesures(true); setError('')
-    const mesures = []
-    for (const p of pomsTaula) {
-      for (const talla of tallesSel) {
-        const v = taula[p.pom_master_id]?.[talla]
-        if (v !== undefined && v !== '')
-          mesures.push({ pom_master_id: p.pom_master_id, talla_label: talla, valor: parseFloat(v) })
-      }
-    }
+    const mesures = construeixMesures(pomsTaula, tallesSel, taula)
     try {
       await fetch(`${API}/api/v1/import-sessions/${sessionToken}/mesures/`, {
         method: 'PATCH', headers: { ...authHeaders, 'Content-Type': 'application/json' },
@@ -778,8 +894,7 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
   }
 
   // ── Pas 5 — confirmar
-  const nValors = pomsTaula.reduce((acc, p) =>
-    acc + tallesSel.filter(t => (taula[p.pom_master_id]?.[t] ?? '').toString().trim()).length, 0)
+  const nValors = comptaValors(pomsTaula, tallesSel, taula)
   const teixitInformat = !!(teixit.fabric_main || teixit.fabric_composition ||
     teixit.shrinkage_iso_key || teixit.shrinkage_warp || teixit.shrinkage_pct)
 
@@ -839,6 +954,22 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
   return (
     <div style={{ }}>
       <Stepper step={step} />
+
+      {/* SET-2/T8 · LA PRENDA DE DESTÍ, DITA COM UN FET.
+          **El wizard no pregunta mai de quina peça és l'import**: la peça la fixa el context
+          (el contenidor des d'on s'ha premut «Importar taula») i aquí només es MOSTRA, perquè
+          qui està important sàpiga on aterra la feina sense haver-ho d'anar a comprovar.
+          Només surt quan hi HA prenda: a un model d'una sola peça —el 100% del corpus d'avui—
+          seria soroll dir «important a la peça principal» quan no n'hi ha cap altra. */}
+      {!!garment && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12,
+                      padding: '6px 12px', borderRadius: 8, background: 'var(--bg-main)',
+                      border: `0.5px solid ${BORDER}`, fontSize: 'var(--fs-body)' }}>
+          <i className="ti ti-shirt" aria-hidden="true" style={{ fontSize: 15, color: GOLD }} />
+          <span style={{ color: 'var(--text-muted)' }}>{t('import_wizard.desti_peca')}</span>
+          <strong>{garmentNom || garment}</strong>
+        </div>
+      )}
 
       {error && (
         <div style={{ background: '#fff0f0', border: '1px solid #f0c0c0', color: '#a32d2d',
@@ -907,14 +1038,6 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
 
       {step === 1 && cribratge && (
         <div>
-          {/* Avís multi-model (gating de cribratge, no bloqueja el pas de talles) */}
-          {cribratge.num_models > 1 && (
-            <div style={{ background: '#fdf6ee', border: '1px solid #e0c8a0', color: 'var(--gold)',
-                          borderRadius: 8, padding: '8px 12px', fontSize: 'var(--fs-body)', marginBottom: 12 }}>
-              ⚠ {t('import_wizard.multimodel_warn', { count: cribratge.num_models, names: (cribratge.model_detectat || []).map(m => m.nom).join(', ') })}
-            </div>
-          )}
-
           {/* Aparellament document ⟷ model (LA LLEI de la sessió) */}
           <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 8 }}>
             {t('import_wizard.pairing_intro')}
@@ -1090,9 +1213,26 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
             <div>
               {/* Avisos d'extracció */}
               {(extraccioMeta?.avisos || []).length > 0 && (
-                <div style={{ background: '#fdf6ee', border: '1px solid #e0c8a0', color: 'var(--gold)',
+                <div style={{ background: '#fdf6ee', border: '1px solid var(--gold-border)', color: 'var(--gold)',
                               borderRadius: 8, padding: '8px 12px', fontSize: 'var(--fs-body)', marginBottom: 12 }}>
                   {extraccioMeta.avisos.map((a, i) => <div key={i}>⚠ {a}</div>)}
+                </div>
+              )}
+
+              {/* SET-2/T8-ter · LES SECCIONS QUE NO TENEN PEÇA. És una ABSÈNCIA i s'ha de dir:
+                  un document amb secció SHORT sobre un model sense peça Short vol dir que en
+                  falta una, i el silenci hi deixaria set files aterrant a la mare sense que
+                  ningú se n'adonés. No barra: la columna segueix manant. */}
+              {(extraccioMeta?.proposta_peces?.seccions_sense_peca || []).length > 0 && (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start',
+                              background: 'var(--bg-main)', border: `0.5px solid ${BORDER}`,
+                              borderRadius: 8, padding: '8px 12px', marginBottom: 12,
+                              fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+                  <i className="ti ti-info-circle" aria-hidden="true"
+                     style={{ fontSize: 15, color: GOLD, flexShrink: 0, marginTop: 1 }} />
+                  <span>{t('import_wizard.peces_seccions_sense_peca', {
+                    seccions: (extraccioMeta.proposta_peces.seccions_sense_peca).join(' · '),
+                  })}</span>
                 </div>
               )}
 
@@ -1126,7 +1266,11 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
                   const conflicte = conflictes[p.ordre]
                   return (
                     <Fragment key={idx}>
-                    <div ref={el => { filaRefs.current[p.ordre] = el }} style={{
+                    {/* `data-fila` — l'àncora de la fila per a l'arnès de captura, i el mateix
+                        patró que `EditableTable` ja fa servir (`data-fila`, `data-pindola`):
+                        sense ella, una passejada ha de comptar píndoles per posició i qualsevol
+                        canvi de columnat li mou la tria a una altra fila. */}
+                    <div ref={el => { filaRefs.current[p.ordre] = el }} data-fila={p.ordre} style={{
                       display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
                       borderTop: idx ? `1px solid ${BORDER}` : 'none',
                       background: conflicte ? 'var(--err-bg)' : res ? 'var(--ok-bg)'
@@ -1146,6 +1290,7 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
                               {res.accio === 'vincula'
                                 ? t('import_wizard.resol_fet_vincula', { codi: res.pom_codi, nom: res.pom_nom })
                                 : t('import_wizard.resol_fet_crea', { codi: res.codi, nom: res.nom })}
+                              <b>{sufixIdentitat(filaAmbIdentitat(p, identitats), dicc, lang)}</b>
                             </span>
                           : noMatch
                           ? (tenantOnly
@@ -1176,7 +1321,15 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
                                     {t('import_wizard.add_as_own')}
                                   </span>
                                 </span>)
-                          : <><b>{p.pom_codi}</b> · {p.pom_nom || p.descripcio}</>}
+                          : <><b>{p.pom_codi}</b> · {p.pom_nom || p.descripcio}
+                              {/* P2-ter · LA FILA INFORMA. La instància entra al NOM, com a la
+                                  graella del pas 3 i com a la fitxa: aquí es LLEGEIX què és
+                                  aquesta fila. Per canviar-la, «canvia el vincle» — l'edició viu
+                                  al panell. I el que es llegeix és la decisió PENDENT, no
+                                  l'últim desat: si no, diria «única» just després que algú hagi
+                                  triat «Bottom». */}
+                              <b>{sufixIdentitat(filaAmbIdentitat(p, identitats), dicc, lang)}</b>
+                            </>}
                       </div>
                       {/* Qualsevol fila es pot re-decidir, tingui match o no. */}
                       <button type="button" onClick={() => obrePanell(p)}
@@ -1196,20 +1349,73 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
                           : tenantOnly ? 'tenant-only'
                           : pendent ? t('import_wizard.pending_badge')
                           : noMatch ? t('import_wizard.no_match_badge') : conf.toLowerCase()}</span>
+                      {/* ═══ SET-2/T8-ter · LA COLUMNA DE PEÇA · A LA DRETA DE TOT ═══
+                          La fila es llegeix codi → vincle → accions, i aquesta és l'última
+                          pregunta: DE QUI és. Sempre visible i mai al panell, i no és una
+                          excepció a P2-ter sinó una natura de dada diferent — capa i instància
+                          són eixos de GERMANOR (matisos d'una mesura, es responen mirant-la de
+                          prop) i la peça és una FRONTERA (pertinença, es respon escanejant la
+                          COLUMNA sencera). L'argument sencer viu a `filaPas2.js`, que és on
+                          les dues lleis es toquen.
+
+                          TRES ESTATS, i el que els distingeix no és decoració: verd = algú ho
+                          ha DECIDIT · àmbar = el document ho PROPOSA i espera un clic · neutre
+                          = ningú ho ha mirat i anirà a la peça de la sessió. «Ningú no ho ha
+                          mirat» i «algú ha dit que és de la mare» no són el mateix estat.
+                          La regla és `estatDeLaPeca`, i es prova amb `node --test`. */}
+                      {peces.length > 0 && (() => {
+                        const estat = estatDeLaPeca(p, identitats)
+                        const visible = pecaVisible(p, identitats, garment || '')
+                        const COL = { decidit: { bg: '#f0f9f0', fg: '#3b6d11', br: '#cfe6c0' },
+                                      proposat: { bg: '#fdf6ee', fg: 'var(--gold)', br: 'var(--gold-border)' },
+                                      defecte: { bg: 'var(--white)', fg: 'var(--text-muted)', br: BORDER } }[estat]
+                        return (
+                          <select
+                            data-peca={p.ordre} data-estat={estat}
+                            value={visible}
+                            title={estat === 'proposat'
+                              ? t('import_wizard.peca_proposada_tip', { seccio: p.seccio || '' })
+                              : t('import_wizard.peca_tip')}
+                            aria-label={t('import_wizard.peca_col')}
+                            onChange={e => setIdentitats(prev => ({
+                              ...prev,
+                              [p.ordre]: { ...(prev[p.ordre] || {}), garment: e.target.value },
+                            }))}
+                            style={{
+                              flex: '0 0 auto', minWidth: 116, maxWidth: 160, padding: '2px 6px',
+                              borderRadius: 6, fontFamily: 'inherit', fontSize: 'var(--fs-label)',
+                              background: COL.bg, color: COL.fg, border: `1px solid ${COL.br}`,
+                              fontWeight: estat === 'defecte' ? 400 : 600,
+                            }}>
+                            {peces.map(pc => (
+                              <option key={pc.codi} value={pc.codi}>
+                                {pc.es_mare ? t('resum_wizard.model_base') : (pc.nom || pc.codi)}
+                              </option>
+                            ))}
+                          </select>
+                        )
+                      })()}
                     </div>
                     {panellOrdre === p.ordre && (
                       <ResolPanel
-                        fila={p} conflicte={conflicte} cataleg={cataleg}
+                        fila={p} conflicte={conflicte} res={res} modelId={model.id} peces={peces}
                         crea={crea} setCrea={setCrea}
                         onTanca={() => setPanellOrdre(null)}
+                        dicc={dicc}
+                        capa={capaEfectiva(p, identitats)}
+                        instancia={instanciaEfectiva(p, identitats)}
+                        onCapa={slug => setIdentitats(prev => ({
+                          ...prev, [p.ordre]: { ...identitatEfectiva(p, prev), capa: slug } }))}
+                        onInstancia={slug => setIdentitats(prev => ({
+                          ...prev, [p.ordre]: { ...identitatEfectiva(p, prev), instancia: slug } }))}
                         onVincula={(c) => posaResolucio(p.ordre, {
                           accio: 'vincula', pom_master_id: c.id,
                           pom_codi: c.codi_client, pom_nom: c.nom_client,
-                        })}
+                        }, { tanca: false })}
                         onCrea={() => posaResolucio(p.ordre, {
                           accio: 'crea', codi: crea.codi.trim(),
                           nom: crea.nom.trim() || crea.codi.trim(),
-                        })}
+                        }, { tanca: false })}
                       />
                     )}
                     </Fragment>
@@ -1222,13 +1428,13 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
               {/* Afegir POM manual del catàleg */}
               <div style={{ marginBottom: 16 }}>
                 {!showAddPom ? (
-                  <button type="button" onClick={loadCataleg}
+                  <button type="button" onClick={() => setShowAddPom(true)}
                     style={{ padding: '6px 12px', borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer',
                              border: `1px dashed ${GOLD}`, background: 'transparent', color: GOLD }}>
                     {t('import_wizard.add_pom_catalog')}
                   </button>
                 ) : (
-                  <PomCatalegPicker cataleg={cataleg} autoFocus onPick={addPomManual} />
+                  <PomCatalegPicker modelId={model.id} autoFocus onPick={addPomManual} />
                 )}
               </div>
 
@@ -1277,7 +1483,7 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
           </div>
 
           {emptyCols.length > 0 && (
-            <div style={{ background: '#fdf6ee', border: '1px solid #e0c8a0', color: 'var(--gold)',
+            <div style={{ background: '#fdf6ee', border: '1px solid var(--gold-border)', color: 'var(--gold)',
                           borderRadius: 8, padding: '8px 12px', fontSize: 'var(--fs-body)', marginBottom: 10,
                           display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
               <span>{t('import_wizard.sizes_no_values')} <b>{emptyCols.join(', ')}</b>.</span>
@@ -1308,16 +1514,28 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
               </thead>
               <tbody>
                 {grupsTaula.map((grup, gi) => (
-                  <Fragment key={`g${gi}`}>
-                    {(grup.seccio || taulaAmbSeccions) && (
+                  <Fragment key={`p${grup.codi}`}>
+                    {/* SET-2/T8-ter · LA CAPÇALERA DE CONTENIDOR: la PEÇA. Es pinta només quan
+                        n'hi ha més d'una — amb una sola prenda la taula queda idèntica a la
+                        d'abans d'aquesta peça, que és el 100% dels imports d'avui. */}
+                    {taulaAmbPeces && (
                       <tr>
-                        <td colSpan={1 + tallesSel.length} style={{ ...SUBHEAD, borderTop: `1px solid ${BORDER}` }}>
-                          {grup.seccio || t('import_wizard.seccio_cap')}
+                        <td data-peca-grup={grup.codi} colSpan={1 + tallesSel.length}
+                            style={{ ...SUBHEAD, borderTop: `1px solid ${BORDER}` }}>
+                          {nomDePeca(grup.codi)}
+                          <span style={{ marginLeft: 8, fontWeight: 400, textTransform: 'none',
+                                         letterSpacing: 0 }}>
+                            {t('import_wizard.peca_grup_n', { count: grup.items.length })}
+                          </span>
                         </td>
                       </tr>
                     )}
+                    {/* P1 · la `key` de la fila és l'ORDRE. Amb el POM, dues germanes (el
+                        mateix POM en dues instàncies) donaven claus DUPLICADES: React
+                        desmunta i remunta els inputs i el que s'està teclejant es perd.
+                        L'`ordre` el fixa l'extracció i no canvia entre renders. */}
                     {grup.items.map(p => (
-                  <tr key={p.pom_master_id} style={{ borderTop: `1px solid ${BORDER}` }}>
+                  <tr key={p.ordre} style={{ borderTop: `1px solid ${BORDER}` }}>
                     <td style={{ padding: '6px 10px', position: 'sticky', left: 0, background: 'var(--white)' }}>
                       {/* QA-S8 · El codi del DOCUMENT mana: és el que la persona té al paper
                           davant. El del catàleg queda com a secundari i atenuat, i només si
@@ -1328,14 +1546,19 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
                       {p.pom_codi && p.codi_fitxa && p.pom_codi !== p.codi_fitxa && (
                         <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> → {p.pom_codi}</span>
                       )}
+                      {/* P3 · LA IDENTITAT AL RÈTOL, no en una columna nova: el que eixampla
+                          una taula és el rètol, i aquí la instància és el que fa que dues
+                          files del mateix POM es puguin dir l'una de l'altra. Mateix ordre i
+                          mateixa forma que a la fitxa i a MeasureGrid (` · Bottom · Folre`). */}
+                      <span style={{ fontWeight: 500 }}>{sufixIdentitat(p, dicc, lang)}</span>
                       <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>{p.pom_nom || p.descripcio}</div>
                     </td>
                     {tallesSel.map(talla => (
                       <td key={talla} style={{ padding: '2px', textAlign: 'center',
                             background: talla === baseSize ? '#fbf7ec' : 'var(--white)' }}>
                         <input type="number" step="0.1"
-                          value={taula[p.pom_master_id]?.[talla] ?? ''}
-                          onChange={e => setCell(p.pom_master_id, talla, e.target.value)}
+                          value={taula[p.ordre]?.[talla] ?? ''}
+                          onChange={e => setCell(p.ordre, talla, e.target.value)}
                           style={{ width: 56, padding: '4px', textAlign: 'center', fontSize: 'var(--fs-body)',
                                    border: `1px solid ${BORDER}`, borderRadius: 4,
                                    fontFamily: 'inherit' }} />
@@ -1492,6 +1715,21 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
                         borderRadius: 8, padding: '8px 12px', fontSize: 'var(--fs-body)', marginBottom: 16 }}>
             {t('import_wizard.mana_doc', { count: pomsActius })}
           </div>
+
+          {/* ── SET-2/T8-ter (16/08) · AQUÍ HI HAVIA L'AVÍS DE MULTI-PRENDA I S'HA RETIRAT.
+              Deia «aquest document sembla portar més d'una peça; tot anirà a X» — i era el que
+              es podia dir mentre l'import fos d'UNA peça i el destí ja estigués decidit: un avís
+              perquè ningú es trobés la feina en un lloc que no esperava.
+
+              Amb la columna del pas 2 la frase ha deixat de ser certa (ja no va tot a X) i,
+              sobretot, ha deixat de ser NECESSÀRIA: el suggeriment ja no interromp al final del
+              camí, es pinta AL LLOC DE LA DECISIÓ —les files de la secció SHORT surten en àmbar
+              a la seva columna— i confirmar-lo és un clic allà mateix. Un avís que repetís al
+              pas 5 el que la columna ja diu al pas 2 només afegiria una lectura.
+
+              La DADA es conserva (`cribratge.mes_duna_prenda`, i el backend segueix desant-la a
+              `resultat['mes_duna_prenda']`): és traça del que el document deia, i el dia que la
+              proposta falli servirà per saber que el senyal hi era. */}
 
           {/* PRINCIPI DEL SOROLL — el model s'alimenta de realitat. Les mesures vives que el
               document NO menciona es PROPOSEN per desactivar; mai s'esborren soles i mai

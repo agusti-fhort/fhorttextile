@@ -14,7 +14,9 @@ DDL transaccional: a Postgres un `ALTER TABLE … DROP CONSTRAINT` es desfà amb
 igual que un INSERT. El test no deixa rastre, i `test_la_comporta_torna_a_estar_viva` ho
 verifica al final llegint el catàleg de Postgres.
 
-Quan C4 retiri les comportes, el `with comporta_alcada(...)` sobra i els asserts es queden.
+C4/G1-G4 (04/08) JA les ha retirades: el `with comporta_alcada(...)` és un no-op i els asserts
+del cos s'han quedat tal com estaven, que és el que aquest fitxer havia previst. L'únic que ha
+canviat de sentit és l'últim test, el d'higiene del harness.
 
 Convenció del repo: `python manage.py test fhort.models_app` (el projecte NO fa servir pytest).
 """
@@ -42,9 +44,11 @@ def comporta_alcada(*taules):
     try:
         with connection.cursor() as cur:
             for taula in taules:
+                # `IF EXISTS` — C4/G1-G4 (04/08) han retirat les 40 comportes: alçar-ne una
+                # que ja no hi és és el mateix estat, i el `finally` retorna igual.
                 cur.execute(
                     f'ALTER TABLE "{connection.schema_name}"."{taula}" '
-                    f'DROP CONSTRAINT "{taula}_capa_gate_c1"'
+                    f'DROP CONSTRAINT IF EXISTS "{taula}_capa_gate_c1"'
                 )
         yield
     finally:
@@ -113,8 +117,12 @@ class LectorsCapaOnada1Test(TenantTestCase):
             tol = _tolerance_map(self.model)
 
             self.assertEqual(len(tol), 2, 'les dues capes han de tenir entrada pròpia')
-            self.assertEqual(tol[(self.pom.id, EXTERIOR, '')], (0.5, 0.5))
-            self.assertEqual(tol[(self.pom.id, FOLRE, '')], (2.0, 2.0))
+            # SET-2/T6a (2026-08-11) — LA CLAU DEL MAPA TÉ UN TRAM MÉS: el `garment`. Pin
+            # de FORMA i era el seu ofici caure avui — les toleràncies no s'han mogut
+            # (0.5/2.0/9.0, les mateixes germanes), només la clau. Segueix exigint una
+            # entrada PRÒPIA per germana, que és el que aquest test defensa.
+            self.assertEqual(tol[(self.pom.id, EXTERIOR, '', '')], (0.5, 0.5))
+            self.assertEqual(tol[(self.pom.id, FOLRE, '', '')], (2.0, 2.0))
 
     # ── C5 · el serializer de Size Check ─────────────────────────────────────────────
 
@@ -224,9 +232,22 @@ class LectorsCapaOnada1Test(TenantTestCase):
     def test_c7_la_taula_de_mesures_no_barreja_les_capes_per_cap_de_les_dues_portes(self):
         """`cells` i `poms_seen` s'omplen per dos camins excloents —specs graduats si el
         model té graduació, mesures base si no— i tots dos escriuen als MATEIXOS
-        diccionaris, indexats per POM sol. Amb dues capes, la cel·la se la quedava la
-        darrera fila llegida: una taula mig d'una capa i mig de l'altra segons la porta."""
+        diccionaris. Amb dues capes, la cel·la se la quedava la darrera fila llegida: una
+        taula mig d'una capa i mig de l'altra segons la porta.
+
+        C4 — LA CLAU DE `cells` HA CRESCUT i el que aquest test defensa NO ha canviat.
+        Fins a C4 la clau era `str(pom_id)` i, amb dues capes vives, la manera de comprovar
+        que no es barrejaven era exigir que la cel·la del POM digués el valor de l'exterior
+        —perquè només n'hi cabia UNA i calia saber quina hi quedava—. Ara n'hi caben dues,
+        cadascuna amb la seva clau, i la comprovació es fa millor: **s'exigeixen totes dues,
+        cadascuna amb el seu valor**. Si el lector tornés a barrejar-les, o una perdés
+        l'altra, aquest assert cau igual que abans.
+        """
         from fhort.fitting.models import GradedSpec
+        from fhort.pom.identitat import clau_mesura
+
+        ext = clau_mesura(self.pom.id, EXTERIOR, '')
+        fol = clau_mesura(self.pom.id, FOLRE, '')
 
         # Porta 1 · mesures base, sense graduació.
         with comporta_alcada('models_app_basemeasurement',
@@ -237,9 +258,10 @@ class LectorsCapaOnada1Test(TenantTestCase):
             resp = self._taula(sf)
 
             self.assertEqual(resp.status_code, 200)
-            cella = resp.data['cells'][str(self.pom.id)]['M']
-            self.assertEqual(cella['value'], 100.0,
-                             "la taula ha de dir el valor de l'exterior, no el del folre")
+            self.assertEqual(resp.data['cells'][ext]['M']['value'], 100.0,
+                             "la cel·la de l'exterior ha de dir el valor de l'exterior")
+            self.assertEqual(resp.data['cells'][fol]['M']['value'], 98.0,
+                             'la cel·la del folre ha de dir el seu, i ha d\'existir')
 
         # Porta 2 · specs graduats.
         with comporta_alcada('fitting_gradedspec'):
@@ -253,8 +275,10 @@ class LectorsCapaOnada1Test(TenantTestCase):
             resp = self._taula(sf2)
 
             self.assertEqual(resp.status_code, 200)
-            self.assertEqual(resp.data['cells'][str(self.pom.id)]['M']['value'], 100.0,
-                             'un valor graduat de folre s\'ha colat a la taula')
+            self.assertEqual(resp.data['cells'][ext]['M']['value'], 100.0,
+                             'un valor graduat de folre s\'ha colat a la cel·la de l\'exterior')
+            self.assertEqual(resp.data['cells'][fol]['M']['value'], 7.0,
+                             'el graduat del folre ha de tenir cel·la pròpia')
 
     # ── C9 · el node del pin: el carry-forward dels estadis ──────────────────────────
 
@@ -301,17 +325,26 @@ class LectorsCapaOnada1Test(TenantTestCase):
 
     # ── El rastre: cap ───────────────────────────────────────────────────────────────
 
-    def test_la_comporta_torna_a_estar_viva(self):
-        """El harness alça comportes: si el savepoint no les tornés, aquest fitxer deixaria
-        la BD de test sense guard i els altres tests de capa passarien per una raó falsa."""
+    def test_el_harness_no_deixa_rastre(self):
+        """Deia «la comporta torna a estar viva» i comptava que n'hi hagués nou. C4/G1-G4 les
+        han retirades totes i ja no n'hi ha cap per tornar, però el que aquell assert defensava
+        segueix fent falta: que el harness deixi l'esquema EXACTAMENT com el va trobar — si no,
+        la resta de tests d'aquest fitxer passarien per una raó falsa.
+
+        Pel NOM i no per recompte: el 9 d'abans és justament la xifra que va quedar ranci."""
+        def noms_de_check():
+            with connection.cursor() as cur:
+                cur.execute(
+                    "SELECT conname FROM pg_constraint c "
+                    "JOIN pg_namespace n ON n.oid = c.connamespace "
+                    "WHERE n.nspname = %s AND c.contype = 'c'",
+                    [connection.schema_name])
+                return {row[0] for row in cur.fetchall()}
+
+        abans = noms_de_check()
         with comporta_alcada('models_app_basemeasurement'):
             pass
 
-        with connection.cursor() as cur:
-            cur.execute(
-                "SELECT conname FROM pg_constraint c "
-                "JOIN pg_namespace n ON n.oid = c.connamespace "
-                "WHERE n.nspname = %s AND c.contype = 'c' AND c.conname LIKE %s",
-                [connection.schema_name, '%_capa_gate_c1'])
-            self.assertEqual(len(cur.fetchall()), 9,
-                             'el harness ha deixat una comporta per terra')
+        self.assertEqual(noms_de_check(), abans, 'el harness ha canviat l\'esquema')
+        self.assertEqual({c for c in abans if c.endswith('_capa_gate_c1')}, set(),
+                         'una comporta de capa ha sobreviscut a C4')

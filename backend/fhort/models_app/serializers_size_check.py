@@ -97,7 +97,10 @@ class SizeCheckGridSerializer(serializers.ModelSerializer):
         rules = _load_grading_rules(obj.model)
 
         out = []
-        ordres = []   # ordre de fitxa, paral·lel a `out`: la fila del payload no porta capa
+        # Ordre de fitxa, paral·lel a `out`. C4/BLOC 1-BIS: la fila SÍ que porta ara els
+        # eixos, o sigui que el motiu d'aquesta llista paral·lela ha caigut. El mecanisme es
+        # queda: substituir-lo és una refosa de forma sense defecte que la justifiqui.
+        ordres = []
         for line in obj.linies.select_related('pom', 'pom__pom_global').all():
             bm = bm_map.get((line.pom_id, line.capa, line.instancia))
             r = rules.get(line.pom_id)
@@ -117,6 +120,26 @@ class SizeCheckGridSerializer(serializers.ModelSerializer):
             out.append({
                 'id': line.id,
                 'pom_id': line.pom_id,
+                # C4/BLOC 1-BIS — ELS DOS EIXOS I LA PK DE LA MESURA AL CONTRACTE.
+                #
+                # Aquest serializer ja resolia la identitat sencera (`bm_map` per
+                # `(pom_id, capa, instancia)`) per jutjar cada línia amb la tolerància de LA
+                # SEVA germana. El que no feia era dir-ho, i el consumidor no ho podia saber.
+                #
+                # El dany era al front i era doble. `CheckMeasureEditor.buildRows` creua les
+                # files de `base_stages` amb aquestes línies fent `lineByPom[l.pom_id]`: amb
+                # dues germanes, les dues files rebien la MATEIXA línia —el mateix valor
+                # mesurat, el mateix veredicte de tolerància, la mateixa cel·la de decisió— i
+                # una de les dues preses desapareixia de la pantalla sense avisar. Un
+                # veredicte fora/dins atribuït a la germana equivocada és pitjor que no tenir-ne.
+                #
+                # `base_measurement_id` i no `bm_id`: el creuament que això arregla és amb
+                # `base_stages_view`, que ja serveix la PK amb aquest nom. Al fitting el
+                # mateix camp es diu `bm_id`; la divergència és VIVA i anterior a C4, i
+                # unificar-la és un concern propi que aquest commit no porta.
+                'capa': line.capa,
+                'instancia': line.instancia,
+                'base_measurement_id': bm.id if bm is not None else None,
                 'codi': pom.pom_code if pom else '',
                 'codi_fitxa': codi_fitxa,
                 'nom': pom.name_cat if pom else '',          # nom en idioma usuari (línia inferior)

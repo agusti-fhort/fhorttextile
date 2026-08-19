@@ -25,6 +25,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from fhort.accounts.capabilities import CONFIGURE, get_capabilities
+from fhort.tasks.services_batec import SUP_FITXA, batec_de_request
 
 from . import services_ftt, services_ftt_document as svc
 from .ftt_template_views import DocumentTemplateSerializer
@@ -243,6 +244,10 @@ class FttDocumentDetailView(APIView):
         new_head = svc.save_document(head, document_json, assets=assets or None, kind=kind)
         # Arreglo del timer-gap: desar renova locked_at → editar >TTL no perd el lock.
         svc.renew_lock(new_head, request.user)
+        # F1.3 · D-1 — AQUESTA és la línia que faltava. L'editor autodesa cada 2 s i, fins avui,
+        # cap d'aquells desats tocava `ModelTask`: editar la fitxa des de «Modificar» no comptava
+        # ni un minut. El `model_id` no ve del camí sinó del `ModelFitxer` (FK `model`).
+        batec_de_request(request, head.model_id, SUP_FITXA)
         return Response(ModelFitxerSerializer(new_head).data, status=status.HTTP_200_OK)
 
 

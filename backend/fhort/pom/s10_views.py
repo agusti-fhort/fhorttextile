@@ -61,7 +61,9 @@ def _tolerance_map(model):
     for bm in BaseMeasurement.objects.filter(model=model, is_active=True):
         tm = float(bm.tolerancia_minus) if bm.tolerancia_minus is not None else TOL_FALLBACK
         tp = float(bm.tolerancia_plus) if bm.tolerancia_plus is not None else TOL_FALLBACK
-        tol[(bm.pom_id, bm.capa, bm.instancia)] = (tm, tp)
+        # SET-2/T6a — la PEÇA hi entra: un veredicte PASS/FAIL decidit amb la tolerància
+        # d'una altra prenda és pitjor que no tenir-ne, i d'aquí en surten POMAlerts.
+        tol[(bm.pom_id, bm.capa, bm.instancia, bm.garment)] = (tm, tp)
     return tol
 
 
@@ -96,8 +98,9 @@ def fitting_vs_spec_view(request, pf_id):
         for line in lines:
             spec_cm = float(line.valor_teoric) if line.valor_teoric is not None else None
             val_cm = float(line.valor_real) if line.valor_real is not None else None
-            tol_minus, tol_plus = tol_map.get((line.pom_id, line.capa, line.instancia),
-                                              (TOL_FALLBACK, TOL_FALLBACK))
+            tol_minus, tol_plus = tol_map.get(
+                (line.pom_id, line.capa, line.instancia, line.garment),
+                (TOL_FALLBACK, TOL_FALLBACK))
 
             desv = None
             passa = None
@@ -117,6 +120,11 @@ def fitting_vs_spec_view(request, pf_id):
 
             resultats.append({
                 'pom_id': line.pom_id,
+                # C4/BLOC 2 — els eixos viatgen amb el resultat: els necessita l'alerta de
+                # sota, i el payload d'aquesta vista tampoc no els deia (mateixa espècie que
+                # A1/A2/A3 del bloc 1-bis).
+                'capa': line.capa,
+                'instancia': line.instancia,
                 'codi_client': _pom_codi(line.pom),
                 'nom_en': _pom_name_en(line.pom),
                 'talla': line.size_label,
@@ -141,9 +149,18 @@ def fitting_vs_spec_view(request, pf_id):
             from fhort.fitting.models import POMAlert
             for r in resultats:
                 if r['passa'] is False and model:
+                    # C4/BLOC 2 — LA CLAU DE L'ALERTA ÉS LA MESURA, NO EL POM. Una alerta
+                    # és el veredicte sobre UNA mesura: la sisa dreta pot desviar 2 cm i
+                    # l'esquerra estar dins de tolerància. Amb `(model, pom, size_fitting)`
+                    # les dues germanes escrivien la MATEIXA fila —l'última guanyava— i el
+                    # `missatge`, que porta la talla i la desviació, acabava descrivint una
+                    # mesura i titulant-ne una altra. Els eixos surten de la LÍNIA, que els
+                    # sap dir; no s'hi posa cap literal.
                     POMAlert.objects.update_or_create(
                         model=model,
                         pom_id=r['pom_id'],
+                        capa=r['capa'],
+                        instancia=r['instancia'],
                         size_fitting=sf,
                         defaults={
                             'desviacio_cm': r['desviacio_cm'],

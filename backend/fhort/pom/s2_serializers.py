@@ -3,6 +3,8 @@ fhort/pom/s2_serializers.py — Sprint S2 serializers
 """
 from rest_framework import serializers
 
+from fhort.accounts.capabilities import PodaEconomicaMixin
+
 
 class TargetSerializer(serializers.Serializer):
     id = serializers.IntegerField()
@@ -19,19 +21,31 @@ class TargetSerializer(serializers.Serializer):
 
 
 class ConstructionTypeSerializer(serializers.Serializer):
+    # `nom_es` s'exposa (coda F2.2, 08/08) EXACTAMENT pel mateix motiu que `FitTypeSerializer` el
+    # va exposar a F2.1b, i és l'últim dels quatre eixos que li faltava: mentre l'endpoint no el
+    # servia, una UI castellana de construccions s'havia d'inventar «Tejido plano» al client, i
+    # de fet se l'inventava —`components/grading/gradingAxes.js:CONSTRUCTIONS`—. Els altres dos
+    # vocabularis de la família (Target, ConstructionType) ja el servien. Les quatre files el
+    # tenen informat (verificat a `fhort`: 0 sense `nom_cat`/`nom_es`).
     id = serializers.IntegerField()
     codi = serializers.CharField()
     nom_en = serializers.CharField()
     nom_cat = serializers.CharField()
+    nom_es = serializers.CharField()
     mesures_en_mitja = serializers.BooleanField()
     tolerancia_critica_cm = serializers.DecimalField(max_digits=4, decimal_places=2)
     display_order = serializers.IntegerField()
 
 
 class FitTypeSerializer(serializers.Serializer):
+    # `nom_cat` i `nom_es` s'exposen (F2.1b) perquè eren l'única raó per la qual una UI catalana
+    # de fits s'havia d'inventar les etiquetes: els altres dos vocabularis de la mateixa família
+    # (Target, ConstructionType) ja les servien i aquest no. Les deu files les tenen informades.
     id = serializers.IntegerField()
     codi = serializers.CharField()
     nom_en = serializers.CharField()
+    nom_cat = serializers.CharField()
+    nom_es = serializers.CharField()
     display_order = serializers.IntegerField()
 
 
@@ -41,6 +55,30 @@ class SizeSystemLightSerializer(serializers.Serializer):
     nom = serializers.CharField()
     base_unit = serializers.CharField()
     norma_ref = serializers.CharField()
+    # N1 (2026-08-06 nit) — el run ja es descriu a si mateix. La Size Library ho pinta com a
+    # tags, i el pas 3 del wizard ho llegeix per ordenar per proximitat. Llista de CODIS (mai
+    # ids ni text traduït): el consumidor tradueix pel seu compte, com ja fa amb `target_codis`.
+    tipus_escala = serializers.CharField(allow_blank=True, required=False)
+    target_codis = serializers.SerializerMethodField()
+    construccio_codis = serializers.SerializerMethodField()
+    fit_codis = serializers.SerializerMethodField()
+    grup_codis = serializers.SerializerMethodField()
+    customer_nom = serializers.SerializerMethodField()
+
+    def get_target_codis(self, obj):
+        return [t.codi for t in obj.targets.all()]
+
+    def get_construccio_codis(self, obj):
+        return [c.codi for c in obj.construccions.all()]
+
+    def get_fit_codis(self, obj):
+        return [f.codi for f in obj.fits.all()]
+
+    def get_grup_codis(self, obj):
+        return [g.codi for g in obj.grups.all()]
+
+    def get_customer_nom(self, obj):
+        return obj.customer.nom if obj.customer_id else ''
 
 
 class SizeDefinitionLightSerializer(serializers.Serializer):
@@ -162,7 +200,12 @@ class SizingProfileSerializer(serializers.Serializer):
             return []
 
 
-class TenantConfigSerializer(serializers.Serializer):
+class TenantConfigSerializer(PodaEconomicaMixin, serializers.Serializer):
+    #: `hourly_rate` és la TARIFA DE COST per hora de la casa, i aquest endpoint el consulta
+    #: tota la SPA per saber `unitat_mesura`: qualsevol pantalla de mesures la portava al
+    #: payload (diagnosi 2026-08-14 §3.1). Es poda; el GET segueix obert per a la resta.
+    CAMPS_ECONOMICS = ('hourly_rate',)
+
     id = serializers.IntegerField(read_only=True)
     unitat_mesura = serializers.ChoiceField(choices=['CM', 'INCH'])
     norma_referencia = serializers.ChoiceField(choices=['ISO_8559', 'ASTM_D13'])

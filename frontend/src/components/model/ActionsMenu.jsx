@@ -5,8 +5,8 @@ import useAuthStore from '../../store/auth'
 import Modal from '../ui/Modal'
 import { selS } from '../ui/buttons'
 import TaskAssignWizard from '../TaskAssignWizard'
+import { useEnumeracio, codiSeguent, codiAnterior } from '../../utils/vocabulariDominiFont'
 
-export const PHASES = ['Pending', 'Dev', 'Proto', 'SizeSet', 'PP', 'TOP']
 const CURRENT = '__current__'   // "fase actual de cada model" (bulk)
 const MONO = 'IBM Plex Mono, monospace'
 // Cercle de color d'assignació (color_avatar). Fallback --gold si null. (replica de TaskAssignWizard)
@@ -14,8 +14,10 @@ const ColorDot = ({ color, size = 16 }) => (
   <span style={{ display: 'inline-block', width: size, height: size, borderRadius: '50%',
     background: color || 'var(--gold)', border: '0.5px solid var(--gray-l)', flexShrink: 0 }} />
 )
-const nextPhase = (f) => { const i = PHASES.indexOf(f); return i >= 0 && i < PHASES.length - 1 ? PHASES[i + 1] : null }
-const prevPhase = (f) => { const i = PHASES.indexOf(f); return i > 0 ? PHASES[i - 1] : null }
+// `nextPhase`/`prevPhase` han BAIXAT a dins del component: ara depenen del vocabulari, que és
+// asíncron. La lògica no ha canviat gens —és `codiSeguent`/`codiAnterior` sobre la mateixa
+// llista ordenada—, i ara és la MATEIXA que fa servir `DashboardGovPanel`, que en tenia una
+// còpia pròpia. `PHASES` deixa d'exportar-se: `Models.jsx` demana el vocabulari pel seu compte.
 const todayISO = () => new Date().toISOString().slice(0, 10)
 
 // Pas 5C · TRAM 2 — Desplegable "Accions" per a UN model (fitxa) o N (selecció a la llista).
@@ -23,8 +25,15 @@ const todayISO = () => new Date().toISOString().slice(0, 10)
 // `selectionSet` (C2) = selecció de CONJUNT filtrat {filters, excludeIds, count}: no hi ha
 // llista d'objectes al client. En aquest mode NOMÉS "assignar tasques" s'escala (envia
 // filters+exclude_ids); la resta d'accions (runBulk per-element) queden deshabilitades.
-export default function ActionsMenu({ targets, model, selectionSet = null, onChanged, onFeedback, triggerLabel }) {
+export default function ActionsMenu({ targets, model, selectionSet = null, onChanged, onFeedback, triggerLabel, variant = 'boto' }) {
   const { t } = useTranslation()
+  // Les fases del model són DADA (`Model.FASE_CHOICES`) i arriben de `/vocabulari/`. Mentre no
+  // hi són, avançar i retrocedir de fase no s'ofereixen: `codiSeguent(null, …)` és `null` i
+  // `someNext`/`somePrev` són falsos. És el que toca —no sabem quina fase ve després—, i no una
+  // llista escrita aquí que el dia que el model canviï ningú no actualitzarà.
+  const { codis: fases } = useEnumeracio('fases_model')
+  const nextPhase = (f) => codiSeguent(fases, f)
+  const prevPhase = (f) => codiAnterior(fases, f)
   const conjunt = !!selectionSet
   const list = (targets && targets.length ? targets : (model ? [model] : []))
   const single = (!conjunt && list.length === 1) ? list[0] : null
@@ -272,7 +281,15 @@ export default function ActionsMenu({ targets, model, selectionSet = null, onCha
     { key: 'assign', label: t('model_sheet.assign_tasks'), icon: 'ti-users-plus', enabled: n > 0 },
     { key: 'production', label: t('model_sheet.send_to_production'), icon: 'ti-send', enabled: !conjunt && list.length > 0, hint: conjuntHint },
     { key: 'fitting', label: t('model_sheet.schedule_fitting'), icon: 'ti-calendar-plus', enabled: !conjunt && list.length > 0, hint: conjuntHint },
-    { key: 'assign_order', label: t('model_sheet.assign_order'), icon: 'ti-clipboard-list', enabled: !conjunt && list.length > 0, hint: conjuntHint },
+    // L'assignació a comanda demana CONFIGURE al servidor des de sempre
+    // (`commerce/views.py`, `assign-model`), però l'entrada de menú no ho deia: un tècnic la
+    // veia, obria el modal, triava línia i només aleshores es menjava un 403. Es gateja com
+    // les dues germanes de sota. NO demana `comercial`: assignar és cartera, no comerç
+    // (decisió d'Agus, 2026-08-14), i el selector li arriba podat d'imports.
+    ...(canConfigure
+      ? [{ key: 'assign_order', label: t('model_sheet.assign_order'), icon: 'ti-clipboard-list',
+           enabled: !conjunt && list.length > 0, hint: conjuntHint }]
+      : []),
     // Només en una Marca amb CONFIGURE. Fora del mode conjunt: l'endpoint pren model_ids
     // explícits (no filtres), com production/fitting/assign_order.
     ...((isBrand && canConfigure)
@@ -291,15 +308,31 @@ export default function ActionsMenu({ targets, model, selectionSet = null, onCha
   const phaseSelectOptions = (withCurrent) => (
     <>
       {!single && withCurrent && <option value={CURRENT}>{t('model_sheet.current_phase')}</option>}
-      {PHASES.map(p => <option key={p} value={p}>{p}{single && p === single.fase_actual ? ' ●' : ''}</option>)}
+      {(fases || []).map(p => <option key={p} value={p}>{p}{single && p === single.fase_actual ? ' ●' : ''}</option>)}
     </>
   )
 
   return (
     <div style={{ position: 'relative' }}>
       <button type="button" onClick={() => n && setOpen(o => !o)} disabled={!n}
-        style={{ ...triggerBtn, opacity: n ? 1 : 0.5, cursor: n ? 'pointer' : 'not-allowed' }}>
-        {triggerLabel || t('model_sheet.actions')}{n > 1 ? ` (${n})` : ''} <i className="ti ti-chevron-down" aria-hidden="true" />
+        aria-haspopup="menu" aria-expanded={open}
+        style={{
+          ...(variant === 'menu' ? triggerMenu : triggerBtn),
+          // §5.7 — deshabilitat: BAIXA EL FONS, no la tinta. L'`opacity` d'abans apagava
+          // també el text i el deixava per sota d'AA.
+          //
+          // …PERÒ AL MENÚ NO HI HA FONS QUE BAIXAR: la píndola de la barra és transparent en
+          // repòs, i donar-li `--bg-page` la deixa a un pas de `--sel`, que en aquesta barra
+          // vol dir EXACTAMENT EL CONTRARI (píndola activa/hover). Allà mana la §1, que
+          // reserva `--text-faint` per a «només deshabilitat».
+          ...(n ? null : (variant === 'menu'
+            ? { color: 'var(--text-faint)', cursor: 'not-allowed' }
+            : { background: 'var(--bg-page)', cursor: 'not-allowed' })),
+        }}>
+        {triggerLabel || t('model_sheet.actions')}{n > 1 ? ` (${n})` : ''}
+        {/* §8: icona dins de botó = 14px i SEMPRE currentColor, perquè segueixi la tinta. */}
+        <i className="ti ti-chevron-down" aria-hidden="true"
+          style={{ fontSize: 14, color: 'currentColor' }} />
       </button>
       {open && (
         <>
@@ -436,7 +469,7 @@ export default function ActionsMenu({ targets, model, selectionSet = null, onCha
           <Row label={t('model_sheet.phase')}>
             <select style={fullSel} value={form.fase} onChange={e => setForm(f => ({ ...f, fase: e.target.value }))}>
               {single
-                ? PHASES.map(p => <option key={p} value={p}>{p}{deliveredPhases.has(p) ? ' ✓' : ''}</option>)
+                ? (fases || []).map(p => <option key={p} value={p}>{p}{deliveredPhases.has(p) ? ' ✓' : ''}</option>)
                 : phaseSelectOptions(true)}
             </select>
           </Row>
@@ -538,7 +571,39 @@ function Row({ label, children }) {
   return <div style={{ marginBottom: 12 }}><div style={{ fontSize: 'var(--fs-label)', textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--gray)', marginBottom: 4, fontFamily: MONO }}>{label}</div>{children}</div>
 }
 
-const triggerBtn = { display: 'flex', alignItems: 'center', gap: 6, background: 'var(--gold)', color: 'var(--white)', border: 'none', borderRadius: 6, padding: '7px 14px', fontSize: 'var(--fs-body)', fontWeight: 600, fontFamily: MONO }
+// EL DISPARADOR D'«ACCIONS ▾» ÉS SECUNDARI (NORMA_LAYOUT §5.6, T0-bis.4).
+//
+// «Accions ⋯» és el calaix de les ocasionals —duplicar, exportar, arxivar—, i un calaix no és
+// mai «el que has vingut a fer»: la primària n'és una per pantalla i aquesta no ho és.
+//
+// Fins ara consumia `primaryBtn`, cosa que era CORRECTA mentre la primària era daurada (S37):
+// aleshores «vora/fons de la casa» i «acció primària» eren el mateix color i el préstec no es
+// notava. En passar la primària a blau (T0-bis.2) el préstec va quedar a la vista: el menú
+// d'accions sortia blau a /models, al dashboard del model i al TaskAssignWizard.
+//
+// Es corregeix AQUÍ, un sol cop, i no a les tres pantalles: el disparador és compartit.
+// §8e — QUAN L'ACCIÓ PUJA AL MENÚ DE PANTALLA DEIXA DE SER UN BOTÓ: dins de la barra blanca
+// el llenguatge és el de la píndola de navegació, no el del botó secundari. Mateixa forma que
+// `PageMenu` i que el `BotoMenu` de la llista de Models; `variant="menu"` és opt-in, i el
+// consumidor de sempre (capçalera de la fitxa del model) no canvia gens.
+const triggerMenu = {
+  display: 'inline-flex', alignItems: 'center', gap: 6,
+  borderWidth: 1, borderStyle: 'solid', borderColor: 'transparent',
+  borderRadius: 'var(--r-pill)', background: 'none',
+  padding: '6px 14px', fontFamily: MONO, fontSize: 'var(--fs-body)', lineHeight: '16px',
+  color: 'var(--text-soft)', cursor: 'pointer', whiteSpace: 'nowrap',
+}
+// §5.2 · SECUNDÀRIA: blanc + vora --gold-border + tinta fosca, **padding 8×16** i pes 500 —
+// les mides exactes que la norma escriu i que el `.btn` de la maqueta del §8b pinta. Abans
+// anava a 7×14 i pes 600, que és el pes d'un primari.
+const triggerBtn = {
+  display: 'inline-flex', alignItems: 'center', gap: 6,
+  background: 'var(--panel)', color: 'var(--text-main)',
+  borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--gold-border)',
+  borderRadius: 'var(--r-ctrl)',
+  padding: '8px 16px', fontSize: 'var(--fs-body)', fontWeight: 500, lineHeight: '16px',
+  cursor: 'pointer', fontFamily: MONO,
+}
 const menuBox = { position: 'absolute', right: 0, top: 'calc(100% + 4px)', zIndex: 41, background: 'var(--white)', border: '0.5px solid var(--gray-l)', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', padding: 4, minWidth: 230 }
 const menuItem = { display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: '8px 10px', borderRadius: 6, fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-main)' }
 const fullSel = { ...selS, width: '100%' }

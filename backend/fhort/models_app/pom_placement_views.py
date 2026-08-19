@@ -84,9 +84,21 @@ def _cascada(request, item):
     # mesura. Creixen alhora, perquè és la mateixa clau a les dues bandes.
     bm_by_pom = {}
     if model_id:
+        # SET-2/T6a — LA PEÇA ENTRA A L'ÀNCORA, NO A LA CLAU, i és una FRONTERA
+        # ESTRUCTURAL, no un oblit: `POMPlacement` no té columna `garment` ni en pot
+        # tenir avui —una cota dibuixada sobre un croquis no sap dir de quina prenda és—,
+        # o sigui que el costat esquerre de la comparació només parla de tres trams.
+        # Afegir el `garment` a la clau faria que CAP cota trobés la seva mesura.
+        # El filtre a la peça MARE conserva exactament el comportament d'avui i evita el
+        # dany silenciós: sense ell, amb dues peces vives el `values_list` en tornaria
+        # dues amb la mateixa clau i la cota rebria el `bm_id` de la que es llegís
+        # l'última — el dibuix lligat a la mesura d'una altra prenda («no peta: pinta»).
+        # Un POM que només existeixi en una peça no-mare cau a `no_al_model`, que és el
+        # camí segur que aquesta vista ja té.
+        # QUAN ES REVISA: quan una cota sàpiga dir la seva peça (T7/T8), no per data.
         bm_by_pom = {
             (p, c, ins): i for p, c, ins, i in BaseMeasurement.objects.filter(
-                model_id=model_id, is_active=True).values_list(
+                model_id=model_id, is_active=True, garment='').values_list(
                     'pom_id', 'capa', 'instancia', 'id')
         }
 

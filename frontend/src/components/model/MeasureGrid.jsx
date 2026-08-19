@@ -3,6 +3,11 @@ import { useTranslation } from 'react-i18next'
 
 import BateigInput from './BateigInput'
 import { thStyle, SaveStatus, useDebouncedSave, fmtMeasure, useUnit } from '../../pages/fittingShared'
+import { etiquetaCapa, etiquetaInstancia } from '../../utils/capaInstancia'
+import { useDiccionariMesures, useEstatDiccionari } from '../../utils/diccionariMesuresFont'
+import { useTraduccioPoms } from '../../utils/traduccioPomFont'
+import { InfoTraduccio } from '../EditableTable/EditableTable'
+import AvisDiccionari from '../ui/AvisDiccionari'
 
 // MeasureGrid — editor únic de mesures (un component, dos modes treball/consulta) que serveix els
 // DOS eixos via SLOTS, reusant l'esquelet del fitting editor (MeasureTable):
@@ -15,17 +20,25 @@ import { thStyle, SaveStatus, useDebouncedSave, fmtMeasure, useUnit } from '../.
 // Controlat: els valors arriben per `rows`; en desar es crida onSave(lineId, value) i, si retorna línies
 // propagades (fitting), s'actualitzen les germanes (excepte la cel·la amb focus). Motors INTACTES.
 
+// C5-UI — LA IDENTITAT DE LA FILA ÉS LA MATEIXA A TOTES LES SUPERFÍCIES. Aquesta graella la
+// comparteixen Escalat, Comprovació, Fitting i Repàs, i les quatre poden servir dues germanes del
+// mateix POM. Fins ara les dues files hi sortien amb el mateix nom i la diferència només es podia
+// endevinar per la nomenclatura del client (A / A-FOL): la capa passa a tenir columna pròpia i la
+// instància viu dins del nom, exactament com a la taula d'entrada de Mesures (P1). Una identitat
+// que canviés de forma segons la pantalla seria la mateixa trampa que la nomenclatura tenia abans
+// de `nomenclaturaPom.js`.
+const COL_CAPA_W = 92
 const COL_POM_W = 78
 const COL_NOM_W = 160
 
 // `filled` = gold-pale (NOMÉS la columna activa destaca); groupStart/End = filet subtil de
 // delimitació del grup (no daurat, per no competir amb el destacat de l'activa).
 const cellTd = (filled, groupStart, groupEnd) => ({
-  padding: '5px 8px', borderBottom: '0.5px solid var(--border)', verticalAlign: 'middle',
+  padding: '5px 8px', borderBottom: '1px solid var(--line-soft)', verticalAlign: 'middle',
   textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums',
-  background: filled ? 'var(--gold-pale)' : undefined,
-  borderLeft: groupStart ? '1px solid var(--border)' : '0.5px solid var(--border)',
-  borderRight: groupEnd ? '1px solid var(--border)' : undefined,
+  background: filled ? 'var(--sel)' : undefined,
+  borderLeft: groupStart ? '1px solid var(--line)' : '1px solid var(--line-soft)',
+  borderRight: groupEnd ? '1px solid var(--line)' : undefined,
 })
 
 // Parse numèric tolerant amb la COMA decimal (60,5 == 60.5). Buit → null; no-numèric → NaN.
@@ -87,11 +100,24 @@ function NotaDot({ nota }) {
 // editada a mà (ancoratge). Buida si no hi ha línia activa per a aquest (pom, grup).
 const stepBtnStyle = {
   display: 'flex', alignItems: 'center', justifyContent: 'center', height: 11, width: 16,
-  padding: 0, border: '1px solid var(--border)', background: 'var(--white)',
-  color: 'var(--text-muted)', cursor: 'pointer', lineHeight: 1, fontSize: 9,
+  padding: 0, border: '1px solid var(--line)', background: 'var(--white)',
+  color: 'var(--text-soft)', cursor: 'pointer', lineHeight: 1, fontSize: 'var(--fs-caption)',
 }
 
-function ActiveCell({ active, editable, value, edited, onChange, onCommit, focusRef, unit }) {
+// EL VEREDICTE PINTA EL NÚMERO (fitting_v3). L'etiqueta sola no bastava: el que es llegeix quan
+// s'escombra la columna de dalt a baix és la XIFRA, i una xifra negra sota una etiqueta verda es
+// llegeix com una mesura sense decidir. El color va al número, en negreta, i el rebuig el ratlla —
+// que és el que vol dir «aquest valor no substitueix res».
+// A9 · §1b(d) — l'ajustat va en `--warn-ink` com a TINTA (5.32:1). `--warn` era un taronja
+// antic que no és cap dels tokens de la norma.
+const VERDICTE_COL = { ACCEPTED: 'var(--ok)', ADJUSTED: 'var(--warn-ink)', REJECTED: 'var(--err)' }
+// Les tecles del veredicte, en l'ordre del brief: A accepta · J ajusta · R rebutja. Viuen aquí i no
+// a l'adaptador perquè el que les ha de sentir és el camp del número —la mà no en surt— i és
+// aquest component qui el té. Sense `onVeredicte` (check, escalat, repàs) no s'escolta cap lletra.
+const TECLA_VERDICTE = { a: 'ACCEPTED', j: 'ADJUSTED', r: 'REJECTED' }
+
+function ActiveCell({ active, editable, value, edited, onChange, onCommit, focusRef, unit,
+                      registerInput, onNav }) {
   const { t } = useTranslation()
   const [state, schedule] = useDebouncedSave(onCommit)
   const [focused, setFocused] = useState(false)
@@ -101,17 +127,32 @@ function ActiveCell({ active, editable, value, edited, onChange, onCommit, focus
   // diuen la veritat: en aquesta fila no hi ha res a anotar (encara).
   if (!active) {
     return (
-      <td style={{ ...cellTd(true, false, false), color: 'var(--text-muted)' }}
+      <td style={{ ...cellTd(true, false, false), color: 'var(--text-soft)' }}
         title={t('measuregrid.sense_linia')}>—</td>
     )
   }
   const modified = activeRed(value, active)
+  // E2b — pre-omplert sense gest: la xifra hi és perquè és la teòrica, no perquè ningú l'hagi
+  // mesurada. Deixa de ser fantasma en tocar-la (`edited`), que és quan passa a ser una presa.
+  const fantasma = !!active.fantasma && !edited
+  const verdicte = active.veredicte || null
+  const colVerdicte = verdicte ? VERDICTE_COL[verdicte] : null
   // `active.readonly` força lectura en una cel·la concreta encara que la graella sigui editable
   // (p.ex. la talla base de l'Escalat, que no s'edita com a override).
   if (!editable || active.readonly) {
-    // Lectura: format de presentació (1 decimal cm · 2 inch).
+    // Lectura: format de presentació (1 decimal cm · 2 inch). El veredicte també hi pinta: una
+    // sessió segellada s'ha de poder rellegir amb els mateixos colors amb què es va decidir.
     return (
-      <td style={{ ...cellTd(true, false, false), color: modified ? 'var(--err)' : 'var(--text-main)' }}>
+      <td style={{ ...cellTd(true, false, false),
+                   // E2b — el fantasma també en LECTURA: una consulta no pot fer passar per
+                   // presa una xifra que ningú no ha mesurat (és la llei d'E1 a la pantalla).
+                   color: fantasma ? 'var(--text-soft)'
+                     : (colVerdicte || (modified ? 'var(--err)' : 'var(--text-main)')),
+                   // `active.canvi` (B2) posa la negreta a la columna activa amb el mateix
+                   // criteri que a les d'història: un canvi es marca encara que ningú no li
+                   // hagi posat veredicte. Qui no l'envia, com abans.
+                   fontWeight: verdicte || active.canvi ? 600 : undefined,
+                   textDecoration: verdicte === 'REJECTED' ? 'line-through' : undefined }}>
         {fmtMeasure(value, unit) ?? '—'}
         <NotaDot nota={active.nota} />
       </td>
@@ -135,15 +176,48 @@ function ActiveCell({ active, editable, value, edited, onChange, onCommit, focus
     <td style={{ ...cellTd(true, false, false), position: 'relative' }}>
       <span style={{ display: 'inline-flex', alignItems: 'stretch', gap: 2 }}>
         <input
+          ref={el => registerInput?.(active.lineId, el)}
           type="text" inputMode="decimal" value={shown}
-          onFocus={() => { setFocused(true); focusRef.current = active.lineId }}
+          onFocus={e => { setFocused(true); focusRef.current = active.lineId; e.target.select() }}
           onBlur={() => { setFocused(false); if (focusRef.current === active.lineId) focusRef.current = null }}
           onChange={e => { onChange(active.lineId, e.target.value); schedule(e.target.value) }}
+          onKeyDown={e => {
+            // EL VEREDICTE DES DEL TECLAT, sense sortir del número (fitting_v3). Només on n'hi ha:
+            // en una graella sense veredicte una `a` no ha de fer res que l'usuari no esperi.
+            const k = e.key.toLowerCase()
+            if (active.onVeredicte && TECLA_VERDICTE[k] && !e.ctrlKey && !e.metaKey && !e.altKey) {
+              e.preventDefault(); active.onVeredicte(TECLA_VERDICTE[k]); return
+            }
+            // E2b — ENTER SOBRE UN FANTASMA EL CONFIRMA. La cel·la surt pre-omplerta amb la
+            // teòrica i això NO és una presa; l'Enter és el gest que diu «la peça arribada fa
+            // exactament això». Sense aquesta branca, confirmar exigiria reteclejar el mateix
+            // número, i el debounce d'`onChange` no salta perquè no hi ha hagut cap canvi.
+            //
+            // Va ABANS del `if (!onNav)`: confirmar no pot dependre de si hi ha carril. I només
+            // amb `fantasma && !edited` — un cop l'usuari l'ha tocada, la cel·la ja és una presa
+            // pel camí normal i l'Enter torna a ser només navegació.
+            if (e.key === 'Enter' && active.fantasma && !edited) onCommit(value)
+            if (!onNav) return
+            if (e.key === 'ArrowDown' || e.key === 'Enter') { e.preventDefault(); onNav(active.lineId, 1) }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); onNav(active.lineId, -1) }
+          }}
           style={{
             font: 'inherit', width: 70, padding: '2px 4px', textAlign: 'right',
-            border: '1px solid var(--border)', borderRadius: 4, background: 'var(--white)',
-            color: modified ? 'var(--err)' : 'var(--text-main)',
-            fontWeight: modified && edited ? 700 : 400,
+            border: `1px solid ${colVerdicte || 'var(--line)'}`, borderRadius: 4, background: 'var(--white)',
+            // ── E2c-bis (decisió d'Agus, 17/08) · GRIS NORMAL I RECTE ────────────────────
+            // Això anava en `--text-faint` + CURSIVA, llegint el pre-omplert com un «estat
+            // buit». No ho és: **és la mesura vigent de la presa actual**, vàlida mentre ningú
+            // no la toqui. La cursiva la feia semblar provisional i el `--text-faint` (3.05:1,
+            // reservat per norma a «deshabilitat i estats buits», `index.css:72`) la feia
+            // semblar inactiva.
+            //
+            // Ara `--text-soft` (5.37:1, «secundari»): **gris perquè no està confirmada, recta
+            // perquè és un valor de debò**. La distinció fantasma/presa NO es toca — segueix
+            // sencera per sota, i qui mana és `presa_at`. Això és crom, no semàntica.
+            color: fantasma ? 'var(--text-soft)'
+              : (colVerdicte || (modified ? 'var(--err)' : 'var(--text-main)')),
+            fontWeight: verdicte || (modified && edited) ? 700 : 400,
+            textDecoration: verdicte === 'REJECTED' ? 'line-through' : undefined,
             fontVariantNumeric: 'tabular-nums', boxSizing: 'border-box',
           }}
         />
@@ -176,8 +250,27 @@ function ActiveCell({ active, editable, value, edited, onChange, onCommit, focus
 // `editCodi` és fals (fitting), la 2a línia mostra nom_fitxa amb precedència i és EDITABLE via
 // `onNomSave(bmId, value)` (P4: NO toca el POM tenant compartit).
 function NomCell({ nomEn, nomLocal, nomFitxa, nomCanonicModel = '', nomTraduitModel = '',
-                   bmId, editable, onNomSave, onNomsSave = null, editCodi = false, style }) {
+                   instancia = '', marca = null, bmId, editable, onNomSave, onNomsSave = null,
+                   editCodi = false, style, traduccio = '' }) {
   const { t } = useTranslation()
+  const dicc = useDiccionariMesures()
+  // La INSTÀNCIA s'enganxa al nom en TOTES les branques: és el nom d'aquesta mesura el que
+  // s'allarga («Front armhole · Left»), i el que no pot passar és que la germana esquerra i la
+  // dreta es llegeixin igual segons per quina branca hi entri la cel·la.
+  // Va en ANGLÈS CANÒNIC i no es tradueix (05/08): és la paraula que allarga el nom del POM i
+  // de la qual surt el sufix del codi. El diccionari mana quan hi és.
+  const inst = etiquetaInstancia(instancia, dicc)
+  const Inst = () => (inst ? <span style={{ fontWeight: 500 }}>{` · ${inst}`}</span> : null)
+  // v3 (`.tagd`) — una germana que el sistema ha mogut sola porta etiqueta. El número d'una
+  // derivada s'assembla a un de mesurat, i qui llegeix la columna de dalt a baix ha de poder
+  // distingir una PRESA d'un CÀLCUL sense obrir res.
+  const Marca = () => (marca ? (
+    <span style={{ fontSize: 'var(--fs-caption)', border: '1px solid var(--line)',
+                   borderRadius: 999, padding: '1px 7px', marginLeft: 6, whiteSpace: 'nowrap',
+                   color: 'var(--text-soft)', background: 'var(--white)' }}>
+      {t(`fitting.grid.marca_${marca}`)}
+    </span>
+  ) : null)
   const catCanonic = nomEn || nomLocal || ''
   const canon = nomEn && nomLocal && nomLocal !== nomEn ? nomLocal : (nomLocal || '')
   // editCodi → la 2a línia és el nom LOCAL (la nomenclatura curta viu a la columna POM, no aquí).
@@ -203,41 +296,69 @@ function NomCell({ nomEn, nomLocal, nomFitxa, nomCanonicModel = '', nomTraduitMo
   // Les DUES línies del nom, editables i amb el catàleg de fons (Mesures). Cada input desa el
   // seu camp per separat: rebatejar el canònic no ha d'arrossegar la traducció, ni al revés.
   if (bateig) {
+    // Les DUES línies segueixen sent camps: aquí la segona no és un subtítol, és la superfície on
+    // es bateja la traducció (P3 demana la identitat de fila, no que desaparegui un editor).
     return (
       <td style={style}>
-        <BateigInput value={nomCanonicModel} placeholder={catCanonic || ''}
-          title={t('measuregrid.nom_canonic_tip')}
-          onSave={(v) => onNomsSave(bmId, { nom_canonic_model: v })}
-          style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)' }} />
+        <div style={{ display: 'flex', alignItems: 'baseline' }}>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <BateigInput value={nomCanonicModel} placeholder={catCanonic || ''}
+              title={t('measuregrid.nom_canonic_tip')}
+              onSave={(v) => onNomsSave(bmId, { nom_canonic_model: v })}
+              style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)' }} />
+          </span>
+          <span style={{ flex: 'none', fontSize: 'var(--fs-body)', color: 'var(--text-main)' }}><Inst /></span>
+        </div>
         <BateigInput value={nomTraduitModel} placeholder={catLocal || ''}
           title={t('measuregrid.nom_traduit_tip')}
           onSave={(v) => onNomsSave(bmId, { nom_traduit_model: v })}
-          style={{ fontSize: 'var(--fs-caption)', fontStyle: 'italic', color: 'var(--text-muted)' }} />
+          style={{ fontSize: 'var(--fs-caption)', fontStyle: 'italic', color: 'var(--text-soft)' }} />
       </td>
     )
   }
+  // LECTURA PURA (Escalat, Repàs): el nom local deixa de ser una segona línia permanent i passa a
+  // la ⓘ, com a P1. Aquí no s'hi edita res, o sigui que la línia només ocupava alçada; el que ha
+  // de saltar a la vista en una taula amb germanes és QUINA mesura és cada fila.
+  if (!canEdit) {
+    // `traduccio` (tram ⓘ) va l'ÚLTIMA: el bateig del model i el nom del catàleg manen per
+    // damunt del que digui un servei extern. Fins avui aquí no hi arribava mai res —el catàleg
+    // v4 no porta noms locals— i la ⓘ d'aquestes tres pantalles no sortia mai.
+    // Un nom local que repeteix el canònic no tapa la traducció demanada: v. la nota de la
+    // mateixa regla a `EditableTable`.
+    const candidat = (modelName && modelName !== top ? modelName : '') || traduccio
+    const local = candidat && candidat !== top ? candidat : ''
+    return (
+      <td style={style}>
+        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)', whiteSpace: 'normal' }}>
+          {top || '—'}<Inst /><Marca />
+          {/* LA MATEIXA ⓘ QUE LES ALTRES TAULES, no una que se li assembli. Aquí n'hi havia una
+              de pròpia amb `title` natiu: el mecanisme que el 06/08 ja es va diagnosticar com a
+              inservible —només surt amb el ratolí a sobre i esperant-se, no respon al clic ni al
+              teclat, i sobre 12px la meitat de les vegades no arriba a sortir—. */}
+          {local && <InfoTraduccio text={local} />}
+        </div>
+      </td>
+    )
+  }
+  // LLEGAT (fitting): la 2a línia ÉS la nomenclatura curta del model i s'hi escriu. No es toca.
   return (
     <td style={style}>
-      <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)', whiteSpace: 'normal' }}>{top || '—'}</div>
-      {canEdit ? (
-        <input
-          value={val ?? ''} onChange={e => setVal(e.target.value)}
-          onFocus={() => setFocused(true)} onBlur={commit}
-          onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
-          placeholder={canon || ''}
-          style={{
-            font: 'inherit', fontSize: 'var(--fs-caption)', fontStyle: 'italic',
-            color: 'var(--text-muted)', width: '100%', padding: '0 2px', boxSizing: 'border-box',
-            borderRadius: 3, background: focused ? 'var(--white)' : 'transparent',
-            // Affordance: subratllat tènue en repòs (pista d'editabilitat) → vora completa en focus.
-            border: '1px solid transparent',
-            borderBottom: focused ? '1px solid var(--border)' : '1px dashed var(--border)',
-            ...(focused && { borderColor: 'var(--border)' }),
-          }}
-        />
-      ) : (modelName && (
-        <div style={{ fontSize: 'var(--fs-caption)', fontStyle: 'italic', color: 'var(--text-muted)', whiteSpace: 'normal' }}>{modelName}</div>
-      ))}
+      <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)', whiteSpace: 'normal' }}>{top || '—'}<Inst /><Marca /></div>
+      <input
+        value={val ?? ''} onChange={e => setVal(e.target.value)}
+        onFocus={() => setFocused(true)} onBlur={commit}
+        onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+        placeholder={canon || ''}
+        style={{
+          font: 'inherit', fontSize: 'var(--fs-caption)', fontStyle: 'italic',
+          color: 'var(--text-soft)', width: '100%', padding: '0 2px', boxSizing: 'border-box',
+          borderRadius: 3, background: focused ? 'var(--white)' : 'transparent',
+          // Affordance: subratllat tènue en repòs (pista d'editabilitat) → vora completa en focus.
+          border: '1px solid transparent',
+          borderBottom: focused ? '1px solid var(--line)' : '1px dashed var(--line)',
+          ...(focused && { borderColor: 'var(--line)' }),
+        }}
+      />
     </td>
   )
 }
@@ -262,7 +383,7 @@ function CodiCell({ codi, nomFitxa, pomCode, bmId, isKey, editable, editCodi, on
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
         {reorderable && (
           <i className="ti ti-grip-vertical" title={t('measuregrid.reorder')}
-            style={{ fontSize: 12, color: 'var(--text-muted)', cursor: 'grab' }} />
+            style={{ fontSize: 12, color: 'var(--text-soft)', cursor: 'grab' }} />
         )}
         {canEdit ? (
           <input
@@ -276,14 +397,14 @@ function CodiCell({ codi, nomFitxa, pomCode, bmId, isKey, editable, editCodi, on
               background: focused ? 'var(--white)' : 'transparent',
               // Affordance: subratllat tènue en repòs → vora completa en focus.
               border: '1px solid transparent',
-              borderBottom: focused ? '1px solid var(--border)' : '1px dashed var(--border)',
-              ...(focused && { borderColor: 'var(--border)' }),
+              borderBottom: focused ? '1px solid var(--line)' : '1px dashed var(--line)',
+              ...(focused && { borderColor: 'var(--line)' }),
             }}
           />
         ) : (
           <span style={{ fontWeight: 500, color: 'var(--gold)' }}>{codi}</span>
         )}
-        {isKey && <i className="ti ti-star" style={{ fontSize: 9, marginLeft: 3, color: 'var(--gold)' }} title="KEY" />}
+        {isKey && <i className="ti ti-star" style={{ fontSize: 14, marginLeft: 3, color: 'var(--gold)' }} title="KEY" />}
       </span>
     </td>
   )
@@ -313,8 +434,16 @@ export default function MeasureGrid({
   onPodar = null,         // C1 — (row) => Promise: treu el POM del model (SOFT). null = cap columna d'acció
   empty = null,           // node quan no hi ha files
 }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  // Les capes es diuen com el diccionari de la BD diu (F2.2), en l'idioma de qui llegeix.
+  const dicc = useDiccionariMesures()
+  const lang = (i18n.resolvedLanguage || i18n.language || 'ca').slice(0, 2)
   const unit = useUnit()                       // unitat del tenant (CM|INCH) → format de presentació
+  // EL VOCABULARI, A NIVELL DE GRAELLA. Qui el consumeix és `NomCell` (una cel·la per fila), i una
+  // cel·la no és el lloc d'anunciar una fallada de xarxa: la graella pregunta per l'ESTAT i, si no
+  // ha arribat, ho diu una vegada a dalt. La cel·la segueix amb `useDiccionariMesures` — la font
+  // memoritza la resposta a nivell de mòdul, o sigui que no és una segona petició.
+  const { error: diccError, reintenta: reintentaDicc } = useEstatDiccionari()
   const [vals, setVals] = useState({})        // buffer local lineId -> string
   const [edited, setEdited] = useState(() => new Set())  // ancoratge (editat a mà)
   const focusRef = useRef(null)
@@ -358,6 +487,33 @@ export default function MeasureGrid({
     setEdited(prev => { const n = new Set(prev); n.add(lineId); return n })
   }, [])
 
+  // EL CARRIL DINS DE LA COLUMNA (fitting_v3 · v8.1): ↓/Enter baixa i ↑ puja, SENSE canviar de
+  // columna. Es navega dins del MATEIX grup a posta —una graella d'Escalat té una columna per
+  // talla i saltar de talla a mig recorregut seria perdre el fil de la mesura que s'està prenent.
+  // Els inputs es registren per `lineId`, que és la identitat que ja fa servir tot el buffer.
+  const inputRefs = useRef({})
+  const registerInput = useCallback((lineId, el) => {
+    if (el) inputRefs.current[lineId] = el
+    else delete inputRefs.current[lineId]
+  }, [])
+  // LA ⓘ TÉ FONT (tram ⓘ): un sol lot per graella, compartit per Escalat, Comprovació, Repàs i
+  // Fitting, que són les quatre pantalles que munten aquesta graella.
+  const traduccioDe = useTraduccioPoms(rows.map(r => r.pom_id))
+  const gridRef = useRef({ rows, groups })
+  useEffect(() => { gridRef.current = { rows, groups } }, [rows, groups])
+  const onNav = useCallback((lineId, dir) => {
+    const { rows: rr, groups: gg } = gridRef.current
+    for (const g of gg) {
+      const carril = rr.map(r => r.cells?.[g.key]?.active)
+        .filter(a => a && !a.readonly).map(a => a.lineId)
+      const i = carril.indexOf(lineId)
+      if (i < 0) continue
+      const seguent = carril[i + dir]
+      if (seguent != null) inputRefs.current[seguent]?.focus()
+      return
+    }
+  }, [])
+
   const commitFor = useCallback((lineId) => (raw) => {
     if (!onSave) return Promise.resolve()
     const num = toNum(raw)
@@ -379,26 +535,38 @@ export default function MeasureGrid({
 
   if (!rows.length) return empty
 
-  // Offsets sticky acumulats: POM(0) · Nom · leadCols… (sense mutació, per al react-compiler).
-  const baseLeft = COL_POM_W + COL_NOM_W
+  // Offsets sticky acumulats: Capa(0) · POM · Nom · leadCols… (sense mutació, per al react-compiler).
+  const baseLeft = COL_CAPA_W + COL_POM_W + COL_NOM_W
   const leadLefts = leadCols.map((_, i) => baseLeft + leadCols.slice(0, i).reduce((s, c) => s + c.width, 0))
 
-  // FIX-4 — el bloc de REGLA es distingeix per FONS (crema de la casa) i per un SEPARADOR gruixut
-  // just abans de les mesures. Dos senyals, no un: el color agrupa, el filet talla.
+  // FIX-4 deia el bloc de REGLA amb dos senyals: un FONS crema i un SEPARADOR gruixut just abans
+  // de les mesures. AGUS (10/08, re-confirmat a pantalla el 12) EN TREU EL FONS: la regla és part
+  // de la LÍNIA INFORMATIVA DEL POM, i el crema la convertia en una taula estrangera enganxada al
+  // costat de la fila. La cel·la agafa el fons de la SEVA fila, com totes les altres.
+  //
+  // El que agrupa passa a ser el que ja hi havia i no s'aprofitava: la CAPÇALERA DE GRUP. Ara n'hi
+  // ha tres i no dues —«POMs definits» sobre CAPA·POM·NOM, «Regla de graduació», «Mesures per
+  // talla»— i el filet gruixut segueix tallant on toca. Nomenar és més fort que tenyir: un color
+  // s'ha d'endevinar i un rètol es llegeix.
   const agrupat = !!leadGroupLabel
-  const REGLA_BG = 'var(--model-band)'                   // crema suau (token de casa, cap hex)
-  const SEP = '2px solid var(--border)'                  // separador Regla | Mesures
+  const SEP = '2px solid var(--line)'                  // separador Regla | Mesures
   const esUltimLead = (i) => agrupat && i === leadCols.length - 1
+  // I LES COLUMNES DE LA REGLA, A L'AMPLADA DEL SEU CONTINGUT. El que les eixamplava no eren els
+  // valors —«+2,0», «XS»— sinó el RÈTOL: a 10px amb tracking .08em i `nowrap`, «TALLA BREAK» sol
+  // demana ~103 px de columna per a un número de tres caràcters. Amb el rètol embolicat (ja té el
+  // seu grup a sobre, que és qui diu de què va) i el padding retallat, qui mesura és la xifra.
+  const leadHd = { whiteSpace: 'normal', padding: '0.5rem 0.4rem', lineHeight: 1.15 }
 
   const stickyHd = (left, w, i = null) => ({
     ...thStyle, position: 'sticky', left, zIndex: 3, minWidth: w, width: w,
-    background: (agrupat && i != null) ? REGLA_BG : 'var(--bg-muted)', textAlign: 'left',
+    background: 'var(--panel)', textAlign: 'left',
+    ...((agrupat && i != null) ? leadHd : null),
     ...(esUltimLead(i) && { borderRight: SEP }),
   })
   const stickyTd = (left, w, bg, i = null) => ({
-    position: 'sticky', left, zIndex: 1, minWidth: w, width: w,
-    background: (agrupat && i != null) ? REGLA_BG : bg,
-    padding: '5px 10px', borderBottom: '0.5px solid var(--border)',
+    position: 'sticky', left, zIndex: 1, minWidth: w, width: w, background: bg,
+    padding: (agrupat && i != null) ? '5px 6px' : '5px 10px',
+    borderBottom: '1px solid var(--line-soft)',
     verticalAlign: 'middle', whiteSpace: 'nowrap',
     ...(esUltimLead(i) && { borderRight: SEP }),
   })
@@ -407,34 +575,48 @@ export default function MeasureGrid({
   const identitatHd = (left, w) => stickyHd(left, w)     // POM/Nom: mai del bloc de regla
 
   return (
+    <>
+      {diccError && (
+        <AvisDiccionari hint={t('dicc.error_hint_noms')} onReintenta={reintentaDicc} />
+      )}
     <div style={{ overflow: 'auto', maxHeight: '70vh', width: '100%' }}>
       <table style={{ borderCollapse: 'collapse', fontSize: 'var(--fs-body)' }}>
         <thead>
           {agrupat && (
             <tr>
-              <th rowSpan={3} style={identitatHd(0, COL_POM_W)}>{t('measuregrid.col_pom')}</th>
-              <th rowSpan={3} style={identitatHd(COL_POM_W, COL_NOM_W)}>{t('measuregrid.col_nom')}</th>
+              {/* SIMETRIA (Agus, 10/08): si la regla i les talles porten rètol de grup, les tres
+                  columnes d'IDENTITAT també. Sense ell la fila de dalt començava en blanc i
+                  «Regla de graduació» es llegia com el títol de TOTA la taula.
+                  Sticky com les columnes que encapçala: un rètol de grup que llisca mentre les
+                  seves columnes es queden clavades deixa de nomenar-les. Mateix motiu per al de
+                  la regla, que fins ara no ho era. */}
+              <th colSpan={3} style={stickyHd(0, baseLeft)}>{t('measuregrid.grup_poms')}</th>
               {leadCols.length > 0 && (
                 <th colSpan={leadCols.length} style={{
-                  ...thStyle, textAlign: 'center', background: REGLA_BG, borderRight: SEP,
+                  ...thStyle, position: 'sticky', left: baseLeft, zIndex: 3,
+                  textAlign: 'center', background: 'var(--panel)', borderRight: SEP,
                 }}>{leadGroupLabel}</th>
               )}
               {totalGroupCols > 0 && (
                 <th colSpan={totalGroupCols} style={{
-                  ...thStyle, textAlign: 'center', background: 'var(--bg-muted)',
+                  ...thStyle, textAlign: 'center', background: 'var(--panel)',
                 }}>{groupsLabel}</th>
               )}
               {canPodar && (
                 <th rowSpan={3} style={{ ...thStyle, textAlign: 'center', width: 64, minWidth: 64,
-                                         background: 'var(--bg-muted)', borderLeft: '1px solid var(--border)' }}>
+                                         background: 'var(--panel)', borderLeft: '1px solid var(--line)' }}>
                   {t('measuregrid.col_accions')}
                 </th>
               )}
             </tr>
           )}
           <tr>
-            {!agrupat && <th rowSpan={2} style={identitatHd(0, COL_POM_W)}>{t('measuregrid.col_pom')}</th>}
-            {!agrupat && <th rowSpan={2} style={identitatHd(COL_POM_W, COL_NOM_W)}>{t('measuregrid.col_nom')}</th>}
+            {/* Les tres d'identitat viuen SEMPRE en aquesta fila: amb grups, sota el seu rètol
+                («POMs definits»); sense grups, com abans. El `rowSpan` cobreix la fila de
+                sub-columnes en tots dos casos. */}
+            <th rowSpan={2} style={identitatHd(0, COL_CAPA_W)}>{t('capa.col')}</th>
+            <th rowSpan={2} style={identitatHd(COL_CAPA_W, COL_POM_W)}>{t('measuregrid.col_pom')}</th>
+            <th rowSpan={2} style={identitatHd(COL_CAPA_W + COL_POM_W, COL_NOM_W)}>{t('measuregrid.col_nom')}</th>
             {leadCols.map((c, i) => (
               <th key={c.key} rowSpan={2} style={stickyHd(leadLefts[i], c.width, i)}>{c.label}</th>
             ))}
@@ -443,14 +625,14 @@ export default function MeasureGrid({
               return (
                 <th key={g.key} colSpan={span} style={{
                   ...thStyle, textAlign: 'center',
-                  background: 'var(--bg-muted)',
-                  borderLeft: '1px solid var(--border)',
+                  background: 'var(--panel)',
+                  borderLeft: '1px solid var(--line)',
                 }}>{g.label}</th>
               )
             })}
             {!agrupat && canPodar && (
               <th rowSpan={2} style={{ ...thStyle, textAlign: 'center', width: 64, minWidth: 64,
-                                       background: 'var(--bg-muted)', borderLeft: '1px solid var(--border)' }}>
+                                       background: 'var(--panel)', borderLeft: '1px solid var(--line)' }}>
                 {t('measuregrid.col_accions')}
               </th>
             )}
@@ -458,9 +640,9 @@ export default function MeasureGrid({
           <tr>
             {groups.flatMap(g => {
               const sub = (start) => ({ ...thStyle, textAlign: 'right', fontSize: 'var(--fs-caption)', padding: '3px 8px',
-                background: 'var(--bg-muted)',
-                borderLeft: start ? '1px solid var(--border)' : '0.5px solid var(--border)' })
-              const activeSub = { ...sub(false), background: 'var(--gold-pale)' }   // NOMÉS la columna activa destaca
+                background: 'var(--panel)',
+                borderLeft: start ? '1px solid var(--line)' : '1px solid var(--line-soft)' })
+              const activeSub = { ...sub(false), background: 'var(--sel)' }   // NOMÉS la columna activa destaca
               const hs = (g.historyCols || []).map((h, idx) => <th key={`${g.key}-h-${h.key}`} style={sub(idx === 0)}>{h.label}</th>)
               hs.push(<th key={`${g.key}-active`} style={activeSub}>{g.activeLabel}</th>)
               for (const tcol of (g.trailCols || [])) hs.push(<th key={`${g.key}-t-${tcol.key}`} style={{ ...sub(false), textAlign: 'center' }}>{tcol.label}</th>)
@@ -470,26 +652,42 @@ export default function MeasureGrid({
         </thead>
         <tbody>
           {rows.map((r, i) => {
-            const rowBg = i % 2 === 0 ? 'var(--white)' : 'var(--bg-card)'
+            const rowBg = i % 2 === 0 ? 'var(--white)' : 'var(--bg-page)'
             // C2 — candidata a poda: indicador SUBTIL (un filet a l'esquerra), mai un automatisme.
             const soroll = isNoiseRow(r, groups)
             return (
-              <tr key={r.pom_id} style={{ background: rowBg }}
+              // C4/BLOC 3 — la clau de React de la FILA no pot ser el `pom_id`. Aquesta
+              // graella la comparteixen les quatre superfícies (Mesures, Escalat, Fitting,
+              // Repàs) i totes quatre poden servir dues germanes del mateix POM: dues `<tr>`
+              // amb la mateixa clau fan que React en reconciliï una amb l'estat de l'altra
+              // —cel·la enfocada, ordre en arrossegar— i avisi per consola sense que res peti.
+              // `rowKey` el posa cada adaptador amb la identitat més forta que el SEU payload
+              // li dona; el `pom_id` queda de pla B per a qui encara no en pot donar cap.
+              <tr key={r.rowKey || r.pom_id} style={{ background: rowBg }}
                 draggable={reorderable || undefined}
                 onDragStart={reorderable ? (() => { dragFrom.current = i }) : undefined}
                 onDragOver={reorderable ? (e => e.preventDefault()) : undefined}
                 onDrop={reorderable ? (() => onRowDrop(i)) : undefined}>
+                {/* LA CAPA (D-31.22), en lectura i sempre present. Una fila sense `capa` al
+                    payload és l'exterior de sempre: `etiquetaCapa` ho resol, i així cap
+                    adaptador que encara no la serveixi deixa la columna muda. */}
+                <td style={{ ...stickyTd(0, COL_CAPA_W, rowBg), whiteSpace: 'normal',
+                             color: 'var(--text-main)' }}>
+                  {etiquetaCapa(r.capa, dicc, lang)}
+                </td>
                 <CodiCell codi={r.codi} nomFitxa={r.nom_fitxa} pomCode={r.pom_code} bmId={r.bm_id}
                   isKey={r.is_key} editable={editable} editCodi={editCodi} onNomSave={onNomSave}
                   reorderable={reorderable}
                   style={soroll
-                    ? { ...stickyTd(0, COL_POM_W, rowBg), boxShadow: 'inset 3px 0 0 var(--border)' }
-                    : stickyTd(0, COL_POM_W, rowBg)}
+                    ? { ...stickyTd(COL_CAPA_W, COL_POM_W, rowBg), boxShadow: 'inset 3px 0 0 var(--line)' }
+                    : stickyTd(COL_CAPA_W, COL_POM_W, rowBg)}
                   title={soroll ? t('measuregrid.poda_candidata') : undefined} />
                 <NomCell nomEn={r.nom_en} nomLocal={r.nom_local} nomFitxa={r.nom_fitxa} bmId={r.bm_id}
+                  traduccio={traduccioDe(r.pom_id)}
                   nomCanonicModel={r.nom_canonic_model} nomTraduitModel={r.nom_traduit_model}
+                  instancia={r.instancia} marca={r.marca}
                   editable={editable} onNomSave={onNomSave} onNomsSave={onNomsSave}
-                  editCodi={editCodi} style={stickyTd(COL_POM_W, COL_NOM_W, rowBg)} />
+                  editCodi={editCodi} style={stickyTd(COL_CAPA_W + COL_POM_W, COL_NOM_W, rowBg)} />
                 {leadCols.map((c, idx) => (
                   <td key={c.key} style={stickyTd(leadLefts[idx], c.width, rowBg, idx)}>{c.render(r)}</td>
                 ))}
@@ -499,8 +697,24 @@ export default function MeasureGrid({
                     const hv = cell.history?.[h.key]
                     const obj = hv && typeof hv === 'object'
                     const v = obj ? hv.value : hv
+                    // EL CANVI ES MARCA (B2 · Agus, 10/08). Una columna d'història pintava tota
+                    // en negre i el que hi passava —quin número s'havia mogut respecte de
+                    // l'anterior— s'havia de trobar comparant xifra a xifra amb el dit.
+                    // NEGRETA quan la cel·la canvia, i el color el posa el VEREDICTE de la
+                    // modista (la paleta de sempre, `VERDICTE_COL`); sense veredicte, negreta
+                    // sola. La resta, normal.
+                    //
+                    // Additiu a posta: qui no envia `canvi`/`veredicte` (fitting, escalat) pinta
+                    // exactament igual que abans.
+                    const canviat = obj && !!hv.canvi
+                    const colVerd = canviat && hv.veredicte ? VERDICTE_COL[hv.veredicte] : null
                     return (
-                      <td key={`${g.key}-h-${h.key}`} style={{ ...cellTd(false, idx === 0, false), color: 'var(--text-main)' }}>
+                      <td key={`${g.key}-h-${h.key}`}
+                        style={{ ...cellTd(false, idx === 0, false),
+                                 color: colVerd || 'var(--text-main)',
+                                 fontWeight: canviat ? 600 : undefined,
+                                 textDecoration: canviat && hv.veredicte === 'REJECTED'
+                                   ? 'line-through' : undefined }}>
                         {fmtMeasure(v, unit) ?? '—'}
                         {obj && <NotaDot nota={hv.nota} />}
                       </td>
@@ -510,16 +724,17 @@ export default function MeasureGrid({
                   out.push(
                     <ActiveCell key={`${g.key}-active`} active={a} editable={editable} unit={unit}
                       value={a ? (vals[a.lineId] ?? '') : ''} edited={a ? edited.has(a.lineId) : false}
-                      onChange={onChange} onCommit={a ? commitFor(a.lineId) : (() => Promise.resolve())} focusRef={focusRef} />
+                      onChange={onChange} onCommit={a ? commitFor(a.lineId) : (() => Promise.resolve())} focusRef={focusRef}
+                      registerInput={registerInput} onNav={onNav} />
                   )
                   for (const tcol of (g.trailCols || [])) {
-                    out.push(<td key={`${g.key}-t-${tcol.key}`} style={{ padding: '5px 8px', borderBottom: '0.5px solid var(--border)', verticalAlign: 'middle' }}>{cell.trail?.[tcol.key] ?? null}</td>)
+                    out.push(<td key={`${g.key}-t-${tcol.key}`} style={{ padding: '5px 8px', borderBottom: '1px solid var(--line-soft)', verticalAlign: 'middle' }}>{cell.trail?.[tcol.key] ?? null}</td>)
                   }
                   return out
                 })}
                 {canPodar && (
-                  <td style={{ padding: '5px 8px', borderBottom: '0.5px solid var(--border)',
-                               borderLeft: '1px solid var(--border)', textAlign: 'center',
+                  <td style={{ padding: '5px 8px', borderBottom: '1px solid var(--line-soft)',
+                               borderLeft: '1px solid var(--line)', textAlign: 'center',
                                verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
                     {podaArmada === r.pom_id ? (
                       <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
@@ -537,7 +752,7 @@ export default function MeasureGrid({
                         <button type="button" title={t('common.cancel')} aria-label={t('common.cancel')}
                           onClick={() => setPodaArmada(null)}
                           style={{ border: 'none', background: 'transparent', cursor: 'pointer',
-                                   color: 'var(--text-muted)', padding: 2, lineHeight: 1 }}>
+                                   color: 'var(--text-soft)', padding: 2, lineHeight: 1 }}>
                           <i className="ti ti-x" aria-hidden="true" style={{ fontSize: 15 }} />
                         </button>
                       </span>
@@ -546,7 +761,7 @@ export default function MeasureGrid({
                         aria-label={t('measuregrid.poda_title')}
                         onClick={() => setPodaArmada(r.pom_id)}
                         style={{ border: 'none', background: 'transparent', cursor: 'pointer',
-                                 color: 'var(--text-muted)', padding: 2, lineHeight: 1 }}>
+                                 color: 'var(--text-soft)', padding: 2, lineHeight: 1 }}>
                         <i className="ti ti-trash" aria-hidden="true" style={{ fontSize: 14 }} />
                       </button>
                     )}
@@ -558,5 +773,6 @@ export default function MeasureGrid({
         </tbody>
       </table>
     </div>
+    </>
   )
 }

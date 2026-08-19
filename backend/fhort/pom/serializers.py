@@ -1,9 +1,18 @@
-from rest_framework import serializers
+from collections import defaultdict
+
+from rest_framework import serializers, status
+from rest_framework.exceptions import APIException
+
+from .size_labels import _tipus_de_les_etiquetes
 
 from .models import (
+    ConstructionType,
     CustomerPOMAlias,
+    FitType,
     GarmentGroup,
+    GarmentGroupPOMMap,
     GarmentPOMMap,
+    GarmentTypePOMMap,
     GarmentType,
     GarmentTypeGlobal,
     GradingRule,
@@ -32,8 +41,25 @@ class POMCategorySerializer(serializers.ModelSerializer):
 
 
 class POMMasterSerializer(serializers.ModelSerializer):
-    pom_global_codi = serializers.CharField(source='pom_global.codi', read_only=True)
-    pom_global_nom = serializers.CharField(source='pom_global.nom_en', read_only=True)
+    # ── LA FORMA DE LA RESPOSTA NO POT VARIAR PER FILA (F2.1a) ────────────────────────────
+    # Els 21 camps que pengen de `pom_global` s'emeten SEMPRE, amb `null` quan el POM no està
+    # lligat al catàleg global. Abans DESAPAREIXIEN de la resposta: quan el `source` travessa un
+    # `None`, `get_attribute()` de DRF llança AttributeError i, com que `read_only` implica
+    # `required=False`, el camp cau per `SkipField` (rest_framework/fields.py:450-456). Amb
+    # `allow_null=True` la mateixa branca retorna `None` i la clau es queda.
+    #
+    # Per què importa i no és cosmètica: `fhort` té 396 POMs, **122 sense `pom_global`**. Un
+    # client no podia distingir «no lligat al catàleg» de «camp que no existeix» —les dues coses
+    # es veien igual: la clau absent—, i és exactament l'error que va fer que el cens de la
+    # Fase 1 conclogués que aquests camps no existien. Ara la resposta distingeix TRES estats:
+    #     null           → no lligat al catàleg global   (122 POMs)
+    #     cadena buida    → lligat, però sense informar   (149 POMs)
+    #     valor           → dada de debò                  (125 POMs)
+    # La UI els ha de dir amb paraules diferents; els guions muts els amagaven tots tres.
+    #
+    # Additiu i read-only: no es treu ni es renombra res, i no s'obre cap camí d'escriptura.
+    pom_global_codi = serializers.CharField(source='pom_global.codi', read_only=True, allow_null=True)
+    pom_global_nom = serializers.CharField(source='pom_global.nom_en', read_only=True, allow_null=True)
 
     # PAS B5 — bloc complet "com mesurar" per a la vista Catalogue (NOMÉS LECTURA). Mateix patró
     # que GarmentPOMMapSerializer però arrelat al propi POMMaster: pom_global flat amb fallback
@@ -43,29 +69,29 @@ class POMMasterSerializer(serializers.ModelSerializer):
     name_cat = serializers.SerializerMethodField()
     abbreviation = serializers.SerializerMethodField()
     categoria_nom = serializers.SerializerMethodField()
-    applies_woven = serializers.BooleanField(source='pom_global.applies_woven', read_only=True)
-    applies_knit = serializers.BooleanField(source='pom_global.applies_knit', read_only=True)
-    applies_swim = serializers.BooleanField(source='pom_global.applies_swim', read_only=True)
-    start_point = serializers.CharField(source='pom_global.start_point', read_only=True)
-    end_point = serializers.CharField(source='pom_global.end_point', read_only=True)
-    reference_point = serializers.CharField(source='pom_global.reference_point', read_only=True)
-    scope = serializers.CharField(source='pom_global.scope', read_only=True)
-    orientation = serializers.CharField(source='pom_global.orientation', read_only=True)
-    state = serializers.CharField(source='pom_global.state', read_only=True)
-    line = serializers.CharField(source='pom_global.line', read_only=True)
-    body_section = serializers.CharField(source='pom_global.body_section', read_only=True)
+    applies_woven = serializers.BooleanField(source='pom_global.applies_woven', read_only=True, allow_null=True)
+    applies_knit = serializers.BooleanField(source='pom_global.applies_knit', read_only=True, allow_null=True)
+    applies_swim = serializers.BooleanField(source='pom_global.applies_swim', read_only=True, allow_null=True)
+    start_point = serializers.CharField(source='pom_global.start_point', read_only=True, allow_null=True)
+    end_point = serializers.CharField(source='pom_global.end_point', read_only=True, allow_null=True)
+    reference_point = serializers.CharField(source='pom_global.reference_point', read_only=True, allow_null=True)
+    scope = serializers.CharField(source='pom_global.scope', read_only=True, allow_null=True)
+    orientation = serializers.CharField(source='pom_global.orientation', read_only=True, allow_null=True)
+    state = serializers.CharField(source='pom_global.state', read_only=True, allow_null=True)
+    line = serializers.CharField(source='pom_global.line', read_only=True, allow_null=True)
+    body_section = serializers.CharField(source='pom_global.body_section', read_only=True, allow_null=True)
     tol_prod_cm = serializers.DecimalField(source='pom_global.tol_prod_cm',
-                                           max_digits=5, decimal_places=2, read_only=True)
+                                           max_digits=5, decimal_places=2, read_only=True, allow_null=True)
     tol_samp_cm = serializers.DecimalField(source='pom_global.tol_samp_cm',
-                                           max_digits=5, decimal_places=2, read_only=True)
-    iso_ref = serializers.CharField(source='pom_global.iso_ref', read_only=True)
-    unitat = serializers.CharField(source='pom_global.unitat', read_only=True)
-    descripcio_en = serializers.CharField(source='pom_global.descripcio_en', read_only=True)
-    descripcio_ca = serializers.CharField(source='pom_global.descripcio_ca', read_only=True)
+                                           max_digits=5, decimal_places=2, read_only=True, allow_null=True)
+    iso_ref = serializers.CharField(source='pom_global.iso_ref', read_only=True, allow_null=True)
+    unitat = serializers.CharField(source='pom_global.unitat', read_only=True, allow_null=True)
+    descripcio_en = serializers.CharField(source='pom_global.descripcio_en', read_only=True, allow_null=True)
+    descripcio_ca = serializers.CharField(source='pom_global.descripcio_ca', read_only=True, allow_null=True)
     body_measure_iso_codi = serializers.CharField(
-        source='pom_global.body_measure_iso.codi_iso', read_only=True)
+        source='pom_global.body_measure_iso.codi_iso', read_only=True, allow_null=True)
     body_measure_iso_nom = serializers.CharField(
-        source='pom_global.body_measure_iso.nom_en', read_only=True)
+        source='pom_global.body_measure_iso.nom_en', read_only=True, allow_null=True)
 
     def get_pom_code(self, obj):
         pg = obj.pom_global
@@ -89,6 +115,30 @@ class POMMasterSerializer(serializers.ModelSerializer):
             return pg.categoria
         cat = obj.categoria
         return (cat.nom_ca or cat.nom_en) if cat else ''
+
+    def validate_codi_client(self, value):
+        """El codi és ÚNIC AL CATÀLEG i les majúscules no el distingeixen — dit amb un 400.
+
+        La constraint `uniq_pommaster_codi_client_ci` (migració `pom/0075`) ja ho impedeix a la
+        BD, però una constraint d'EXPRESSIÓ no la tradueix ningú: DRF només genera validadors
+        automàtics a partir d'`unique_together` i de `unique=True`, no de `UniqueConstraint` amb
+        `Upper(...)`. Sense això, aquest `ModelViewSet` —que és obert a l'escriptura— tornaria un
+        **500 amb un `IntegrityError`** en comptes de dir quin camp està malament.
+
+        La comprovació és `iexact` perquè ha de mirar el mateix que mira l'índex; i exclou la
+        pròpia fila perquè rebatejar un POM amb el codi que ja tenia no és cap col·lisió.
+        """
+        codi = (value or '').strip()
+        qs = POMMaster.objects.filter(codi_client__iexact=codi)
+        if self.instance is not None:
+            qs = qs.exclude(pk=self.instance.pk)
+        xoc = qs.values('pk', 'nom_client').first()
+        if xoc:
+            raise serializers.ValidationError(
+                f"«{codi}» ja és al catàleg (POM {xoc['pk']} · {xoc['nom_client']}). "
+                f"Les majúscules no distingeixen un codi d'un altre."
+            )
+        return codi
 
     class Meta:
         model = POMMaster
@@ -114,10 +164,50 @@ class SizeSystemSerializer(serializers.ModelSerializer):
         many=True, slug_field='codi', source='targets',
         queryset=Target.objects.all(), required=False,
     )
+    # N1 (2026-08-06 nit) — les altres tres capes de restricció del RUN, amb el mateix patró
+    # que `target_codis`: llista de CODIS a la lectura, llista de codis a l'escriptura, i el
+    # SlugRelatedField ja valida que cada codi existeixi al seu vocabulari. Mateixa llei que
+    # `targets`: **buit NO és "universal"**, és "no declarat" — qui filtra ha de decidir què
+    # en fa, i el pas 3 del wizard ORDENA per proximitat sense amagar res (D-31.3).
+    construccio_codis = serializers.SlugRelatedField(
+        many=True, slug_field='codi', source='construccions',
+        queryset=ConstructionType.objects.all(), required=False,
+    )
+    fit_codis = serializers.SlugRelatedField(
+        many=True, slug_field='codi', source='fits',
+        queryset=FitType.objects.all(), required=False,
+    )
+    # El vocabulari de GRUP és `GarmentGroup` (Garment Types), no POM System.
+    grup_codis = serializers.SlugRelatedField(
+        many=True, slug_field='codi', source='grups',
+        queryset=GarmentGroup.objects.all(), required=False,
+    )
+    customer_alias = serializers.CharField(source='customer.nom', read_only=True, default=None)
 
     class Meta:
         model = SizeSystem
-        fields = ('id', 'codi', 'nom', 'descripcio', 'actiu', 'talles', 'target_codis', 'customer_codi')
+        fields = ('id', 'codi', 'nom', 'descripcio', 'actiu', 'talles', 'target_codis',
+                  'customer_codi', 'tipus_escala', 'construccio_codis', 'fit_codis',
+                  'grup_codis', 'customer', 'customer_alias')
+
+    def validate_tipus_escala(self, value):
+        """C4 · el tipus d'escala no pot contradir les etiquetes del run (deute §7.4.3).
+
+        `base_unit` no és escrivible per aquí, però `tipus_escala` sí — i és la mateixa
+        mentida per una altra porta. La llei de N1 és que **l'etiqueta mana**: si les talles
+        diuen una cosa, el camp no en pot dir una altra. Buit sempre s'accepta (és «no
+        deduït», que és honest), i un run sense talles tampoc té amb què contradir-se.
+        """
+        if not value or self.instance is None:
+            return value
+        etiquetes = list(self.instance.talles.values_list('etiqueta', flat=True))
+        segons_etiquetes = _tipus_de_les_etiquetes(etiquetes)
+        if segons_etiquetes and value != segons_etiquetes:
+            raise serializers.ValidationError(
+                f'Les talles d\'aquest run són de tipus {segons_etiquetes}; «{value}» les '
+                'contradiu. Canvia les etiquetes o deixa el camp buit.'
+            )
+        return value
 
 
 class GarmentTypeSerializer(serializers.ModelSerializer):
@@ -146,6 +236,22 @@ class GarmentTypeSerializer(serializers.ModelSerializer):
         model = GarmentType
         fields = '__all__'
         read_only_fields = ['is_system']
+
+
+class ConflicteConfirmable(APIException):
+    """Un 409 amb cos PROPI: un avís que es pot confirmar, no un error.
+
+    ⚠️ `self.detail` s'assigna DIRECTAMENT i no es passa per `APIException.__init__`, que
+    normalitza tot el payload amb `_get_error_details` i converteix els enters en cadenes
+    (`'regles': 3` → `'3'`). El front hi compta plurals amb aquests nombres, i un «3» de text
+    no és un 3. DRF ja retorna els `dict` tal qual (`exception_handler`), o sigui que no cal
+    res més perquè el cos arribi sencer.
+    """
+
+    status_code = status.HTTP_409_CONFLICT
+
+    def __init__(self, payload):
+        self.detail = payload
 
 
 class GradingRuleSerializer(serializers.ModelSerializer):
@@ -272,19 +378,73 @@ class GradingRuleSetSerializer(serializers.ModelSerializer):
     def get_fit_type_codi(self, obj):
         return obj.fit_type.codi if obj.fit_type else None
 
+    # ── CANVIAR EL SISTEMA DE TALLES D'UN CONJUNT AMB REGLES ─────────────────────────────
+    #
+    # 🚨 AQUÍ HI HAVIA UN GUARD DUR (400) i el seu motiu era FALS (Agus, 2026-08-10). Deia:
+    # «no es pot canviar: les talles base de les regles pertanyen al run actual». Però
+    # `GradingRule.talla_base` és **mer metadata del seed** i el motor no la llegeix mai —ho
+    # té escrit `grading_utils.grading_rules_match`: «_apply_rule ancora a
+    # model.base_size_label, no a rule.talla_base»—, i el trencament es resol per ETIQUETA
+    # (`_break_idx_de` compara `talla_break_label` amb les etiquetes del run). O sigui que un
+    # conjunt NO pertany al seu run: hi apunta, i el pot canviar.
+    #
+    # El que sí que és real és una etiqueta que desapareix: si una regla trenca a `S` i el run
+    # nou no té cap `S`, `_break_idx_de` torna `None` i **aquella regla es gradua sense
+    # trencament**, en silenci. Això no és per bloquejar-ho —hi ha casos legítims— sinó per
+    # PREGUNTAR-HO, amb els noms a la vista.
+    #
+    # 🔑 EL CRITERI DE COMPARACIÓ ÉS EL DEL MOTOR I NO UN ALTRE: `_norm` (upper+strip), mai
+    # `canonical_size_label`. Afinar-lo aquí faria que la porta i el càlcul diguessin coses
+    # diferents, que és pitjor que tenir-los tots dos estrictes.
+    def _validar_canvi_de_run(self, inst, nou):
+        from fhort.pom.grading_utils import _norm
+
+        nou_id = getattr(nou, 'id', None)
+        if nou_id == inst.size_system_id:
+            return
+        # Treure el run (`None`) no deixa cap etiqueta orfe: el conjunt passa a no apuntar
+        # enlloc i el motor el resol contra el run del MODEL, que és cap on va CAT2.1.
+        if nou is None:
+            return
+
+        etiquetes_noves = {_norm(e) for e in nou.talles.values_list('etiqueta', flat=True)}
+        orfes = defaultdict(list)
+        for r in inst.regles.select_related('pom').all():
+            lbl = (r.talla_break_label or '').strip()
+            if lbl and _norm(lbl) not in etiquetes_noves:
+                orfes[lbl].append(r.pom.codi_client if r.pom_id else f'#{r.id}')
+        if not orfes:
+            return
+
+        if str(self.initial_data.get('confirmar_etiquetes_fora_del_run', '')).lower() in (
+                'true', '1', 'yes', 'on'):
+            return
+
+        n_regles = sum(len(v) for v in orfes.values())
+        raise ConflicteConfirmable({
+            'conflict': True,
+            'tipus': 'etiquetes_fora_del_run',
+            'codi': 'GRADING_BREAK_LABELS_OUTSIDE_RUN',
+            'grading_rule_set_id': inst.id,
+            'grading_rule_set_nom': inst.nom,
+            'size_system_nou': nou.codi,
+            # Els POMs, TALLATS a 8 per etiqueta: la llista és per reconèixer-les, no per
+            # auditar-les, i 86 codis en un diàleg no es llegeixen — es tanquen.
+            'etiquetes': [
+                {'etiqueta': lbl, 'regles': len(poms), 'poms': sorted(poms)[:8]}
+                for lbl, poms in sorted(orfes.items(), key=lambda kv: -len(kv[1]))
+            ],
+            'regles_afectades': n_regles,
+            'message': (
+                f"{n_regles} regles de «{inst.nom}» trenquen a talles que {nou.codi} no té "
+                f"({', '.join(sorted(orfes))}). Si continues, aquestes regles graduaran SENSE "
+                f"trencament fins que se'ls doni una talla del run nou."),
+        })
+
     def validate(self, attrs):
         inst = self.instance
-        # GUARD DUR: si el conjunt té regles, el `size_system` és IMMUTABLE — les talla_base de les
-        # regles hi pertanyen. El front el desactiva (UX); la seguretat real viu aquí. Sortida: clonar
-        # el conjunt al sistema correcte (el clon ja hereta targets + abast) o buidar-ne les regles.
         if inst is not None and 'size_system' in attrs:
-            new_id = getattr(attrs['size_system'], 'id', None)
-            if new_id != inst.size_system_id and inst.regles.exists():
-                actual = inst.size_system.codi if inst.size_system_id else '—'
-                raise serializers.ValidationError({'size_system': (
-                    f"No es pot canviar el sistema de talles d'un conjunt amb regles: les talles base "
-                    f"de les {inst.regles.count()} regles pertanyen a {actual}. Clona el conjunt al "
-                    f"sistema correcte o buida'n les regles.")})
+            self._validar_canvi_de_run(inst, attrs['size_system'])
         # F-5 — GUARD DUR: un seed ISO (is_system_default) NO pot canviar d'eixos. El `disabled`
         # del front és UX; la seguretat real viu aquí (protegeix contra PATCH directes a l'API).
         if inst is not None and inst.is_system_default:
@@ -325,6 +485,22 @@ class GradingRuleSetSerializer(serializers.ModelSerializer):
 
 
 class GarmentPOMMapSerializer(serializers.ModelSerializer):
+    # U2/R2 (07/08) — `capa` i `instancia` SURTEN PER L'API. Eren al model des de C1/C1-ins i són
+    # part de la CLAU ÚNICA, però no eren a `Meta.fields`: existien a la BD i eren invisibles per
+    # a qualsevol lector d'API. La pantalla del catàleg en fa quatre columnes (Capa + el bloc
+    # Instància), i sense això els seus desplegables i píndoles no tindrien on escriure.
+    #
+    # ⚠️ EL `default` NO ÉS DECORATIU, ÉS EL QUE EVITA UNA REGRESSIÓ. En completar-se la tupla de
+    # la `unique_together`, DRF hi afegeix sol un `UniqueTogetherValidator` — que és justament el
+    # que volem (un 400 net en comptes de l'`IntegrityError`/500 d'abans). Però el seu
+    # `enforce_required_fields` exigeix TOTS els camps de la clau al `create`, i un camp de model
+    # amb `default` només arriba a DRF com a `required=False`, SENSE default de serializer. Sense
+    # aquests dos `default` explícits, tota crida que ja existeix —`MeasurementBaseGrid` crea amb
+    # `{garment_type_item, pom, ordre}`— passaria a rebre un 400 «This field is required».
+    # En PATCH parcial DRF salta els defaults i el validador omple des de la instància: `update`
+    # amb només `{ordre}` segueix sense tocar ni la capa ni la instància.
+    capa = serializers.CharField(max_length=20, default='exterior')
+    instancia = serializers.CharField(max_length=60, default='', allow_blank=True)
     # Display fields amb FALLBACK a POMMaster (tenant-only, pom_global=None → els 19 importats per IA
     # no han de sortir buits): si no hi ha pom_global, caure a codi_client / nom_client / categoria FK.
     pom_code = serializers.SerializerMethodField()
@@ -403,7 +579,80 @@ class GarmentPOMMapSerializer(serializers.ModelSerializer):
             'descripcio_en', 'descripcio_ca',
             'body_measure_iso_codi', 'body_measure_iso_nom',
             'is_key', 'obligatori', 'ordre', 'pendent_revisio',
+            # U2/R2 — la identitat de la pertinença, que ja era clau única a la BD.
+            'capa', 'instancia',
         )
+
+
+class _POMDisplayMixin(serializers.Serializer):
+    """Els camps de display d'un POM, amb el FALLBACK de sempre: `pom_global` si n'hi ha, i si
+    no (tenant-only, els importats per IA) el que digui `POMMaster`.
+
+    U2 — viu en un mixin perquè les DUES pertinences noves (família i grup) l'han de dir igual
+    que la de l'item. `GarmentPOMMapSerializer` **no s'ha tocat**: convergir-lo aquí és una
+    millora òbvia però toca un serializer viu amb 103 lectors, i aquest sprint no ho demanava.
+    ANOTAT al report com a deute.
+    """
+    pom_code = serializers.SerializerMethodField()
+    name_en = serializers.SerializerMethodField()
+    name_cat = serializers.SerializerMethodField()
+    abbreviation = serializers.SerializerMethodField()
+    categoria = serializers.SerializerMethodField()
+    unitat = serializers.CharField(source='pom.pom_global.unitat', read_only=True)
+
+    #: Els camps que el mixin aporta, per no repetir-los a cada `Meta.fields`.
+    CAMPS = ('pom_code', 'name_en', 'name_cat', 'abbreviation', 'categoria', 'unitat')
+
+    def get_pom_code(self, obj):
+        pg = obj.pom.pom_global
+        return (pg.codi if pg else None) or obj.pom.codi_client
+
+    def get_name_en(self, obj):
+        pg = obj.pom.pom_global
+        return (pg.nom_en if pg else None) or obj.pom.nom_client
+
+    def get_name_cat(self, obj):
+        pg = obj.pom.pom_global
+        return (pg.nom_ca if pg else None) or obj.pom.nom_client
+
+    def get_abbreviation(self, obj):
+        pg = obj.pom.pom_global
+        return (pg.abbreviation if pg else None) or obj.pom.codi_client
+
+    def get_categoria(self, obj):
+        pg = obj.pom.pom_global
+        if pg and pg.categoria:
+            return pg.categoria
+        cat = obj.pom.categoria
+        return (cat.nom_ca or cat.nom_en) if cat else ''
+
+
+class GarmentTypePOMMapSerializer(_POMDisplayMixin, serializers.ModelSerializer):
+    """U2 — els POMs que aporta una FAMÍLIA. Germà del de l'item, mateixa forma."""
+
+    garment_type_codi = serializers.CharField(source='garment_type.codi_client', read_only=True)
+    garment_type_nom = serializers.CharField(source='garment_type.nom_client', read_only=True)
+
+    class Meta:
+        model = GarmentTypePOMMap
+        fields = (('id', 'garment_type', 'garment_type_codi', 'garment_type_nom', 'pom')
+                  + _POMDisplayMixin.CAMPS
+                  + ('is_key', 'obligatori', 'nivell', 'ordre', 'pendent_revisio',
+                     'capa', 'instancia'))
+
+
+class GarmentGroupPOMMapSerializer(_POMDisplayMixin, serializers.ModelSerializer):
+    """U2 — els POMs que aporta un GRUP, el nivell més bast de l'acumulació."""
+
+    garment_group_codi = serializers.CharField(source='garment_group.codi', read_only=True)
+    garment_group_nom = serializers.CharField(source='garment_group.nom', read_only=True)
+
+    class Meta:
+        model = GarmentGroupPOMMap
+        fields = (('id', 'garment_group', 'garment_group_codi', 'garment_group_nom', 'pom')
+                  + _POMDisplayMixin.CAMPS
+                  + ('is_key', 'obligatori', 'nivell', 'ordre', 'pendent_revisio',
+                     'capa', 'instancia'))
 
 
 class ItemBaseSetSerializer(serializers.ModelSerializer):

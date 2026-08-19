@@ -50,7 +50,7 @@ def _materialize_lines(size_check, model) -> int:
     ja_hi_son = set(
         SizeCheckLine.objects
         .filter(size_check=size_check)
-        .values_list('pom_id', 'capa', 'instancia')
+        .values_list('pom_id', 'capa', 'instancia', 'garment')
     )
     bms = (
         BaseMeasurement.objects
@@ -59,13 +59,17 @@ def _materialize_lines(size_check, model) -> int:
     )
     n = 0
     for bm in bms:
-        if (bm.pom_id, bm.capa, bm.instancia) in ja_hi_son:
+        # SET-2/T5 — l'aparellament porta el garment: sense ell, la primera peça
+        # BLOQUEJARIA la materialització de les altres i la seva fila quedaria inerta
+        # a l'editor (mateix mode de fallada que el `pom_id` pelat tenia abans de C4).
+        if (bm.pom_id, bm.capa, bm.instancia, bm.garment) in ja_hi_son:
             continue
         SizeCheckLine.objects.create(
             size_check=size_check,
             pom=bm.pom,
             capa=bm.capa,
             instancia=bm.instancia,
+            garment=bm.garment,
             valor_teoric=bm.base_value_cm,   # snapshot del vigent en crear la línia
             valor_real=None,                 # el tècnic l'anota
         )
@@ -154,12 +158,16 @@ def resolve_size_check(size_check_id: int, estat: str, missatge: str = '',
     grading que un segell pugui refusar). Es conserva a la signatura perquè hi ha tests que
     el passen; candidat a retirar quan es netegi la signatura.
 
+    F1.2 (2026-08-05): resoldre un size check JA NO TANCA LA TASCA. Desar no tanca (D-2); el
+    Stop humà és l'únic gest que tanca. `tasca_finalitzada` es conserva al retorn per contracte
+    i ara és sempre False.
+
     GRAVAR (estat='Acceptat'):
       · cap línia 'valor_descartat' → estat='Acceptat': promou None→'tolerancia_acceptada',
         escriu CHECKED (NOMÉS base, abs<1e-6 skip), incrementa measurements_version si la base
-        canvia (perquè l'estalitud ho vegi), finalitza tasca → Done.
-      · alguna línia 'valor_descartat' → estat='Rebutjat': NO promou, NO CHECKED, NO Done
-        (proto a refer). Es grava la constància de decisions.
+        canvia (perquè l'estalitud ho vegi). La tasca queda VIVA.
+      · alguna línia 'valor_descartat' → estat='Rebutjat': NO promou, NO CHECKED (proto a refer).
+        Es grava la constància de decisions.
     DESCARTAR (estat='Descartat'): NO toca línies, NO propaga, tasca viva.
 
     REAGENDAR: quan la tasca queda viva (Rebutjat o Descartat) i ve `data_represa` (date o
@@ -228,7 +236,10 @@ def resolve_size_check(size_check_id: int, estat: str, missatge: str = '',
             # néixer, a `_materialize_lines`): el lookup els diu també, o el valor acceptat
             # d'una germana aterraria sobre l'altra.
             bm, _created = BaseMeasurement.objects.get_or_create(
+                # SET-2/T5 — el tercer eix: el valor acceptat d'una peça no pot aterrar
+                # sobre la mesura base d'una altra.
                 model=model, pom=line.pom, capa=line.capa, instancia=line.instancia,
+                garment=line.garment,
                 defaults={'base_value_cm': line.valor_real, 'origen': 'CHECKED'},
             )
             # Guarda contra el valor VIGENT: no escriure canvis nuls.
@@ -273,21 +284,17 @@ def resolve_size_check(size_check_id: int, estat: str, missatge: str = '',
                 measurements_version=F('measurements_version') + 1
             )
 
-        # Finalitza la tasca Kanban size_check → Done. Gate TOU: si no existeix la tasca
-        # o la transició no és vàlida, NO peta.
-        try:
-            from fhort.tasks.models import ModelTask
-            from fhort.tasks.services_c import transition_task
-            task = (ModelTask.objects
-                    .filter(model=model, task_type__code='size_check')
-                    .exclude(status='Done').order_by('-id').first())
-            if task is not None:
-                if task.status != 'InProgress':
-                    transition_task(task, 'InProgress', profile)   # Done només des d'InProgress
-                transition_task(task, 'Done', profile)
-                tasca_finalitzada = True
-        except Exception as e:
-            logger.warning(f"SizeCheck {sc.pk}: no s'ha pogut finalitzar la tasca size_check: {e}")
+        # F1.2 — AQUÍ hi havia el tancament de la tasca `size_check` a Done, dins d'un
+        # `try/except Exception` amb `logger.warning`. Marxa sencer, i per DUES raons:
+        #
+        #   1. **Desar no tanca** (D-2). El Stop humà és l'únic gest que tanca una tasca.
+        #   2. **El `except` era una boca tapada** (§S-5 de la diagnosi pre-F1): sobre una tasca
+        #      albaranada el `TransitionError('tasca_albaranada')` queia aquí dins i el `resolve`
+        #      retornava èxit igualment. El tècnic gravava el check, la base es consolidava, i
+        #      ningú no sabia que la tasca s'havia quedat viva.
+        #
+        # `tasca_finalitzada` es conserva al retorn (contracte d'API) i ara és SEMPRE False:
+        # el consumidor que l'ensenyi deixarà d'ensenyar-ho tot sol, que és el que ara és veritat.
 
     # Rebutjat / Descartat: NO es propaga; la tasca queda viva. Si ve data_represa, reagenda.
     reagendada = False

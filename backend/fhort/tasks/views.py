@@ -3,7 +3,6 @@ from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.filters import OrderingFilter
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -12,7 +11,26 @@ from .models import TimerEntrada
 from .serializers import TimerEntradaSerializer
 
 
-class TimerEntradaViewSet(viewsets.ModelViewSet):
+class TimerEntradaViewSet(viewsets.ReadOnlyModelViewSet):
+    """Trams de temps del PROPI tècnic. **Lectura + les dues accions**, mai CRUD.
+
+    Un `TimerEntrada` no és un recurs que el client redacti: neix i mor dins de `transition_task`
+    (`services_c.py:_open_timer` / `_close_open_timer`), que és qui sap tancar-lo amb la seva
+    durada i alimentar-ne el Welford. Com a `ModelViewSet`, però, el router publicava també
+    `POST /timers/`, `PUT|PATCH /timers/<id>/` i `DELETE /timers/<id>/` amb només `IsAuthenticated`
+    — i `inici` i `model_task` són escrivibles al serializer (`read_only_fields` només cobreix
+    `tecnic`, `minuts`, `fi` i `last_heartbeat`). Amb això, el temps facturable era **inventable i
+    esborrable des del navegador**, per `id`, sense passar per cap transició ni deixar cap
+    `TaskTransition` al log.
+
+    El fitxer de test d'aquesta zona ja declarava la llei —«l'única porta d'escriptura ha de ser
+    `heartbeat`» (`test_guard_tasca_oblidada.py:11`)—; el que faltava era aplicar-la al nivell
+    correcte. Defensar `last_heartbeat` camp a camp tapava un forat i deixava la porta oberta.
+
+    Cap consumidor perd res: `timers.create` està declarat a `endpoints.js` però **no el crida
+    ningú** (verificat), i no hi ha ni `update` ni `remove`. El que segueix viu és el que es fa
+    servir: `list` (guard + pàgina de temps), `retrieve`, i les accions `tancar` i `heartbeat`.
+    """
     permission_classes = [IsAuthenticated]
     serializer_class = TimerEntradaSerializer
     filter_backends = [DjangoFilterBackend, OrderingFilter]
@@ -36,12 +54,6 @@ class TimerEntradaViewSet(viewsets.ModelViewSet):
         if profile is None:
             return qs.none()
         return qs.filter(tecnic=profile)
-
-    def perform_create(self, serializer):
-        profile = self._get_profile()
-        if profile is None:
-            raise PermissionDenied('Usuari sense UserProfile en aquest tenant.')
-        serializer.save(tecnic=profile)
 
     @action(detail=False, methods=['post'], url_path='heartbeat')
     def heartbeat(self, request):
@@ -69,17 +81,18 @@ class TimerEntradaViewSet(viewsets.ModelViewSet):
                          'last_heartbeat': timer.last_heartbeat.isoformat()},
                         status=status.HTTP_200_OK)
 
-    @action(detail=True, methods=['post'], url_path='tancar')
-    def tancar(self, request, pk=None):
-        timer = self.get_object()
-        if timer.fi is not None:
-            raise ValidationError('El timer ja està tancat.')
-        now = timezone.now()
-        delta = now - timer.inici
-        minutes = max(0, int(delta.total_seconds() // 60))
-        timer.fi = now
-        timer.minuts = minutes
-        timer.actiu = False
-        timer.save(update_fields=['fi', 'minuts', 'actiu'])
-        serializer = self.get_serializer(timer)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+    # F1.7 — JUBILADA l'acció `tancar` (`POST /api/v1/timers/<pk>/tancar/`).
+    #
+    # Tancava un tram SENSE passar per `transition_task`: cap `TaskTransition`, cap
+    # `record_actual_time`, i la tasca quedava «En curs» sense tram obert — l'anomalia «òrfena»
+    # que el cron compta i no toca. Era, a més, l'última escriptura pública que quedava en aquest
+    # viewset: el pas a `ReadOnlyModelViewSet` (89009858) va tancar el router, però les `@action`
+    # no en depenen.
+    #
+    # El seu únic consumidor era el botó de `/temps` (`TimeTracking.jsx`), que a la pràctica no
+    # funcionava: la pàgina llegeix `data_inici`/`data_fi`/`created_at` i el serializer emet
+    # `inici`/`fi` (i `created_at` no existeix a la taula), de manera que el botó disparava sobre
+    # el primer tram de la llista —normalment ja tancat— i rebia un 400 (§S-3).
+    #
+    # Qui vulgui tancar feina té el Stop, que passa per la màquina d'estats. La refeta de la
+    # pàgina de temps és F2.

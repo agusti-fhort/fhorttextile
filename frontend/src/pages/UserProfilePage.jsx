@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { me } from '../api/endpoints'
 import useAuthStore from '../store/auth'
 import Card from '../components/ui/Card'
+import PageMenu from '../components/ui/PageMenu'
+import { apagat, botoPri, botoSec } from '../components/ui/buttons'
 
 export default function UserProfilePage() {
   const { t } = useTranslation()
@@ -39,7 +41,7 @@ export default function UserProfilePage() {
   }
 
   if (loading) return (
-    <div style={{padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 'var(--fs-body)'}}>
+    <div style={{padding: '3rem', textAlign: 'center', color: 'var(--text-soft)', fontSize: 'var(--fs-body)'}}>
       {t('userProfile.st_loading')}
     </div>
   )
@@ -67,10 +69,16 @@ export default function UserProfilePage() {
   ]
 
   return (
-    <div style={{maxWidth: 640}}>
-      <div style={{marginBottom: '1.5rem'}}>
-        <h1 style={{fontSize: 'var(--fs-h1)', fontWeight: 500, marginBottom: 4}}>{t('userProfile.hd_title')}</h1>
-        <p style={{fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300}}>
+    <>
+      {/* §8b · menú de pantalla; sense seccions, queda la fletxa (§8b.2). */}
+      <div style={{ margin: '-1.5rem -1.5rem 0' }}>
+        <PageMenu backTo="/" backTitle={t('userProfile.back_title')} />
+      </div>
+
+    <div style={{maxWidth: 640, paddingTop: 16}}>
+      <div style={{marginBottom: 16}}>
+        <h1 style={{fontSize: 'var(--fs-h1)', lineHeight: '28px', fontWeight: 500, marginBottom: 4, color: 'var(--text-main)'}}>{t('userProfile.hd_title')}</h1>
+        <p style={{fontSize: 'var(--fs-caption)', color: 'var(--text-soft)'}}>
           {t('userProfile.hd_subtitle')}
         </p>
       </div>
@@ -79,14 +87,14 @@ export default function UserProfilePage() {
         <div style={{
           display: 'flex', alignItems: 'center', gap: '1.4rem',
           paddingBottom: '1.2rem',
-          borderBottom: '0.5px solid var(--gray-l)',
+          borderBottom: '1px solid var(--line)',
           marginBottom: '1.2rem',
         }}>
           <div style={{
             width: 72, height: 72, borderRadius: '50%',
             background: profile.color_avatar || 'var(--gold)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: 'white', fontSize: 'var(--fs-h1)', fontWeight: 500,
+            color: 'var(--text-main)', fontSize: 'var(--fs-h1)', fontWeight: 500,
             flexShrink: 0,
           }}>
             {initials}
@@ -95,7 +103,7 @@ export default function UserProfilePage() {
             <h2 style={{fontSize: 'var(--fs-h2)', fontWeight: 500, marginBottom: 4}}>
               {profile.nom_complet || profile.username}
             </h2>
-            <div style={{fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300}}>
+            <div style={{fontSize: 'var(--fs-body)', color: 'var(--text-soft)'}}>
               {profile.rol_nom || t('userProfile.pf_no_role')}
             </div>
           </div>
@@ -104,15 +112,15 @@ export default function UserProfilePage() {
         {fields.map(([key, v]) => (
           <div key={key} style={{
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            padding: '0.6rem 0', borderBottom: '0.5px solid var(--gray-l)',
+            padding: '0.6rem 0', borderBottom: '1px solid var(--line)',
             fontSize: 'var(--fs-body)',
           }}>
-            <span style={{color: 'var(--gray)', fontWeight: 300}}>{t(`userProfile.${key}`)}</span>
+            <span style={{color: 'var(--text-soft)'}}>{t(`userProfile.${key}`)}</span>
             <span style={{display: 'flex', alignItems: 'center', gap: 8, fontWeight: 400}}>
               {key === 'pf_color' && v && (
                 <span style={{
                   width: 16, height: 16, borderRadius: '50%',
-                  background: v, border: '0.5px solid var(--gray-l)',
+                  background: v, border: '1px solid var(--line)',
                 }} />
               )}
               {v || '—'}
@@ -120,25 +128,19 @@ export default function UserProfilePage() {
           </div>
         ))}
 
-        <button
-          onClick={logout}
-          style={{
-            marginTop: '1.5rem', width: '100%',
-            background: 'var(--gold)', color: 'white',
-            border: 'none', borderRadius: 8,
-            padding: '10px 16px', fontSize: 'var(--fs-body)', fontWeight: 500,
-            cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-          }}
-        >
-          <i className="ti ti-logout" style={{fontSize: 14}} />
+        {/* §5 · TANCAR SESSIÓ NO ÉS L'ACCIÓ PRIMÀRIA d'aquesta pantalla —el que hi has vingut
+            a fer és canviar la contrasenya— i tampoc és destructiva: és una PORTA de sortida.
+            Anava en daurat ple i a tota amplada, cridant més que res del producte. Secundària
+            de la casa (§5.2/§5.3), i sense ocupar la línia sencera. */}
+        <button onClick={logout} style={{ ...botoSec, marginTop: 16 }}>
+          <i className="ti ti-logout" aria-hidden="true" style={{fontSize: 14, color: 'currentColor'}} />
           {t('userProfile.pf_logout')}
         </button>
       </Card>
 
       <Card style={{marginTop: '1.5rem'}}>
         <h2 style={{fontSize: 'var(--fs-h2)', fontWeight: 500, marginBottom: 4}}>{t('userProfile.pw_title')}</h2>
-        <p style={{fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300, marginBottom: '1.2rem'}}>
+        <p style={{fontSize: 'var(--fs-body)', color: 'var(--text-soft)', marginBottom: '1.2rem'}}>
           {t('userProfile.pw_subtitle')}
         </p>
         <form onSubmit={changePassword} style={{display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 360}}>
@@ -154,28 +156,31 @@ export default function UserProfilePage() {
           </div>
           {pwMsg && (
             <div style={{
-              fontSize: 'var(--fs-body)', padding: '8px 10px', borderRadius: 6,
+              fontSize: 'var(--fs-body)', padding: '8px 10px', borderRadius: 'var(--r-ctrl)',
               background: pwMsg.type === 'ok' ? 'var(--ok-bg)' : 'var(--err-bg)',
               color: pwMsg.type === 'ok' ? 'var(--ok)' : 'var(--err)',
             }}>{pwMsg.text}</div>
           )}
-          <button type="submit" disabled={pwSaving || !pw || !pw2} style={{
-            background: 'var(--gold)', color: 'white', border: 'none', borderRadius: 8,
-            padding: '10px 16px', fontSize: 'var(--fs-body)', fontWeight: 500,
-            cursor: pwSaving ? 'default' : 'pointer', opacity: (pwSaving || !pw || !pw2) ? 0.6 : 1,
-            alignSelf: 'flex-start',
-          }}>{pwSaving ? t('userProfile.pw_saving') : t('userProfile.pw_submit')}</button>
+          {/* §5.1 · AQUESTA sí que és l'acció primària de la pantalla, i és l'única: blava.
+              I el deshabilitat baixa el FONS, no la tinta (§5.7). */}
+          <button type="submit" disabled={pwSaving || !pw || !pw2}
+            style={{ ...botoPri, alignSelf: 'flex-start',
+                     ...((pwSaving || !pw || !pw2) ? apagat : null) }}>
+            {pwSaving ? t('userProfile.pw_saving') : t('userProfile.pw_submit')}</button>
         </form>
       </Card>
     </div>
+    </>
   )
 }
 
 const pwInputS = {
   width: '100%', boxSizing: 'border-box', fontFamily: 'IBM Plex Mono, monospace',
-  fontSize: 'var(--fs-body)', padding: '9px 11px', marginTop: 4,
-  border: '0.5px solid var(--gray-l)', borderRadius: 8, background: 'var(--white)', color: 'var(--text-main)',
+  fontSize: 'var(--fs-body)', padding: '8px 12px', marginTop: 4,
+  border: '1px solid var(--line)', borderRadius: 'var(--r-ctrl)',
+  background: 'var(--panel)', color: 'var(--text-main)',
 }
 const pwLabelS = {
-  fontSize: 'var(--fs-label)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em',
+  fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-soft)',
+  textTransform: 'uppercase', letterSpacing: '.08em',
 }

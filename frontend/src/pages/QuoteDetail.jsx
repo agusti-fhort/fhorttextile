@@ -5,10 +5,12 @@ import useAuthStore from '../store/auth'
 import { commerce } from '../api/endpoints'
 import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
+import PageMenu from '../components/ui/PageMenu'
+import { camp, forceBarra } from '../components/llista/ChromLlista'
 import Modal from '../components/ui/Modal'
 import PdfButton, { usePdfLang } from '../components/ui/PdfButton'
 import IssueDateField from '../components/commercial/IssueDateField'
-import { selS, primaryBtn } from '../components/ui/buttons'
+import { botoPri, botoSec, apagat } from '../components/ui/buttons'
 import { DocumentHeader, LineTable, RowBtn, DocumentSummary } from '../components/commercial'
 import { StatusBadge } from './Quotes'
 
@@ -17,13 +19,12 @@ import { StatusBadge } from './Quotes'
 // E6 — vincle preparatori: intencions de model per línia, editables en DRAFT i SENT (l'oferta enviada
 // encara negocia models), read-only en ACCEPTED. Picker de models replicat d'OrderDetail.
 const MONO = 'IBM Plex Mono, monospace'
-const smallBtn = {
-  background: 'none', border: '0.5px solid var(--gray-l)', borderRadius: 6, cursor: 'pointer',
-  padding: '4px 9px', fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)',
-}
+// §5.2 · el botó petit d'aquesta fitxa, amb la família de la casa. Anava amb `0.5px --gray-l`,
+// que no és cap amplada ni cap token del sistema.
+const smallBtn = { ...botoSec, padding: '5px 10px' }
 const intentChip = {
-  display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 8px', borderRadius: 12,
-  border: '0.5px solid var(--gray-l)', background: 'var(--gold-pale)', fontFamily: MONO,
+  display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 8px', borderRadius: 'var(--r-card)',
+  borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)', background: 'var(--sel)', fontFamily: MONO,
   fontSize: 'var(--fs-caption)', color: 'var(--gold)', fontWeight: 600,
 }
 const money = (v) => `${Number(v ?? 0).toFixed(2)} €`
@@ -130,24 +131,30 @@ export default function QuoteDetail() {
   const canEditDate = canIntents
 
   return (
-    <div style={{ minWidth: 0, maxWidth: 900 }}>
-      <button onClick={() => navigate('/comercial/ofertes')} style={{ ...smallBtn, marginBottom: 12 }}>
-        <i className="ti ti-arrow-left" style={{ fontSize: 14 }} /> {t('quotes.back')}
-      </button>
+    <>
+      {/* §8b.2 · MENÚ DE PANTALLA. El botó-fletxa solt de sobre el títol se'n va: la fletxa té
+          UN lloc a tot el producte, i és aquest. El destí és EXPLÍCIT — mai `history.back()`,
+          que no pot garantir on porta si s'hi ha arribat per enllaç, per recàrrega o per una
+          pestanya nova. */}
+      <div style={forceBarra}>
+        <PageMenu backTo="/comercial/ofertes" backTitle={t('quotes.back')} />
+      </div>
+
+      <div style={{ minWidth: 0, maxWidth: 900 }}>
 
       <DocumentHeader
         reference={quote.document_number}
         statusBadge={<StatusBadge status={quote.status} t={t} />}
         customer={quote.customer_nom}
         actions={<>
-          <button onClick={doSend} disabled={busy || !editable || !hasLines} style={{ ...primaryBtn, marginLeft: 0 }}
+          <button onClick={doSend} disabled={busy || !editable || !hasLines} style={botoPri}
             title={!isDraft ? t('quotes.send_only_draft') : (!hasLines ? t('quotes.send_needs_lines') : '')}>
             <i className="ti ti-send" style={{ fontSize: 14 }} /> {t('quotes.send')}
           </button>
           <PdfButton onClick={doPdf} disabled={busy} label={t('quotes.download_pdf')}
             lang={pdfLang} onLangChange={setPdfLang} t={t} />
           {canConvert && (
-            <button onClick={() => setConfirmConvert(true)} disabled={busy} style={{ ...primaryBtn, marginLeft: 0 }}>
+            <button onClick={() => setConfirmConvert(true)} disabled={busy} style={botoPri}>
               <i className="ti ti-arrow-right-circle" style={{ fontSize: 14 }} /> {t('quotes.convert')}
             </button>
           )}
@@ -158,7 +165,7 @@ export default function QuoteDetail() {
         <Feedback feedback={feedback} onDismiss={() => setFeedback(null)} />
       </div>
 
-      {!isDraft && <p style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)', marginBottom: 12 }}>{t('quotes.locked_note')}</p>}
+      {!isDraft && <p style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)', marginBottom: 12 }}>{t('quotes.locked_note')}</p>}
 
       <LinesSection quote={quote} editable={editable} canIntents={canIntents} products={products}
         t={t} reload={reload} ok={ok} err={err} />
@@ -197,15 +204,16 @@ export default function QuoteDetail() {
           </ul>
         </Modal>
       )}
-    </div>
+      </div>
+    </>
   )
 }
 
 function Section({ title, hint, children }) {
   return (
-    <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', padding: 16, marginBottom: 16 }}>
+    <div style={{ borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)', borderRadius: 'var(--r-card)', background: 'var(--panel)', padding: 16, marginBottom: 16 }}>
       <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, fontFamily: MONO, marginBottom: hint ? 2 : 10 }}>{title}</h2>
-      {hint && <p style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)', marginBottom: 10 }}>{hint}</p>}
+      {hint && <p style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)', marginBottom: 10 }}>{hint}</p>}
       {children}
     </div>
   )
@@ -281,7 +289,7 @@ function LinesSection({ quote, editable, canIntents, products, t, reload, ok, er
   const columns = [
     { key: 'desc', label: t('quotes.col_concept'), render: l => l.description || l.product_name },
     { key: 'qty', label: t('quotes.col_qty'), align: 'right', width: 90,
-      render: l => <span style={{ fontFamily: MONO, color: 'var(--text-muted)' }}>×{Number(l.quantity).toFixed(2)}</span> },
+      render: l => <span style={{ fontFamily: MONO, color: 'var(--text-soft)' }}>×{Number(l.quantity).toFixed(2)}</span> },
     { key: 'price', label: t('quotes.col_unit_price'), align: 'right', width: 110,
       render: l => <span style={{ fontFamily: MONO }}>{money(l.unit_price)}</span> },
     { key: 'total', label: t('quotes.col_total'), align: 'right', width: 100,
@@ -294,35 +302,35 @@ function LinesSection({ quote, editable, canIntents, products, t, reload, ok, er
   return (
     <Section title={t('quotes.lines')} hint={t('quotes.lines_hint')}>
       {lines.length === 0
-        ? <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{t('quotes.lines_empty')}</p>
+        ? <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>{t('quotes.lines_empty')}</p>
         : <LineTable columns={columns} rows={lines} renderActions={renderActions} />}
 
       {editable && (
         <div style={{ display: 'flex', gap: 8, marginTop: 14, alignItems: 'center', flexWrap: 'wrap' }}>
-          <select value={product} onChange={e => onPickProduct(e.target.value)} style={{ ...selS, flex: 1, minWidth: 160 }}>
+          <select value={product} onChange={e => onPickProduct(e.target.value)} style={{ ...camp, flex: 1, minWidth: 160 }}>
             <option value="">{t('quotes.product_ph')}</option>
             {products.map(p => <option key={p.id} value={p.id}>{p.code} · {p.name}</option>)}
           </select>
-          <input value={description} onChange={e => setDescription(e.target.value)} placeholder={t('quotes.desc_ph')} style={{ ...selS, flex: 1, minWidth: 140 }} />
-          <input type="text" inputMode="decimal" value={qty} onChange={e => setQty(e.target.value)} placeholder={t('quotes.col_qty')} style={{ ...selS, width: 80 }} />
-          <input type="text" inputMode="decimal" value={price} onChange={e => setPrice(e.target.value)} placeholder={t('quotes.col_unit_price')} style={{ ...selS, width: 100 }} />
-          <button onClick={add} disabled={busy || !product} style={primaryBtn}>{t('quotes.add')}</button>
+          <input value={description} onChange={e => setDescription(e.target.value)} placeholder={t('quotes.desc_ph')} style={{ ...camp, flex: 1, minWidth: 140 }} />
+          <input type="text" inputMode="decimal" value={qty} onChange={e => setQty(e.target.value)} placeholder={t('quotes.col_qty')} style={{ ...camp, width: 80 }} />
+          <input type="text" inputMode="decimal" value={price} onChange={e => setPrice(e.target.value)} placeholder={t('quotes.col_unit_price')} style={{ ...camp, width: 100 }} />
+          <button type="button" onClick={add} disabled={busy || !product} style={{ ...botoPri, ...((busy || !product) ? apagat : null) }}>{t('quotes.add')}</button>
         </div>
       )}
 
       {/* E6 — vincle preparatori: models previstos per línia. Editable en DRAFT/SENT; read-only en ACCEPTED. */}
       {lines.length > 0 && (canIntents || anyIntent) && (
-        <div style={{ marginTop: 16, borderTop: '0.5px solid var(--gray-l)', paddingTop: 12 }}>
+        <div style={{ marginTop: 16, paddingTop: 12, borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: 'var(--line)' }}>
           <p style={{ fontSize: 'var(--fs-body)', fontFamily: MONO, fontWeight: 600, marginBottom: 2 }}>{t('quotes.intents_title')}</p>
-          <p style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)', marginBottom: 10 }}>{t('quotes.intents_hint')}</p>
+          <p style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)', marginBottom: 10 }}>{t('quotes.intents_hint')}</p>
           {canIntents && pendingLines.length > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', margin: '0 0 10px',
-              padding: '8px 14px', background: 'var(--gold-pale)', border: '0.5px solid var(--gold)', borderRadius: 8,
+              padding: '8px 14px', background: 'var(--sel)', borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--gold-border)', borderRadius: 'var(--r-ctrl)',
               fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-main)' }}>
               <i className="ti ti-arrow-back-up" aria-hidden="true" />
               <span>{t('quotes.pending_lines', { n: pendingLines.length })}</span>
               <button onClick={() => goSelect(pendingLines[0].id)}
-                style={{ ...smallBtn, cursor: 'pointer', color: 'var(--gold)', border: '0.5px solid var(--gold)', fontWeight: 600 }}>
+                style={{ ...smallBtn, cursor: 'pointer', color: 'var(--gold)', borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--gold-border)', fontWeight: 600 }}>
                 {t('quotes.continue_selecting')}
               </button>
             </div>
@@ -335,11 +343,11 @@ function LinesSection({ quote, editable, canIntents, products, t, reload, ok, er
                 <div key={l.id} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 'var(--fs-body)', minWidth: 140, flexShrink: 0 }}>
                     {l.description || l.product_name}
-                    <span style={{ fontFamily: MONO, color: 'var(--text-muted)', marginLeft: 6 }}>×{Number(l.quantity).toFixed(0)}</span>
+                    <span style={{ fontFamily: MONO, color: 'var(--text-soft)', marginLeft: 6 }}>×{Number(l.quantity).toFixed(0)}</span>
                   </span>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                     {intents.length === 0 && !canIntents &&
-                      <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--gray)' }}>{t('quotes.intents_none')}</span>}
+                      <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)' }}>{t('quotes.intents_none')}</span>}
                     {intents.map(mi => (
                       <span key={mi.id} style={intentChip} title={mi.model_nom || ''}>
                         {mi.model_codi}
@@ -400,12 +408,12 @@ function DetailsSection({ quote, editable, dateEditable, paymentTerms, t, reload
         <IssueDateField value={quote.issued_at} editable={dateEditable} onSave={saveIssuedAt} t={t} />
         <Field label={t('quotes.valid_until')}>
           {editable
-            ? <input type="date" value={validUntil} onChange={e => setValidUntil(e.target.value)} style={{ ...selS }} />
+            ? <input type="date" value={validUntil} onChange={e => setValidUntil(e.target.value)} style={camp} />
             : <span style={{ fontFamily: MONO }}>{quote.valid_until || '—'}</span>}
         </Field>
         <Field label={t('quotes.payment_terms')}>
           {editable
-            ? <select value={terms} onChange={e => setTerms(e.target.value)} style={{ ...selS, minWidth: 200 }}>
+            ? <select value={terms} onChange={e => setTerms(e.target.value)} style={{ ...camp, minWidth: 200 }}>
                 <option value="">{t('quotes.terms_customer_default')}{defaultName ? ` · ${defaultName}` : ''}</option>
                 {paymentTerms.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
@@ -414,12 +422,12 @@ function DetailsSection({ quote, editable, dateEditable, paymentTerms, t, reload
       </div>
       <Field label={t('quotes.notes')}>
         {editable
-          ? <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} style={{ ...selS, width: '100%', resize: 'vertical' }} />
+          ? <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} style={{ ...camp, width: '100%', resize: 'vertical' }} />
           : <span style={{ whiteSpace: 'pre-wrap' }}>{quote.notes || '—'}</span>}
       </Field>
       {editable && (
         <div style={{ marginTop: 12 }}>
-          <button onClick={save} disabled={busy} style={primaryBtn}>{t('quotes.save')}</button>
+          <button type="button" onClick={save} disabled={busy} style={{ ...botoPri, ...(busy ? apagat : null) }}>{t('quotes.save')}</button>
         </div>
       )}
     </Section>
@@ -429,7 +437,7 @@ function DetailsSection({ quote, editable, dateEditable, paymentTerms, t, reload
 function Field({ label, children }) {
   return (
     <div style={{ marginBottom: 10 }}>
-      <label style={{ fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>{label}</label>
+      <label style={{ fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-soft)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>{label}</label>
       {children}
     </div>
   )

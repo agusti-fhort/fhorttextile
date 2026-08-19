@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../store/auth'
@@ -10,12 +10,15 @@ import { SelfBadge } from './Customers'
 import DictionaryWizard from '../components/DictionaryWizard'
 import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
-import Table from '../components/ui/Table'
 import Badge from '../components/ui/Badge'
+import PageMenu from '../components/ui/PageMenu'
+import TaulaLlista from '../components/ui/TaulaLlista'
+import { BotoEsborrar, EstatBuit, camp, buit, forceBarra } from '../components/llista/ChromLlista'
+import { ClassificacioBadge } from '../components/commercial/estats'
 import { StatusBadge } from './Quotes'
 import { OrderStatusBadge } from './Orders'
 import { DNStatusBadge } from './DeliveryNotes'
-import { primaryBtn, selS } from '../components/ui/buttons'
+import { botoPri, botoSec, botoDestructiu, apagat } from '../components/ui/buttons'
 
 const money = (v) => `${Number(v ?? 0).toFixed(2)} €`
 const dayOf = (r) => (r.issued_at || r.created_at || '').slice(0, 10)
@@ -26,10 +29,30 @@ const dayOf = (r) => (r.issued_at || r.created_at || '').slice(0, 10)
 // (ofertes/comandes del client). L'edició d'àlies està gated CONFIGURE al backend.
 const MONO = 'IBM Plex Mono, monospace'
 const TABS = ['dades', 'tecnic', 'comercial']
-// Els QUATRE choices d'origen del model (pom/models.py:243-246). Han d'estar tots aquí i tots
-// als tres i18n (clients.origen_*): la clau es construeix per interpolació (`origen_${r.origen}`)
-// i, si falta, i18next pinta la clau crua a la cel·la (QA-S8 · D4c).
-const ORIGEN_VARIANT = { IMPORT: 'gold', MANUAL: 'ok', MIGRACIO: 'gray', DICCIONARI: 'gate' }
+// 🚨 AQUÍ HI HAVIA EL CAS DE MANUAL DE PER QUÈ CAP ENUMERACIÓ ES DECLARA AL CLIENT.
+//
+// Hi vivia `ORIGEN_VARIANT = { IMPORT, MANUAL, MIGRACIO, DICCIONARI }` amb un comentari que deia
+// en veu alta «els QUATRE choices d'origen del model (pom/models.py:243-246)». Tres coses hi
+// eren falses alhora, i cap fallava:
+//
+//  1. **En són CINC.** `CustomerPOMAlias.ORIGEN_CHOICES` declara també `MODEL` («Nascut d'un
+//     model»), afegit després per la migració `0061`. Ningú va tornar a aquest fitxer.
+//  2. **Hi ha qui l'escriu.** `pom/wizard_views.py:694` fa `origen='MODEL'` —el camí «Crear POM
+//     propi del model»— i està documentat allà mateix com a provinença **permanent**. O sigui
+//     que hi ha files reals amb aquest valor i n'hi seguirà havent.
+//  3. **El punter portava a un lloc plausible i fals.** `pom/models.py:243-246` no és una línia
+//     morta: és un `ORIGEN_CHOICES` VIU d'un ALTRE model (n'hi ha quatre blocs al fitxer: 147,
+//     214, 282 i el bo, 513). Qui hi anés a verificar hi trobaria choices, en comptaria quatre i
+//     quedaria tranquil.
+//
+// L'efecte viu era que un àlies amb `origen='MODEL'` pintava **`clients.origen_MODEL` en cru** a
+// la cel·la — el mode de fallada que el comentari de sota descrivia tres línies més avall. El
+// fitxer s'avisava a si mateix i no s'escoltava.
+//
+// Ara els codis surten de `/vocabulari/` (`origens_alias_pom`) i el badge és NEUTRE: la
+// provinença és una CLASSIFICACIÓ, no un semàfor — cap origen és millor ni pitjor que un altre, i
+// verd/daurat/gris/gate repartits suggerien una jerarquia que no existeix
+// (v. `components/commercial/estats`, decisió 3).
 
 export default function CustomerDetail() {
   const { id } = useParams()
@@ -37,6 +60,8 @@ export default function CustomerDetail() {
   const navigate = useNavigate()
   const me = useAuthStore(s => s.user)
   const canEdit = !!me?.capabilities?.includes('configure')
+  // Amunt de qualsevol return: els dos returns primerencs de sota (loading · error) fan que
+  // el primer render en registri MENYS que el segon si aquest hook queda a sota — React #310.
   const isStudio = useAuthStore(st => st.tenant?.tipologia === 'estudi')
 
   const [sp, setSp] = useSearchParams()
@@ -47,11 +72,53 @@ export default function CustomerDetail() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [feedback, setFeedback] = useState(null)
+  // EL GOVERN DEL CLIENT VIU A LA SEVA FITXA (§8e · §5.6). La llista de Clients tenia, a cada
+  // fila, quatre botons de text: obrir · pujar logo · activar/desactivar · esborrar. La graella
+  // canònica no en dona cap columna —només la paperera— i la §5.6 reserva el menú d'accions als
+  // gestos OCASIONALS. «Pujar el logo» i «desactivar» ho són, i totes dues parlen d'UN client:
+  // el seu lloc és aquí, on la pantalla parla d'una entitat, i no a la llista, on en parla de
+  // moltes. Entren en aquest tram i no en el següent a posta: així la llista no perd cap
+  // capacitat en cap moment intermedi.
+  const [saving, setSaving] = useState(false)
+  const logoRef = useRef(null)
+  const API = import.meta.env.VITE_API_URL || ''
 
   const load = useCallback(() => {
     setError(false)
     return customers.get(id).then(res => setCustomer(res.data)).catch(() => setError(true))
   }, [id])
+
+  // El logo del client no passa per `customers.update`: té endpoint propi multipart. `fetch` i
+  // no el client d'API perquè el cos és un `FormData` i el `Content-Type` l'ha de posar el
+  // navegador amb el `boundary` (mateix codi que tenia la llista).
+  const pujaLogo = (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file || !customer) return
+    setSaving(true); setFeedback(null)
+    const fd = new FormData(); fd.append('logo', file)
+    fetch(`${API}/api/v1/customers/${customer.id}/upload-logo/`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
+      body: fd,
+    })
+      .then(r => { if (!r.ok) throw new Error('upload'); return r.json() })
+      .then(() => load())
+      .then(() => setFeedback({ type: 'ok', text: t('clients.logo_uploaded') }))
+      .catch(() => setFeedback({ type: 'err', text: t('clients.error') }))
+      .finally(() => setSaving(false))
+  }
+
+  // Activar/desactivar. El client propi (is_self) no s'ofereix: el tenant es quedaria sense
+  // casa. Amagar-ho és cortesia — qui blinda de debò és el backend (409 `self_customer_protected`).
+  const commutaActiu = () => {
+    setSaving(true); setFeedback(null)
+    customers.update(customer.id, { active: !customer.active })
+      .then(() => load())
+      .then(() => setFeedback({ type: 'ok', text: t('clients.saved') }))
+      .catch(() => setFeedback({ type: 'err', text: t('clients.error') }))
+      .finally(() => setSaving(false))
+  }
 
   useEffect(() => {
     let alive = true
@@ -72,39 +139,69 @@ export default function CustomerDetail() {
   const activeTab = tabs.includes(tabParam) ? tabParam : 'dades'
 
   return (
-    <div style={{ minWidth: 0 }}>
-      {/* Capçalera */}
-      <div style={{ padding: '0 0 0.75rem' }}>
-        <button onClick={() => navigate('/clients')} style={{
-          background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)',
-          fontFamily: MONO, fontSize: 'var(--fs-body)', padding: 0, marginBottom: 8,
-        }}>
-          <i className="ti ti-arrow-left" style={{ fontSize: 13, marginRight: 4 }} />{t('clients.back_to_list')}
-        </button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, fontFamily: MONO, margin: 0 }}>
-            <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{customer.codi}</span>
-            <span style={{ marginLeft: 10 }}>{customer.nom}</span>
+    <>
+      {/* §8b.2 · MENÚ DE PANTALLA — la barra blanca de costat a costat, amb el ← SEMPRE PRIMER i
+          amb destí EXPLÍCIT. Els tres tabs del client són SECCIONS D'UNA ENTITAT (§8b-bis: «un
+          sol tipus de menú de pantalla a tot el producte») i per tant són PÍNDOLES d'aquesta
+          barra, no una segona banda de navegació a sota.
+
+          El que se'n va: una banda pròpia amb l'activa en DAURAT PLE sobre `--bg-muted`. Era el
+          defecte exacte que A6 va haver de corregir al dashboard del model —dos patrons de
+          navegació al mateix nivell, i el daurat fent d'estat de navegació quan és marca. */}
+      <div style={forceBarra}>
+        <PageMenu
+          backTo="/clients"
+          backTitle={t('clients.back_to_list')}
+          items={tabs.map(tab => ({
+            key: tab, label: t(`clients.tab_${tab}`), active: activeTab === tab,
+            onClick: () => setTab(tab),
+          }))}
+        />
+      </div>
+
+      {/* §8b.3 · IDENTITAT — SOBRE EL FONS DE PÀGINA, SENSE CONTENIDOR (és informativa, no un
+          panell): codi en CAPTION a dalt + nom a 22/500 + badges + accions a la dreta.
+          El codi deixa d'anar en daurat pes 700 dins de l'h1: el daurat és marca, no una dada,
+          i un codi no és el títol de la pàgina — el nom sí. */}
+      <div style={{ padding: '16px 0 12px' }}>
+        <div style={{ fontSize: 'var(--fs-caption)', letterSpacing: '.08em', textTransform: 'uppercase',
+          color: 'var(--text-soft)', fontFamily: MONO, fontWeight: 600, marginBottom: 4 }}>
+          {customer.codi}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <h1 style={{ fontSize: 'var(--fs-h1)', lineHeight: '28px', fontWeight: 500,
+            fontFamily: MONO, color: 'var(--text-main)', margin: 0 }}>
+            {customer.nom}
           </h1>
-          <span style={{
-            fontSize: 'var(--fs-label)', fontWeight: 600, padding: '2px 8px', borderRadius: 999, fontFamily: MONO,
-            background: customer.active ? 'var(--ok-bg)' : 'var(--gray-l)', color: customer.active ? 'var(--ok)' : 'var(--gray)',
-          }}>{customer.active ? t('clients.active') : t('clients.inactive')}</span>
+          <Badge variant={customer.active ? 'ok' : 'gray'}>
+            {customer.active ? t('clients.active') : t('clients.inactive')}
+          </Badge>
           {/* La fitxa del client propi no es distingia de cap altra: hi entraves i no sabies que
               estaves mirant casa teva. Mateix badge que a la llista (definició única). */}
           {customer.is_self && <SelfBadge t={t} />}
-        </div>
-      </div>
 
-      {/* Barra de tabs */}
-      <div style={{ display: 'flex', gap: 8, padding: '0.5rem 0', borderBottom: '0.5px solid var(--border)', marginBottom: '1.25rem' }}>
-        {tabs.map(tab => (
-          <button key={tab} onClick={() => setTab(tab)} style={{
-            fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '6px 14px', cursor: 'pointer', borderRadius: 8, border: 'none',
-            background: activeTab === tab ? 'var(--gold)' : 'var(--bg-muted)',
-            color: activeTab === tab ? 'var(--white)' : 'var(--text-muted)', fontWeight: activeTab === tab ? 500 : 400,
-          }}>{t(`clients.tab_${tab}`)}</button>
-        ))}
+          {/* §8b.3 · les accions de la identitat van A LA DRETA. Cap de les dues és blava: el
+              blau és «el que has vingut a fer» (§5.1) i a la fitxa d'un client això és DESAR les
+              dades, que ja porta el seu botó al tab. Pujar un logo i desactivar són gestos de la
+              casa: secundari amb vora daurada, i la de desactivar amb VORA vermella i mai plena
+              (§5.5 — el vermell ple només al botó que confirma dins d'un modal). */}
+          {canEdit && (
+            <span style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <input ref={logoRef} type="file" accept="image/*" hidden onChange={pujaLogo} />
+              <button type="button" onClick={() => logoRef.current?.click()} disabled={saving}
+                style={{ ...botoSec, ...(saving ? apagat : null) }}>
+                <i className="ti ti-photo" aria-hidden="true" style={{ fontSize: 14, color: 'currentColor' }} />
+                {customer.logo ? t('clients.logo_replace') : t('clients.logo_upload')}
+              </button>
+              {!customer.is_self && (
+                <button type="button" onClick={commutaActiu} disabled={saving}
+                  style={{ ...(customer.active ? botoDestructiu : botoSec), ...(saving ? apagat : null) }}>
+                  {customer.active ? t('clients.deactivate') : t('clients.activate')}
+                </button>
+              )}
+            </span>
+          )}
+        </div>
       </div>
 
       <Feedback feedback={feedback} onDismiss={() => setFeedback(null)} />
@@ -133,7 +230,7 @@ export default function CustomerDetail() {
           <ComercialTab customer={customer} t={t} navigate={navigate} />
         )}
       </div>
-    </div>
+    </>
   )
 }
 
@@ -164,9 +261,13 @@ function DadesTab({ customer, canEdit, t, onSaved, onError }) {
     <div>
       <SectionTitle t={t} title="clients.dades_section" subtitle="clients.dades_section_help" />
       <CustomerForm form={form} set={set} terms={terms} t={t} section="all" />
+      {/* §5.1 · L'ACCIÓ PRIMÀRIA del tab Dades, i l'única: desar la fitxa és el que has vingut
+          a fer aquí. Les del §8b.3 (logo, desactivar) són gestos de la casa i no li competeixen. */}
       {canEdit && (
-        <button onClick={submit} disabled={saving || invalid} style={{ ...primaryBtn, marginLeft: 0, marginTop: 8 }}>
-          <i className="ti ti-device-floppy" style={{ fontSize: 14 }} />{t('clients.save')}
+        <button type="button" onClick={submit} disabled={saving || invalid}
+          style={{ ...botoPri, marginTop: 8, ...(saving || invalid ? apagat : null) }}>
+          <i className="ti ti-device-floppy" aria-hidden="true" style={{ fontSize: 14, color: 'currentColor' }} />
+          {t('clients.save')}
         </button>
       )}
     </div>
@@ -236,21 +337,31 @@ function TecnicTab({ customer, canEdit, t, navigate, notify }) {
     return cd.toLowerCase() === (r.client_code || '').trim().toLowerCase() ? '' : cd
   }
 
+  // ⚠️ DESVIACIÓ DECLARADA DE LA §8e, i el motiu. La graella canònica imposa UNA LÍNIA per fila
+  // amb ellipsis, i aquí tres columnes en porten DUES. No és un salt de línia (que és el que la
+  // norma prohibeix, perquè trenca la fila): és una PILA de dos camps diferents —descripció EN +
+  // descripció local amb el seu codi d'idioma, i codi global de POM + abreviatura/nom—. Aplanar-
+  // les a una línia no comprimiria res: faria desaparèixer dades que aquesta pantalla existeix
+  // per ensenyar. Les tres columnes ho declaren amb `whiteSpace: 'normal'`; la resta de la
+  // graella (capçaleres, filets, hover, amplades per contingut) és la canònica.
+  const pila = { whiteSpace: 'normal' }
+
   const aliasCols = [
-    { key: 'client_code', label: t('clients.alias_code'),
-      render: r => <span style={{ fontFamily: MONO, fontWeight: 600 }}>{r.client_code}</span> },
+    { key: 'client_code', label: t('clients.alias_code'), min: 100, max: 130,
+      estil: { fontWeight: 600 }, titol: r => r.client_code,
+      render: r => r.client_code },
     // Descripció: EN a dalt (canònica), local a sota amb el codi d'idioma (mateixa convenció que
     // el pas 2 del wizard, DictionaryWizard.jsx:177-182). Els escriu el diccionari; abans la
     // columna llegia el camp obsolet i sortia '—' per a TOTS els àlies del wizard (QA-S8 · D4b).
-    { key: 'description_en', label: t('clients.alias_desc'), render: r => {
+    { key: 'description_en', label: t('clients.alias_desc'), min: 200, max: 320, estil: pila, render: r => {
       const en = r.description_en || legacyDesc(r)
       const local = r.description_local
-      if (!en && !local) return <span style={{ color: 'var(--text-muted)' }}>—</span>
+      if (!en && !local) return <span style={{ color: 'var(--text-soft)' }}>—</span>
       return (
         <div style={{ lineHeight: 1.2 }}>
           {en && <div>{en}</div>}
           {local && (
-            <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>
+            <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)' }}>
               {r.language && <span style={{ fontFamily: MONO, marginRight: 4 }}>[{r.language}]</span>}{local}
             </div>
           )}
@@ -262,7 +373,7 @@ function TecnicTab({ customer, canEdit, t, navigate, notify }) {
     // no repetim l'abreviatura si coincideix amb el principal.
     // Sense POM (pom=null): és vocabulari del client PENDENT DE MAPAR (QA-S8-R1) — es pot mapar
     // des de la mateixa fila amb el cercador de POM.
-    { key: 'pom', label: t('clients.alias_pom'), render: r => {
+    { key: 'pom', label: t('clients.alias_pom'), min: 160, max: 240, estil: pila, render: r => {
       if (!r.pom) {
         return canEdit
           ? <PomPicker t={t} onPick={pm => mapAlias(r, pm)} label={t('clients.alias_pendent_map')} />
@@ -275,23 +386,22 @@ function TecnicTab({ customer, canEdit, t, navigate, notify }) {
       return (
         <div style={{ lineHeight: 1.2 }}>
           <div style={{ fontFamily: MONO, fontWeight: 600, color: 'var(--gold)' }}>{primary}</div>
-          {secondary && <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>{secondary}</div>}
+          {secondary && <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)' }}>{secondary}</div>}
         </div>
       )
     } },
     // Origen com a badge; sota, la data. TODO: CustomerPOMAlias no té camp autor (només dates);
     // el diccionari futur pot afegir-lo.
-    { key: 'origen', label: t('clients.alias_origen'), render: r => (
+    { key: 'origen', label: t('clients.alias_origen'), min: 110, max: 140, estil: pila, render: r => (
       <div style={{ lineHeight: 1.3 }}>
-        <Badge variant={ORIGEN_VARIANT[r.origen] || 'gray'}>{t(`clients.origen_${r.origen}`)}</Badge>
-        {r.creat_at && <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', marginTop: 3 }}>{r.creat_at.slice(0, 10)}</div>}
+        <ClassificacioBadge>{t(`clients.origen_${r.origen}`)}</ClassificacioBadge>
+        {r.creat_at && <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', marginTop: 3 }}>{r.creat_at.slice(0, 10)}</div>}
       </div>
     ) },
-    ...(canEdit ? [{ key: '_a', label: '', align: 'right', render: r => (
-      <button onClick={() => removeAlias(r)} title={t('clients.delete')} style={{
-        background: 'none', border: '0.5px solid var(--err)', borderRadius: 6, cursor: 'pointer',
-        padding: '3px 8px', color: 'var(--err)', fontFamily: MONO, fontSize: 'var(--fs-body)',
-      }}><i className="ti ti-trash" style={{ fontSize: 13 }} /></button>
+    // §8e · la paperera de fila de la casa: 26×26, icona 14, VORA només al hover i mai vermella
+    // plena en repòs (§5.5). Abans portava la vora d'error sempre encesa a cada fila.
+    ...(canEdit ? [{ key: '_a', amplada: 36, render: r => (
+      <BotoEsborrar onClick={() => removeAlias(r)} title={t('clients.delete')} />
     ) }] : []),
   ]
 
@@ -304,18 +414,22 @@ function TecnicTab({ customer, canEdit, t, navigate, notify }) {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
           <SectionTitle t={t} title="clients.biblioteca_title" subtitle="clients.biblioteca_subtitle"
             meta={t('clients.biblioteca_count', { aliases: aliases.length, poms: nPoms })} />
+          {/* PORTA, no primària (§5.3): «Carregar diccionari» obre un assistent a part i no
+              completa cap feina d'aquesta pantalla. El blau del tab Tècnic és l'«Afegir àlies»
+              de la fila d'alta, que és el gest que sí que hi acaba una feina. */}
           {canEdit && (
-            <button onClick={() => setShowDict(true)} style={{ ...primaryBtn, marginLeft: 0 }}>
-              <i className="ti ti-file-spreadsheet" style={{ fontSize: 14 }} />{t('clients.load_dictionary')}
+            <button type="button" onClick={() => setShowDict(true)} style={botoSec}>
+              <i className="ti ti-file-spreadsheet" aria-hidden="true" style={{ fontSize: 14, color: 'currentColor' }} />
+              {t('clients.load_dictionary')}
             </button>
           )}
         </div>
         {canEdit && <AliasAddRow customer={customer} t={t}
           onCreated={() => loadAliases().then(() => notify({ type: 'ok', text: t('clients.alias_saved') }))}
           onError={(text) => notify({ type: 'err', text })} />}
-        {busy ? <Center>{t('clients.loading')}</Center> : (
-          <Table columns={aliasCols} data={aliases} loading={false} empty={t('clients.alias_empty')} />
-        )}
+        {busy ? <EstatBuit>{t('clients.loading')}</EstatBuit>
+          : aliases.length === 0 ? <EstatBuit>{t('clients.alias_empty')}</EstatBuit>
+            : <TaulaLlista cols={aliasCols} files={aliases} clau={(a) => a.id} />}
       </section>
 
       {showDict && (
@@ -340,7 +454,7 @@ function TecnicTab({ customer, canEdit, t, navigate, notify }) {
             {rulesets.map(rs => (
               <li key={rs.id} style={rowCard} onClick={() => navigate('/poms/grading')} role="button" tabIndex={0}>
                 <span style={{ fontFamily: MONO }}>{rs.nom}</span>
-                <span style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>
+                <span style={{ color: 'var(--text-soft)', fontSize: 'var(--fs-body)' }}>
                   {rs.size_system_nom || rs.size_system_codi} · {rs.regles_count} {t('clients.rules')}
                   <i className="ti ti-external-link" style={{ fontSize: 13, marginLeft: 8 }} />
                 </span>
@@ -361,7 +475,7 @@ function TecnicTab({ customer, canEdit, t, navigate, notify }) {
             {profiles.map(p => (
               <li key={p.id} style={{ ...rowCard, cursor: 'default' }}>
                 <span style={{ fontFamily: MONO }}>{p.size_system?.nom || p.size_system?.codi}</span>
-                <span style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>
+                <span style={{ color: 'var(--text-soft)', fontSize: 'var(--fs-body)' }}>
                   {p.target?.nom_en} · {p.fit_type_nom}
                 </span>
               </li>
@@ -391,10 +505,13 @@ function PomPicker({ t, onPick, label }) {
 
   if (!open) {
     return (
-      <button onClick={() => setOpen(true)} style={{
-        ...miniBtn, borderColor: 'var(--warn)', color: 'var(--warn)', cursor: 'pointer',
+      // §1b(d) · el taronja de TEXT s'enfosqueix: `--warn-state` com a tinta no arriba a AA.
+      // La marca (la vora) es queda al to viu; el text va a `--warn-ink`.
+      <button type="button" onClick={() => setOpen(true)} style={{
+        ...miniBtn, borderColor: 'var(--warn-state)', color: 'var(--warn-ink)',
       }}>
-        <i className="ti ti-map-pin-plus" style={{ fontSize: 13, marginRight: 4 }} />{label}
+        <i className="ti ti-map-pin-plus" aria-hidden="true"
+          style={{ fontSize: 14, marginRight: 6, color: 'currentColor' }} />{label}
       </button>
     )
   }
@@ -402,21 +519,14 @@ function PomPicker({ t, onPick, label }) {
     <div>
       <input autoFocus value={q} onChange={e => search(e.target.value)}
         onKeyDown={e => { if (e.key === 'Escape') { setOpen(false); setQ(''); setResults([]) } }}
-        placeholder={t('clients.alias_search_pom')} style={{ ...selS, width: 220 }} />
+        placeholder={t('clients.alias_search_pom')} style={{ ...camp, width: 220 }} />
       {results.length > 0 && (
-        <ul style={{
-          listStyle: 'none', padding: 0, margin: '4px 0 0', maxHeight: 160, overflowY: 'auto',
-          border: '0.5px solid var(--gray-l)', borderRadius: 6, background: 'var(--white)',
-        }}>
+        <ul style={llistaResultats}>
           {results.map(pm => (
             <li key={pm.id}>
-              <button onClick={() => { setOpen(false); setQ(''); setResults([]); onPick(pm) }}
-                style={{
-                  width: '100%', textAlign: 'left', background: 'none', border: 'none',
-                  cursor: 'pointer', padding: '5px 8px', fontSize: 'var(--fs-body)',
-                  borderBottom: '0.5px solid var(--border)',
-                }}>
-                <span style={{ fontFamily: MONO, fontWeight: 600 }}>{pm.codi_client}</span> · {pm.nom_client}
+              <button type="button" onClick={() => { setOpen(false); setQ(''); setResults([]); onPick(pm) }}
+                style={itemResultat}>
+                <span style={{ fontWeight: 600 }}>{pm.codi_client}</span> · {pm.nom_client}
               </button>
             </li>
           ))}
@@ -466,34 +576,39 @@ function AliasAddRow({ customer, t, onCreated, onError }) {
   }
 
   return (
-    <div style={{ paddingBottom: 14, marginBottom: 14, borderBottom: '0.5px solid var(--gray-l)' }}>
+    <div style={{
+      paddingBottom: 14, marginBottom: 14,
+      borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: 'var(--line)',
+    }}>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
         <label style={miniLabel}>{t('clients.alias_code')}
           <input value={code} onChange={e => setCode(e.target.value)} maxLength={60}
-            style={{ ...selS, width: 120, display: 'block', marginTop: 4, fontFamily: MONO }} />
+            style={{ ...camp, width: 120, display: 'block', marginTop: 4, fontFamily: MONO }} />
         </label>
         <label style={miniLabel}>{t('clients.alias_desc_en')}
           <input value={descEn} onChange={e => setDescEn(e.target.value)} maxLength={200}
-            style={{ ...selS, width: 200, display: 'block', marginTop: 4 }} />
+            style={{ ...camp, width: 200, display: 'block', marginTop: 4 }} />
         </label>
         <label style={miniLabel}>{t('clients.alias_desc_local')}
           <input value={descLocal} onChange={e => setDescLocal(e.target.value)} maxLength={200}
-            style={{ ...selS, width: 180, display: 'block', marginTop: 4 }} />
+            style={{ ...camp, width: 180, display: 'block', marginTop: 4 }} />
         </label>
         <label style={miniLabel}>{t('clients.alias_lang')}
           <input value={lang} onChange={e => setLang(e.target.value)} maxLength={2} placeholder="es"
-            style={{ ...selS, width: 56, display: 'block', marginTop: 4, fontFamily: MONO }} />
+            style={{ ...camp, width: 56, display: 'block', marginTop: 4, fontFamily: MONO }} />
         </label>
         <label style={miniLabel}>{t('clients.alias_pom')}
           <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
             <input value={q} onChange={e => setQ(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); search() } }}
-              placeholder={t('clients.alias_search_pom')} style={{ ...selS, width: 200 }} />
+              placeholder={t('clients.alias_search_pom')} style={{ ...camp, width: 200 }} />
             <button onClick={search} type="button" style={miniBtn}><i className="ti ti-search" style={{ fontSize: 13 }} /></button>
           </div>
         </label>
-        <button onClick={create} disabled={saving} style={{ ...primaryBtn, marginLeft: 0 }}>
-          <i className="ti ti-plus" style={{ fontSize: 14 }} />{t('clients.alias_add')}
+        <button type="button" onClick={create} disabled={saving}
+          style={{ ...botoPri, ...(saving ? apagat : null) }}>
+          <i className="ti ti-plus" aria-hidden="true" style={{ fontSize: 14, color: 'currentColor' }} />
+          {t('clients.alias_add')}
         </button>
       </div>
 
@@ -504,13 +619,12 @@ function AliasAddRow({ customer, t, onCreated, onError }) {
         </div>
       )}
       {!pom && results.length > 0 && (
-        <ul style={{ listStyle: 'none', padding: 0, margin: '8px 0 0', maxHeight: 160, overflowY: 'auto', border: '0.5px solid var(--gray-l)', borderRadius: 8, background: 'var(--white)' }}>
+        <ul style={{ ...llistaResultats, margin: '8px 0 0' }}>
           {results.map(r => (
             <li key={r.id}>
-              <button onClick={() => { setPom(r); setResults([]) }} type="button" style={{
-                width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer',
-                padding: '6px 10px', fontSize: 'var(--fs-body)', borderBottom: '0.5px solid var(--border)',
-              }}><span style={{ fontFamily: MONO, fontWeight: 600 }}>{r.codi_client}</span> · {r.nom_client}</button>
+              <button type="button" onClick={() => { setPom(r); setResults([]) }} style={itemResultat}>
+                <span style={{ fontWeight: 600 }}>{r.codi_client}</span> · {r.nom_client}
+              </button>
             </li>
           ))}
         </ul>
@@ -540,85 +654,116 @@ function ComercialTab({ customer, t, navigate }) {
     return () => { alive = false }
   }, [customer.id])
 
-  // Columnes llegibles: número de document (mai la PK), data, total, estat com a badge.
+  // Columnes llegibles: número de document (mai la PK), data, total, estat com a badge. Aquestes
+  // tres llistes SÍ que són d'una línia per fila i entren a la graella canònica sense excepcions:
+  // la dada reina és el NÚMERO (a un document, el número és l'entitat — l'invers d'un client).
   const docCols = (badge) => [
-    { key: 'num', label: t('clients.col_num'),
-      render: r => <span style={{ fontFamily: MONO, fontWeight: 600 }}>{r.document_number || `#${r.id}`}</span> },
-    { key: 'data', label: t('clients.col_data'),
-      render: r => <span style={{ fontFamily: MONO, color: 'var(--text-muted)' }}>{dayOf(r) || '—'}</span> },
-    { key: 'total', label: t('clients.col_total'), align: 'right',
-      render: r => <span style={{ fontFamily: MONO }}>{money(r.total)}</span> },
-    { key: 'estat', label: t('clients.col_estat'), render: badge },
+    { key: 'num', label: t('clients.col_num'), min: 120, max: 160,
+      estil: { fontWeight: 600 }, titol: r => r.document_number || `#${r.id}`,
+      render: r => r.document_number || `#${r.id}` },
+    { key: 'data', label: t('clients.col_data'), min: 90, max: 110,
+      estil: { fontSize: 11, color: 'var(--text-soft)' },
+      render: r => dayOf(r) || '—' },
+    { key: 'total', label: t('clients.col_total'), min: 90, max: 120, align: 'right',
+      render: r => money(r.total) },
+    { key: 'estat', label: t('clients.col_estat'), min: 100, max: 130, render: badge },
   ]
 
-  if (busy) return <Center>{t('clients.loading')}</Center>
+  if (busy) return <EstatBuit>{t('clients.loading')}</EstatBuit>
+
+  const seccio = (titolKey, files, buitKey, badge, ruta) => (
+    <section>
+      <SectionTitle t={t} title={titolKey} count={files.length} />
+      {files.length === 0 ? <EstatBuit>{t(buitKey)}</EstatBuit> : (
+        <TaulaLlista cols={docCols(badge)} files={files} clau={(r) => r.id}
+          onObrir={(r) => navigate(`${ruta}/${r.id}`)} />
+      )}
+    </section>
+  )
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
-      <section>
-        <SectionTitle t={t} title="clients.quotes_title" count={quotes.length} />
-        <Table columns={docCols(r => <StatusBadge status={r.status} t={t} />)}
-          data={quotes} loading={false} empty={t('clients.quotes_empty')}
-          onRowClick={r => navigate(`/comercial/ofertes/${r.id}`)} />
-      </section>
-      <section>
-        <SectionTitle t={t} title="clients.orders_title" count={orders.length} />
-        <Table columns={docCols(r => <OrderStatusBadge status={r.status} t={t} />)}
-          data={orders} loading={false} empty={t('clients.orders_empty')}
-          onRowClick={r => navigate(`/comercial/comandes/${r.id}`)} />
-      </section>
-      <section>
-        <SectionTitle t={t} title="clients.deliverynotes_title" count={deliveryNotes.length} />
-        <Table columns={docCols(r => <DNStatusBadge status={r.status} t={t} />)}
-          data={deliveryNotes} loading={false} empty={t('clients.deliverynotes_empty')}
-          onRowClick={r => navigate(`/comercial/albarans/${r.id}`)} />
-      </section>
+      {seccio('clients.quotes_title', quotes, 'clients.quotes_empty',
+        r => <StatusBadge status={r.status} t={t} />, '/comercial/ofertes')}
+      {seccio('clients.orders_title', orders, 'clients.orders_empty',
+        r => <OrderStatusBadge status={r.status} t={t} />, '/comercial/comandes')}
+      {seccio('clients.deliverynotes_title', deliveryNotes, 'clients.deliverynotes_empty',
+        r => <DNStatusBadge status={r.status} t={t} />, '/comercial/albarans')}
     </div>
   )
 }
 
 // ── helpers de presentació ──────────────────────────────────────────────────────────
+// §3 · targeta = radi 12 (`--r-card`) i filet d'1px `--line`. El 10 no és cap dels tres radis
+// del sistema, i `0.5px` no és cap amplada de la casa. Vores en LONGHAND a posta: una shorthand
+// `border` col·locada després de la seva pròpia longhand la reescriu sencera, i és el defecte
+// que el bloc A va haver de caçar amb el navegador (línies negres de 3px on hi havia d'haver
+// un filet).
 const rowCard = {
   display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10,
-  padding: '10px 14px', border: '0.5px solid var(--gray-l)', borderRadius: 10,
-  background: 'var(--white)', cursor: 'pointer',
+  padding: '10px 14px',
+  borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)',
+  borderRadius: 'var(--r-card)', background: 'var(--panel)', cursor: 'pointer',
 }
-const miniLabel = { fontSize: 'var(--fs-label)', fontFamily: MONO, color: 'var(--text-muted)', textTransform: 'uppercase' }
+const miniLabel = {
+  fontSize: 'var(--fs-label)', fontFamily: MONO, color: 'var(--text-soft)',
+  textTransform: 'uppercase', letterSpacing: '.08em', fontWeight: 600,
+}
 const miniBtn = {
-  background: 'none', border: '0.5px solid var(--gray-l)', borderRadius: 6, cursor: 'pointer',
-  padding: '4px 9px', color: 'var(--text-muted)', fontFamily: MONO, fontSize: 'var(--fs-body)',
+  background: 'var(--panel)', color: 'var(--text-main)', cursor: 'pointer',
+  borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--gold-border)',
+  borderRadius: 'var(--r-ctrl)', padding: '6px 10px',
+  fontFamily: MONO, fontSize: 'var(--fs-body)', lineHeight: '16px',
+}
+// El desplegable de resultats del cercador de POM: mateixa forma que el menú desplegable de la
+// casa (`ChromLlista`) — panell blanc, filet `--line`, radi de control. El 8 de radi que hi
+// havia no és cap dels tres del sistema.
+const llistaResultats = {
+  listStyle: 'none', padding: 0, margin: '4px 0 0', maxHeight: 160, overflowY: 'auto',
+  borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)',
+  borderRadius: 'var(--r-ctrl)', background: 'var(--panel)',
+}
+const itemResultat = {
+  width: '100%', textAlign: 'left', background: 'none', cursor: 'pointer',
+  padding: '6px 10px', fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-main)',
+  borderWidth: 0, borderBottomWidth: 1, borderStyle: 'solid', borderColor: 'var(--line-soft)',
 }
 
-// Capçalera de secció a l'estil de la casa (Grading Rules): títol + comptador gris al costat.
+// §2 · h2 de secció a 18/24. El comptador al costat, en caption i tinta suau — «KPI/recomptes
+// NEUTRES» (§8c). El pes 300 dels subtítols se'n va: no és cap dels pesos del sistema.
 function SectionTitle({ t, title, subtitle, count, meta }) {
   const metaText = meta != null ? meta : (count != null ? String(count) : null)
   return (
     <div style={{ marginBottom: 10 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
-        <h2 style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, fontFamily: MONO, margin: 0 }}>{t(title)}</h2>
-        {metaText && <span style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300 }}>{metaText}</span>}
+        <h2 style={{ fontSize: 'var(--fs-h2)', lineHeight: '24px', fontWeight: 500,
+          fontFamily: MONO, color: 'var(--text-main)', margin: 0 }}>{t(title)}</h2>
+        {metaText && <span style={{ fontSize: 'var(--fs-caption)', fontFamily: MONO,
+          color: 'var(--text-soft)' }}>{metaText}</span>}
       </div>
-      {subtitle && <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', margin: '2px 0 0', fontWeight: 300 }}>{t(subtitle)}</p>}
+      {subtitle && <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)',
+        margin: '2px 0 0', fontFamily: MONO }}>{t(subtitle)}</p>}
     </div>
   )
 }
 
-// Secció buida amb context: explica què és i on es crea, amb enllaços a la pàgina d'origen.
+// §8c · ESTAT BUIT AMB CONTEXT: explica què és la secció i on es crea, amb portes a la pàgina
+// d'origen. La caixa DISCONTÍNUA sobre `--bg-card` se'n va —el filet trencat és la forma d'un
+// avís, i això no n'és cap: és una secció que encara no té contingut— i passa a la caixa de la
+// casa amb la frase en `--text-faint` cursiva. Els enllaços són PORTES (§5.3), no botons grisos.
 function EmptyContext({ t, help, actions = [], navigate }) {
   return (
     <div style={{
-      border: '1px dashed var(--border)', borderRadius: 10, padding: '1.25rem',
-      background: 'var(--bg-card)',
+      borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)',
+      borderRadius: 'var(--r-card)', padding: '24px 16px', background: 'var(--panel)',
+      textAlign: 'center', marginBottom: 16,
     }}>
-      <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', margin: '0 0 10px' }}>{t(help)}</p>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      <p style={{ ...buit, margin: '0 0 12px' }}>{t(help)}</p>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
         {actions.map(([labelKey, to]) => (
-          <button key={to} onClick={() => navigate(to)} style={{
-            background: 'var(--white)', border: '0.5px solid var(--border)', borderRadius: 6,
-            padding: '5px 11px', cursor: 'pointer', fontFamily: MONO, fontSize: 'var(--fs-body)',
-            color: 'var(--text-muted)',
-          }}>
-            <i className="ti ti-external-link" style={{ fontSize: 13, marginRight: 5 }} />{t(labelKey)}
+          <button key={to} type="button" onClick={() => navigate(to)} style={miniBtn}>
+            <i className="ti ti-external-link" aria-hidden="true"
+              style={{ fontSize: 14, marginRight: 6, color: 'currentColor' }} />{t(labelKey)}
           </button>
         ))}
       </div>
@@ -657,13 +802,18 @@ function ConnexioTenant({ customer, canEdit, t, onSaved, onError }) {
       .finally(() => setBusy(false))
   }
 
+  // 🛑 BLOQUEJAT-PER-S1 · `vincle_estat` és `tenants.TenantLink.ESTAT_CHOICES`
+  // (`fhort/tenants/models.py:345` — ACTIU · ATURAT · REVOCAT) i cap endpoint la publica. Aquí
+  // NO es declara la llista: només es distingeix l'estat sa de la resta, que és l'única
+  // pregunta que aquesta secció respon («¿em segueixen arribant encàrrecs?»). El dia que
+  // l'enumeració es publiqui, el codi i la seva etiqueta vindran d'allà.
   const estat = customer.vincle_estat
-  const estatStyle = estat === 'ACTIU'
-    ? { background: 'var(--ok-bg)', color: 'var(--ok)' }
-    : { background: 'var(--warn-bg)', color: 'var(--warn)' }
 
   return (
-    <div style={{ marginTop: 28, paddingTop: 20, borderTop: '0.5px solid var(--gray-l)' }}>
+    <div style={{
+      marginTop: 28, paddingTop: 20,
+      borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: 'var(--line)',
+    }}>
       <SectionTitle t={t} title="clients.vincle_section" subtitle="clients.vincle_section_help" />
       {connectat ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -671,17 +821,15 @@ function ConnexioTenant({ customer, canEdit, t, onSaved, onError }) {
             <i className="ti ti-plug-connected" style={{ marginRight: 6, color: 'var(--gold)' }} aria-hidden="true" />
             {t('clients.vincle_connectat', { codi: customer.codi_global })}
           </span>
-          <span style={{ fontSize: 'var(--fs-label)', fontWeight: 600, padding: '2px 8px',
-            borderRadius: 999, fontFamily: MONO, ...estatStyle }}>
-            {/* Un pont ATURAT es veu igual de clar que un d'ACTIU: el Studio ha de saber per què
-                han deixat d'arribar-li encàrrecs sense haver-ho d'endevinar. */}
+          {/* Un pont ATURAT es veu igual de clar que un d'ACTIU: el Studio ha de saber per què
+              han deixat d'arribar-li encàrrecs sense haver-ho d'endevinar. §1 · badge de la
+              casa: fons suau + tinta + VORA FINA del mateix color. */}
+          <Badge variant={estat === 'ACTIU' ? 'ok' : 'warn'}>
             {t(`recursos.estat_${estat}`, estat || '—')}
-          </span>
+          </Badge>
           {canEdit && (
-            <button onClick={desvincula} disabled={busy}
-              style={{ background: 'none', border: '0.5px solid var(--err)', color: 'var(--err)',
-                borderRadius: 6, padding: '4px 10px', fontFamily: MONO,
-                fontSize: 'var(--fs-body)', cursor: busy ? 'not-allowed' : 'pointer' }}>
+            <button type="button" onClick={desvincula} disabled={busy}
+              style={{ ...botoDestructiu, ...(busy ? apagat : null) }}>
               {t('clients.vincle_treure')}
             </button>
           )}
@@ -690,17 +838,18 @@ function ConnexioTenant({ customer, canEdit, t, onSaved, onError }) {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <input value={token} onChange={e => setToken(e.target.value)}
             placeholder={t('clients.vincle_ph')} disabled={busy}
-            style={{ ...selS, flex: 1, minWidth: 260, fontFamily: MONO }} />
-          <button onClick={vincula} disabled={busy || !token.trim()}
-            style={{ ...primaryBtn, marginLeft: 0,
-              opacity: (busy || !token.trim()) ? 0.5 : 1,
-              cursor: (busy || !token.trim()) ? 'not-allowed' : 'pointer' }}>
-            <i className="ti ti-plug" style={{ fontSize: 14 }} aria-hidden="true" />
+            style={{ ...camp, flex: 1, minWidth: 260, fontFamily: MONO }} />
+          {/* §5.7 · deshabilitat: BAIXA EL FONS, no la tinta. L'`opacity` que hi havia apagava
+              també el text i el deixava per sota d'AA — i un botó que no es pot prémer ha de
+              seguir sent llegible, perquè el que diu és justament el que ara no es pot fer. */}
+          <button type="button" onClick={vincula} disabled={busy || !token.trim()}
+            style={{ ...botoPri, ...((busy || !token.trim()) ? apagat : null) }}>
+            <i className="ti ti-plug" style={{ fontSize: 14, color: 'currentColor' }} aria-hidden="true" />
             {t('clients.vincle_connectar')}
           </button>
         </div>
       ) : (
-        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>
           {t('clients.vincle_no_connectat')}
         </div>
       )}

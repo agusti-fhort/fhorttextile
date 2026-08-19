@@ -17,6 +17,122 @@ from fhort.pom.grading_utils import normalitza_cm
 from fhort.models_app.extraction_utils import registra_us_ia
 
 
+# ═══════════════════════════════════════════════════════════════════════════════════════
+# SET-2/T8 · LA PEÇA DE DESTÍ D'UN IMPORT — EL PUNT ÚNIC DEL PIPELINE
+#
+# Decisió Agus (Patró C): **un import = una prenda**, i s'inicia DES DE LA PEÇA. El garment
+# es dedueix del context i no es pregunta mai; viu a `ImportSession.garment` des de la
+# iniciació i totes les vistes del pipeline el llegeixen d'AQUÍ, mai del cos de la petició.
+#
+# ⚠️ I EL SEU VALOR EFECTIU NO ES RE-DERIVA ENLLOC. Run, talla base, sistema i joc de regles
+# d'una peça són `garment.X or model.X` amb `is None` per predicat, i això viu en UN sol
+# mòdul (`services_garment.valor_efectiu`) des de T2-bis. Aquestes dues funcions són la
+# porta d'aquest fitxer cap allà: qui necessiti l'eix o el valor efectiu d'un import passa
+# per aquí i no escriu cap `or` propi.
+# ═══════════════════════════════════════════════════════════════════════════════════════
+
+def _peca_de(session):
+    """La prenda de destí d'una sessió d'import: `ModelGarment` o `None` (= la MARE).
+
+    `None` no és un error tolerat: la mare ÉS el model i no té fila (D3). Una sessió amb un
+    codi que ja no existeix (peça esborrada enmig d'un import) també torna `None` i escriu a
+    la mare —que és el comportament d'abans d'aquest tram— en comptes de petar a mig camí.
+    """
+    from fhort.models_app.models import ModelGarment
+    codi = (getattr(session, 'garment', '') or '').strip()
+    if not codi or not session.model_id:
+        return None
+    return ModelGarment.objects.filter(model_id=session.model_id, codi=codi).first()
+
+
+def _efectiu(session, camp):
+    """El valor EFECTIU d'un camp heretable per a la peça de destí de la sessió."""
+    from fhort.models_app.services_garment import valor_efectiu
+    return valor_efectiu(session.model, _peca_de(session), camp)
+
+
+def _efectiu_de_peca(session, codi, camp):
+    """El valor EFECTIU d'un camp heretable per a UNA peça qualsevol d'aquest import.
+
+    SET-2/T8-ter — `_efectiu` pregunta per la peça de LA SESSIÓ, i amb el garment a la fila la
+    sessió ja no té una sola peça de destí. Aquest germà pren el codi com a argument.
+
+    No duplica cap regla d'herència: totes dues passen per `valor_efectiu`, que segueix sent el
+    punt únic (la llei de T2-bis és que `garment.X or model.X` viu en UN sol lloc).
+    """
+    from fhort.models_app.models import ModelGarment
+    from fhort.models_app.services_garment import valor_efectiu
+    codi = (codi or '').strip()
+    peca = (ModelGarment.objects.filter(model_id=session.model_id, codi=codi).first()
+            if (codi and session.model_id) else None)
+    return valor_efectiu(session.model, peca, camp)
+
+
+def _peces_amb_metrica_propia(session, codis):
+    """Les peces de `codis` que declaren run o talla base PRÒPIS (override no NULL).
+
+    ── SET-2/T8-ter · PER QUÈ EL PAS 1 ES RESOL CONTRA LA MARE (decisió Agus, §3) ──────────
+    El pas 1 aparella les columnes del DOCUMENT amb les talles del model, i el document és UN:
+    porta un sol joc de columnes per a totes les peces que hi surten. Un aparellament per peça
+    voldria dir un pas 1 per peça, que és un wizard diferent i no el que aquest tram construeix.
+
+    La referència neutra, doncs, és LA MARE — el model mateix (D3), que és de qui les peces
+    hereten mentre no diguin el contrari. I com que NULL vol dir «hereta», el cas normal és que
+    totes les peces hi coincideixin: el 100% del corpus d'avui (la `02 Short` del 1323 té
+    `base_size_label=None`).
+
+    El cas rar és que una peça declari metrica pròpia. Llavors el pas 1 NO pot parlar per ella i
+    **s'ha de DIR** en comptes de decidir en silenci: aparellar contra la mare i escriure a una
+    peça amb un altre run seria fabricar un aparellament que ningú ha validat. Es torna la
+    llista perquè el wizard l'avisi; no barra, perquè qui sap si el document parla d'aquella
+    peça és la persona que reparteix les files.
+    """
+    from fhort.models_app.models import ModelGarment
+    if not session.model_id:
+        return []
+    codis_reals = [c for c in {(c or '').strip() for c in (codis or [])} if c]
+    if not codis_reals:
+        return []
+    fora = []
+    for peca in ModelGarment.objects.filter(model_id=session.model_id, codi__in=codis_reals):
+        propis = [camp for camp in ('size_run_model', 'base_size_label', 'size_system')
+                  if getattr(peca, camp if camp != 'size_system' else 'size_system_id') is not None]
+        if propis:
+            fora.append({'garment': peca.codi, 'garment_nom': peca.nom or peca.codi,
+                         'camps': propis})
+    return fora
+
+
+def _nom_de_peca(model, codi):
+    """Com s'anomena la peça `codi` d'aquest model, per DIR-LA a l'usuari.
+
+    SET-2/T8-ter — germà de `_nom_de_la_peca`, que pregunta per la peça de la SESSIÓ. Amb el
+    garment a la fila cal poder anomenar-ne una qualsevol: una llista de poda que barreja files
+    de dues peces ha de dir de quina és cadascuna, i `_nom_de_la_peca` no ho sap fer perquè
+    només coneix la de la sessió.
+    """
+    from fhort.models_app.models import ModelGarment
+    codi = (codi or '').strip()
+    if not codi:
+        return (getattr(model, 'nom_prenda', '') or getattr(model, 'codi_intern', '') or '') if model else ''
+    peca = ModelGarment.objects.filter(model=model, codi=codi).first() if model else None
+    return (peca.nom or peca.codi) if peca is not None else codi
+
+
+def _nom_de_la_peca(session):
+    """Com s'anomena la prenda de destí, per DIR-LA a l'usuari.
+
+    L'avís del multi-prenda ha de dir el NOM («s'importarà tot a Llaçada»), no una
+    genèrica: un avís que no diu on va la feina obliga a anar-ho a comprovar. Si ningú ha
+    batejat la peça encara, el codi és el millor nom que en tenim i és millor que el silenci.
+    """
+    peca = _peca_de(session)
+    if peca is not None:
+        return peca.nom or peca.codi
+    model = session.model
+    return (getattr(model, 'nom_prenda', '') or getattr(model, 'codi_intern', '') or '') if model else ''
+
+
 def normalize_size_run(raw):
     """Convert any size_run format to 'XXS·XS·S·M·L·XL'."""
     if not raw:
@@ -564,7 +680,7 @@ def _cribratge_content_block(file_bytes: bytes, filename: str, content_type: str
     }
 
 
-def _cribratge_determinista(file_name, file_bytes, model):
+def _cribratge_determinista(file_name, file_bytes, base_hint, run_model):
     """Cribratge SENSE IA per a un .xlsx que el parser determinista entén — o `None`.
 
     Decisió Agus 2026-07-22: «IA només quan el determinista no pot; un xlsx parsejable no ha
@@ -587,11 +703,14 @@ def _cribratge_determinista(file_name, file_bytes, model):
     """
     if not (file_name or '').lower().endswith(('.xlsx', '.xls')):
         return None
-    run_hint = [s.strip() for s in (model.size_run_model or '').replace(';', '·').split('·')
+    # SET-2/T8 — les pistes són les de la PEÇA DE DESTÍ (valors efectius), no les de la mare:
+    # una peça amb run propi ha de fer llegir el document amb el SEU run, o el parser ancora
+    # les columnes contra una escala que aquella prenda no fa servir.
+    run_hint = [s.strip() for s in (run_model or '').replace(';', '·').split('·')
                 if s.strip()]
     try:
         poms, talles, meta = _parse_excel_poms(
-            file_bytes, base_hint=model.base_size_label, run_hint=run_hint)
+            file_bytes, base_hint=base_hint, run_hint=run_hint)
     except Exception:
         _logging.getLogger(__name__).exception(
             'Cribratge: el parser determinista ha petat; es cau a la IA')
@@ -618,18 +737,21 @@ def _cribratge_determinista(file_name, file_bytes, model):
 def import_session_cribratge_view(request):
     """
     POST /api/v1/import-sessions/cribratge/
-    multipart: document (fitxer), model_id, garment_type_item_code
+    multipart: document (fitxer), model_id, garment_type_item_code, garment
 
     Crida 1 — cribratge barat (visió, Opus, tokens baixos, sense thinking): detecta nº de
     models al document, tipologia, gènere i el run de talles. SEMPRE retorna resultats; el
     gating (bloqueig de talles, confirmació multi-model) és el pas F2.3.
+
+    SET-2/T8 — `garment` és el CONTEXT de la peça des d'on s'ha obert l'import ('' = mare).
+    És l'ÚNICA porta on entra: a partir d'aquí el pipeline el llegeix de la sessió.
     """
     import anthropic
     from django.conf import settings
     from django.core.files.base import ContentFile
 
     from fhort.accounts.models import UserProfile
-    from fhort.models_app.models import ImportSession, Model
+    from fhort.models_app.models import ImportSession, Model, ModelGarment
     from fhort.models_app.extraction_utils import safe_json_parse
     from fhort.tasks.models import GarmentTypeItem
 
@@ -654,6 +776,15 @@ def import_session_cribratge_view(request):
         else:
             item = GarmentTypeItem.objects.filter(code=item_code).first()
 
+    # ── SET-2/T8 · L'EIX DE LA PEÇA. Ve del CONTEXT (el contenidor des d'on s'ha premut
+    # «Importar taula»), mai d'una pregunta del wizard. Un codi que no és cap peça d'aquest
+    # model és un 400 i no un silenci: escriure a la mare quan el client ha dit '02' seria
+    # exactament el dany que aquest tram tanca.
+    garment = (request.data.get('garment') or '').strip()
+    if garment and not ModelGarment.objects.filter(model=model, codi=garment).exists():
+        return Response({'error': f"El model {model.id} no té cap prenda «{garment}»."},
+                        status=400)
+
     profile = UserProfile.objects.filter(user=request.user).first()
 
     api_key = getattr(settings, 'ANTHROPIC_API_KEY', '')
@@ -663,6 +794,7 @@ def import_session_cribratge_view(request):
     # Crea la sessió i desa el document origen.
     session = ImportSession.objects.create(
         estat='CRIBRATGE', creat_per=profile, model=model, tipologia_confirmada=item,
+        garment=garment,
     )
     file_bytes = file_obj.read()
     session.document.save(file_obj.name, ContentFile(file_bytes), save=True)
@@ -685,7 +817,9 @@ def import_session_cribratge_view(request):
     # ningú al wizard: només consumeix `run_talles_document` i `num_models`. Per això
     # saltar la crida no li treu res. PDF, imatge i xlsx on el parser abdica segueixen
     # passant per Opus exactament com abans.
-    resultat = _cribratge_determinista(file_obj.name, file_bytes, model)
+    resultat = _cribratge_determinista(
+        file_obj.name, file_bytes,
+        _efectiu(session, 'base_size_label'), _efectiu(session, 'size_run_model'))
     cribratge_ia = resultat is None
     if not cribratge_ia:
         _logging.getLogger(__name__).info(
@@ -734,9 +868,20 @@ def import_session_cribratge_view(request):
     run_document = resultat.get('run_talles_document') or []
     sistema = resultat.get('sistema_talles') or 'unknown'
 
+    # El run CONFIGURAT és el de la PEÇA DE DESTÍ (efectiu), no el de la mare: és el que la
+    # pantalla de talles compara contra el document i el que el confirm acabarà escrivint.
     run_configurat = [
-        s.strip() for s in (model.size_run_model or '').replace(';', '·').split('·') if s.strip()
+        s.strip() for s in (_efectiu(session, 'size_run_model') or '').replace(';', '·').split('·')
+        if s.strip()
     ]
+
+    # ── SET-2/T8 · MÉS D'UN PATRÓ AL DOCUMENT = AVÍS, MAI BARRERA ────────────────────
+    # Amb «un import = una prenda», que el document en porti dues deixa de ser una condició
+    # d'error: la peça de destí ja està decidida pel context i tot el que s'importi hi anirà.
+    # El cribratge, doncs, EMET LA SENYAL i no barra; el gest de barrar-lo era el
+    # `num_models == 1` de `pot_continuar`, que se'n va d'aquell predicat i es queda com a
+    # dada. La senyal es PERSISTEIX (el confirm la torna al front, que és on es pinta).
+    mes_duna_prenda = num_models > 1
 
     # Desa a la sessió (no fa gating; només cribratge).
     session.model_detectat = models_detectats
@@ -747,7 +892,8 @@ def import_session_cribratge_view(request):
         'estat': 'PENDENT',
     }
     # Persisteix el cribratge cru per a F2.3 (gènere/tipologia) sense tocar `resultat` definitiu.
-    session.resultat = {**(session.resultat or {}), 'cribratge': resultat}
+    session.resultat = {**(session.resultat or {}), 'cribratge': resultat,
+                        'mes_duna_prenda': mes_duna_prenda}
     session.estat = 'CRIBRATGE'
     session.save()
 
@@ -755,7 +901,7 @@ def import_session_cribratge_view(request):
     # Pel camí determinista no hi ha tipologia ni gènere per validar (ningú no els demanava
     # al parser): el que fa continuable el document és que s'hagi entès UNA taula de mesures.
     pot_continuar = (not cribratge_ia) or bool(
-        num_models == 1 and tipologia and tipologia != 'unknown' and plausible_genere)
+        tipologia and tipologia != 'unknown' and plausible_genere)
 
     return Response({
         'token': str(session.token),
@@ -768,6 +914,11 @@ def import_session_cribratge_view(request):
         'sistema_talles': sistema,
         'run_configurat': run_configurat,
         'pot_continuar': pot_continuar,
+        # SET-2/T8 — la peça de destí, com a FET (el wizard la MOSTRA, no la pregunta) i la
+        # senyal del document multi-prenda, que és avís i no barrera.
+        'garment': session.garment,
+        'garment_nom': _nom_de_la_peca(session),
+        'mes_duna_prenda': mes_duna_prenda,
         # Traça del routing: qui ha resolt aquest cribratge. Visible a la resposta perquè
         # «quantes crides d'IA ha fet aquest import?» tingui resposta sense mirar logs.
         'cribratge_origen': ('ia' if cribratge_ia else 'parser_determinista'),
@@ -794,8 +945,13 @@ def import_session_talles_view(request, token):
     sessió: es desa a run_conciliat.talla_mapping i el confirm el consumeix en exclusiva (la clau
     `mapeig` antiga es retira). Validació: aparellament UNÍVOC (1↔1), model del system, sense dups.
     `alinear` RETIRAT: el run del model parla SEMPRE en etiquetes tenant.
+
+    SET-2/T8 — TOT el que aquesta vista llegeix i escriu és de la PEÇA DE DESTÍ: el sistema
+    de talles i la base són els EFECTIUS, i el canvi de talla base (B5) aterra a l'override
+    de la prenda, no al model. Sense això, obrir el pas 1 d'un import a la 02 i triar-hi una
+    base canviava la base de la MARE — el dany d'aquest tram, fet des del pas 1.
     """
-    from fhort.models_app.models import ImportSession
+    from fhort.models_app.models import ImportSession, ModelGarment
 
     session = ImportSession.objects.filter(token=token).select_related(
         'model', 'model__size_system',
@@ -806,6 +962,12 @@ def import_session_talles_view(request, token):
     if not model:
         return Response({'error': 'La sessió no té model associat'}, status=400)
 
+    # La peça de destí i qui ESCRIU els seus camps heretables: la prenda si n'hi ha, el
+    # model si som a la mare (que és el model mateix, D3).
+    peca = _peca_de(session)
+    destinatari = peca if peca is not None else model
+    size_system = _efectiu(session, 'size_system')
+
     talles_sel = [str(t).strip() for t in (request.data.get('talles_seleccionades') or []) if str(t).strip()]
     mapping_in = request.data.get('talla_mapping')   # [{document, model}] editat per l'humà (opcional)
     base_in = request.data.get('base_size_label')    # B5: canvi de talla base (etiqueta model)
@@ -815,15 +977,17 @@ def import_session_talles_view(request, token):
     # /extraccio/ — aquesta vista només desa la tria.
     full_in = request.data.get('full_seleccionat')
 
-    # Run configurat actual del model (etiquetes tenant; només informatiu).
+    # Run configurat actual de la PEÇA (etiquetes tenant; només informatiu).
     configurat = [
-        s.strip() for s in (model.size_run_model or '').replace(';', '·').split('·') if s.strip()
+        s.strip() for s in (_efectiu(session, 'size_run_model') or '').replace(';', '·').split('·')
+        if s.strip()
     ]
 
-    # Etiquetes REALS del model (SizeDefinition del system, ordenades) — LA veritat del panell dret.
+    # Etiquetes REALS de la peça (SizeDefinition del seu system, ordenades) — LA veritat del
+    # panell dret.
     system_labels = []
-    if model.size_system_id:
-        system_labels = list(model.size_system.talles.order_by('ordre').values_list('etiqueta', flat=True))
+    if size_system is not None:
+        system_labels = list(size_system.talles.order_by('ordre').values_list('etiqueta', flat=True))
     canon_to_tenant = {}
     for _e in system_labels:
         canon_to_tenant.setdefault(canonical_size_label(_e), _e)
@@ -865,15 +1029,16 @@ def import_session_talles_view(request, token):
     else:
         talla_mapping, no_aparellades = _propose(talles_sel)
 
-    # ── B5 · TALLA BASE. Canvi opcional (limitat a les SizeDefinition del system) → escriu al model.
+    # ── B5 · TALLA BASE. Canvi opcional (limitat a les SizeDefinition del system) → escriu a
+    # la PEÇA DE DESTÍ: a la seva fila d'override si és una prenda, al model si és la mare.
     if base_in is not None:
         base_in = str(base_in).strip()
-        if base_in and base_in in set(system_labels) and base_in != (model.base_size_label or ''):
-            model.base_size_label = base_in
-            model.save(update_fields=['base_size_label'])
+        if base_in and base_in in set(system_labels) and base_in != (_efectiu(session, 'base_size_label') or ''):
+            destinatari.base_size_label = base_in
+            destinatari.save(update_fields=['base_size_label'])
         elif base_in and base_in not in set(system_labels):
             errors.append(f"La talla base «{base_in}» no és del sistema de talles del model.")
-    base_label = (model.base_size_label or '').strip()
+    base_label = (_efectiu(session, 'base_size_label') or '').strip()
 
     # Guard BLOQUEJANT: la talla base ha de tenir una columna del document aparellada (si no, l'import
     # no pot escriure el valor base → seria el 422 del confirm). Es bloqueja ja al pas 1.
@@ -898,8 +1063,9 @@ def import_session_talles_view(request, token):
     conv = _conventional_base()
     if base_label and conv and base_label != conv:
         base_avisos.append(f"La talla base «{base_label}» divergeix de la convenció del segment (esperada «{conv}»).")
-    if base_label and model.grading_rule_set_id:
-        anchor = (model.grading_rule_set.regles.values_list('talla_base__etiqueta', flat=True).first())
+    _joc = _efectiu(session, 'grading_rule_set')
+    if base_label and _joc is not None:
+        anchor = (_joc.regles.values_list('talla_base__etiqueta', flat=True).first())
         if anchor and anchor != base_label:
             base_avisos.append(f"La talla base «{base_label}» divergeix de l'àncora del ruleset «{anchor}».")
 
@@ -927,14 +1093,14 @@ def import_session_talles_view(request, token):
     size_map_prefill = None
     if not ready and no_aparellades:
         target_codi = model.target or ''
-        if not target_codi and model.size_system_id:
-            _ss_target = model.size_system.targets.first()
+        if not target_codi and size_system is not None:
+            _ss_target = size_system.targets.first()
             if _ss_target:
                 target_codi = _ss_target.codi
         size_map_prefill = {
             'target_codi': target_codi or None,
             'labels': no_aparellades,
-            'base_size': model.base_size_label or None,
+            'base_size': base_label or None,
             'import_session_token': str(session.token),
             'model_id': model.id,
         }
@@ -950,7 +1116,7 @@ def import_session_talles_view(request, token):
         'base_paired': base_paired,
         'base_avisos': base_avisos,           # B5: divergències no bloquejants de la talla base.
         'conventional_base': conv,
-        'size_run_model': model.size_run_model,
+        'size_run_model': _efectiu(session, 'size_run_model'),
         'errors': errors,
         'size_map_prefill': size_map_prefill,
     }, status=200)
@@ -1171,18 +1337,40 @@ def _apply_many_to_one_guard(rows):
     Un àlies dolent és un problema del catàleg i es resol al catàleg; el que aquesta porta
     ha de garantir és que **no acabi sent una pèrdua de dades silenciosa**.
 
+    ── SET-2/T8-ter (16/08) · LA PREMISSA D'AQUEST GUARD HA CADUCAT DUES VEGADES ──────────
+    La frase de dalt —«`BaseMeasurement` és únic per `(model, pom)`»— era certa el dia que es va
+    escriure i ja no ho és: la clau porta `capa` i `instancia` des de C1/T3 i `garment` des de
+    T2. El guard, però, seguia comptant per `pom_master_id` PELAT, i per això desvinculava files
+    que **no col·lideixen**.
+
+    És exactament el que va passar amb la Brumà el 16/08: «G1 · Bottom height» (faldilla) i
+    «M1 · Bottom hem height» (short) resolen al mateix POM 962 i el guard va desvincular-les
+    totes dues. La persona va haver de resoldre-les a mà —dos 409 al rastre de la sessió 113— i
+    la sortida que va trobar va ser inventar-li una instància al short. El guard fabricava la
+    feina que després obligava a fabricar la dada.
+
+    Ara compta per **`(pom, peça proposada)`**, que és el gra que la clau realment té a
+    l'abast en aquest moment del pipeline. Els altres dos eixos NO hi entren i és a posta:
+    capa i instància encara no les ha dit ningú quan aquest guard corre (les decideix la persona
+    al pas 2), o sigui que comptar-hi seria donar per bo un buit que ningú ha confirmat. La peça
+    sí que hi és, perquè la porta el DOCUMENT (`seccio` → `_proposta_de_peca`, F2).
+
+    Dues files del mateix POM dins de la MATEIXA peça segueixen desvinculant-se, que és el
+    vermell original i ha de seguir sent-ho.
+
     Muta `rows` in situ.
     """
     counts = {}
     for r in rows:
         if r.get('pom_master_id'):
-            counts[r['pom_master_id']] = counts.get(r['pom_master_id'], 0) + 1
-    dup_ids = {pid for pid, n in counts.items() if n >= 2}
+            clau = (r['pom_master_id'], r.get('garment_proposat') or '')
+            counts[clau] = counts.get(clau, 0) + 1
+    dup_ids = {clau for clau, n in counts.items() if n >= 2}
     if not dup_ids:
         return rows
 
     for r in rows:
-        if r.get('pom_master_id') in dup_ids:
+        if (r.get('pom_master_id'), r.get('garment_proposat') or '') in dup_ids:
             # El suggeriment queda VISIBLE: la persona ha de poder veure a què s'assemblava.
             r['weak_suggestion'] = r.get('pom_nom')
             r['weak_suggestion_codi'] = r.get('pom_codi')
@@ -1194,7 +1382,7 @@ def _apply_many_to_one_guard(rows):
     return rows
 
 
-def _match_rows(files, customer):
+def _match_rows(files, customer, model=None):
     """Files llegides del document → `poms_extrets`, amb les portes aplicades.
 
     **Font ÚNICA de matching per als DOS camins d'extracció** (parser ràpid d'Excel i visió
@@ -1210,6 +1398,12 @@ def _match_rows(files, customer):
     `seccio` (F4) travessa TAL QUAL: aquesta funció aparella POMs, no interpreta el document.
     Els dos camins d'extracció l'omplen (el parser llegint la fila de secció, la IA amb el camp
     `section` de l'esquema) i el que arriba aquí ja és el text final.
+
+    SET-2/T8-ter — `model` hi entra perquè la PROPOSTA de peça (F2) s'ha de resoldre AQUÍ DINS,
+    entre l'aparellament i el guard de many-to-one: el guard compta per `(pom, peça proposada)` i
+    sense la proposta ja feta comptaria per POM pelat i desvincularia files que no col·lideixen.
+    L'ordre dels tres passos és, doncs, part del contracte i no una casualitat. `model=None`
+    (cap cridador de producte) degrada a la proposta buida: totes les files a la mare.
     """
     rows = []
     n_nomatch = n_low = 0
@@ -1247,10 +1441,13 @@ def _match_rows(files, customer):
             'many_to_one': False,
         })
 
+    # L'ORDRE MANA: proposta (F2) → guard (F4). Vegeu el docstring.
+    proposta = _proposta_de_peca(model, rows)
     _apply_many_to_one_guard(rows)
     n_many = sum(1 for r in rows if r.get('many_to_one'))
 
-    return rows, {'n_nomatch': n_nomatch, 'n_low': n_low, 'n_many_to_one': n_many}
+    return rows, {'n_nomatch': n_nomatch, 'n_low': n_low, 'n_many_to_one': n_many,
+                  'proposta': proposta}
 
 
 def _avisos_de_matching(stats):
@@ -1378,11 +1575,13 @@ def _extraccio_via_excel(session, api_key):
     # 2. Parse determinista. Les pistes del model (talla base i run) ajuden a reconèixer les
     # columnes de talla quan el document no declara `SAMPLE SIZE`; si el document sí que ho
     # diu, mana el document.
+    # SET-2/T8 — les pistes són les EFECTIVES de la peça de destí, com al cribratge: llegir el
+    # document amb l'escala de la mare quan la prenda en té una de pròpia és ancorar-lo malament.
     model = session.model
     raw_poms, talles_detectades, meta = _parse_excel_poms(
         file_bytes,
-        base_hint=(model.base_size_label if model else None),
-        run_hint=[s.strip() for s in ((model.size_run_model if model else '') or '')
+        base_hint=(_efectiu(session, 'base_size_label') if model else None),
+        run_hint=[s.strip() for s in ((_efectiu(session, 'size_run_model') if model else '') or '')
                   .replace(';', '·').split('·') if s.strip()],
         # F5 · el full que el tècnic ha triat al pas 1. Viu a `run_conciliat` (JSONField que ja
         # és la casa de l'estat de W1) i NO en un camp nou: no cal migració per a un punter.
@@ -1439,7 +1638,7 @@ def _extraccio_via_excel(session, api_key):
     # matching és literalment el mateix codi.
     # N3: customer del model per resoldre els àlies de nomenclatura del client.
     import_customer = session.model.customer if session.model_id else None
-    poms_extrets, stats = _match_rows(raw_poms, import_customer)
+    poms_extrets, stats = _match_rows(raw_poms, import_customer, session.model)
 
     avisos_extraccio = list(revision.get('warnings', []))
     avisos_extraccio += _avisos_de_matching(stats)
@@ -1471,8 +1670,12 @@ def _extraccio_via_excel(session, api_key):
 
     # 10. Persisteix. NOTA: `session.poms_extrets` és la font de veritat per als passos
     # W2-confirmació (:1216) i W3-mesures (:1415); cal desar-la (paritat amb la via Opus).
+    # SET-2/T8-ter — la proposta ja l'ha resolta `_match_rows` (ha de córrer ABANS del guard
+    # de many-to-one, que hi compta); aquí només se'n desa la traça.
+    _proposta = stats.get('proposta') or {}
     session.resultat = {**(session.resultat or {}),
                         'extraccio': extraccio,
+                        'proposta_peces': _proposta,
                         'grading_status': 'ok'}
     session.poms_extrets = poms_extrets
     session.avisos = list(session.avisos or []) + avisos_extraccio
@@ -1501,6 +1704,9 @@ def _extraccio_via_excel(session, api_key):
         'grading_status': {'status': 'ok', 'detail': ''},
         'avisos': avisos_extraccio,
         'suggested_valors_mode': suggested_valors_mode,
+        # SET-2/T8-ter — la proposta secció→peça i, sobretot, les seccions que NO tenen
+        # peça: una absència que el pas 2 ha de poder DIR (crear la peça és un gest humà).
+        'proposta_peces': _proposta,
         'fulls': fulls,                    # F5 · informe del llibre
         'full': meta.get('full'),          # F5 · quin s'ha llegit
     }, status=200), meta
@@ -1650,10 +1856,14 @@ def import_session_extraccio_view(request, token):
             for msr in measurements
         ],
         import_customer,
+        session.model,
     )
     avisos += _avisos_de_matching(stats)
 
+    # SET-2/T8-ter — la proposta ja l'ha resolta `_match_rows` (un sol punt per als dos camins).
+    _proposta = stats.get('proposta') or {}
     session.resultat = {**(session.resultat or {}), 'extraccio': extracted,
+                        'proposta_peces': _proposta,
                         'grading_status': grading_status}
     session.poms_extrets = poms_extrets
     session.avisos = avisos
@@ -1684,6 +1894,9 @@ def import_session_extraccio_view(request, token):
         'grading_status': grading_status,
         'avisos': avisos,
         'suggested_valors_mode': suggested_valors_mode,
+        # SET-2/T8-ter — la proposta secció→peça i, sobretot, les seccions que NO tenen
+        # peça: una absència que el pas 2 ha de poder DIR (crear la peça és un gest humà).
+        'proposta_peces': _proposta,
         # F5 · l'informe de fulls surt del parser determinista, que sap comptar les pestanyes
         # encara que abdiqui de llegir-les. Buit per a PDF/imatge, que no tenen fulls.
         'fulls': excel_meta.get('fulls') or [],
@@ -1711,7 +1924,267 @@ def _candidats_de_codi(codi):
     } for pm in POMMaster.objects.filter(codi_client=codi).order_by('id')]
 
 
-def _pla_de_resolucions(poms, brut):
+def _capa_instancia_de(fila):
+    """Els dos eixos d'identitat d'una fila, normalitzats. Absents → els de sempre.
+
+    `''` d'instància és «la instància única» i `SLUG_DEFECTE` de capa és l'exterior: són els
+    valors que l'import escrivia HARDCODEJATS abans de l'Onada 3, o sigui que una fila que no
+    en digui res es comporta exactament com abans d'aquesta peça. Això és el que fa que la
+    columna nova no toqui cap sessió existent ni cap camí que no la faci servir.
+
+    Es normalitza a minúscules perquè els slugs són slugs: `'Left'` i `'left'` han de ser la
+    MATEIXA instància, i si no ho fossin el detector deixaria passar una col·lisió real per
+    una diferència de majúscules — que és el mode de fallada més lleig possible aquí (dues
+    mesures a la mateixa cel·la, i la segona guanya en silenci al confirm).
+    """
+    from fhort.pom.models import MeasurementLayer
+    capa = str((fila or {}).get('capa') or '').strip().lower() or MeasurementLayer.SLUG_DEFECTE
+    instancia = str((fila or {}).get('instancia') or '').strip().lower()
+    return capa, instancia
+
+
+def _garment_de(fila, garment_sessio=''):
+    """L'eix de PEÇA d'una fila: el seu si el declara, i si no el de la SESSIÓ.
+
+    ── SET-2/T8-ter (2026-08-16) · **REOBERTURA CONSCIENT DE T8** (Agus, Patró C) ──────────
+    T8 va decidir «un import = una prenda» i va posar el garment a `ImportSession`. La decisió
+    era bona amb el que hi havia: llavors la fila no tenia transport per a cap eix propi. L'Onada
+    3 (14/08) el va construir —capa i instància ja viatgen a la fila i sobreviuen del pas 2 al
+    confirm— i amb ell la premissa de T8 ha caducat: el garment és **l'últim eix que queda a la
+    sessió**, i baixa a la fila pel mateix camí que els altres dos.
+
+    ⚠️ EL PREDICAT ÉS `is None`, NO LA FALSEDAT, i és la MATEIXA llei que `valor_efectiu`
+    (`services_garment.py`) i que el `??` de `filaPas2.js`: `''` és una DECISIÓ («aquesta fila és
+    de la mare») i l'absència és «no s'ha dit res» (→ la de la sessió). Amb `or` no es podria
+    dir mai «mare» dins d'un import obert des d'una peça, que és exactament el gest que el
+    desdoblament necessita: un document que porta la faldilla i el short s'obre des d'on sigui i
+    cada fila diu de qui és.
+
+    Una fila que no en declari cap es comporta EXACTAMENT com abans d'aquesta peça: rep el de la
+    sessió, que és el que el confirm hi escrivia hardcodejat. Cap de les 16 sessions vives del
+    corpus (totes amb `garment=''`) canvia de comportament.
+
+    ── EL PRE-MARCAT HI ENTRA (16/08) · I VIU EN UN SOL LLOC ────────────────────────────────
+    Entre la decisió de la persona i la de la sessió hi ha la PROPOSTA del document
+    (`garment_proposat`, F2). Hi entra perquè el disseny la crida «pre-marcat» i un pre-marcat és
+    un valor POSAT que es pot canviar, no una insinuació: la cel·la el mostra i enviar el pas
+    l'accepta.
+
+    ⚠️ I hi entra AQUÍ, no a cada consumidor. El 16/08 la regla només vivia al front i el
+    detector del backend comparava com a mare una fila que la pantalla mostrava com a «Short»
+    (captura 13:21): dues meitats de la mateixa pantalla parlant de files diferents. Amb la
+    resolució en un sol punt, el detector, el confirm i el pas 3 no poden divergir.
+    """
+    g = (fila or {}).get('garment')
+    if g is None:
+        g = (fila or {}).get('garment_proposat')
+    if g is None:
+        return (garment_sessio or '').strip()
+    return str(g).strip()
+
+
+def _norm_seccio(text):
+    """Forma comparable d'un rètol de secció o d'un nom de peça.
+
+    Majúscules/minúscules i espais sobrers no distingeixen res: «SHORT», «Short» i « short »
+    són el mateix rètol. Els accents SÍ que es conserven —no és el mateix «Llaçada» que
+    «Llacada» per a un tècnic que escriu bé— i no cal desaccentuar per al cas real.
+    """
+    return ' '.join(str(text or '').strip().split()).casefold()
+
+
+def _proposta_de_peca(model, poms):
+    """Marca `garment_proposat` a cada fila segons la SECCIÓ del document. Torna la traça.
+
+    ── SET-2/T8-ter · EL SUGGERIMENT NEIX D'ON JA ESTAVA ────────────────────────────────
+    `seccio` no és cap camp nou: els DOS camins d'extracció ja la porten a la fila —el parser
+    determinista la treu del rètol de bloc (`:530`) i la via IA del `section` de l'esquema
+    (`:1745`)— i el confirm ja la persisteix a `BaseMeasurement.seccio` des de F3. L'única
+    cosa que faltava era aparellar-la amb les peces del model.
+
+    ⚠️ PROPOSA, NO DECIDEIX. `garment_proposat` és una clau SEPARADA de `garment`: la fila
+    proposada segueix sense declarar eix propi i, si ningú la confirma, el confirm hi escriu
+    el de la sessió com sempre. La decisió és de la persona (la columna del pas 2, F3) i el
+    dia que el rètol del document canviï de nom, el pitjor que pot passar és que no es
+    proposi res — mai que la fila aterri sola a una peça que ningú no ha triat.
+
+    L'aparellament és per NOM o per CODI de la peça, en forma comparable, i té una segona
+    passada per PARAULA SENCERA («SHORT MEASUREMENTS» → la peça «Short») perquè els documents
+    reals titulen les seccions, no les etiqueten. Es demana ≥3 caràcters per no aparellar una
+    peça dita «A» amb qualsevol secció que porti una a.
+
+    Les seccions que NO troben peça es tornen a part: **és una absència que s'ha de DIR**. Un
+    document amb una secció SHORT sobre un model sense peça Short vol dir que falta crear-la, i
+    un silenci aquí deixaria set files aterrant a la mare sense que ningú se n'adonés.
+    """
+    from fhort.models_app.models import ModelGarment
+
+    peces = list(ModelGarment.objects.filter(model=model).order_by('ordre', 'codi')) if model else []
+    per_nom = {}
+    for g in peces:
+        for etiqueta in (g.nom, g.codi):
+            clau = _norm_seccio(etiqueta)
+            if clau:
+                per_nom.setdefault(clau, g.codi)
+
+    mapa, sense_peca = {}, []
+    for p in (poms or []):
+        seccio = _norm_seccio(p.get('seccio'))
+        if not seccio:
+            continue
+        if seccio in mapa:
+            p['garment_proposat'] = mapa[seccio]
+            continue
+        codi = per_nom.get(seccio)
+        if codi is None:
+            # Segona passada: el nom de la peça com a PARAULA SENCERA dins del rètol.
+            mots = set(seccio.split())
+            for clau, c in per_nom.items():
+                if len(clau) >= 3 and clau in mots:
+                    codi = c
+                    break
+        if codi is None:
+            if p.get('seccio') not in sense_peca:
+                sense_peca.append(p.get('seccio'))
+            continue
+        mapa[seccio] = codi
+        p['garment_proposat'] = codi
+
+    return {'mapa': mapa, 'seccions_sense_peca': sense_peca,
+            'n_proposades': sum(1 for p in (poms or []) if p.get('garment_proposat'))}
+
+
+def _identitat(fila, garment_sessio=''):
+    """`(pom_master_id, capa, instancia, garment)` d'una fila resolta. La clau del detector.
+
+    SET-2/T8-ter — el `garment` hi entra com a QUART element. La clau de `BaseMeasurement` ja
+    és aquesta des de T2 (`('model','pom','capa','instancia','garment')`): el detector del
+    wizard es limitava a mirar-ne tres perquè el quart era constant dins d'una tramesa. Ara que
+    no ho és, mirar-ne tres tornaria a fabricar el mode de fallada que l'Onada 3 va tancar —dues
+    files que voldrien ocupar cel·les DIFERENTS declarades com a col·lisió, i la resolució
+    barrada sense motiu.
+
+    ⚠️ `garment_sessio` és OBLIGATORI de pensar a cada cridador, no un defecte còmode: amb el
+    defecte `''` i una sessió oberta a la 02, la identitat de lectura diria «mare» i la
+    d'escriptura «02», i les dues cadenes deixarien de trobar-se. Tots els cridadors el passen
+    (cens del 16/08: 8 punts, tots amb la sessió o el seu garment a l'abast).
+    """
+    capa, instancia = _capa_instancia_de(fila)
+    return (fila.get('pom_master_id'), capa, instancia, _garment_de(fila, garment_sessio))
+
+
+def _files_per_ordre(poms):
+    """`{ordre: fila}` de `poms_extrets`.
+
+    L'`ordre` és la identitat de FILA del wizard: neix a l'extracció (`:1342`), sobreviu a
+    les resolucions del pas 2 (`_pla_de_resolucions` hi indexa) i és l'única clau que no
+    col·lapsa quan dues files parlen del mateix POM. Les sessions velles i les muntades a mà
+    poden no portar-lo; per a aquestes val la posició, que és el mateix nombre.
+    """
+    per_ordre = {}
+    for i, p in enumerate(poms or []):
+        ordre = p.get('ordre')
+        per_ordre[i if ordre is None else ordre] = p
+    return per_ordre
+
+
+def _valors_de_les_mesures(session):
+    """Les mesures del pas 3 indexades per IDENTITAT SENCERA `(pom, capa, instancia)`.
+
+    🔑 ONADA 3 (14/08) · AQUESTA ERA LA MEITAT QUE FALTAVA. El pas 2 ja sabia dir que tres
+    files són el mateix POM en tres instàncies, però la cadena de mesures seguia parlant per
+    `pom_master_id` PELAT: `{pom_id: {talla: valor}}`. Amb la fitxa de la Brumà (B «at the
+    top» 30 · BB «at the bottom» 31 · B1 «stretched out» 40) el diccionari en retenia UNA i
+    les tres files s'escrivien amb el MATEIX valor, sense error i sense avís.
+
+    **Les mesures VELLES no es perden ni canvien de sentit.** Una mesura desada abans
+    d'aquesta peça (o enviada pel front d'avui) no porta identitat, i aquí se li dona la de
+    les FILES que reclamen el seu POM: si n'hi ha una, la seva; si n'hi ha diverses, la de
+    TOTES —que és exactament el que passava abans, quan cada fila llegia `valors[pid]`—.
+    Així una sessió a mig fer es confirma igual que ahir i el guard de no-regressió és el
+    primer que passa, no l'últim.
+    """
+    _gs = (getattr(session, 'garment', '') or '')
+    poms = list(session.poms_extrets or [])
+    idents_per_pom = {}
+    for p in poms:
+        pid = p.get('pom_master_id')
+        if pid:
+            idents_per_pom.setdefault(int(pid), []).append(_identitat(p, _gs))
+
+    valors = {}
+    for m in (session.resultat or {}).get('mesures', []):
+        talla = m.get('talla_label')
+        if talla in (None, ''):
+            continue
+        try:
+            pid = int(m['pom_master_id'])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if m.get('capa') is not None or m.get('instancia') is not None:
+            # SET-2/T8-ter — la mesura porta la seva peça quan el pas 3 la declara; si no, la de
+            # la sessió, que és el que la fila d'on ve també haurà rebut.
+            idents = [(pid,) + _capa_instancia_de(m) + (_garment_de(m, _gs),)]
+        else:
+            idents = (idents_per_pom.get(pid)
+                      or [(pid,) + _capa_instancia_de(None) + (_gs.strip(),)])
+        for ident in idents:
+            valors.setdefault(ident, {})[talla] = m.get('valor')
+    return valors
+
+
+def _valors_per_pom(valors, avisos=None):
+    """La vista PER POM de la taula, per als consumidors que graduen.
+
+    El grading és del POM: `derive_rules_from_fitxa` deriva UNA regla per `pom_id` i el
+    contenidor del client tampoc no coneix instàncies. Quan un POM es reparteix en més d'una
+    fila, la regla surt de la fila CANÒNICA (capa per defecte, instància única) i, si no
+    n'hi ha cap, de la primera de la taula. Les germanes NO deriven regla pròpia: inventar-ne
+    una per instància seria fabricar catàleg que ningú no ha decidit — i el valor de cada
+    germana sí que arriba sencer al seu `BaseMeasurement`, que és on viu.
+    """
+    from fhort.pom.models import MeasurementLayer
+    tria = {}      # pid → (és_canònica, files)
+    n_files = {}   # pid → quantes identitats el mesuren
+    # SET-2/T8-ter — la identitat ja porta el `garment` i aquí encara es col·lapsa per POM sol.
+    # És el gra que aquesta vista declara des de sempre (el catàleg del client no coneix
+    # instàncies) i NO canvia amb aquesta peça; el que canvia és que ara el col·lapse també es
+    # menja la frontera de peça, i això sí que és una pèrdua nova. Es tanca a F6, amb acta i
+    # paritat; aquí es DIU al desempaquetar perquè qui hi passi ho vegi.
+    for (pid, capa, instancia, _garment), files in valors.items():
+        canonica = (capa == MeasurementLayer.SLUG_DEFECTE and instancia == '')
+        n_files[pid] = n_files.get(pid, 0) + 1
+        if pid not in tria or (canonica and not tria[pid][0]):
+            tria[pid] = (canonica, files)
+    if avisos is not None:
+        for pid, n in n_files.items():
+            if n > 1:
+                avisos.append(
+                    f"El POM #{pid} es mesura en {n} files (capes/instàncies diferents): la "
+                    "graduació es deriva d'una sola —la canònica— i les germanes desen el seu "
+                    "valor sense regla pròpia.")
+    return {pid: files for pid, (_canonica, files) in tria.items()}
+
+
+def _descriu_fila(fila, pm, capa, instancia, garment):
+    """Com s'anomena una fila del pas 2 quan cal DIR-LA en un conflicte.
+
+    El text que llegeix la persona és «M · Short · exterior · única», no un `ordre` pelat: el
+    conflicte s'ha de poder resoldre mirant les dues files, i per mirar-les cal saber quines són.
+    """
+    fila = fila or {}
+    return {
+        'ordre': fila.get('ordre'),
+        'codi': fila.get('codi_fitxa') or (pm.codi_client if pm is not None else '') or '',
+        'nom': (fila.get('pom_nom') or (pm.nom_client if pm is not None else '')
+                or fila.get('descripcio') or ''),
+        'capa': capa if capa is not None else _capa_instancia_de(fila)[0],
+        'instancia': instancia if instancia is not None else _capa_instancia_de(fila)[1],
+        'garment': garment,
+    }
+
+
+def _pla_de_resolucions(poms, brut, garment_sessio=''):
     """R2 · valida les `resolucions` de fila i en retorna el PLA, o els errors per fila.
 
     Una resolució és la decisió humana sobre UNA fila del pas 2:
@@ -1730,9 +2203,22 @@ def _pla_de_resolucions(poms, brut):
 
     per_ordre = {p.get('ordre'): p for p in poms if p.get('ordre') is not None}
     ordres_resolts = {r.get('ordre') for r in brut}
-    #: POM → fila que ja el té. Les files que aquesta tramesa resol no compten: si es re-vincula
-    #: una fila, el POM que tenia queda lliure.
-    presos = {p['pom_master_id']: p.get('ordre') for p in poms
+    #: IDENTITAT → fila que ja la té. Les files que aquesta tramesa resol no compten: si es
+    #: re-vincula una fila, la identitat que tenia queda lliure.
+    #:
+    #: 🔑 LA CLAU ÉS LA IDENTITAT SENCERA, NO EL POM PELAT (Onada 3, 14/08). Era
+    #: `{pom_master_id: ordre}`, i amb això la fitxa BROWNIE BRUMA/RUFFLES no es podia
+    #: importar: B «at the top», BB «at the bottom» i B1 «stretched out» són el MATEIX POM B
+    #: mesurat en tres instàncies, i el detector les llegia com dues col·lisions. Una mesura
+    #: d'aquesta casa s'identifica per `(pom, capa, instancia, garment)` —el motor ja hi
+    #: indexa (`:2087`)— i el `garment` no entra a la clau perquè és de la SESSIÓ: un import
+    #: és una prenda (T8), o sigui que totes les files d'aquesta tramesa el comparteixen i
+    #: afegir-lo no distingiria res.
+    #:
+    #: La col·lisió no desapareix: es fa PRECISA. Dues files amb la mateixa identitat sencera
+    #: segueixen sent l'error de sempre, i han de ser-ho — són dues mesures que voldrien
+    #: ocupar la mateixa cel·la i el confirm en perdria una en silenci.
+    presos = {_identitat(p, garment_sessio): p for p in poms
               if p.get('pom_master_id') and p.get('actiu')
               and p.get('ordre') not in ordres_resolts}
 
@@ -1751,12 +2237,34 @@ def _pla_de_resolucions(poms, brut):
             if pm is None:
                 errors.append({'ordre': ordre, 'error': 'pom_no_valid', 'pom_master_id': pid})
                 continue
-            if pm.id in presos:
+            # La identitat que la PERSONA ha triat per a aquesta fila. Absent = la de sempre
+            # (exterior, instància única): una resolució que no parli d'instàncies es comporta
+            # exactament com abans d'aquesta peça.
+            capa, instancia = _capa_instancia_de(r)
+            # ⚠️ LA PEÇA DE LA FILA MANA SOBRE LA DE LA SESSIÓ (QA Agus 16/08, captura 13:21).
+            # Una resolució diu QUIN POM és aquesta fila; de QUI és ho diu la COLUMNA, que ja ha
+            # desat la decisió a la fila unes línies més amunt (`files_garment`). Fent el fallback
+            # a la sessió, el detector comparava com a mare una fila que la pantalla mostrava com
+            # a «Short», i la Brumà donava un conflicte que no es podia verificar mirant-la.
+            garment = _garment_de(r, _garment_de(fila, garment_sessio))
+            ident = (pm.id, capa, instancia, garment)
+            if ident in presos:
+                ocupada = presos[ident]
                 errors.append({'ordre': ordre, 'error': 'pom_ja_usat', 'pom_master_id': pm.id,
-                               'ordre_ocupat': presos[pm.id]})
+                               'capa': capa, 'instancia': instancia, 'garment': garment,
+                               'ordre_ocupat': ocupada.get('ordre'),
+                               # EL CONFLICTE ES RESOL VEIENT-LO, NO ENDEVINANT-LO. «Un POM no pot
+                               # ser dues files» és una acusació sense judici: no diu per què
+                               # AQUESTA vegada, i amb la peça i la instància a la identitat les
+                               # dues files poden diferir en tres eixos. Van les DUES, amb nom.
+                               'aquesta': _descriu_fila(fila, pm, capa, instancia, garment),
+                               'ocupada': _descriu_fila(ocupada, None, None, None,
+                                                        _garment_de(ocupada, garment_sessio))})
                 continue
-            presos[pm.id] = ordre
-            pla.append({'fila': fila, 'accio': 'vincula', 'pom': pm})
+            presos[ident] = dict(fila or {}, ordre=ordre, capa=capa, instancia=instancia,
+                                 garment=garment, pom_master_id=pm.id, pom_codi=pm.codi_client)
+            pla.append({'fila': fila, 'accio': 'vincula', 'pom': pm,
+                        'capa': capa, 'instancia': instancia, 'garment': garment})
         elif accio == 'crea':
             codi = str(r.get('codi') or '').strip()
             if not codi:
@@ -1771,8 +2279,15 @@ def _pla_de_resolucions(poms, brut):
                                'ordre_ocupat': codis_nous[codi.upper()]})
                 continue
             codis_nous[codi.upper()] = ordre
+            # La identitat viatja també amb el `crea`: un POM nou pot néixer ja partit (la
+            # fitxa el porta esquerre i dret). El detector de `crea` segueix sent per CODI i
+            # no per identitat a posta — dues files que creen el mateix codi són un conflicte
+            # de CATÀLEG, i això no depèn de quina instància mesuri cadascuna.
+            capa, instancia = _capa_instancia_de(r)
             pla.append({'fila': fila, 'accio': 'crea', 'codi': codi,
-                        'nom': str(r.get('nom') or '').strip() or codi})
+                        'nom': str(r.get('nom') or '').strip() or codi,
+                        'capa': capa, 'instancia': instancia,
+                        'garment': _garment_de(r, garment_sessio)})
         else:
             errors.append({'ordre': ordre, 'error': 'accio_desconeguda', 'accio': accio})
     return pla, errors
@@ -1786,6 +2301,9 @@ def import_session_poms_view(request, token):
 
     Rep poms_confirmats (llista de pom_master_id actius). Marca actiu per cada POM extret;
     els pom_master_id confirmats que no hi siguin (afegits manualment del catàleg) s'incorporen.
+    P2 · `files_confirmades` (opcional, llista d'`ordre`) fa la mateixa pregunta PER FILA i, si
+    hi és, mana sobre `poms_confirmats` per a l'estat `actiu`: amb germanes, un POM no pot
+    respondre per totes les seves files.
     Rep també poms_tenant_only (llista d'ordres de files NO_MATCH que el tècnic vol crear com
     a POMMaster tenant-only: pom_global=None, codi_client=codi_fitxa). estat→'MESURES'.
 
@@ -1846,14 +2364,67 @@ def import_session_poms_view(request, token):
                          'candidats': {c: _candidats_de_codi(c) for c in duplicats}}, status=409)
 
     existents = {p.get('pom_master_id') for p in poms if p.get('pom_master_id')}
-    for p in poms:
+    # P2 · QUINES FILES ENTREN A LA TAULA — la pregunta és per FILA quan el client la sap fer.
+    #
+    # `poms_confirmats` és una llista d'IDs de POM, i mentre un POM no podia ocupar més d'una
+    # fila això era la mateixa cosa. Des de l'Onada 3 no ho és: amb tres germanes, desmarcar-ne
+    # una les desmarcava TOTES TRES. `files_confirmades` (llista d'`ordre`) fa la mateixa
+    # pregunta a la fila. Absent = el camí de sempre, byte a byte; `[]` és una decisió («cap»),
+    # que no és el mateix que no dir-ne res.
+    #
+    # No substitueix `poms_confirmats`: aquell té una segona feina —incorporar POMs del catàleg
+    # que el document no menciona— i aquells encara no tenen fila amb què demanar-se.
+    # ── SET-2/T8-ter · LA PEÇA DE CADA FILA, DECIDIDA PER LA PERSONA ────────────────────────
+    # `files_garment` és `[{ordre, garment}]` i és la porta de la COLUMNA del pas 2. Va a part
+    # de `resolucions` a posta: aquelles resolen QUIN POM és una fila que no en tenia, i la
+    # immensa majoria de files ja el tenen —el que la persona hi canvia és de qui SÓN—. Fer-ho
+    # passar per `resolucions` obligaria a re-declarar el vincle per moure una fila de peça.
+    #
+    # ⚠️ Es valida contra les peces REALS del model, com la porta del cribratge: un codi que no
+    # és cap peça d'aquest model és un 400 i no un silenci. Escriure a la mare quan la persona
+    # ha dit «02» és exactament el dany que aquest tram tanca, fabricat des de l'altra banda.
+    # `''` és sempre vàlid: és la mare.
+    files_garment = request.data.get('files_garment')
+    if isinstance(files_garment, list) and files_garment:
+        from fhort.models_app.models import ModelGarment
+        _codis_valids = set(
+            ModelGarment.objects.filter(model=session.model).values_list('codi', flat=True))
+        _per_ordre = _files_per_ordre(poms)
+        _desconeguts, _ordres_no_trobats = set(), []
+        for entrada in files_garment:
+            if not isinstance(entrada, dict):
+                continue
+            g = str(entrada.get('garment') or '').strip()
+            if g and g not in _codis_valids:
+                _desconeguts.add(g)
+                continue
+            fila = _per_ordre.get(entrada.get('ordre'))
+            if fila is None:
+                _ordres_no_trobats.append(entrada.get('ordre'))
+                continue
+            fila['garment'] = g
+        if _desconeguts:
+            return Response({'error': 'garment_desconegut', 'codis': sorted(_desconeguts),
+                             'message': (f"El model {session.model_id} no té cap prenda "
+                                         f"«{', '.join(sorted(_desconeguts))}».")}, status=400)
+        if _ordres_no_trobats:
+            return Response({'error': 'files_inexistents', 'ordres': _ordres_no_trobats},
+                            status=400)
+
+    files_confirmades = request.data.get('files_confirmades')
+    ordres_confirmats = ({int(x) for x in files_confirmades if str(x).lstrip('-').isdigit()}
+                         if isinstance(files_confirmades, list) else None)
+    for i, p in enumerate(poms):
         if p.get('pom_master_id'):
-            p['actiu'] = p['pom_master_id'] in confirmats_set
+            p['actiu'] = ((p.get('ordre', i) in ordres_confirmats)
+                          if ordres_confirmats is not None
+                          else p['pom_master_id'] in confirmats_set)
 
     # PORTA de les resolucions, també abans de tocar res: si una sola falla, no n'entra CAP.
     # Els errors van per `ordre` perquè el wizard els pugui pintar a la fila que toca i
     # reenviar la tramesa sencera sense que el tècnic hagi de refer les que ja eren bones.
-    pla_resolucions, errors_resolucions = _pla_de_resolucions(poms, resolucions_brut)
+    pla_resolucions, errors_resolucions = _pla_de_resolucions(
+        poms, resolucions_brut, session.garment or '')
     if errors_resolucions:
         return Response({'error': 'resolucions_invalides', 'errors': errors_resolucions},
                         status=409)
@@ -1887,6 +2458,18 @@ def import_session_poms_view(request, token):
             fila['match_type'] = 'tenant_only' if r['accio'] == 'crea' else 'manual'
             fila['confidence'] = 'TENANT_ONLY' if r['accio'] == 'crea' else 'HIGH'
             fila['actiu'] = True
+            # ONADA 3 · LA IDENTITAT QUEDA A LA FILA. Sense aquestes dues línies el detector
+            # ja no col·lisionaria però el confirm tornaria a escriure les tres files de la
+            # Brumà al mateix `(pom, exterior, '')`: l'`update_or_create` en desaria una i les
+            # altres dues es perdrien sense dir res. La decisió de la persona ha de sobreviure
+            # del pas 2 al confirm, i és aquí on hi puja.
+            fila['capa'] = r['capa']
+            fila['instancia'] = r['instancia']
+            # SET-2/T8-ter — i la PEÇA, pel mateix argument literal que les altres dues: la
+            # decisió de la persona ha de sobreviure del pas 2 al confirm. Sense aquesta línia
+            # el confirm tornaria a llegir el garment de la sessió i les files de les altres
+            # peces aterrarien totes al mateix contenidor.
+            fila['garment'] = r['garment']
             existents.add(pm.id)
 
         # POMs sense match triats pel tècnic → crear (o reutilitzar) POMMaster tenant-only.
@@ -1963,18 +2546,46 @@ def import_session_grading_preview_view(request, token):
     model = session.model
     if not model:
         return Response({'error': 'La sessió no té model associat'}, status=400)
-    if not model.grading_rule_set_id:
+    if _efectiu(session, 'grading_rule_set') is None:
         return Response({'error': 'El model no té GradingRuleSet configurat', 'grading': {}}, status=400)
 
+    # SET-2/T8 — l'eix entra a la CLAU, que és per on el motor el llegeix. `_regla_de` resol
+    # la regla de la peça amb herència de la mare; una clau escalar (la d'abans) hauria
+    # ensenyat sempre la regla de la mare, i el preview ha de dir el mateix que el generador.
+    garment = session.garment or ''
     raw = request.data.get('base_values') or {}
     base_values = {}
-    for k, v in raw.items():
-        if not str(k).isdigit() or v in (None, ''):
-            continue
-        try:
-            base_values[int(k)] = float(v)
-        except (TypeError, ValueError):
-            continue
+    # ONADA 3 · LA TERCERA PORTA. `base_values` accepta les DUES formes:
+    #   · `{pom_master_id: valor}` — el contracte d'avui, intacte. Els eixos són els de sempre.
+    #   · `[{ordre, valor}]` — la taula parlant per FILA. Un objecte JSON no pot tenir una clau
+    #     composta, i per això la forma nova és una LLISTA: és l'única manera que tres files
+    #     del mateix POM hi càpiguen. Els eixos, com al pas 3, es HEREDEN de la fila.
+    # La resposta es torna amb la MATEIXA clau amb què s'ha preguntat, i ho declara a `clau`.
+    clau = 'ordre' if isinstance(raw, list) else 'pom_master_id'
+    ordre_de_ident = {}
+    if clau == 'ordre':
+        per_ordre = _files_per_ordre(session.poms_extrets)
+        for entrada in raw:
+            if not isinstance(entrada, dict):
+                continue
+            fila = per_ordre.get(entrada.get('ordre'))
+            v = entrada.get('valor')
+            if fila is None or not fila.get('pom_master_id') or v in (None, ''):
+                continue
+            capa, instancia = _capa_instancia_de(fila)
+            try:
+                base_values[(int(fila['pom_master_id']), capa, instancia, garment)] = float(v)
+            except (TypeError, ValueError):
+                continue
+            ordre_de_ident[(int(fila['pom_master_id']), capa, instancia)] = entrada.get('ordre')
+    else:
+        for k, v in raw.items():
+            if not str(k).isdigit() or v in (None, ''):
+                continue
+            try:
+                base_values[(int(k), MeasurementLayer.SLUG_DEFECTE, '', garment)] = float(v)
+            except (TypeError, ValueError):
+                continue
 
     grading_avisos: list[str] = []
     grading = preview_graded_specs(model, base_values, warnings=grading_avisos)
@@ -1988,9 +2599,25 @@ def import_session_grading_preview_view(request, token):
     # frontend espera. Avui és una equivalència exacta —les comportes de C1/C1-ins garanteixen
     # una sola germana per POM— i per això el col·lapse no perd res.
     # Fer créixer aquest payload és INTERFÍCIE i va a C4 amb maqueta (llei 3c.5).
-    grading = {str(pom_id): row for (pom_id, _capa, _instancia), row in grading.items()}
-    return Response({'grading': grading, 'base_size': model.base_size_label,
-                     'size_run': (model.size_run_model or '').split('·'),
+    # SET-2/T6a — la clau que arriba té QUATRE trams (el `garment` darrere de la instància).
+    # SET-2/T8 — i el col·lapse a `pom_id` SEGUEIX SENT EXACTE, ara per una altra raó: **un
+    # import = una prenda**, o sigui que totes les claus d'aquesta resposta porten el MATEIX
+    # garment (el de la sessió) i cap parella no pot xocar. El que abans el garantia era la
+    # comporta; ara ho garanteix el disseny. Fer créixer el payload seguiria sent INTERFÍCIE
+    # (llei 3c.5), i aquest camí ja no la necessita.
+    # ONADA 3 — …i quan la pregunta ha vingut per FILA, la resposta hi torna per FILA: el
+    # col·lapse a `pom_id` és precisament el que faria que les tres files de la Brumà
+    # s'omplissin totes amb la graduació d'una sola.
+    if clau == 'ordre':
+        grading = {str(ordre_de_ident[(pom_id, capa, instancia)]): row
+                   for (pom_id, capa, instancia, _garment), row in grading.items()
+                   if (pom_id, capa, instancia) in ordre_de_ident}
+    else:
+        grading = {str(pom_id): row
+                   for (pom_id, _capa, _instancia, _garment), row in grading.items()}
+    return Response({'grading': grading, 'clau': clau,
+                     'base_size': _efectiu(session, 'base_size_label'),
+                     'size_run': (_efectiu(session, 'size_run_model') or '').split('·'),
                      'avisos': grading_avisos}, status=200)
 
 
@@ -2000,8 +2627,19 @@ def import_session_mesures_view(request, token):
     """
     PATCH /api/v1/import-sessions/<token>/mesures/  (Pas W3 — desa valors de la taula)
 
-    Rep mesures [{pom_master_id, talla_label, valor}]. Desa a session.resultat['mesures'].
-    estat→'MESURES_OK'.
+    Rep mesures `[{ordre, talla_label, valor}]` — o `[{pom_master_id, …}]`, el contracte
+    d'avui. Desa a session.resultat['mesures']. estat→'MESURES_OK'.
+
+    🔑 ONADA 3 · LA TAULA PARLA PER FILA, NO PER POM. `ordre` és la identitat de fila del
+    wizard i és l'única clau que no col·lapsa quan tres files són el mateix POM en tres
+    instàncies (la fitxa de la Brumà). Els EIXOS NO ELS DIU AQUEST PAYLOAD: es HEREDEN de la
+    fila, que és on el pas 2 va desar la decisió de la persona. Si el pas 3 els pogués tornar
+    a declarar hi hauria dues fonts de veritat per a la mateixa cosa i, el dia que
+    discrepessin, guanyaria l'última a escriure —el mode de fallada més lleig d'aquí.
+
+    Sense `ordre` el comportament és EXACTAMENT el d'avui: la mesura es desa amb el
+    `pom_master_id` pelat i els lectors li donen la identitat de les files que reclamen aquell
+    POM (`_valors_de_les_mesures`). Una sessió a mig fer amb el front vell es confirma igual.
     """
     from fhort.models_app.models import ImportSession
 
@@ -2009,20 +2647,40 @@ def import_session_mesures_view(request, token):
     if not session:
         return Response({'error': 'Sessió no trobada'}, status=404)
 
+    per_ordre = _files_per_ordre(session.poms_extrets)
     mesures = request.data.get('mesures') or []
-    # Normalitza a llista neta de {pom_master_id, talla_label, valor}.
+    # Normalitza a llista neta de {pom_master_id, talla_label, valor} (+ identitat de fila
+    # quan la tramesa parla per `ordre`).
     net = []
     for m in mesures:
-        pid = m.get('pom_master_id')
         talla = m.get('talla_label')
         valor = m.get('valor')
-        if pid is None or talla in (None, ''):
+        if talla in (None, ''):
+            continue
+        ordre = m.get('ordre')
+        fila = per_ordre.get(ordre) if ordre is not None else None
+        if ordre is not None and fila is None:
+            # Un `ordre` que no és de cap fila no pot inventar-se una mesura sense identitat:
+            # es descarta aquí i no al pas 5, on ja no se sabria de qui parlava.
+            continue
+        pid = fila.get('pom_master_id') if fila is not None else m.get('pom_master_id')
+        if pid is None:
             continue
         # D3 · porta d'entrada del camí ENGANXAT. Arribava el que el navegador hagués
         # posat al JSON (el front fa `parseFloat`, que davant d'un "3,5" enganxat d'un
         # Excel europeu dona 3). `normalitza_cm` entén la coma i talla a 0,1 mm.
-        net.append({'pom_master_id': pid, 'talla_label': talla,
-                    'valor': normalitza_cm(valor)})
+        entrada = {'pom_master_id': pid, 'talla_label': talla,
+                   'valor': normalitza_cm(valor)}
+        if fila is not None:
+            capa, instancia = _capa_instancia_de(fila)
+            # SET-2/T8-ter — i la PEÇA de la fila, pel mateix argument que els altres dos eixos:
+            # els EIXOS NO ELS DIU AQUEST PAYLOAD, s'hereten de la fila (que és on el pas 2 va
+            # desar la decisió). Sense això una mesura d'una fila decidida a la 02 es desava amb
+            # el garment de la SESSIÓ i el confirm no la trobava: la cel·la quedava buida sense
+            # que ningú petés — el mode de fallada que aquest tram persegueix, fabricat al pas 3.
+            entrada.update({'ordre': ordre, 'capa': capa, 'instancia': instancia,
+                            'garment': _garment_de(fila, session.garment or '')})
+        net.append(entrada)
 
     session.resultat = {**(session.resultat or {}), 'mesures': net}
     # 1C-2a: si el wizard declara el mode dels valors (absoluts/deltes), desar-lo per al W5.
@@ -2054,18 +2712,19 @@ def import_session_library_prefill_view(request, token):
     model = session.model
 
     # valors {pid:{talla:valor}} des de les mesures desades (els valors EDITATS al W3).
-    valors = {}
-    for m in (session.resultat or {}).get('mesures', []):
-        try:
-            pid = int(m['pom_master_id'])
-        except (KeyError, TypeError, ValueError):
-            continue
-        if m.get('talla_label') in (None, ''):
-            continue
-        valors.setdefault(pid, {})[m['talla_label']] = m.get('valor')
+    #
+    # ONADA 3 — la taula ja parla per identitat sencera, però la Size Library NO: el seu
+    # prefill viatja per `pom_codi` (`find_pom_master` matcheja `codi_client`) i no té eix de
+    # capa ni d'instància. La taula hi entra, doncs, PER POM, i és el mateix col·lapse que
+    # feia abans aquest bucle: un POM repartit en tres files hi porta la canònica i les
+    # germanes no hi són. Créixer aquest contracte és INTERFÍCIE de la Library (llei 3c.5) i
+    # té la seva pròpia decisió; el que aquí importa és que el col·lapse ara és EXPLÍCIT.
+    valors = _valors_per_pom(_valors_de_les_mesures(session))
 
-    base_size = ((model.base_size_label if model else '') or '').strip()
-    run = [s.strip() for s in ((model.size_run_model if model else '') or '')
+    # SET-2/T8 — run i base de la PEÇA de destí (efectius): és la seva taula la que viatja
+    # cap a la Size Library, i amb els de la mare el run proposat seria d'una altra prenda.
+    base_size = ((_efectiu(session, 'base_size_label') if model else '') or '').strip()
+    run = [s.strip() for s in ((_efectiu(session, 'size_run_model') if model else '') or '')
            .replace(';', '·').split('·') if s.strip()]
 
     # Mode deltes → absoluts ABANS d'enviar (reusa 1C-2a; una sola font de conversió).
@@ -2089,8 +2748,9 @@ def import_session_library_prefill_view(request, token):
             poms.append({'pom_codi': codi_by_pid.get(pid) or '', 'valors': net})
 
     target_codi = (model.target if model else '') or ''
-    if not target_codi and model and model.size_system_id:
-        _t = model.size_system.targets.first()
+    _ss = _efectiu(session, 'size_system') if model else None
+    if not target_codi and _ss is not None:
+        _t = _ss.targets.first()
         if _t:
             target_codi = _t.codi
 
@@ -2158,6 +2818,26 @@ def import_session_confirmar_view(request, token):
       4. PDF → ModelFitxer(tipus='DOCUMENT', versio NNN, naming {codi}_DOCUMENT_{NNN});
          re-import → versio_anterior apunta a l'anterior.
       5. session.estat='CONFIRMAT'.
+
+    ── SET-2/T8 · L'EIX DE LA PRENDA TRAVESSA TOTA L'ESCRIPTURA ────────────────────────
+    **Un import = una prenda.** El `garment` de la sessió (fixat a la iniciació, mai
+    preguntat) entra per PARÀMETRE a cada escriptura i a cada consulta prèvia:
+
+      · `BaseMeasurement` neix amb `garment=<el de la sessió>` (i el signal el COPIA al
+        `MeasurementChangeLog`, o sigui que el log ja diu la veritat sense tocar-lo).
+      · `ModelGradingOverride` i `ModelGradingRule`, igual.
+      · I LES TRES CONSULTES QUE MIREN «QUÈ HI HA JA AL MODEL» s'hi acoten: la poda de
+        POMs no mencionats, la neteja de files buides i el pre-flight de les MANUAL. És
+        la MATEIXA llei que #12b va aplicar a `_poda_mesures` —una llista de files no és
+        una ordre d'esborrar la feina d'una altra prenda— per una TERCERA porta que la
+        té pròpia: aquesta funció no passa per `_poda_mesures`, poda ella mateixa.
+      · Run, talla base, sistema i joc de regles són els EFECTIUS de la peça
+        (`services_garment.valor_efectiu`), i el guard dur de la talla base valida
+        contra ells. Amb els de la mare, una peça amb run propi seria rebutjada —o pitjor,
+        acceptada— per una escala que no és la seva.
+      · La metadata reconciliada (sistema · base · run) aterra a la FILA DE LA PEÇA quan
+        no som a la mare: el camí de fallback escrivia `model.save(...)` i hauria canviat
+        el run de la MARE des d'un import a la 02.
     """
     import os
     from django.db import transaction
@@ -2176,20 +2856,40 @@ def import_session_confirmar_view(request, token):
     if not model:
         return Response({'error': 'La sessió no té model associat'}, status=400)
 
+    # ── L'EIX DE LA SESSIÓ. Es llegeix UNA vegada i viatja per paràmetre; cap escriptura
+    # d'aquesta funció torna a preguntar-lo ni el declara com a literal.
+    from fhort.models_app.services_garment import valor_efectiu
+    garment = session.garment or ''
+    peca = _peca_de(session)
+    destinatari = peca if peca is not None else model
+
+    def _ef(camp):
+        """El valor efectiu d'un camp heretable, llegit dels objectes EN MEMÒRIA.
+
+        No pot ser `_efectiu(session, …)`: aquesta funció RECONCILIA metadata (sistema,
+        base, run) i la desa diferida al final del pre-flight, o sigui que una relectura
+        de la BD entremig tornaria el valor RANCI i el guard de la talla base validaria
+        contra una escala que aquest mateix import ja ha canviat.
+        """
+        return valor_efectiu(model, peca, camp)
+
+    size_system = _ef('size_system')
+
     user_profile = UserProfile.objects.filter(user=request.user).first()
 
     poms = [p for p in (session.poms_extrets or []) if p.get('actiu') and p.get('pom_master_id')]
     if not poms:
         return Response({'error': 'No hi ha POMs confirmats per importar'}, status=400)
 
-    # mesures (Pas 3) → {pom_id: {talla: valor}}
-    valors = {}
-    for m in (session.resultat or {}).get('mesures', []):
-        try:
-            pid = int(m['pom_master_id'])
-        except (KeyError, TypeError, ValueError):
-            continue
-        valors.setdefault(pid, {})[m['talla_label']] = m['valor']
+    # mesures (Pas 3) → {(pom, capa, instancia): {talla: valor}}
+    #
+    # 🔑 ONADA 3 · LA CLAU ÉS LA IDENTITAT SENCERA. Era `{pom_id: {talla: valor}}`, i amb
+    # tres files al mateix POM (la Brumà: 30 · 31 · 40) el diccionari en retenia UNA i les
+    # tres files s'escrivien amb el mateix valor, sense error i sense avís. Els TRES
+    # consumidors d'aquest mapa —el guard de la base, l'escriptura de `BaseMeasurement` i el
+    # grading— el llegeixen des d'aquí, i per això es canvia la clau en origen i no a cada
+    # lector. El que graduava per POM segueix graduant per POM (`_valors_per_pom`).
+    valors = _valors_de_les_mesures(session)
 
     with transaction.atomic():
         # ── B1 · APARELLAMENT = LLEI DE LA SESSIÓ. Si el pas 1 va fixar `talla_mapping`, el confirm
@@ -2216,22 +2916,25 @@ def import_session_confirmar_view(request, token):
                 "Sessió sense taula d'aparellament de talles (anterior al canvi): s'aplica el remap "
                 "canònic automàtic. Reobre el pas 1 per fixar l'aparellament si cal."]
             target_codi = model.target or ''
-            if not target_codi and model.size_system_id:
-                _ss_target = model.size_system.targets.first()
+            if not target_codi and size_system is not None:
+                _ss_target = size_system.targets.first()
                 if _ss_target:
                     target_codi = _ss_target.codi
             if run_detectat and base_detectada and target_codi:
                 mr = match_size_system(target_codi, run_detectat, base_detectada)
                 if mr.ok and mr.score == 1.0 and mr.base_ok:
-                    model.size_system = mr.size_system
+                    # SET-2/T8 — la metadata reconciliada és de la PEÇA de destí. A la mare,
+                    # `destinatari` ÉS el model i això és el camí de sempre, byte a byte.
+                    destinatari.size_system = mr.size_system
+                    size_system = mr.size_system
                     meta_update_fields = ['size_system', 'base_size_label', 'size_run_model']
                 else:
                     session.avisos = (session.avisos or []) + [
                         f"Size system no reconciliat automàticament (match {mr.score:.0%} per target "
                         f"'{target_codi}'): es manté la classificació manual."]
-            if model.size_system_id:
+            if size_system is not None:
                 from fhort.pom.models import SizeDefinition
-                _tenant_labels = list(SizeDefinition.objects.filter(size_system=model.size_system)
+                _tenant_labels = list(SizeDefinition.objects.filter(size_system=size_system)
                                       .values_list('etiqueta', flat=True))
                 _canon_to_tenant, _canon_ambig = {}, set()
                 for _e in _tenant_labels:
@@ -2256,30 +2959,32 @@ def import_session_confirmar_view(request, token):
                 if base_detectada:
                     base_detectada = _to_tenant(base_detectada)
                 if meta_update_fields:
-                    model.base_size_label = base_detectada or model.base_size_label
+                    destinatari.base_size_label = (base_detectada
+                                                   or _ef('base_size_label'))
                     # PORTA ÚNICA DEL RUN (llei S24b): l'ordre del DOCUMENT no mana sobre el run
-                    # del MODEL. Les etiquetes ja vénen traduïdes a llengua-tenant per
+                    # de la PEÇA. Les etiquetes ja vénen traduïdes a llengua-tenant per
                     # `_to_tenant`; aquí només se n'imposa l'ordre del SizeSystem.
                     from fhort.pom.grading_utils import run_del_model
                     _run_ordenat, _run_fora = run_del_model(
-                        [_to_tenant(l) for l in run_detectat], model.size_system,
+                        [_to_tenant(l) for l in run_detectat], size_system,
                     )
-                    model.size_run_model = '·'.join(_run_ordenat)
+                    destinatari.size_run_model = '·'.join(_run_ordenat)
                     if _run_fora:
                         # Abans, una etiqueta sense equivalència al sistema es desava CRUA dins el
                         # run (només avisava `_no_resol`), i el model acabava amb una talla que el
                         # seu propi sistema no coneix. Ara no hi entra i es diu en clar — mateixa
                         # direcció que el check (d) de la S24.
                         session.avisos = (session.avisos or []) + [
-                            f"Talles del document fora del sistema '{model.size_system.codi}' "
+                            f"Talles del document fora del sistema '{size_system.codi}' "
                             f"i excloses del run del model: {', '.join(_run_fora)}."]
                 if _no_resol:
                     session.avisos = (session.avisos or []) + [
                         "Etiquetes del document sense equivalència única al sistema "
-                        f"'{model.size_system.codi}': {', '.join(sorted(_no_resol))} (no traduïdes)."]
+                        f"'{size_system.codi}': {', '.join(sorted(_no_resol))} (no traduïdes)."]
 
-        # base_size = etiqueta tenant del model (mai document).
-        base_size = (model.base_size_label or '').strip()
+        # base_size = etiqueta tenant de la PEÇA DE DESTÍ (mai del document, mai de la mare
+        # si la peça en té de pròpia).
+        base_size = (_ef('base_size_label') or '').strip()
         if _to_tenant is not None and base_size:
             base_size = _to_tenant(base_size)
 
@@ -2292,15 +2997,19 @@ def import_session_confirmar_view(request, token):
         if valors_mode == 'deltes':
             from fhort.pom.grading_utils import deltes_a_absoluts
             run_ordenat_conv = [
-                s.strip() for s in (model.size_run_model or '').replace(';', '·').split('·')
+                s.strip() for s in (_ef('size_run_model') or '').replace(';', '·').split('·')
                 if s.strip()
             ]
             valors = deltes_a_absoluts(valors, base_size, run_ordenat_conv)
 
-        # ── C1c (D2, guard DUR). La talla base del model ha de tenir valor a la fitxa (després del
-        # remap). Si no hi és entre les etiquetes dels valors → 422 ABANS de cap escriptura: mai més
-        # base_value_cm=None silenciós. set_rollback per desfer el save de metadata diferit (si n'hi
-        # hagués). Els valors ja parlen la llengua-tenant per C1b.
+        # ── C1c (D2, guard DUR). La talla base de la PEÇA DE DESTÍ ha de tenir valor a la fitxa
+        # (després del remap). Si no hi és entre les etiquetes dels valors → 422 ABANS de cap
+        # escriptura: mai més base_value_cm=None silenciós. set_rollback per desfer el save de
+        # metadata diferit (si n'hi hagués). Els valors ja parlen la llengua-tenant per C1b.
+        #
+        # SET-2/T8 — «la talla base» d'aquest guard és la EFECTIVA de la peça (`_ef`), no la del
+        # model: importar a una prenda amb base pròpia i validar contra la de la mare rebutjaria
+        # fitxes bones i n'acceptaria de dolentes, que és el mateix error amb els dos signes.
         _val_labels = set()
         for _d in valors.values():
             _val_labels |= {k for k, v in _d.items() if v is not None}
@@ -2336,13 +3045,38 @@ def import_session_confirmar_view(request, token):
         # Ara es PROPOSEN, mai s'esborren sols: 409 amb la llista → el tècnic tria
         # `poda_choice`. Mateix mecanisme que `container_choice` (no cal pantalla nova).
         # Sempre soft (is_active=False), mai DELETE dur.
+        #
+        # ⚠️ SET-2/T8 · I L'ABAST ÉS EL DE LA PRENDA QUE S'IMPORTA. Aquesta és la TERCERA
+        # porta de poda de la casa —les dues de `_poda_mesures` les va acotar el #12b— i té
+        # la poda pròpia, o sigui que la llei s'hi ha de tornar a escriure: un document que
+        # parla de la Llaçada no diu RES de les mesures del Pantaló, i sense el filtre les
+        # hauria desactivades totes per no sortir a la seva llista. Un import a la 02 amb
+        # `garment=''` al filtre proposava podar la mare sencera.
+        #
+        # ⚠️ SET-2/T8-ter (16/08) · I ARA L'ABAST SÓN LES PECES QUE LA TRAMESA ANOMENA, EN
+        # PLURAL. Amb el garment a la fila un sol import en toca N, i el filtre escalar tornava
+        # a ser el dany de sempre girat: podar la mare mirava només la mare —correcte— però un
+        # import que porta faldilla i short deixava el short sencer FORA de la poda, o sigui que
+        # les seves mesures ràncies sobrevivien en silenci a un document que ja no les diu.
+        #
+        # I la pregunta es respon PER PEÇA: els POMs confirmats del short no protegeixen les
+        # files de la faldilla. Amb un `confirmed_pom_ids` pla, importar el short hauria
+        # «confirmat» el POM 962 i la fila G1 de la faldilla, que el document ja no menciona,
+        # no hauria sortit mai a la llista de poda. És la MATEIXA llei que `_poda_mesures` va
+        # aprendre al #12b —qui no surt a la llista cau només si la seva peça és una de les que
+        # la llista anomena—, escrita aquí per tercera vegada perquè aquesta porta és pròpia.
         poda_choice = (request.data.get('poda_choice') or '').strip().lower()  # 'desactivar'|'conservar'
-        orfes = list(
-            BaseMeasurement.objects
-            .filter(model=model, is_active=True, base_value_cm__isnull=False)
-            .exclude(pom_id__in=confirmed_pom_ids)
-            .select_related('pom')
-        )
+        confirmats_per_peca = {}
+        for _i, _p, _pm in resolved:
+            confirmats_per_peca.setdefault(_garment_de(_p, garment), set()).add(_pm.id)
+        orfes = []
+        for _g, _pids in confirmats_per_peca.items():
+            orfes.extend(
+                BaseMeasurement.objects
+                .filter(model=model, garment=_g, is_active=True, base_value_cm__isnull=False)
+                .exclude(pom_id__in=_pids)
+                .select_related('pom')
+            )
         if orfes and poda_choice not in ('desactivar', 'conservar'):
             return Response({
                 'conflict': True,
@@ -2353,9 +3087,18 @@ def import_session_confirmar_view(request, token):
                     'nom': bm.nom_fitxa or getattr(bm.pom, 'nom_ca', '') or '',
                     'base_value_cm': bm.base_value_cm,
                     'origen': bm.origen,
+                    # SET-2/T8-ter — DE QUINA PEÇA és cada òrfena. Amb un import que en toca
+                    # més d'una, una llista que no ho digués faria decidir a cegues: dues files
+                    # del mateix POM, una de la faldilla i una del short, es llegirien com una
+                    # repetició i el tècnic no sabria quina està a punt de donar de baixa.
+                    'garment': bm.garment,
+                    'garment_nom': _nom_de_peca(model, bm.garment),
                 } for bm in orfes],
                 'n': len(orfes),
-                'message': ("Aquest model té mesures vives que el document no menciona. "
+                'garment': garment,
+                'garment_nom': _nom_de_la_peca(session),
+                'garments': sorted(confirmats_per_peca),
+                'message': ("Aquesta prenda té mesures vives que el document no menciona. "
                             "Vols desactivar-les (el model s'alimenta de la realitat del "
                             "document) o conservar-les?"),
             }, status=409)
@@ -2371,11 +3114,20 @@ def import_session_confirmar_view(request, token):
         #
         # No es decideix per ell en cap direcció: es PROPOSA, com el soroll.
         manual_choice = (request.data.get('manual_choice') or '').strip().lower()  # 'sobreescriure'|'respectar'
+        # ONADA 3 — la pregunta segueix sent PER POM (la consulta de sota filtra per `pom_id`),
+        # però «porta valor?» es respon per la IDENTITAT de la fila: amb el POM pelat, una
+        # germana sense valor de base n'hauria arrossegat una altra que sí que en té.
         _doc_pom_ids = {int(p['pom_master_id']) for _i, p, _pm in resolved
-                        if valors.get(int(p['pom_master_id']), {}).get(base_size) is not None}
+                        if (valors.get(_identitat(p, garment)) or {}).get(base_size) is not None}
+        # SET-2/T8 — acotat a la prenda, com el soroll: el que un tècnic va teclejar al
+        # Pantaló no el trepitja un document de la Llaçada, i per tant tampoc n'ha de sortir
+        # una pregunta que faria decidir sobre files que aquest import no tocarà mai.
         manuals = list(
             BaseMeasurement.objects
-            .filter(model=model, is_active=True, origen='MANUAL',
+            # SET-2/T8-ter — les peces que la tramesa anomena, no la de la sessió: un import de
+            # dues peces ha de preguntar pel patrimoni MANUAL de totes dues.
+            .filter(model=model, garment__in=sorted(confirmats_per_peca) or [garment],
+                    is_active=True, origen='MANUAL',
                     base_value_cm__isnull=False, pom_id__in=_doc_pom_ids)
             .select_related('pom')
         ) if _doc_pom_ids else []
@@ -2388,15 +3140,22 @@ def import_session_confirmar_view(request, token):
                     'codi': bm.pom.codi_client or '',
                     'nom': bm.nom_fitxa or getattr(bm.pom, 'nom_ca', '') or '',
                     'valor_manual': bm.base_value_cm,
-                    'valor_document': valors.get(bm.pom_id, {}).get(base_size),
+                    # La fila MANUAL que es trepitjaria té els seus propis eixos: el valor que
+                    # se li compara ha de sortir de la SEVA identitat, no d'una germana.
+                    'valor_document': (valors.get((bm.pom_id, bm.capa, bm.instancia,
+                                                   bm.garment)) or {}).get(base_size),
+                    'garment': bm.garment,
+                    'garment_nom': _nom_de_peca(model, bm.garment),
                 } for bm in manuals],
                 'n': len(manuals),
                 'message': ("El document porta valor per a mesures introduïdes MANUALMENT. "
                             "Vols que mani el document o que es respecti el valor manual?"),
             }, status=409)
-        # POMs on el valor manual guanya: l'escriptura de sota els salta.
-        respectats_pom_ids = ({bm.pom_id for bm in manuals}
-                              if manual_choice == 'respectar' else set())
+        # Les FILES on el valor manual guanya: l'escriptura de sota les salta. ONADA 3 — per
+        # IDENTITAT, no per POM: amb la clau curta, respectar una MANUAL de l'exterior hauria
+        # deixat sense escriure la germana del folre, que ningú no havia decidit respectar.
+        respectats_idents = ({(bm.pom_id, bm.capa, bm.instancia, bm.garment) for bm in manuals}
+                             if manual_choice == 'respectar' else set())
 
         # ══ PRE-FLIGHT GRADING (D1) — detecció (pura) + matcher + GATES 409, TOT abans d'escriure.
         # El contenidor de client (GradingRuleSet origen=CLIENT_RUN) és ÚNIC per (customer +
@@ -2427,9 +3186,16 @@ def import_session_confirmar_view(request, token):
         elif _to_tenant is not None:
             run_document = [_to_tenant(l) for l in run_document]
         # (a) DETECCIÓ de les regles de la fitxa (pur, sense persistència; reusa detect_grading).
+        #
+        # ONADA 3 — el motor de detecció gradua PER POM (una regla per `pom_id`, i el
+        # contenidor del client tampoc no coneix instàncies), o sigui que aquí la taula entra
+        # per la vista col·lapsada. No és una pèrdua: el valor de cada germana ja ha arribat
+        # sencer al seu `BaseMeasurement`; el que no es fabrica és una regla de catàleg per
+        # instància, que ningú no ha decidit. `_valors_per_pom` ho DIU en un avís quan passa.
+        valors_pom = _valors_per_pom(valors, avisos=grading_avisos)
         fitxa_specs = derive_rules_from_fitxa(
-            run_document=run_document, base_size=base_size, valors=valors,
-            confirmed_pom_ids=confirmed_pom_ids, size_system=model.size_system,
+            run_document=run_document, base_size=base_size, valors=valors_pom,
+            confirmed_pom_ids=confirmed_pom_ids, size_system=size_system,
             avisos=grading_avisos, bloqueigs=grading_bloqueigs,
             descartades=grading_descartades)
         # LLEI BEACH (2026-07-26): les columnes fora del sistema (no-base) es descarten també de
@@ -2439,9 +3205,12 @@ def import_session_confirmar_view(request, token):
         # aquí es tanca el forat de l'escriptura d'overrides.
         if grading_descartades:
             _desc_canon = {canonical_size_label(x) for x in grading_descartades}
-            valors = {pid: {k: v for k, v in d.items()
-                            if canonical_size_label(k) not in _desc_canon}
-                      for pid, d in valors.items()}
+            valors = {ident: {k: v for k, v in d.items()
+                              if canonical_size_label(k) not in _desc_canon}
+                      for ident, d in valors.items()}
+            # I la vista per POM es refà de la taula ja podada: és la que el bucle
+            # d'overrides itera, i llegir-la de la d'abans hi tornaria a colar la columna.
+            valors_pom = _valors_per_pom(valors)
         # BLOQUEIG d'integritat (llei 2026-07-08): cap regla d'una taula incompleta. Abans
         # aquest camí només avisava i persistia igualment — el forat del bug 166. 422 ABANS de
         # cap escriptura de grading; `set_rollback` perquè som dins de l'atomic i les mesures
@@ -2472,8 +3241,11 @@ def import_session_confirmar_view(request, token):
         rs_fit = FitType.objects.filter(codi__iexact=model.fit_type).first() if model.fit_type else None
         gti = model.garment_type_item
         grp_codi = model.garment_group.codi if model.garment_group_id else None
+        # El contenidor és del CLIENT (customer + sistema + item + fit) i per tant no porta eix
+        # de peça: el que sí que hi entra per la peça és el SISTEMA DE TALLES efectiu, perquè
+        # una prenda amb sistema propi ha de buscar el contenidor del SEU sistema.
         res_cont = resolve_grading_container(
-            model.customer, model.size_system, model.target, model.construction,
+            model.customer, size_system, model.target, model.construction,
             rs_fit, grp_codi, garment_type_item=gti)
         container = res_cont['container']
         container_choice = (request.data.get('container_choice') or '').strip().lower()  # 'create'|'no_container'
@@ -2496,7 +3268,7 @@ def import_session_confirmar_view(request, token):
                     'tipus': 'container_absent',
                     'customer_nom': str(getattr(model.customer, 'nom', '') or model.customer or ''),
                     'garment_type_item': (getattr(gti, 'name', '') if gti else ''),
-                    'size_system': str(getattr(model.size_system, 'nom', '') or model.size_system or ''),
+                    'size_system': str(getattr(size_system, 'nom', '') or size_system or ''),
                     'fit': (rs_fit.codi if rs_fit else (model.fit_type or '')),
                     'n_regles': len(fitxa_specs),
                     'message': ("Aquest client no té graduació per a aquesta combinació "
@@ -2508,9 +3280,11 @@ def import_session_confirmar_view(request, token):
 
         # ════════════════════════════════ ESCRIPTURA ════════════════════════════════
         # Totes les decisions que podien retornar 409/422 ja s'han pres. Persistim la metadata
-        # reconciliada del model (diferida del pre-flight) i escrivim les mesures (sobirania).
+        # reconciliada de la PEÇA DE DESTÍ (diferida del pre-flight) i escrivim les mesures
+        # (sobirania). A la mare, `destinatari` ÉS el model: `model.save(update_fields=…)` de
+        # sempre. A una prenda, els tres camps són overrides seus i la mare no es toca.
         if meta_update_fields:
-            model.save(update_fields=meta_update_fields)
+            destinatari.save(update_fields=meta_update_fields)
 
         # ── 1. Mana el document: neteja files buides i crea NOMÉS els confirmats.
         #
@@ -2521,8 +3295,16 @@ def import_session_confirmar_view(request, token):
         #   · qualsevol altre origen (MANUAL, IMPORTED, FITTED…) → **SOFT** (is_active=False)
         #     + entrada al MeasurementChangeLog. Algú les va crear conscientment encara que
         #     ara no portin valor; la seva desaparició ha de deixar rastre.
+        #
+        # SET-2/T8 — acotat a la prenda (la mateixa llei de la poda de dalt: aquesta neteja
+        # ÉS una poda, i esborrar files de plantilla d'una altra peça és esborrar la seva
+        # bastida sense que ningú l'hagi anomenada).
         _TEMPLATE_ORIGENS = ('TEMPLATE', 'ITEM_STANDARD')
-        _buides = BaseMeasurement.objects.filter(model=model, base_value_cm__isnull=True)
+        # SET-2/T8-ter — i aquesta neteja també és per PECES ANOMENADES: la bastida de plantilla
+        # d'una peça que aquest import no toca no és soroll seu i no li pertoca esborrar-la.
+        _buides = BaseMeasurement.objects.filter(
+            model=model, garment__in=sorted(confirmats_per_peca) or [garment],
+            base_value_cm__isnull=True)
         _buides.filter(origen__in=_TEMPLATE_ORIGENS).delete()
         n_buides_soft = 0
         for bm in _buides.exclude(origen__in=_TEMPLATE_ORIGENS).exclude(is_active=False):
@@ -2537,11 +3319,13 @@ def import_session_confirmar_view(request, token):
         n_bm_valors = 0
         n_manual_respectats = 0
         for i, p, pm in resolved:
-            base_val = valors.get(int(p['pom_master_id']), {}).get(base_size)
+            # ONADA 3 — el valor és el de LA FILA, no el del POM: tres files del mateix POM
+            # són tres mesures, i amb la clau curta les tres es desaven amb el mateix número.
+            base_val = (valors.get(_identitat(p, garment)) or {}).get(base_size)
             # B2 — el tècnic ha decidit que el valor manual mana: el document no el trepitja.
             # La fila queda tal com està (valor, origen MANUAL i tot); només és patrimoni que
             # sobreviu a l'import, no una fila nova.
-            if pm.id in respectats_pom_ids:
+            if _identitat(p, garment) in respectats_idents:
                 n_manual_respectats += 1
                 n_bm += 1
                 n_bm_valors += 1
@@ -2567,14 +3351,36 @@ def import_session_confirmar_view(request, token):
                 _defaults['tolerancia_minus'] = p['tol_minus']
             if p.get('tol_plus') is not None:
                 _defaults['tolerancia_plus'] = p['tol_plus']
-            # FASE_3/C1-ins — literals: el document importat encara no diu de quina capa ni
-            # de quina instància parla cada fila. El lèxic multilingüe que ho sabrà llegir
-            # (LINING/FORRO/FOLRE→folre, i el mateix per a les repeticions) és l'Onada 3, que
-            # té UI i maqueta pendent. Fins llavors l'import escriu a l'exterior i a la
-            # instància única, i ho declara aquí en comptes de deixar-ho al default implícit.
+            # ✅ ONADA 3 · TANCADA EL 14/08. Aquí hi havia `capa=SLUG_DEFECTE, instancia=''`
+            # literals, amb l'acta que deia: «el document importat encara no diu de quina capa
+            # ni de quina instància parla cada fila; el lèxic multilingüe que ho sabrà llegir
+            # és l'Onada 3, que té UI i maqueta pendent». Ja no és pendent, i el que ha
+            # resolt el forat NO és el lèxic: és que **ho decideix la persona**. El pas de
+            # POMs porta el columnat d'instància de la definició manual, la decisió es desa a
+            # la fila i aquí es llegeix. El lèxic automàtic (LINING/FORRO→folre, «stretched
+            # out»→extended) queda per a quan hi hagi corpus d'imports reals que l'ensenyi;
+            # decisió d'Agus, i és la llei de l'import: el que no se sap segur, ho decideix
+            # l'humà. Sense declarar res, `_capa_instancia_de` torna exactament els dos
+            # literals d'abans: cap sessió existent canvia de comportament.
+            _capa, _instancia = _capa_instancia_de(p)
+            # …i la comporta `instancia_exigeix_nom` (migració 0074) segueix manant: una fila
+            # amb instància SENSE `nom_fitxa` és un IntegrityError, no un 422 educat. Passa
+            # amb els POMs afegits a mà al pas 2, que neixen amb `codi_fitxa` buit: el codi
+            # del catàleg és el nom que la fitxa hauria portat si el document l'hagués dit.
+            if _instancia and not _defaults['nom_fitxa']:
+                _defaults['nom_fitxa'] = (pm.codi_client or '')[:20]
             BaseMeasurement.objects.update_or_create(
                 model=model, pom=pm,
-                capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
+                # SET-2/T5 — el garment es declara igual que els altres dos eixos i entra a la
+                # CLAU, no als defaults: és identitat de fila, i sense ell l'update_or_create
+                # petaria amb MultipleObjectsReturned amb dues peces vives.
+                # SET-2/T8 — i el valor ja no és el literal `''`: és el de la SESSIÓ. Aquesta
+                # és la línia on l'import deixa d'escriure sempre a la mare.
+                # SET-2/T8-ter — i ara és el de LA FILA, amb el de la sessió de recanvi. Aquesta
+                # és la línia on un sol import deixa d'escriure sempre a la MATEIXA peça: la
+                # faldilla i el short de la Brumà surten del mateix document i aterren a dos
+                # contenidors, cadascuna amb la seva.
+                capa=_capa, instancia=_instancia, garment=_garment_de(p, garment),
                 defaults=_defaults)
             n_bm += 1
             if base_val is not None:
@@ -2628,17 +3434,25 @@ def import_session_confirmar_view(request, token):
             sf_codi = f"IMP-{model.id}-{next_num}"
 
         # (d) APLICAR (escriptures) — savepoint intern amb degradació amb gràcia.
-        new_rule_set = model.grading_rule_set
+        #
+        # SET-2/T8 — el JOC és un camp heretable: el que aquest import decideixi és de la PEÇA
+        # DE DESTÍ i s'escriu a `destinatari`. A la mare, `destinatari` ÉS el model i el camí
+        # és el de sempre; a una prenda, l'override seu, i el joc de la mare no es mou.
+        new_rule_set = _ef('grading_rule_set')
         resident_specs = None
-        prev_grs_id = model.grading_rule_set_id
+        prev_grs_id = getattr(destinatari, 'grading_rule_set_id', None)
+        # 6.1 — el joc que la PEÇA tenia ABANS d'aquest import, com a OBJECTE: cal llegir-ne
+        # l'`origen` per decidir si les seves `MANUAL` són autoria. Capturat aquí, abans de
+        # qualsevol `save()` d'aquesta funció.
+        prev_grs_obj = new_rule_set
         if fitxa_specs:
             try:
                 with transaction.atomic():
                     if container is None:
                         if container_choice == 'no_container':
-                            # SOBIRANIA: el model queda amb regles residents pròpies, sense contenidor.
-                            model.grading_rule_set = None
-                            model.save(update_fields=['grading_rule_set'])
+                            # SOBIRANIA: la peça queda amb regles residents pròpies, sense contenidor.
+                            destinatari.grading_rule_set = None
+                            destinatari.save(update_fields=['grading_rule_set'])
                             new_rule_set = None
                             resident_specs = fitxa_specs
                             grading_avisos.append(
@@ -2652,12 +3466,12 @@ def import_session_confirmar_view(request, token):
                             nom_cont = " · ".join(p for p in [
                                 str(getattr(model.customer, 'nom', '') or model.customer or ''),
                                 str(getattr(model.garment_group, 'nom', '') or model.garment_group or ''),
-                                str(getattr(model.size_system, 'nom', '') or model.size_system or ''),
+                                str(getattr(size_system, 'nom', '') or size_system or ''),
                             ] if p)[:120] or f"Contenidor client · {model.codi_intern}"
                             # AMPLI: garment_type_item=NULL (abast per garment_group FK → el troba M1
                             # nivell 2 la propera vegada). NO és la identitat fina (item), és de món.
                             container = GradingRuleSet.objects.create(
-                                nom=nom_cont, size_system=model.size_system,
+                                nom=nom_cont, size_system=size_system,
                                 garment_group=model.garment_group, garment_type_item=None,
                                 construction=rs_constr, fit_type=rs_fit,
                                 is_system_default=False, actiu=True,
@@ -2665,8 +3479,8 @@ def import_session_confirmar_view(request, token):
                             if rs_target:
                                 container.targets.add(rs_target)
                             afegeix_regles_al_contenidor(container, fitxa_specs, base_def_id)
-                            model.grading_rule_set = container
-                            model.save(update_fields=['grading_rule_set'])
+                            destinatari.grading_rule_set = container
+                            destinatari.save(update_fields=['grading_rule_set'])
                             new_rule_set = container
                             resident_specs = fitxa_specs
                             grading_avisos.append(
@@ -2677,8 +3491,8 @@ def import_session_confirmar_view(request, token):
                         # Amb 0 regles, cls['amplia'] == totes les specs (res per coincidir/divergir).
                         if cls['amplia']:
                             afegeix_regles_al_contenidor(container, cls['amplia'], base_def_id)
-                        model.grading_rule_set = container
-                        model.save(update_fields=['grading_rule_set'])
+                        destinatari.grading_rule_set = container
+                        destinatari.save(update_fields=['grading_rule_set'])
                         new_rule_set = container
                         resident_specs = fitxa_specs
                         grading_avisos.append(
@@ -2693,24 +3507,44 @@ def import_session_confirmar_view(request, token):
                         #     (services._load_model_overrides); base i talla-base van a BaseMeasurement.
                         from fhort.pom.grading_utils import _norm as _norm_label
                         from fhort.models_app.models import ModelGradingOverride
-                        model.grading_rule_set = container
-                        model.save(update_fields=['grading_rule_set'])
+                        destinatari.grading_rule_set = container
+                        destinatari.save(update_fields=['grading_rule_set'])
                         new_rule_set = container
                         # SENSE residents: el contenidor mana (all-or-nothing de _load_grading_rules).
                         # Neteja residents ranços perquè l'herència del contenidor no quedi tapada.
-                        model.grading_rules.all().delete()
+                        #
+                        # 🔴 6.1 · AQUESTA BRANCA NO PRESERVA LES `MANUAL`, I ÉS A POSTA. Salvar-ne
+                        # una sola deixaria el model amb residents, i `_load_grading_rules` és
+                        # ALL-OR-NOTHING: amb una resident viva el contenidor deixaria de graduar
+                        # els altres 24 POMs. Preservar aquí no salvaria una regla, desactivaria
+                        # el contenidor sencer en silenci. És l'únic camí de wipe que la decisió
+                        # 6.1 NO tanca, i el tancarà la política fina (decisió de l'Agus).
+                        #
+                        # ⚠️ SET-2/T8 — I EL WIPE S'ACOTA A LA PRENDA. `model.grading_rules.all()`
+                        # era el mateix dany del #12d amb una altra taula: un import a la Llaçada
+                        # esborrava les regles residents del Pantaló, que no surten enlloc del
+                        # document i que ningú no ha anomenat. La germana d'aquesta línia
+                        # (`materialize_model_grading_rules_from_specs`) ja fa el wipe per
+                        # `(model, garment)` des de T3; aquesta se li iguala.
+                        model.grading_rules.filter(garment=garment).delete()
                         resident_specs = None
                         base_norm = _norm_label(base_size)
                         pom_divergents = ([c['pom_id'] for c in cls['conflicte']]
                                           + [s['pom_id'] for s in cls['amplia']])
                         n_ovr = 0
                         for pom_id in pom_divergents:
-                            for label, val in (valors.get(pom_id) or {}).items():
+                            # Per POM: l'override és la contrapartida d'una regla de catàleg,
+                            # i el catàleg no coneix instàncies (mateixa llei que la detecció).
+                            for label, val in (valors_pom.get(pom_id) or {}).items():
                                 if val is None or _norm_label(label) == base_norm:
                                     continue
+                                # SET-2/T8 — `garment` a la CLAU (és identitat de fila, com a
+                                # BaseMeasurement): l'override d'una prenda no trepitja el de
+                                # la germana ni el de la mare.
                                 ModelGradingOverride.objects.update_or_create(
                                     model=model, pom_id=pom_id, size_label=label,
                                     capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
+                                    garment=garment,
                                     defaults={'value_cm': float(val), 'created_by': user_profile,
                                               'motiu': ("Import W5 — divergència vs catàleg del "
                                                         "contenidor (INTOCABLE)")})
@@ -2735,13 +3569,32 @@ def import_session_confirmar_view(request, token):
                     # SEMBRA SELECTIVA de residents (origen=IMPORTED); el motor les llegeix amb prioritat.
                     if resident_specs is not None:
                         materialize_model_grading_rules_from_specs(
-                            model, resident_specs, origen='IMPORTED')
+                            model, resident_specs, origen='IMPORTED',
+                            joc_anterior=prev_grs_obj, garment=garment)
             except Exception as e:
-                model.grading_rule_set_id = prev_grs_id
-                new_rule_set = model.grading_rule_set
+                # La reversió és del MATEIX objecte que hauria escrit: a la mare el model, a una
+                # prenda la seva fila. Restaurar `model.grading_rule_set_id` des d'un import a la
+                # 02 hauria mogut el joc de la mare a l'hora d'anar malament.
+                destinatari.grading_rule_set_id = prev_grs_id
+                new_rule_set = _ef('grading_rule_set')
                 grading_avisos.append(
-                    f"Grading no aplicat (error en desar: {e}); es manté el ruleset previ del model.")
-        n_rules = model.grading_rules.count()
+                    f"Grading no aplicat (error en desar: {e}); es manté el ruleset previ de la peça.")
+        n_rules = model.grading_rules.filter(garment=garment).count()
+
+        # ── SET-2/T8-ter (16/08) · AQUÍ HI HAVIA UN AVÍS + WATCHPOINT `residents_de_peca` I
+        # S'HA RETIRAT, perquè el forat que denunciava ja no existeix.
+        #
+        # Deia: «mentre el motor decideixi "hi ha residents?" per MODEL i no per peça, les altres
+        # prendes poden deixar de graduar pel contenidor del client», i obria un Watchpoint a
+        # cada import a una peça. **PRED-3 el va tancar el 12/08**: `_load_grading_rules_per_garment`
+        # (`pom/services.py:876`) ja no pregunta `rules.exists()` sobre tot el model sinó
+        # `te_residents_la_mare` —«en té LA MARE?»—, que és el subjecte bo, i amb ell una peça
+        # amb residents propis ja NO fa baixar el catàleg per a les seves germanes.
+        #
+        # Un avís que descriu un estat que ja no es dona no és prudència: és soroll que fa
+        # desconfiar del que sí que avisa. I amb T8-ter costava més que ahir —un sol import pot
+        # tocar N peces, o sigui que n'hauria obert un per import i per peça.
+        # Verificat contra el codi viu el 16/08 abans de retirar-lo.
 
         # ── 3. SizeFitting CONTENIDOR per a la projecció CONSCIENT (D-10) — només quan no hi ha
         # conflicte pendent. L'import reté base + deltes + breaks (ModelGradingRule); el grading
@@ -2768,7 +3621,7 @@ def import_session_confirmar_view(request, token):
         # visible al WatchpointsPanel del model) + avís al resum del pas 5.
         columnes_descartades = list(dict.fromkeys(grading_descartades))
         if columnes_descartades:
-            _ss_codi = model.size_system.codi if model.size_system_id else ''
+            _ss_codi = size_system.codi if size_system is not None else ''
             _etq = ', '.join(columnes_descartades)
             grading_avisos.append(
                 f"{len(columnes_descartades)} columna/es descartada/es: {_etq} "
@@ -2820,7 +3673,9 @@ def import_session_confirmar_view(request, token):
         if teixit_aplicat:
             model.save()
 
-        # ── 6. Tanca la sessió.
+        # ── 6. Tanca la sessió. L'EIX NO S'HI TOCA: la fila d'`ImportSession` que queda amb
+        # `estat='CONFIRMAT'` porta el document, el model i la PRENDA on ha aterrat, i és el
+        # registre import→peça que el brief demana (v. l'acta al camp `garment` del model).
         session.estat = 'CONFIRMAT'
         session.save(update_fields=['estat', 'avisos', 'actualitzat_at'])
 
@@ -2829,6 +3684,16 @@ def import_session_confirmar_view(request, token):
         'estat': session.estat,
         'model_id': model.id,
         'model_codi': model.codi_intern,
+        # SET-2/T8 — de quina prenda parla tot aquest resum.
+        'garment': garment,
+        'garment_nom': _nom_de_la_peca(session),
+        # L'AVÍS INFORMATIU, MAI BLOQUEJANT: el cribratge va veure més d'un patró al
+        # document i l'import ha anat sencer a UNA prenda. No demana cap clic —el desat ja
+        # s'ha fet— i es pot ignorar amb raó legítima; el que no pot és no dir-se.
+        'avis_multiprenda': ({
+            'garment': garment,
+            'garment_nom': _nom_de_la_peca(session),
+        } if (session.resultat or {}).get('mes_duna_prenda') else None),
         'base_measurements': n_bm,
         'base_measurements_amb_valor': n_bm_valors,
         # B1 — el resultat de la poda mai és silenciós.
@@ -2845,7 +3710,7 @@ def import_session_confirmar_view(request, token):
         'grading_avisos': grading_avisos,
         # BEACH — columnes del document fora del sistema, descartades (no bloqueja; watchpoint creat).
         'columnes_descartades': columnes_descartades,
-        'size_system_codi': (model.size_system.codi if model.size_system_id else None),
+        'size_system_codi': (size_system.codi if size_system is not None else None),
         # D1 — la proposta viatja també a la resposta perquè el wizard la pugui ensenyar
         # a l'acte; la font persistent, però, és el Watchpoint (sobreviu al tancament del
         # wizard, que és justament on abans es perdia tot).

@@ -8,12 +8,19 @@ import Shell from './components/layout/Shell'
 import GuardTascaOblidada from './components/GuardTascaOblidada'
 import AvisSessio from './components/AvisSessio'
 import { modelFitxers } from './api/endpoints'
+import { botoSec } from './components/ui/buttons'
+import { overlayBase } from './components/ui/overlay'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Models = lazy(() => import('./pages/Models'))
+const FittingPrintSheet = lazy(() => import('./pages/FittingPrintSheet'))
 const POMs = lazy(() => import('./pages/POMs'))
 const TaskTypes = lazy(() => import('./pages/TaskTypes'))
 const GarmentTypes = lazy(() => import('./pages/GarmentTypes'))
+// U2 — el Catàleg de peces (maqueta v4): la cascada grup › família › item i la pantalla d'item
+// amb dos tabs. Substitueix el mestre-detall de GarmentTypes i el stepper d'ItemAuthoring.
+const CatalegPeces = lazy(() => import('./pages/CatalegPeces'))
+const CatalegPecesItem = lazy(() => import('./pages/CatalegPecesItem'))
 const Suppliers = lazy(() => import('./pages/Suppliers'))
 // P7 — els RECURSOS del Brand (Studios amb pont obert). Ruta viva sempre; l'entrada de menú
 // la gateja isBrand() al Sidebar. Un Estudi que hi arribi per URL rep 403 del backend.
@@ -51,7 +58,10 @@ const TechSheetEditor = lazy(() => import('./pages/TechSheetEditor'))
 const TallerPatro = lazy(() => import('./pages/TallerPatro'))
 const TechSheetEntry = lazy(() => import('./pages/TechSheetEntry'))
 const DissenyPlaceholder = lazy(() => import('./pages/DissenyPlaceholder'))
-const ItemAuthoring = lazy(() => import('./pages/ItemAuthoring'))
+// U2 — `ItemAuthoring` retirat de rutes (la pantalla de l'item el substitueix). El FITXER es
+// conserva a posta: és l'únic consumidor de `BaseSetPanel`, que al seu torn és l'única UI dels
+// `ItemBaseSet` (els «mons» d'un item), i la maqueta v4 NO els cobreix. Esborrar-lo enterraria
+// aquella superfície sencera. Decisió pendent al report.
 const TimeTracking = lazy(() => import('./pages/TimeTracking'))
 const UsersRoles = lazy(() => import('./pages/UsersRoles'))
 const UserProfilePage = lazy(() => import('./pages/UserProfilePage'))
@@ -83,13 +93,31 @@ function ProtectedRoute({ children }) {
   const location = useLocation()
 
   if (estatAuth === AUTH_DESCONEGUT) return <PantallaEspera />
-  // El guard de tasca oblidada penja D'AQUÍ i no del Shell a posta: l'editor .ftt i el taller de
-  // patró són rutes de fora del Shell (són eines a pantalla completa), i són precisament on el
-  // tècnic passa aquells 30 minuts. Muntat al Shell, l'avís no existiria allà on més cal.
+  // El guard de tasca oblidada penja D'AQUÍ i no del Shell a posta: el TALLER DE PATRÓ és una
+  // ruta de fora del Shell (és una eina a pantalla completa), i és precisament on el tècnic
+  // passa aquells 30 minuts. Muntat al Shell, l'avís no existiria allà on més cal.
+  // (L'editor .ftt també era fora fins a la fusió de capçaleres; ara és dins i el tindria
+  // igualment pel Shell. Es queda aquí perquè el motiu segueix viu per al taller, i perquè
+  // penjar-lo del guard és el que garanteix que hi sigui a TOTA ruta protegida, dins o fora.)
   // Va com a GERMÀ de children: repintar-se cada segon no arrossega l'app sencera.
   // AvisSessio (K5) va al costat del guard de tasca oblidada i pel mateix motiu: tots dos
   // són globals i han de viure allà on la persona treballa, no en una pantalla concreta.
-  if (estatAuth === AUTH_VALID) return <>{children}<GuardTascaOblidada /><AvisSessio /></>
+  // (F2.3 hi tenia també `SessioActiva`, amb aquest mateix argument. Ja no: v. la nota de sota.)
+  if (estatAuth === AUTH_VALID) {
+    // ⚠️ `SessioActiva` DESMUNTADA (Agus, revisió a pantalla 12/08). És la píndola flotant de
+    // baix a la dreta («Definició POM · BRW-26-FW-0002 · 1m»). La decisió no la vaig trobar
+    // escrita enlloc del vault, però l'acta de T4 hi va en la mateixa direcció —«la píndola
+    // d'acabar de F2.3 marxa»— i el que quedava des d'aleshores era el residu INFORMATIU: ja no
+    // tanca res, ja no porta cap gest, i el que deia (què corre i des de quan) el diu el panell
+    // de Tasques, que és on la decisió es pren.
+    //
+    // 🚩 ES RETIRA DE TOTA L'APP I NO NOMÉS D'AQUESTA SUPERFÍCIE, i és deliberat: el component
+    // era GLOBAL a posta (la seva capçalera argumenta que el tècnic salta de Mesures a Fitxa a
+    // Escalat i la sessió és la mateixa cosa a totes), o sigui que amagar-la en una pantalla i
+    // deixar-la en una altra hauria trencat justament l'argument que la sostenia. El fitxer es
+    // queda al repo sense muntar: tornar-la és afegir-la aquí i prou.
+    return <>{children}<GuardTascaOblidada /><AvisSessio /></>
+  }
   return <Navigate to="/login" replace state={{ from: location }} />
 }
 
@@ -97,6 +125,30 @@ function ProtectedRoute({ children }) {
  *  que servei, i això no és una càrrega —és una lectura de localStorage. */
 function PantallaEspera() {
   return <div style={{ minHeight: '100vh', background: 'var(--bg-page)' }} />
+}
+
+/** Ruta que a més d'autenticació demana una CAPACITAT (2026-08-14, capability `comercial`).
+ *
+ * Aquest patró no existia: fins ara les rutes només es protegien contra l'anonimat i qualsevol
+ * persona autenticada podia entrar a qualsevol pantalla escrivint la URL. Amagar l'entrada del
+ * menú (`navGroups.js`) no ho impedia — el menú és una llista, no una porta.
+ *
+ * És CORTESIA, no seguretat: qui entri igualment troba una pàgina que no carrega res, perquè
+ * el tall de veritat és el 403 del servidor. El que evita és el pitjor dels dos mons, que és
+ * una pantalla muntada i plena de missatges d'error.
+ *
+ * Rebota a l'arrel i no a /login: qui hi arriba SÍ que té sessió; el que no té és el permís, i
+ * enviar-lo a la pantalla d'entrar li diria una mentida sobre què li passa.
+ */
+function RutaAmbCapacitat({ cap, children }) {
+  const estatAuth = useAuthStore(s => s.estatAuth)
+  const capabilities = useAuthStore(s => s.user?.capabilities)
+  if (estatAuth === AUTH_DESCONEGUT) return <PantallaEspera />
+  // `capabilities` encara no carregat (fetchMe en vol) → esperem. Decidir amb la llista buida
+  // rebotaria la persona legítima a l'arrel a cada F5 sobre una pantalla comercial.
+  if (estatAuth === AUTH_VALID && capabilities === undefined) return <PantallaEspera />
+  if (!capabilities?.includes(cap)) return <Navigate to="/" replace />
+  return children
 }
 
 // v2/J1: el Size Check antic es jubila. /size-check redirigeix al TAB Mesures del ModelSheet,
@@ -118,6 +170,32 @@ function MesuresRedirect() {
   return <Navigate to={`/models/${id}?tab=Mesures${taskId ? `&task_id=${taskId}` : ''}`} replace />
 }
 
+// ── EL CROM DE LES TRES CAIXES DEL RESOLUTOR ────────────────────────────────────────────────
+// Les tres decisions que aquest resolutor pot haver de plantejar —quina fitxa obro, d'on la
+// creo, i «no s'ha pogut»— són la MATEIXA caixa amb contingut diferent, i abans cadascuna es
+// tornava a escriure a mà. Ara la forma és una i el que canvia és què hi diu.
+//
+// 🚨 EL QUE LA MESURA VA TROBAR I LLEGIR NO TROBAVA: aquestes caixes pintaven el text amb
+// `var(--text)`, I `--text` NO EXISTEIX a `:root`. La declaració queda invàlida al càlcul i el
+// color cau a l'heretat — o sigui que el títol i les files es veien negres per accident, no per
+// decisió, i el dia que el pare canviés de tinta canviarien soles. És exactament el mode de
+// fallada del `var(--fs-title)` del commit 254, i tampoc es veu llegint el codi.
+// La tinta de la casa és `--text-main`; la secundària, `--text-soft` (`--text-muted` és
+// DEPRECAT §1b(c) i dona 3.64:1). Vores `--line`, superfícies `--panel`, radis `--r-card`/
+// `--r-ctrl`, i l'overlay del sistema (`overlayBase`, z 150) en comptes d'un `zIndex: 50` fet a
+// mà que queda per sota del menú lateral (100).
+const fittPanel = (maxWidth) => ({
+  background: 'var(--panel)', borderRadius: 'var(--r-card)', padding: '1.4rem',
+  maxWidth, width: '90%', border: '1px solid var(--line)', alignSelf: 'center',
+})
+const fittTitol = { fontSize: 'var(--fs-h3)', fontWeight: 600, marginBottom: 12, color: 'var(--text-main)' }
+const fittFila = {
+  textAlign: 'left', fontSize: 'var(--fs-body)', padding: '8px 10px',
+  border: '1px solid var(--line)', borderRadius: 'var(--r-ctrl)',
+  background: 'var(--panel)', color: 'var(--text-main)', cursor: 'pointer',
+}
+const fittDesc = { fontSize: 'var(--fs-caption)', color: 'var(--text-soft)' }
+
 // Cutover .ftt (F8): /models/:id/fitxa ja no munta l'editor TechSheet (O2O). Resol o crea el
 // document .ftt del model (ModelFitxer tipus TECHSHEET) i redirigeix a l'editor .ftt, conservant
 // task_id. Així WorkPlan (tasca tech_sheet) i el tab Fitxa segueixen apuntant a /fitxa sense canvis.
@@ -132,6 +210,13 @@ function FttResolver() {
   const [choose, setChoose] = useState(null)
   // F2 · nom intern de la fitxa nova des del selector de N. Buit → nom derivat del model.
   const [nouNom, setNouNom] = useState('')
+  // 🚨 BUG D'ACCÉS (Agus, 09/08) · «la Fitxa tècnica no s'obre». El resolutor ENGOLIA els errors
+  // del servidor i se n'anava a `/models/:id` sense dir res: un `POST .../ftt-document/` amb 500
+  // es veia, exactament, com una pantalla que no obre. Ni missatge, ni rastre, ni manera de
+  // saber que hi havia hagut una crida. La causa d'aquell 500 era d'infra i està resolta; això
+  // d'aquí és l'altra meitat del defecte, i és la que fa que la PRÒXIMA vegada es vegi.
+  // Un error del servidor es DIU. Val més que el sistema sembli trencat que no pas que dissimuli.
+  const [fatal, setFatal] = useState(null)
   const API = import.meta.env.VITE_API_URL || ''
   const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('access_token')}` }
 
@@ -143,9 +228,9 @@ function FttResolver() {
       if ((nom || '').trim()) cos.nom = nom.trim()
       const { data: f } = await modelFitxers.crearFitxa(id, cos)
       navigate(`/models/${id}/ftt/${f.id}${taskId ? `?task_id=${taskId}` : ''}`, { replace: true })
-      return
-    } catch { /* noop */ }
-    navigate(`/models/${id}`, { replace: true })
+    } catch (e) {
+      setFatal(e?.response?.data?.error || t('tech_sheet.tab_new_err'))
+    }
   }
 
   useEffect(() => {
@@ -156,11 +241,18 @@ function FttResolver() {
       // tenia una d'accessible per aquest camí.
       // U4 — mateixa font que el tab "Fitxa tècnica" del ModelSheet (modelFitxers.fitxesTecniques):
       // el selector de N i la llista canònica no poden dir coses diferents del mateix model.
-      let fitxes = []
+      // 🚨 AQUEST `catch` NO POT CAURE CAP AVALL. Si la llista falla, `fitxes` es queda a zero i
+      // el camí de sota vol dir «aquest model no en té cap» → CREARIA UNA FITXA NOVA al costat
+      // de les que ja hi ha, i el model es quedaria amb un document duplicat per una caiguda de
+      // xarxa. Zero perquè no n'hi ha i zero perquè no s'ha pogut saber no són el mateix zero.
+      let fitxes
       try {
         const { data: d } = await modelFitxers.fitxesTecniques(id)
         fitxes = d.results || d || []
-      } catch { /* noop */ }
+      } catch (e) {
+        if (!cancelled) setFatal(e?.response?.data?.error || t('tech_sheet_entry.open_error'))
+        return
+      }
       if (cancelled) return
       if (fitxes.length === 1) {
         navigate(`/models/${id}/ftt/${fitxes[0].id}${taskId ? `?task_id=${taskId}` : ''}`, { replace: true })
@@ -181,28 +273,46 @@ function FttResolver() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
+  // EL FRACÀS, DIT. Mateixa caixa centrada que les altres dues decisions d'aquest resolutor —el
+  // que canvia és què hi diu—, i una porta de sortida explícita cap al model: qui arriba aquí ha
+  // vingut a obrir una fitxa i no la tindrà, però ha de saber-ho i ha de poder marxar.
+  if (fatal) {
+    return (
+      <div style={overlayBase({ alignItems: 'center' })}>
+        <div role="alert" style={fittPanel(360)}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 14 }}>
+            <i className="ti ti-alert-circle" aria-hidden="true" style={{ fontSize: 16, color: 'var(--err)', flex: 'none', marginTop: 1 }} />
+            <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)' }}>{fatal}</span>
+          </div>
+          <button type="button" onClick={() => navigate(`/models/${id}`, { replace: true })} style={botoSec}>
+            {t('app.back')}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   // F2 — el model ja té N fitxes: quina s'obre? Amb la porta per fer-ne una de nova amb nom.
   if (choose?.fitxes) {
-    const btn = { textAlign: 'left', fontSize: 'var(--fs-body)', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-card)', color: 'var(--text)', cursor: 'pointer' }
     return (
-      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
-        <div style={{ background: 'var(--bg-card)', borderRadius: 12, padding: '1.4rem', maxWidth: 380, width: '90%', border: '1px solid var(--border)' }}>
-          <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 600, marginBottom: 12, color: 'var(--text)' }}>{t('tech_sheet.pick_doc_title')}</h2>
+      <div style={overlayBase({ alignItems: 'center' })}>
+        <div style={fittPanel(380)}>
+          <h2 style={fittTitol}>{t('tech_sheet.pick_doc_title')}</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {choose.fitxes.map(f => (
-              <button key={f.id} type="button" style={btn}
+              <button key={f.id} type="button" style={fittFila}
                 onClick={() => navigate(`/models/${id}/ftt/${f.id}${taskId ? `?task_id=${taskId}` : ''}`, { replace: true })}>
                 {f.nom_fitxer}
-                {f.descripcio && <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>{f.descripcio}</div>}
+                {f.descripcio && <div style={fittDesc}>{f.descripcio}</div>}
               </button>
             ))}
           </div>
-          <div style={{ display: 'flex', gap: 6, marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', gap: 6, marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--line)' }}>
             <input value={nouNom} onChange={e => setNouNom(e.target.value)}
               placeholder={t('tech_sheet.new_doc_name_placeholder')}
-              style={{ flex: 1, minWidth: 0, fontSize: 'var(--fs-body)', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--white)', color: 'var(--text)' }} />
+              style={{ flex: 1, minWidth: 0, fontSize: 'var(--fs-body)', padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 'var(--r-ctrl)', background: 'var(--panel)', color: 'var(--text-main)' }} />
             <button type="button" onClick={() => createDoc(null, nouNom)}
-              style={{ ...btn, border: '1px solid var(--gold)', color: 'var(--gold)', background: 'transparent', fontWeight: 600, whiteSpace: 'nowrap' }}>
+              style={{ ...botoSec, whiteSpace: 'nowrap' }}>
               {t('tech_sheet.new_doc_add')}
             </button>
           </div>
@@ -212,19 +322,21 @@ function FttResolver() {
   }
   if (choose) {
     return (
-      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
-        <div style={{ background: 'var(--bg-card)', borderRadius: 12, padding: '1.4rem', maxWidth: 360, width: '90%', border: '1px solid var(--border)' }}>
-          <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 600, marginBottom: 12, color: 'var(--text)' }}>{t('tech_sheet.new_doc_title')}</h2>
+      <div style={overlayBase({ alignItems: 'center' })}>
+        <div style={fittPanel(360)}>
+          <h2 style={fittTitol}>{t('tech_sheet.new_doc_title')}</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <button type="button" onClick={() => createDoc(null)}
-              style={{ textAlign: 'left', fontSize: 'var(--fs-body)', padding: '8px 10px', border: '1px solid var(--gold)', borderRadius: 6, background: 'transparent', color: 'var(--gold)', fontWeight: 600, cursor: 'pointer' }}>
+            {/* «En blanc» i les plantilles són la MATEIXA decisió —d'on surt el document—, i per
+                això es pinten igual (§5.3: cap de les dues és una acció, totes dues són portes).
+                Abans la primera anava en daurat i les altres en gris, i el daurat hi deia
+                «aquesta és la bona» sense que ningú ho hagués decidit. */}
+            <button type="button" onClick={() => createDoc(null)} style={fittFila}>
               {t('tech_sheet.new_doc_blank')}
             </button>
             {choose.templates.map(tpl => (
-              <button key={tpl.id} type="button" onClick={() => createDoc(tpl.id)}
-                style={{ textAlign: 'left', fontSize: 'var(--fs-body)', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-card)', color: 'var(--text)', cursor: 'pointer' }}>
+              <button key={tpl.id} type="button" onClick={() => createDoc(tpl.id)} style={fittFila}>
                 {tpl.nom}
-                {tpl.descripcio && <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>{tpl.descripcio}</div>}
+                {tpl.descripcio && <div style={fittDesc}>{tpl.descripcio}</div>}
               </button>
             ))}
           </div>
@@ -232,7 +344,7 @@ function FttResolver() {
       </div>
     )
   }
-  return <div style={{ padding: 24, color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>…</div>
+  return <div style={{ padding: 24, color: 'var(--text-soft)', fontSize: 'var(--fs-body)' }}>…</div>
 }
 
 class AppErrorBoundary extends React.Component {
@@ -263,7 +375,8 @@ class AppErrorBoundary extends React.Component {
               window.location.reload();
             }}
             style={{
-              background: 'var(--gold)', color: '#fff',
+              // C2 · §5.1 — l'única acció d'aquesta pantalla és tornar a provar: és LA primària.
+              background: 'var(--accio)', color: 'var(--white)',
               border: 'none', borderRadius: 4,
               padding: '8px 20px', cursor: 'pointer',
               fontFamily: 'IBM Plex Mono, monospace', fontSize: 'var(--fs-body)'
@@ -301,15 +414,22 @@ export default function App() {
             <FttResolver />
           </ProtectedRoute>
         } />
-        {/* Editor de document .ftt (ModelFitxer tipus TECHSHEET): mateix editor, font .ftt. */}
-        <Route path="/models/:id/ftt/:fitxerId" element={
+        {/* C5-UI/P5 — FULL DE FITTING per imprimir. FORA del Shell a posta: el que s'imprimeix
+            és el full, i el menú lateral i la barra de dalt no hi tenen res a fer. La ruta porta
+            sessió I model perquè una sessió de grup té més d'una peça i el full és d'una sola. */}
+        <Route path="/fittings/:sessionId/full/:modelId" element={
           <ProtectedRoute>
-            <TechSheetEditor />
+            <FittingPrintSheet />
           </ProtectedRoute>
         } />
-        {/* W2 — Taller de patró: FORA del Shell, com l'editor .ftt. És una eina a pantalla
-            completa (el canvas mana), no una pàgina del menú. `?file=` tria el PatternFile;
-            sense param, s'obre el vigent del model. */}
+        {/* W2 — Taller de patró: FORA del Shell. És una eina a pantalla completa (el canvas
+            mana), no una pàgina del menú. `?file=` tria el PatternFile; sense param, s'obre el
+            vigent del model.
+            ⚠️ Deia «com l'editor .ftt» i des del 09/08 ja no és cert: l'editor és DINS del
+            Shell i arriba a la pantalla completa per l'altre camí, `rutesPantallaCompleta`
+            (hi ha de ser, perquè la seva barra —fletxa i Exportar PDF— es teletransporta al
+            forat que obre el Shell). Els dos camins són legítims i el guard accepta tots dos;
+            el que no s'accepta és el tercer, que és el que va passar: dins i sense declarar. */}
         <Route path="/models/:id/patro/taller" element={
           <ProtectedRoute>
             <TallerPatro />
@@ -334,6 +454,17 @@ export default function App() {
           {/* Escalat: l'edició viu DINS el ModelSheet (tab Escalat en mode edició). La ruta de tasca
               hi entra directament (defaultTab+autoEdit), sense pàgina externa ni overlay. */}
           <Route path="models/:id/escalat" element={<ModelSheet defaultTab="Escalat" autoEdit="Escalat" />} />
+          {/* EDITOR DE DOCUMENT .ftt — DINS DEL SHELL des de la fusió de capçaleres (Agus,
+              09/08). Era una de les tres rutes de «pantalla completa» declarades fora, amb el
+              mateix argument que el Taller de patró: «és una eina, el canvas mana». L'argument
+              es va tornar en contra: en no tenir bastiment, l'editor se'l va pintar ell mateix
+              —logo, breadcrumb, barra pròpia— i el que Agus veia a pantalla eren TRES
+              capçaleres apilades i una fitxa tècnica que no s'assemblava a cap altra secció
+              del model. Dins del Shell, la identitat i el camí els posa la casa, l'editor
+              només posa la seva cinta d'eina, i el llenç segueix manant a tot el que queda.
+              ⚠️ El Taller de patró es queda fora de moment: mateix cas, però no és d'aquest
+              tram i moure'l sense mesurar-lo seria fer-ho a cegues. */}
+          <Route path="models/:id/ftt/:fitxerId" element={<TechSheetEditor />} />
           <Route path="models/:id/teixit" element={<ModelFabric />} />
           <Route path="models/:id/fitxers" element={<ModelSheet defaultTab="Fitxers" />} />
           {/* v2: Size Check jubilat → redirigeix a l'edició nova de mesures (conserva task_id). */}
@@ -348,34 +479,41 @@ export default function App() {
               model-tasques/ inexistent → 404); deep-links cauen al catch-all *→/. */}
           <Route path="task-types" element={<TaskTypes />} />
           <Route path="garment-types" element={<GarmentTypes />} />
-          {/* Autoria d'Item (Llibreria d'Items B3): DINS el Shell (àrea de contingut).
-              Crear (des d'un garment type) i obrir-existent (un dels esquelets). */}
-          <Route path="garment-type-items/nou/:typeId" element={<ItemAuthoring />} />
-          <Route path="garment-type-items/:itemId/editar" element={<ItemAuthoring />} />
-          <Route path="suppliers" element={<Suppliers />} />
+          {/* U2 · CATÀLEG DE PECES (maqueta v4). La cascada de tres columnes i la pantalla de
+              l'item amb els dos tabs. `ItemAuthoring` s'ha RETIRAT de rutes: la seva feina
+              (identitat, talla base, graella de mesures) la fa ara la pantalla de l'item, i
+              tenir-hi les dues portes obertes eren dos sistemes per editar el mateix. */}
+          <Route path="cataleg-peces" element={<CatalegPeces />} />
+          <Route path="cataleg-peces/items/:itemId" element={<CatalegPecesItem />} />
           <Route path="recursos" element={<Recursos />} />
           <Route path="encarrecs" element={<Encarrecs />} />
-          <Route path="clients" element={<Customers />} />
-          <Route path="clients/:id" element={<CustomerDetail />} />
+          {/* ── BLOC COMERCIAL — tot sota `comercial` (2026-08-14) ────────────────────────
+              El guard de ruta és CORTESIA: el tall de veritat és el 403 de
+              `commerce/views.py`. Serveix perquè qui hi arribi per URL trobi el taulell i
+              no una pantalla muntada i plena d'errors. Clients i Proveïdors hi entren
+              perquè viuen en aquesta secció des de B3-M i porten dades fiscals i de compra. */}
+          <Route path="suppliers" element={<RutaAmbCapacitat cap="comercial"><Suppliers /></RutaAmbCapacitat>} />
+          <Route path="clients" element={<RutaAmbCapacitat cap="comercial"><Customers /></RutaAmbCapacitat>} />
+          <Route path="clients/:id" element={<RutaAmbCapacitat cap="comercial"><CustomerDetail /></RutaAmbCapacitat>} />
           {/* Mòdul Comercial Studio (B1) — mestre d'articles. Gate de tier = B5. */}
-          <Route path="comercial/productes" element={<Products />} />
-          <Route path="comercial/productes/:id" element={<ProductDetail />} />
+          <Route path="comercial/productes" element={<RutaAmbCapacitat cap="comercial"><Products /></RutaAmbCapacitat>} />
+          <Route path="comercial/productes/:id" element={<RutaAmbCapacitat cap="comercial"><ProductDetail /></RutaAmbCapacitat>} />
           {/* Comercial Studio (B2) — ofertes (Quote). */}
-          <Route path="comercial/ofertes" element={<Quotes />} />
-          <Route path="comercial/ofertes/:id" element={<QuoteDetail />} />
+          <Route path="comercial/ofertes" element={<RutaAmbCapacitat cap="comercial"><Quotes /></RutaAmbCapacitat>} />
+          <Route path="comercial/ofertes/:id" element={<RutaAmbCapacitat cap="comercial"><QuoteDetail /></RutaAmbCapacitat>} />
           {/* Comercial (M4) — condicions de pagament (PaymentTerms). */}
-          <Route path="comercial/condicions-pagament" element={<PaymentTerms />} />
+          <Route path="comercial/condicions-pagament" element={<RutaAmbCapacitat cap="comercial"><PaymentTerms /></RutaAmbCapacitat>} />
           {/* Comercial (B3b) — comandes de venda (SalesOrder). */}
-          <Route path="comercial/comandes" element={<Orders />} />
-          <Route path="comercial/comandes/:id" element={<OrderDetail />} />
+          <Route path="comercial/comandes" element={<RutaAmbCapacitat cap="comercial"><Orders /></RutaAmbCapacitat>} />
+          <Route path="comercial/comandes/:id" element={<RutaAmbCapacitat cap="comercial"><OrderDetail /></RutaAmbCapacitat>} />
           {/* Comercial (B4a) — encàrrecs / ordres de treball (WorkOrder). */}
-          <Route path="comercial/encarrecs" element={<WorkOrders />} />
-          <Route path="comercial/encarrecs/:id" element={<WorkOrderDetail />} />
+          <Route path="comercial/encarrecs" element={<RutaAmbCapacitat cap="comercial"><WorkOrders /></RutaAmbCapacitat>} />
+          <Route path="comercial/encarrecs/:id" element={<RutaAmbCapacitat cap="comercial"><WorkOrderDetail /></RutaAmbCapacitat>} />
           {/* Comercial (D6) — informe d'encàrrecs orfes (desassignats, pendents de reassignar). */}
-          <Route path="comercial/orfes" element={<OrphanedWorkOrders />} />
+          <Route path="comercial/orfes" element={<RutaAmbCapacitat cap="comercial"><OrphanedWorkOrders /></RutaAmbCapacitat>} />
           {/* Comercial (B4c) — albarans (DeliveryNote). */}
-          <Route path="comercial/albarans" element={<DeliveryNotes />} />
-          <Route path="comercial/albarans/:id" element={<DeliveryNoteDetail />} />
+          <Route path="comercial/albarans" element={<RutaAmbCapacitat cap="comercial"><DeliveryNotes /></RutaAmbCapacitat>} />
+          <Route path="comercial/albarans/:id" element={<RutaAmbCapacitat cap="comercial"><DeliveryNoteDetail /></RutaAmbCapacitat>} />
           {/* TEMPORAL (esborrable) — banc de proves dels components del sistema visual comercial. */}
           <Route path="comercial/_kit" element={<CommercialKitDemo />} />
           <Route path="planificacio" element={<Planning />} />

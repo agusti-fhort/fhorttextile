@@ -64,7 +64,7 @@ export default function LegalDocsPage() {
         </div>
         <button onClick={() => setNewDoc(true)}
           style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 14px',
-            background:'var(--gold)', color:'#fff', border:'none', borderRadius:6,
+            background:'var(--accio)', color:'#fff', border:'none', borderRadius:6,
             cursor:'pointer', fontSize:13, fontFamily:MONO }}>
           <IconPlus size={15}/> Nou document
         </button>
@@ -118,7 +118,7 @@ function NewDocForm({ onDone, onCancel }) {
       </select>
       <input placeholder="Nom del document" value={nom} onChange={e => setNom(e.target.value)}
         style={{ ...inp, flex:1 }} />
-      <button onClick={save} style={{ padding:'7px 14px', background:'var(--gold)', color:'#fff',
+      <button onClick={save} style={{ padding:'7px 14px', background:'var(--accio)', color:'#fff',
         border:'none', borderRadius:6, cursor:'pointer', fontFamily:MONO }}>Crear</button>
       <button onClick={onCancel} style={{ padding:'7px 14px', background:'none',
         border:'1px solid var(--border)', borderRadius:6, cursor:'pointer', fontFamily:MONO }}>×</button>
@@ -190,7 +190,7 @@ function DocumentDetail({ doc, onBack, onChange }) {
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', margin:'20px 0 8px' }}>
         <h3 style={{ fontSize:14, fontWeight:600, margin:0 }}>Versions</h3>
         <button onClick={startNew} style={{ display:'flex', alignItems:'center', gap:6,
-          padding:'6px 12px', background:'var(--gold)', color:'#fff', border:'none',
+          padding:'6px 12px', background:'var(--accio)', color:'#fff', border:'none',
           borderRadius:6, cursor:'pointer', fontSize:12, fontFamily:MONO }}>
           <IconPlus size={14}/> Nova versió (esborrany)
         </button>
@@ -204,7 +204,7 @@ function DocumentDetail({ doc, onBack, onChange }) {
           <textarea value={draftText} onChange={e => setDraftText(e.target.value)} rows={10}
             style={{ ...inp, fontFamily:MONO }} placeholder="Contingut del document…" />
           <div style={{ display:'flex', gap:8, marginTop:8 }}>
-            <button onClick={saveDraft} style={{ padding:'7px 16px', background:'var(--gold)',
+            <button onClick={saveDraft} style={{ padding:'7px 16px', background:'var(--accio)',
               color:'#fff', border:'none', borderRadius:6, cursor:'pointer', fontFamily:MONO }}>Guardar esborrany</button>
             <button onClick={() => { setEditingVer(null); setCreatingVer(false); }}
               style={{ padding:'7px 16px', background:'none', border:'1px solid var(--border)',

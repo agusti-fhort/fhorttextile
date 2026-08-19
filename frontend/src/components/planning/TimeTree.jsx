@@ -12,7 +12,7 @@ const FASE_KEY = {
   'Disseny': 'disseny', 'Dev. tècnic': 'dev_tecnic', 'Prototip': 'prototip',
   'Mostres': 'mostres', 'Preproducció': 'preproduccio', 'Producció': 'produccio',
 }
-const MAT_DOT = { empiric: 'var(--ok)', seed: 'var(--gold)', none: 'var(--gray-l)', empty: 'var(--gray-l)' }
+const MAT_DOT = { empiric: 'var(--ok)', seed: 'var(--gold)', none: 'var(--line)', empty: 'var(--line)' }
 
 function fmtMins(m) {
   if (m == null) return '—'
@@ -37,17 +37,17 @@ function nodeMetrics(items) {
 }
 
 const thS = {
-  fontFamily: MONO, fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-muted)', textAlign: 'left',
-  padding: '6px 10px', textTransform: 'uppercase', letterSpacing: '.04em', whiteSpace: 'nowrap',
+  fontFamily: MONO, fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-soft)', textAlign: 'left',
+  padding: '6px 10px', textTransform: 'uppercase', letterSpacing: '.08em', whiteSpace: 'nowrap',
 }
 const tdS = { padding: '6px 10px', fontSize: 'var(--fs-body)', verticalAlign: 'middle' }
 const ghostBtn = {
-  background: 'none', border: '0.5px solid var(--gray-l)', borderRadius: 6, cursor: 'pointer',
+  background: 'none', border: '1px solid var(--line)', borderRadius: 'var(--r-ctrl)', cursor: 'pointer',
   padding: '3px 10px', fontSize: 'var(--fs-label)', fontFamily: MONO, color: 'var(--text-main)',
 }
 
 function MatDot({ m }) {
-  return <span style={{ width: 7, height: 7, borderRadius: '50%', background: MAT_DOT[m] || 'var(--gray-l)', display: 'inline-block', flexShrink: 0 }} />
+  return <span style={{ width: 7, height: 7, borderRadius: '50%', background: MAT_DOT[m] || 'var(--line)', display: 'inline-block', flexShrink: 0 }} />
 }
 
 export default function TimeTree({ t }) {
@@ -133,14 +133,14 @@ export default function TimeTree({ t }) {
   return (
     <div style={{ marginTop: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '.04em' }}>
+        <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)', fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '.08em' }}>
           {t('planning.time.tree.group_by')}
         </span>
         {[['fase', 'by_phase'], ['garment_type', 'by_garment'], ['model', 'by_model']].map(([val, key]) => (
           <button key={val} type="button" onClick={() => setAxis(val)} style={{
             ...ghostBtn, background: axis === val ? 'var(--gold)' : 'none',
             color: axis === val ? 'var(--text-main)' : 'var(--text-main)',
-            borderColor: axis === val ? 'var(--gold)' : 'var(--gray-l)',
+            borderColor: axis === val ? 'var(--gold)' : 'var(--line)',
             fontWeight: axis === val ? 600 : 400,
           }}>{t(`planning.time.tree.${key}`)}</button>
         ))}
@@ -151,14 +151,14 @@ export default function TimeTree({ t }) {
       {axis === 'model'
         ? <ModelAxisTree tree={modelTree} loading={loadingModels} expanded={expanded} toggle={toggle} t={t} />
         : groups.length === 0
-        ? <div style={{ padding: '1.25rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)', border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)' }}>{t('planning.time.tree.empty')}</div>
+        ? <div style={{ padding: '1.25rem', textAlign: 'center', color: 'var(--text-soft)', fontSize: 'var(--fs-body)', border: '1px solid var(--line)', borderRadius: 'var(--r-card)', background: 'var(--panel)' }}>{t('planning.time.tree.empty')}</div>
         : (
-          <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', overflow: 'hidden' }}>
+          <div style={{ border: '1px solid var(--line)', borderRadius: 'var(--r-card)', background: 'var(--panel)', overflow: 'hidden' }}>
             {groups.map(root => {
               const rk = `r:${axis}:${root.key}`
               const rOpen = expanded.has(rk)
               return (
-                <div key={rk} style={{ borderBottom: '0.5px solid var(--gray-l)' }}>
+                <div key={rk} style={{ borderBottom: '1px solid var(--line)' }}>
                   <Row onClick={() => toggle(rk)} open={rOpen} depth={0}
                        label={root.label} m={root.metrics.maturity} t={t}
                        minutes={root.metrics.minutes} count={root.metrics.count} />
@@ -171,7 +171,7 @@ export default function TimeTree({ t }) {
                              label={taskTypeLabel(t, tt.code, tt.name)} m={tt.metrics.maturity} t={t}
                              minutes={tt.metrics.minutes} count={tt.metrics.count} />
                         {tOpen && (
-                          <div style={{ background: 'var(--bg-muted)', padding: '4px 0' }}>
+                          <div style={{ background: 'var(--sel)', padding: '4px 0' }}>
                             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                               <thead><tr>
                                 <th style={{ ...thS, paddingLeft: 48 }}>{t('planning.time.tree.col_item')}</th>
@@ -185,11 +185,11 @@ export default function TimeTree({ t }) {
                                 {tt.items.map(it => {
                                   const ek = `${it.garment_type_item_id}:${it.tt_code}`
                                   return (
-                                    <tr key={ek} style={{ borderTop: '0.5px solid var(--gray-l)' }}>
+                                    <tr key={ek} style={{ borderTop: '1px solid var(--line)' }}>
                                       <td style={{ ...tdS, paddingLeft: 48, fontFamily: MONO }}>
                                         <MatDot m={it.maturity} />{' '}{it.item_nom || `#${it.garment_type_item_id}`}
                                         {axis === 'fase' && it.garment_type_nom &&
-                                          <span style={{ color: 'var(--text-muted)' }}> · {it.garment_type_nom}</span>}
+                                          <span style={{ color: 'var(--text-soft)' }}> · {it.garment_type_nom}</span>}
                                       </td>
                                       <td style={tdS}>{it.estimated_minutes != null ? fmtMins(it.estimated_minutes) : '—'}</td>
                                       <td style={tdS}>{it.mean_minutes != null ? fmtMins(it.mean_minutes) : '—'}</td>
@@ -206,7 +206,7 @@ export default function TimeTree({ t }) {
                                               <input type="number" min="1" value={editVal} autoFocus
                                                      onChange={e => setEditVal(e.target.value)}
                                                      placeholder={t('planning.time.tree.minutes_ph')}
-                                                     style={{ width: 70, padding: '2px 6px', fontFamily: MONO, fontSize: 'var(--fs-label)', border: '0.5px solid var(--gray-l)', borderRadius: 6 }} />
+                                                     style={{ width: 70, padding: '2px 6px', fontFamily: MONO, fontSize: 'var(--fs-label)', border: '1px solid var(--line)', borderRadius: 'var(--r-ctrl)' }} />
                                               <button onClick={() => saveEdit(it)} disabled={saving} style={{ ...ghostBtn, borderColor: 'var(--gold)' }}>{t('planning.time.tree.save')}</button>
                                               <button onClick={() => setEditing(null)} disabled={saving} style={ghostBtn}>{t('planning.time.tree.cancel')}</button>
                                             </span>
@@ -246,17 +246,17 @@ const modelMaturity = (real, est) => (real > 0 ? 'empiric' : (est > 0 ? 'seed' :
 function ModelAxisTree({ tree, loading, expanded, toggle, t }) {
   if (loading) return <Center>{t('planning.loading')}</Center>
   if (!tree.length) return (
-    <div style={{ padding: '1.25rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)', border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)' }}>
+    <div style={{ padding: '1.25rem', textAlign: 'center', color: 'var(--text-soft)', fontSize: 'var(--fs-body)', border: '1px solid var(--line)', borderRadius: 'var(--r-card)', background: 'var(--panel)' }}>
       {t('planning.time.tree.empty')}
     </div>
   )
   return (
-    <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', overflow: 'hidden' }}>
+    <div style={{ border: '1px solid var(--line)', borderRadius: 'var(--r-card)', background: 'var(--panel)', overflow: 'hidden' }}>
       {tree.map(mod => {
         const mk = `m:${mod.model_id}`
         const mOpen = expanded.has(mk)
         return (
-          <div key={mk} style={{ borderBottom: '0.5px solid var(--gray-l)' }}>
+          <div key={mk} style={{ borderBottom: '1px solid var(--line)' }}>
             <Row onClick={() => toggle(mk)} open={mOpen} depth={0} t={t}
                  label={`${mod.label}${mod.nom ? ` · ${mod.nom}` : ''}`}
                  m={modelMaturity(mod.real, mod.est)} minutes={mod.real || mod.est} count={mod.n} />
@@ -269,7 +269,7 @@ function ModelAxisTree({ tree, loading, expanded, toggle, t }) {
                        label={t(`planning.time.phase.${FASE_KEY[ph.fase] || 'other'}`, { defaultValue: ph.fase })}
                        m={modelMaturity(ph.real, ph.est)} minutes={ph.real || ph.est} count={ph.n} />
                   {fOpen && (
-                    <div style={{ background: 'var(--bg-muted)', padding: '4px 0' }}>
+                    <div style={{ background: 'var(--sel)', padding: '4px 0' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                         <thead><tr>
                           <th style={{ ...thS, paddingLeft: 48 }}>{t('planning.time.tree.col_task')}</th>
@@ -279,7 +279,7 @@ function ModelAxisTree({ tree, loading, expanded, toggle, t }) {
                         </tr></thead>
                         <tbody>
                           {(ph.tasks || []).map(tk => (
-                            <tr key={tk.task_type_code} style={{ borderTop: '0.5px solid var(--gray-l)' }}>
+                            <tr key={tk.task_type_code} style={{ borderTop: '1px solid var(--line)' }}>
                               <td style={{ ...tdS, paddingLeft: 48, fontFamily: MONO }}>
                                 <MatDot m={tk.maturity} />{' '}{taskTypeLabel(t, tk.task_type_code, tk.task_type_name)}
                               </td>
@@ -312,15 +312,15 @@ function Row({ onClick, open, depth, label, minutes, m, count, t }) {
     <div onClick={onClick} style={{
       display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
       padding: '8px 12px', paddingLeft: 12 + depth * 24,
-      background: depth === 0 ? 'var(--white)' : 'var(--bg-muted)',
+      background: depth === 0 ? 'var(--panel)' : 'var(--bg-page)',
     }}>
-      <i className={`ti ti-chevron-${open ? 'down' : 'right'}`} style={{ fontSize: 14, color: 'var(--text-muted)' }} />
+      <i className={`ti ti-chevron-${open ? 'down' : 'right'}`} style={{ fontSize: 14, color: 'var(--text-soft)' }} />
       <MatDot m={m} />
       <span style={{ fontFamily: MONO, fontWeight: depth === 0 ? 600 : 500, fontSize: 'var(--fs-body)' }}>{label}</span>
-      <span style={{ marginLeft: 'auto', fontFamily: MONO, fontWeight: 600, fontSize: 'var(--fs-body)', color: minutes != null ? 'var(--text-main)' : 'var(--text-muted)' }}>
+      <span style={{ marginLeft: 'auto', fontFamily: MONO, fontWeight: 600, fontSize: 'var(--fs-body)', color: minutes != null ? 'var(--text-main)' : 'var(--text-soft)' }}>
         {fmtMins(minutes)}
       </span>
-      <span style={{ fontFamily: MONO, fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>
+      <span style={{ fontFamily: MONO, fontSize: 'var(--fs-label)', color: 'var(--text-soft)' }}>
         {t('planning.time.tree.cells_n', { n: count })}
       </span>
     </div>

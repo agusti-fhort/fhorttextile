@@ -135,6 +135,25 @@ class POMAlert(models.Model):
         related_name='pom_alerts',
     )
     pom = models.ForeignKey('pom.POMMaster', on_delete=models.PROTECT, related_name='alerts', null=True, blank=True)
+    # C4/BLOC 2 — ELS DOS EIXOS. Una alerta és el veredicte sobre UNA mesura, no sobre un POM:
+    # la sisa dreta pot desviar 2 cm i l'esquerra estar dins de tolerància, i són dues coses
+    # diferents que un tècnic ha de poder veure per separat. Amb la clau curta
+    # (`update_or_create` per `(model, pom, size_fitting)`) les dues germanes escrivien la
+    # MATEIXA alerta: l'última guanyava, i el missatge —que porta la talla i la desviació—
+    # acabava descrivint una fila i titulant-ne una altra.
+    #
+    # NO porten comporta CHECK, i és deliberat. Les 40 comportes de C1/C1-ins són el dic que
+    # aquest tram està a punt de retirar; afegir-ne dues de noves per treure-les tot seguit
+    # seria fer soroll. I aquesta taula no és font de res: una alerta es DERIVA d'una mesura
+    # que sí que està gatejada.
+    capa = models.CharField(
+        max_length=20, default='exterior', db_index=True,
+        help_text="Capa de la mesura alertada: slug de pom.MeasurementLayer (per SLUG, mai per PK).",
+    )
+    instancia = models.CharField(
+        max_length=60, default='', db_index=True,
+        help_text="Instància del POM dins la capa: slug compost canònic. '' és la instància única.",
+    )
     tipus = models.CharField(max_length=20, choices=TIPUS_CHOICES, blank=True, default='desviacio')
     valor_detectat = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
     valor_esperat = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
@@ -221,27 +240,44 @@ class GradedSpec(models.Model):
         help_text="Instància del POM dins la capa: slug compost canònic (p.ex. 'left-relaxed'). "
                   "'' és la instància única. Fins a C4-ins només s'admet '' (comporta CHECK a BD).",
     )
+    # SET-2/T2 — el garment (declaració canònica a `models_app.BaseMeasurement.garment`).
+    # L'spec és el RESULTAT d'aplicar la regla a un valor base, i el valor base ja porta els
+    # tres eixos: si el pit del top i el de la calceta són dues bases, en surten dos specs.
+    # ⚠️ La VERSIÓ, en canvi, NO travessa l'eix (D6): el fitting és del model sencer, i una
+    # sola `GradingVersion` conté els specs de TOTES les peces. Un segell per peça no
+    # existeix, i que no existeixi és decisió de domini, no limitació tècnica.
+    garment = models.CharField(
+        max_length=20, default='', db_index=True,
+        help_text="Peça (garment) dins del model: codi de ModelGarment ('02', '03'…). "
+                  "'' és la peça mare, que és el Model mateix. Fins a la retirada de la "
+                  "comporta només s'admet '' (comporta CHECK a BD).",
+    )
 
     class Meta:
         verbose_name = 'Spec generat'
         verbose_name_plural = 'Specs generats'
         # C1/T3 + C1-ins/T3 — la clau incorpora la CAPA i la INSTÀNCIA
         # (v. `models_app.BaseMeasurement.Meta`).
-        unique_together = [('grading_version', 'pom', 'size_label', 'capa', 'instancia')]
+        # SET-2/T2 — i el GARMENT (v. `models_app.BaseMeasurement.Meta`): mateixes columnes
+        # + una. La VERSIÓ no hi entra (D6): una sola `GradingVersion` conté els specs de
+        # totes les peces, i el segell és del model per decisió de domini.
+        unique_together = [('grading_version', 'pom', 'size_label', 'capa', 'instancia',
+                            'garment')]
         ordering = ['grading_version', 'pom', 'size_label']
+        # ✅ C4/G1 (04/08) — LES DUES COMPORTES S'HAN RETIRAT (migració fitting/0022).
+        # Aquesta taula va al MATEIX grup que `BaseMeasurement` i no a un de posterior, i el
+        # motiu es va MESURAR: escriure una base de germana encadena cap al motor
+        # (`generate_graded_specs`), que hi escriu els specs dins de la mateixa crida. Amb la
+        # comporta d'aquí viva i la de la mesura retirada, `escalat/ajustar-talla` petava amb
+        # `CheckViolation` — v. el commit `959147a5`, on va sortir de cara.
         constraints = [
-            # C1/T4 — la comporta (v. `models_app.BaseMeasurement.Meta`, on hi ha
-            # l'argument sencer). C4 la retira per migració.
-            models.CheckConstraint(
-                condition=models.Q(capa='exterior'),
-                name='fitting_gradedspec_capa_gate_c1',
-            ),
-            # C1-ins — la comporta d'instància (v. `models_app.BaseMeasurement.Meta`).
-            # C4-ins la retira per migració.
-            models.CheckConstraint(
-                condition=models.Q(instancia=''),
-                name='fitting_gradedspec_instancia_gate_cins',
-            ),
+            # SET-2/T2 — la comporta del garment (v. `models_app.BaseMeasurement.Meta`).
+            # Aquesta taula torna a anar al MATEIX grup que la mesura, i pel motiu que ja es
+            # va MESURAR amb capa i instància: escriure una base de peça encadena cap al
+            # motor, que hi escriu els specs dins de la mateixa crida.
+            # ✅ SET-2/#12 (12/08) — RETIRADA per la migració `fitting/0027`, dins de la
+            # mateixa onada que la de `BaseMeasurement`: pel mateix encadenament, retirar-les
+            # per separat hauria repetit el `CheckViolation` de `959147a5`.
         ]
 
     def __str__(self):
@@ -400,7 +436,49 @@ class PieceFittingLine(models.Model):
     size_label = models.CharField(max_length=20)
     valor_teoric = models.FloatField()
     valor_real = models.FloatField(null=True, blank=True)
+    # E2/B1 — LA MARCA DEL GEST: quan algú ha anotat de debò aquesta cel·la.
+    #
+    # 🚨 PER QUÈ UN CAMP I NO UNA INFERÈNCIA MÉS. `linia_te_contingut` (`esdeveniments.py`)
+    # decidia «algú ho ha mesurat?» comparant `valor_real != valor_teoric`, i la línia NEIX
+    # amb els dos iguals (`create_piece_fitting`). El predicat, doncs, funcionava per un
+    # efecte lateral: només veia les preses que **per casualitat** no coincidien amb la
+    # teòrica. Amb E2b la cel·la de l'Escalat surt PRE-OMPLERTA amb la teòrica en fantasma i
+    # l'usuari la pot **confirmar tal qual** — un gest humà legítim que produeix exactament
+    # l'estat del naixement i que cap predicat derivat de valors pot distingir-ne.
+    #
+    # Això NO relaxa la llei d'E1 («existir no és haver mesurat»): la REFORÇA. Abans
+    # l'endevinava pels números; ara la sap perquè el gest deixa marca. Les files anteriors a
+    # aquest camp queden a `NULL` i segueixen resolent-se pel predicat vell — v. la cadena
+    # completa a `linia_te_contingut`, que és l'únic lloc on es llegeix.
+    #
+    # `null` = ningú no ha anotat res (la sembra no en posa cap). Treure la presa el torna a
+    # `null`: desdir-se és tornar al no-gest, no deixar una marca de gest amb el valor vell.
+    presa_at = models.DateTimeField(null=True, blank=True)
     nota = models.CharField(max_length=200, blank=True, default='')
+    # D-31.21 — EL VEREDICTE DE LA MODISTA sobre aquesta cel·la.
+    #
+    # Els tres valors són DADA DE DOMINI i no es tradueixen, com LINEAR/STEP: són el que el
+    # full imprès porta cap al fabricant (AC/AD/RJ, `FittingPrintSheet.jsx:30`) i el que es
+    # diu en veu alta a la sala. Traduir-los a pantalla i no al paper faria que les dues
+    # superfícies parlessin diferent.
+    #
+    # ⚠️ EL BUIT NO ÉS 'ACCEPTED'. Una cel·la sense decidir és una cel·la que ningú no ha
+    # mirat; una acceptada és una que algú ha mirat i ha donat per bona. Per això el default
+    # és '' i no el primer choice: si no es distingissin, obrir un fitting i tancar-lo sense
+    # tocar res deixaria tota la graella «acceptada» sense que ningú hi hagués dit res.
+    DECISIO_ACCEPTED = 'ACCEPTED'
+    DECISIO_ADJUSTED = 'ADJUSTED'
+    DECISIO_REJECTED = 'REJECTED'
+    DECISIO_CHOICES = [
+        (DECISIO_ACCEPTED, 'Acceptada — la mesura real es dona per bona'),
+        (DECISIO_ADJUSTED, "Ajustada — s'ha rectificat i el valor rectificat val"),
+        (DECISIO_REJECTED, 'Rebutjada — la presa no val; NO sembra res'),
+    ]
+    decisio = models.CharField(
+        max_length=10, choices=DECISIO_CHOICES, blank=True, default='', db_index=True,
+        help_text="Veredicte de la cel·la (D-31.21). '' = sense decidir, que NO és ACCEPTED. "
+                  "Una línia REJECTED es desa i es veu, però cap camí de sembra la llegeix.",
+    )
     # C1 — la capa (declaració canònica a `models_app.BaseMeasurement.capa`).
     capa = models.CharField(
         max_length=20, default='exterior', db_index=True,
@@ -415,6 +493,17 @@ class PieceFittingLine(models.Model):
         help_text="Instància del POM dins la capa: slug compost canònic (p.ex. 'left-relaxed'). "
                   "'' és la instància única. Fins a C4-ins només s'admet '' (comporta CHECK a BD).",
     )
+    # SET-2/T2 — el garment (declaració canònica a `models_app.BaseMeasurement.garment`).
+    # La línia de fitting és on es MESURA la prenda real: si el model és un pijama, la
+    # modista pren les xifres de la jaqueta i les del pantaló, i aquí hi ha d'haver dues
+    # línies. ⚠️ La SESSIÓ i el veredicte segueixen sent del MODEL SENCER (D6): mesurar una
+    # prenda és mesurar tot el model, i no existeix «tancar el fitting del dalt».
+    garment = models.CharField(
+        max_length=20, default='', db_index=True,
+        help_text="Peça (garment) dins del model: codi de ModelGarment ('02', '03'…). "
+                  "'' és la peça mare, que és el Model mateix. Fins a la retirada de la "
+                  "comporta només s'admet '' (comporta CHECK a BD).",
+    )
 
     class Meta:
         verbose_name = 'Línia de fitting de peça'
@@ -422,19 +511,20 @@ class PieceFittingLine(models.Model):
         ordering = ['piece_fitting', 'pom', 'size_label']
         # C1/T3 + C1-ins/T3 — la clau incorpora la CAPA i la INSTÀNCIA
         # (v. `models_app.BaseMeasurement.Meta`).
-        unique_together = [('piece_fitting', 'pom', 'size_label', 'capa', 'instancia')]
+        # SET-2/T2 — i el GARMENT (v. `models_app.BaseMeasurement.Meta`): mateixes columnes
+        # + una. La `PieceFitting` i la `FittingSession` es queden SENSE eix (D6).
+        unique_together = [('piece_fitting', 'pom', 'size_label', 'capa', 'instancia',
+                            'garment')]
+        # ✅ C4/G2 (04/08) — les dues comportes retirades (migració fitting/0023). La línia
+        # de fitting és on es MESURA la peça real: si la fitxa demana la sisa dreta i
+        # l'esquerra, la modista pren dues xifres i aquí hi ha d'haver dues línies. El sembrat
+        # les clona de l'spec amb els seus eixos (`fitting/services.py:339`), o sigui que amb
+        # germanes vives crear una PieceFitting hauria petat aquí.
         constraints = [
-            # C1/T4 — la comporta (v. `models_app.BaseMeasurement.Meta`). C4 la retira.
-            models.CheckConstraint(
-                condition=models.Q(capa='exterior'),
-                name='fitting_piecefittingline_capa_gate_c1',
-            ),
-            # C1-ins — la comporta d'instància (v. `models_app.BaseMeasurement.Meta`).
-            # C4-ins la retira per migració.
-            models.CheckConstraint(
-                condition=models.Q(instancia=''),
-                name='fitting_piecefittingline_instancia_gate_cins',
-            ),
+            # SET-2/T2 — la comporta del garment (v. `models_app.BaseMeasurement.Meta`).
+            # ✅ SET-2/#12 (12/08) — retirada per la migració `0027`. La línia de fitting
+            # clona els eixos de l'spec (`fitting/services.py:339`): amb l'spec obert i
+            # aquesta tancada, crear una PieceFitting d'una segona peça hauria petat aquí.
         ]
 
     def __str__(self):

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { models as modelsApi, timeAnalysis } from '../../api/endpoints'
 import Center from '../ui/Center'
+import { useEnumeracio } from '../../utils/vocabulariDominiFont'
 
 // Tab "Informes" — reporting de direcció. NO construeix backend nou: reusa el substrat agregat ja
 // viu (DIAGNOSI §17.2 / ABAST §C):
@@ -12,22 +13,22 @@ import Center from '../ui/Center'
 // COSTOS parcats (lligats a billing): NO s'hi inclouen. Exportació PDF/full: diferida (commit propi).
 const MONO = 'IBM Plex Mono, monospace'
 
-const PHASES = ['Pending', 'Dev', 'Proto', 'SizeSet', 'PP', 'TOP']   // Model.FASE_CHOICES (eix cartera)
+// L'eix de cartera són les fases del model: surten de `/vocabulari/` (`fases_model`), no d'aquí.
 const FASE_KEY = {   // TaskType.FASE_CHOICES → clau i18n planning.time.phase.* (eix productivitat)
   'Disseny': 'disseny', 'Dev. tècnic': 'dev_tecnic', 'Prototip': 'prototip',
   'Mostres': 'mostres', 'Preproducció': 'preproduccio', 'Producció': 'produccio',
 }
 
 const thS = {
-  fontFamily: MONO, fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-muted)', textAlign: 'left',
-  padding: '8px 10px', textTransform: 'uppercase', letterSpacing: '.04em',
-  borderBottom: '0.5px solid var(--gray-l)', whiteSpace: 'nowrap',
+  fontFamily: MONO, fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-soft)', textAlign: 'left',
+  padding: '8px 10px', textTransform: 'uppercase', letterSpacing: '.08em',
+  borderBottom: '1px solid var(--line)', whiteSpace: 'nowrap',
 }
-const tdS = { padding: '8px 10px', fontSize: 'var(--fs-body)', borderBottom: '0.5px solid var(--gray-l)', verticalAlign: 'middle' }
+const tdS = { padding: '8px 10px', fontSize: 'var(--fs-body)', borderBottom: '1px solid var(--line)', verticalAlign: 'middle' }
 const numTh = { ...thS, textAlign: 'right' }
 const numTd = { ...tdS, fontFamily: MONO, fontVariantNumeric: 'tabular-nums', textAlign: 'right' }
 const ghostBtn = {
-  background: 'none', border: '0.5px solid var(--gray-l)', borderRadius: 6, cursor: 'pointer',
+  background: 'none', border: '1px solid var(--line)', borderRadius: 'var(--r-ctrl)', cursor: 'pointer',
   padding: '3px 10px', fontSize: 'var(--fs-label)', fontFamily: MONO, color: 'var(--text-main)',
 }
 
@@ -72,17 +73,17 @@ function SectionHead({ icon, color, title, subtitle, extra }) {
         </h2>
         {extra}
       </div>
-      {subtitle && <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300, marginTop: 4, marginBottom: 0 }}>{subtitle}</p>}
+      {subtitle && <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', fontWeight: 400, marginTop: 4, marginBottom: 0 }}>{subtitle}</p>}
     </div>
   )
 }
 
 function Kpi({ label, n, tone }) {
-  const color = tone === 'err' ? 'var(--err)' : tone === 'warn' ? 'var(--warn)' : tone === 'ok' ? 'var(--ok)' : 'var(--text-main)'
+  const color = tone === 'err' ? 'var(--err)' : tone === 'warn' ? 'var(--warn-ink)' : tone === 'ok' ? 'var(--ok)' : 'var(--text-main)'
   return (
-    <div style={{ flex: '1 1 150px', minWidth: 130, border: `0.5px solid ${tone ? color : 'var(--gray-l)'}`, borderRadius: 12, background: 'var(--white)', padding: '14px 16px' }}>
+    <div style={{ flex: '1 1 150px', minWidth: 130, borderWidth: 1, borderStyle: 'solid', borderColor: tone ? color : 'var(--line)', borderRadius: 'var(--r-card)', background: 'var(--panel)', padding: '14px 16px' }}>
       <div style={{ fontSize: 'var(--fs-h1)', fontWeight: 600, fontFamily: MONO, color, fontVariantNumeric: 'tabular-nums' }}>{n}</div>
-      <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontFamily: MONO, marginTop: 2 }}>{label}</div>
+      <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)', fontFamily: MONO, marginTop: 2 }}>{label}</div>
     </div>
   )
 }
@@ -134,7 +135,7 @@ function DeadlinesBlock({ t }) {
         <Kpi label={t('planning.informes.deadlines.no_deadline')} n={kpi.no_deadline} />
       </div>
       {late.length > 0 && (
-        <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', overflowX: 'auto' }}>
+        <div style={{ border: '1px solid var(--line)', borderRadius: 'var(--r-card)', background: 'var(--panel)', overflowX: 'auto' }}>
           <table style={{ borderCollapse: 'collapse', width: '100%' }}>
             <thead><tr>
               <th style={thS}>{t('planning.col_model')}</th>
@@ -146,11 +147,11 @@ function DeadlinesBlock({ t }) {
             <tbody>
               {late.map(r => (
                 <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/models/${r.id}`)}>
-                  <td style={{ ...tdS, fontFamily: MONO, fontWeight: 600 }}>{r.codi}<div style={{ fontWeight: 400, color: 'var(--gray)' }}>{r.nom}</div></td>
+                  <td style={{ ...tdS, fontFamily: MONO, fontWeight: 600 }}>{r.codi}<div style={{ fontWeight: 400, color: 'var(--text-soft)' }}>{r.nom}</div></td>
                   <td style={tdS}>{phaseLabel(t, r.fase)}</td>
                   <td style={tdS}>{r.data_objectiu}</td>
                   <td style={{ ...tdS, color: 'var(--err)' }}>{r.predicted_end}</td>
-                  <td style={{ ...numTd, color: r.overdue ? 'var(--err)' : 'var(--warn)', fontWeight: 600 }}>{t('planning.risk.deviation_days', { n: r.desviacio })}</td>
+                  <td style={{ ...numTd, color: r.overdue ? 'var(--err)' : 'var(--warn-ink)', fontWeight: 600 }}>{t('planning.risk.deviation_days', { n: r.desviacio })}</td>
                 </tr>
               ))}
             </tbody>
@@ -167,6 +168,9 @@ function DeadlinesBlock({ t }) {
 function CarteraBlock({ t }) {
   const [models, setModels] = useState(null)
   const [dim, setDim] = useState('temporada')
+  // Sense vocabulari la taula es queda sense columnes de fase (i el `colSpan` s'hi ajusta):
+  // millor una cartera amb total i risc que sis columnes inventades.
+  const { codis: PHASES } = useEnumeracio('fases_model')
   const DIMENSIONS = [
     ['temporada', t('planning.informes.cartera.dim_temporada'),
       m => m.temporada ? `${m.temporada}${m.any ? ` ${m.any}` : ''}` : t('planning.informes.cartera.no_temporada')],
@@ -206,17 +210,17 @@ function CarteraBlock({ t }) {
             {DIMENSIONS.map(([val, label]) => (
               <button key={val} type="button" onClick={() => setDim(val)} style={{
                 ...ghostBtn, background: dim === val ? 'var(--gold)' : 'none',
-                borderColor: dim === val ? 'var(--gold)' : 'var(--gray-l)', fontWeight: dim === val ? 600 : 400,
+                borderColor: dim === val ? 'var(--gold)' : 'var(--line)', fontWeight: dim === val ? 600 : 400,
               }}>{label}</button>
             ))}
           </span>
         } />
-      <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', overflowX: 'auto' }}>
+      <div style={{ border: '1px solid var(--line)', borderRadius: 'var(--r-card)', background: 'var(--panel)', overflowX: 'auto' }}>
         <table style={{ borderCollapse: 'collapse', width: '100%' }}>
           <thead><tr>
             <th style={thS}>{dimLabel}</th>
             <th style={numTh}>{t('planning.informes.cartera.total')}</th>
-            {PHASES.map(p => <th key={p} style={numTh}>{phaseLabel(t, p)}</th>)}
+            {(PHASES || []).map(p => <th key={p} style={numTh}>{phaseLabel(t, p)}</th>)}
             <th style={numTh}>{t('planning.informes.cartera.en_risc')}</th>
           </tr></thead>
           <tbody>
@@ -224,11 +228,11 @@ function CarteraBlock({ t }) {
               <tr key={g.key}>
                 <td style={{ ...tdS, fontFamily: MONO }}>{g.key}</td>
                 <td style={{ ...numTd, fontWeight: 600 }}>{g.total}</td>
-                {PHASES.map(p => <td key={p} style={{ ...numTd, color: g.phases[p] ? 'var(--text-main)' : 'var(--gray-l)' }}>{g.phases[p] || '·'}</td>)}
-                <td style={{ ...numTd, color: g.risc ? 'var(--err)' : 'var(--gray-l)', fontWeight: g.risc ? 600 : 400 }}>{g.risc || '·'}</td>
+                {(PHASES || []).map(p => <td key={p} style={{ ...numTd, color: g.phases[p] ? 'var(--text-main)' : 'var(--line)' }}>{g.phases[p] || '·'}</td>)}
+                <td style={{ ...numTd, color: g.risc ? 'var(--err)' : 'var(--line)', fontWeight: g.risc ? 600 : 400 }}>{g.risc || '·'}</td>
               </tr>
             ))}
-            {groups.length === 0 && <tr><td colSpan={PHASES.length + 3} style={{ ...tdS, textAlign: 'center', color: 'var(--text-muted)' }}>{t('planning.informes.cartera.empty')}</td></tr>}
+            {groups.length === 0 && <tr><td colSpan={(PHASES?.length || 0) + 3} style={{ ...tdS, textAlign: 'center', color: 'var(--text-soft)' }}>{t('planning.informes.cartera.empty')}</td></tr>}
           </tbody>
         </table>
       </div>
@@ -269,7 +273,7 @@ function ProductivityBlock({ t }) {
     <section>
       <SectionHead icon="ti-gauge" color="var(--gold)" title={t('planning.informes.productivity.title')}
         subtitle={t('planning.informes.productivity.subtitle')} />
-      <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', overflowX: 'auto' }}>
+      <div style={{ border: '1px solid var(--line)', borderRadius: 'var(--r-card)', background: 'var(--panel)', overflowX: 'auto' }}>
         <table style={{ borderCollapse: 'collapse', width: '100%' }}>
           <thead><tr>
             <th style={thS}>{t('planning.time.tree.by_phase')}</th>
@@ -295,9 +299,9 @@ function ProductivityBlock({ t }) {
               )
             })}
             {rows.length === 0
-              ? <tr><td colSpan={5} style={{ ...tdS, textAlign: 'center', color: 'var(--text-muted)' }}>{t('planning.informes.productivity.empty')}</td></tr>
+              ? <tr><td colSpan={5} style={{ ...tdS, textAlign: 'center', color: 'var(--text-soft)' }}>{t('planning.informes.productivity.empty')}</td></tr>
               : (
-                <tr style={{ background: 'var(--bg-muted)' }}>
+                <tr style={{ background: 'var(--sel)' }}>
                   <td style={{ ...tdS, fontFamily: MONO, fontWeight: 600 }}>{t('planning.informes.productivity.total')}</td>
                   <td style={{ ...numTd, fontWeight: 600 }}>{fmtMins(totals.est)}</td>
                   <td style={{ ...numTd, fontWeight: 600 }}>{fmtMins(totals.real)}</td>

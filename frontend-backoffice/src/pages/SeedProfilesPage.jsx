@@ -76,7 +76,7 @@ export default function SeedProfilesPage() {
         </div>
         <button onClick={() => setEditing({})}
           style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 14px',
-            background:'var(--gold)', color:'#fff', border:'none', borderRadius:6,
+            background:'var(--accio)', color:'#fff', border:'none', borderRadius:6,
             cursor:'pointer', fontSize:13, fontFamily:MONO }}>
           <IconPlus size={15}/> Nou perfil
         </button>
@@ -219,7 +219,7 @@ function SeedProfileForm({ initial, blocs, onSave, onCancel }) {
 
         <div style={{ display:'flex', gap:8, marginTop:8 }}>
           <button onClick={submit}
-            style={{ padding:'8px 18px', background:'var(--gold)', color:'#fff',
+            style={{ padding:'8px 18px', background:'var(--accio)', color:'#fff',
               border:'none', borderRadius:6, cursor:'pointer', fontSize:13, fontFamily:MONO }}>
             Guardar
           </button>

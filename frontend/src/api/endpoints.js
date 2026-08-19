@@ -70,6 +70,22 @@ export const models = {
   nextRef: (params) => client.get('/api/v1/models/next-ref/', { params }),       // ?year&season
   createWizard: (data) => client.post('/api/v1/models/create-wizard/', data),    // esquelet COMPLET
   updateStep2: (id, data) => client.patch(`/api/v1/models/${id}/update-step2/`, data),
+  // SET-2/T2-bis — LES PRENDES D'UN MODEL, amb el valor EFECTIU i el flag d'herència per camp.
+  // La mare hi ve sintètica i sempre primera (`id: null`, `codi: ''`). Contracte sencer al
+  // docstring de `garment_views.py`, que és la font de veritat (no cap brief).
+  peces: (id) => client.get(`/api/v1/models/${id}/peces/`),
+  // SET-2/R11 · L'AUTORIA. El POST i el PATCH tornen la peça RESOLTA, amb la MATEIXA forma que
+  // cada element de `peces`: qui pinta no ha de saber dos formats.
+  //
+  // 🔑 AL PATCH, `null` EXPLÍCIT VOL DIR «TORNA A HERETAR» I EL CAMP ABSENT «NO TOQUIS». La
+  // distinció és del contracte i el client l'ha de respectar: **no enviïs mai camps que
+  // l'usuari no ha tocat**, perquè enviar-los tots convertiria cada herència en una declaració.
+  // Per això aquí no hi ha cap objecte per defecte ni cap `?? null`: passa exactament el que et
+  // donin.
+  crearPeca: (id, dades) => client.post(`/api/v1/models/${id}/peces/`, dades),
+  actualitzarPeca: (id, pecaId, dades) =>
+    client.patch(`/api/v1/models/${id}/peces/${pecaId}/`, dades),
+  esborrarPeca: (id, pecaId) => client.delete(`/api/v1/models/${id}/peces/${pecaId}/`),
   destroy: (id) => client.delete(`/api/v1/models/${id}/delete/`),
   taskLog: (id) => client.get(`/api/v1/models/${id}/task-log/`),   // 5B-fix: log de transicions
   // Capa de Projecte: definir tasques d'un model i avançar fase (gate del responsable).
@@ -81,6 +97,10 @@ export const models = {
       .then(planChanged),   // C4 — l'auto-start pot reancorar el pla → invalida Board+Gantt
   // Acte lleuger de gènesi POM: base+nomenclatura+regles i tanca la tasca pom. No propaga.
   gravarPom: (id, data) => client.post(`/api/v1/models/${id}/gravar-pom/`, data),
+  // F2.1 — obre una VOLTA nova de feina (D-5). {motiu:'nova_mostra'|'correccio', codes:[slug]}.
+  // Una «correcció» és una volta d'una sola tasca: mateixa porta, motiu diferent. El backend hi
+  // posa la genealogia (mare) sense que la UI l'hagi de saber.
+  obrirRonda: (id, data) => client.post(`/api/v1/models/${id}/obrir-ronda/`, data),
   // Sprint B — CÒPIA model→model. Mirall de `materialitzar-poms` amb la font canviada (un altre
   // MODEL en comptes de l'ITEM). body: {pom_ids?, copy_values?, copy_run?, copy_grading?,
   // copy_files?} — totes les banderes per defecte certes. Mai trepitja el patrimoni del destí.
@@ -93,7 +113,11 @@ export const models = {
   assign: (id, body) => client.post(`/api/v1/models/${id}/assign/`, body),   // {assignee_id, task_ids?}
   unassign: (id) => client.post(`/api/v1/models/${id}/unassign/`),
   // PG-4b-3b — fixa el règim de grading d'un POM del model (l'usarà 3c). {logica}
-  setPomRegim: (modelId, pomId, logica) => client.post(`/api/v1/models/${modelId}/pom/${pomId}/regim/`, { logica }),
+  // S42/F1 · Q1-bis — `garment` diu DE QUINA PEÇA és la regla: `ModelGradingRule` és única
+  // per `(model, pom, garment)` i `set_pom_regim_view` ja el resol (#12d). Qui no el digui rep
+  // la mare, que és el que feia tothom fins ara.
+  setPomRegim: (modelId, pomId, logica, garment = '') =>
+    client.post(`/api/v1/models/${modelId}/pom/${pomId}/regim/`, { logica, garment }),
   // G1 — els ALTRES camps de la regla (increment_base / increment_break / talla_break_label) per
   // la MATEIXA porta que el règim: `set_pom_regim_view` és un upsert de la ModelGradingRule
   // resident amb actualització selectiva per presència de camp. Cap mecànica nova d'escriptura
@@ -105,23 +129,39 @@ export const models = {
   setPomRule: (modelId, pomId, payload) => client.post(`/api/v1/models/${modelId}/pom/${pomId}/regim/`, payload),
   // C1 (principi del soroll) — PODA d'un POM del model: SOFT (is_active=False) + registre al
   // log de mesures. Mai DELETE dur: la mesura va existir i el model n'ha de guardar memòria.
-  desactivarPom: (modelId, pomId, motiu) => client.post(`/api/v1/models/${modelId}/pom/${pomId}/desactivar/`, { motiu }),
+  // C4/BLOC 2 — la poda diu QUINA germana treu. Els eixos van al COS i no al camí: una
+  // `instancia` buida (el cas normal) no té representació honesta dins d'una URL.
+  // S42/F5+ — L'EIX DE PRENDA HI ENTRA. El backend ja resol la fila per `(pom, capa,
+  // instancia, garment)` (`desactivar_pom_view`, des de `e0809954`) i a qui no el diu li dona
+  // el literal de la MARE: enviant-ne dos de tres, podar una fila de la 02 apuntava a la fila
+  // de la mare. Qui no el passi segueix rebent `''`, que és el que feia tothom fins ara.
+  desactivarPom: (modelId, pomId, motiu, eixos = {}) =>
+    client.post(`/api/v1/models/${modelId}/pom/${pomId}/desactivar/`,
+                { motiu, capa: eixos.capa, instancia: eixos.instancia, garment: eixos.garment }),
   // P0+P2+P3 — PROMOCIÓ model→item. Dues fases: confirm=false retorna el diff sense escriure
   // res; confirm=true aplica dins d'una transacció. Gate CONFIGURE al backend.
   promoureAItem: (modelId, confirm = false) => client.post(`/api/v1/models/${modelId}/promoure-a-item/`, { confirm }),
   // D5 (2026-07-21) — `setSizeOverride` JUBILAT: estava declarat aquí però cap component el
-  // cridava mai; l'editor real fa servir `escalatAjustarTalla`. La ruta del backend també s'ha
-  // retirat. Si algun dia cal editar una talla no-base per API, es reobre conscientment.
+  // cridava mai. La ruta del backend també s'ha retirat.
+  // ⚠️ Aquesta nota deia «l'editor real fa servir `escalatAjustarTalla`» i ha caducat el 17/08:
+  // aquell també és jubilat (E1/B4, més avall). **Cap dels dos camins existeix ja**, i per tant
+  // avui no hi ha cap API per editar el valor d'UNA talla no-base: si algun dia cal, es reobre
+  // conscientment i per un gest que digui què fa.
   // Taula base amb estadis (històric per presa + tolerància + base vigent). Read-only.
   baseStages: (modelId) => client.get(`/api/v1/models/${modelId}/base-stages/`),
+  // D-31.17 — LA COMPROVACIÓ del model: què falta i què s'ha de mirar abans que la fitxa
+  // surti cap al fabricant. Lectura pura; aquesta pantalla no escriu res.
+  comprovacio: (modelId) => client.get(`/api/v1/models/${modelId}/comprovacio/`),
   // Peça 2 — propagació conscient (origen Mesures): {new_version:true} crea v+1 sobre la vigent. Sobre
   // una versió segellada retorna 409 {error:'sealed', version_number} → cal doble confirmació
   // ({allow_reopen_sealed:true}).
   generarGrading: (modelId, body) => client.post(`/api/v1/models/${modelId}/generar-grading/`, body || {}),
-  // Fase 2 — ajust de talla a Escalat: ancora la talla i PROPAGA per regla a les germanes (com el
-  // fitting). Retorna {linies:[{id,valor_real}]} per refrescar la fila. Base inclosa.
-  escalatAjustarTalla: (modelId, pomId, talla, valor) =>
-    client.post(`/api/v1/models/${modelId}/escalat/ajustar-talla/`, { pom_id: pomId, talla, valor }),
+  // ✅ E1/B4 (17/08) — `escalatAjustarTalla` JUBILAT, i amb ell la ruta del backend.
+  // Aquella crida EDITAVA LA CORBA TEÒRICA (escrivia `BaseMeasurement`/`ModelGradingOverride`
+  // i re-derivava els specs a cada tecla), i per això «Mesurar prenda» clonava com a teòric el
+  // número que el tècnic acabava d'anotar: desviació zero i acceptació buida. El seu únic
+  // cridador —`PropagatedEditor`— ha canviat de porta i ara anota una PRESA: v. `presaEscalat`,
+  // més avall. Mateix camí que `setSizeOverride` va fer el 21/07.
   // Fase B — estat de propagació perquè el botó Propagar MIRI ABANS (read-only):
   // {te_dades_propagades, segellada, version_number, te_regles}.
   // G2 — `te_regles` és la condició dura: sense regla NO es propaga mai; el gest porta a
@@ -150,6 +190,11 @@ export const baseMeasurements = {
   setNoms: (id, body) => client.patch(`/api/v1/base-measurements/${id}/noms/`, body),
   // Reordena els POM del model en bloc (ordre ÚNIC i global; es materialitza a Grading en propagar).
   reorder: (modelId, ids) => client.post(`/api/v1/models/${modelId}/base-measurements/reorder/`, { ids }),
+  // La mesura NEIX per aquí quan la crea una PRESA (una germana de capa, la partició d'un POM,
+  // una fila del cercador). No passa per `set-measurements` a posta: aquell endpoint reescriu
+  // `origen` a 'MANUAL' i les toleràncies de TOTES les files del payload, i una presa no pot
+  // convertir en manual la base que una altra sessió va deixar 'CHECKED'.
+  create: (body) => client.post('/api/v1/base-measurements/', body),
 }
 
 // D-12 — Watchpoints: advertències de text lliure ancorades al model (+ tasca d'origen), open→resolved.
@@ -197,15 +242,64 @@ export const itemFitxers = {
   // Cicle ①: crea una CÒPIA al model (derivat_de_item), no toca l'ItemFitxer.
   usarAlModel: (id, modelId) =>
     client.post(`/api/v1/item-fitxers/${id}/usar-al-model/`, { model_id: modelId }),
+  // U2 — l'«Esborrar» del tab Fitxers. El ViewSet ja porta `DestroyModelMixin` gated CONFIGURE i
+  // el seu `perform_destroy` esborra els BYTES abans de la fila (si no, quedarien orfes al disc):
+  // aquí no hi havia porta de client, i prou.
+  remove: (id) => client.delete(`/api/v1/item-fitxers/${id}/`),
 }
 
 export const poms = {
   list: (params) => client.get('/api/v1/poms/', { params }),
   cerca: (params) => client.get('/api/v1/poms/cerca/', { params }),          // ?q & page_size
   crearTenant: (data) => client.post('/api/v1/poms/crear-tenant/', data),    // POM tenant-only nou
+  get: (id) => client.get(`/api/v1/poms/${id}/`),
+  update: (id, data) => client.patch(`/api/v1/poms/${id}/`, data),
+  remove: (id) => client.delete(`/api/v1/poms/${id}/`),
+  // U1 — ON S'USA: el recompte que habilita o bloqueja el botó d'esborrar. El calcula el
+  // backend recorrent `_meta.related_objects` (la lliçó de TGIRL: information_schema no veu
+  // les FK amb db_constraint=False). Porta també l'ús OBSERVAT de capes i instàncies.
+  us: (id) => client.get(`/api/v1/poms/${id}/us/`),
+  // POM PROPI DEL MODEL (06/08) — el que el catàleg del client encara no té. Neix AL catàleg
+  // del client (POMMaster + CustomerPOMAlias origen='MODEL') i valida que la nomenclatura no
+  // xoqui amb cap àlies d'aquell client. 409 amb el motiu quan xoca.
+  // body: {nom, nomenclatura, categoria_id?, descripcio_local?}
+  crearPropiDelModel: (modelId, data) =>
+    client.post(`/api/v1/models/${modelId}/pom-propi/`, data),
+}
+
+// El VOCABULARI D'IDENTITAT d'una mesura: capes (D-31.22) + instàncies (D-31.26) + la regla
+// de composició del codi. Un sol GET perquè els dos eixos es miren sempre junts.
+// ⚠️ No confondre amb el diccionari de NOMENCLATURA d'un client (`pom/customers/…/dictionary/`).
+export const diccionariMesures = {
+  get: () => client.get('/api/v1/mesures/diccionari/'),
+}
+
+// LA ⓘ — el nom d'un POM en la llengua de qui llegeix. Es demana per REFERÈNCIA (ids) i EN LOT:
+// la clau del proveïdor de traducció viu al servidor i el que es pinta són els POMs visibles
+// d'una pantalla, no un nom cada cop. Qui l'usa és `utils/traduccioPomFont.js`, mai una pantalla
+// directament: el sistema hi ha d'entrar per un sol punt.
+export const traduccions = {
+  poms: (pomIds, lang) => client.get('/api/v1/translate/pom/', {
+    params: { pom_ids: [...pomIds].join(','), lang },
+  }),
+}
+
+// LES ENUMERACIONS DE DOMINI (F2.2): règims de graduació · fases del model · estats del model ·
+// fases de tasca. Germà del diccionari de dalt i pel mateix motiu: eren als `choices` dels models
+// i el front se les escrivia a mà, fins que van derivar (la còpia dels règims en tenia quatre
+// quan el model en declara cinc). Un sol GET perquè cap pantalla en fa servir una de sola.
+// ⚠️ `fases_model` i `fases_tasca` NO són la mateixa cosa: cicle de vida del model vs fase d'una
+// tasca del pla de treball. Vocabularis independents.
+export const vocabulariDomini = {
+  get: () => client.get('/api/v1/vocabulari/'),
 }
 
 // CRUD complet (GarmentTypeViewSet és ModelViewSet). S'usa al tram 7 (finder 3 columnes).
+// U1 — les categories del catàleg (la «família de lletra» de la fitxa).
+export const pomCategories = {
+  list: (params) => client.get('/api/v1/pom-categories/', { params }),
+}
+
 export const garmentTypes = {
   list: (params) => client.get('/api/v1/garment-types/', { params }),
   get: (id) => client.get(`/api/v1/garment-types/${id}/`),
@@ -216,10 +310,38 @@ export const garmentTypes = {
 
 export const garmentGroups = {
   list: (params) => client.get('/api/v1/garment-groups/', { params }),
+  // U2 — la porta d'escriptura del «＋ Nou grup». NO hi ha `remove`: `GarmentType.grup_ref`
+  // apunta aquí amb PROTECT i el string `grup` encara hi conviu (C6 pas 1). V. el ViewSet.
+  create: (data) => client.post('/api/v1/garment-groups/', data),
+  update: (id, data) => client.patch(`/api/v1/garment-groups/${id}/`, data),
+}
+
+// U2 · l'acumulació — les dues pertinences de nivell superior. La de l'item és
+// `garmentPomMaps` (més avall); aquestes dues tenen el mateix contracte amb una àncora diferent.
+export const garmentTypePomMaps = {
+  list: (params) => client.get('/api/v1/garment-type-pom-maps/', { params }),   // ?garment_type
+  create: (data) => client.post('/api/v1/garment-type-pom-maps/', data),
+  update: (id, data) => client.patch(`/api/v1/garment-type-pom-maps/${id}/`, data),
+  remove: (id) => client.delete(`/api/v1/garment-type-pom-maps/${id}/`),
+}
+export const garmentGroupPomMaps = {
+  list: (params) => client.get('/api/v1/garment-group-pom-maps/', { params }),  // ?garment_group
+  create: (data) => client.post('/api/v1/garment-group-pom-maps/', data),
+  update: (id, data) => client.patch(`/api/v1/garment-group-pom-maps/${id}/`, data),
+  remove: (id) => client.delete(`/api/v1/garment-group-pom-maps/${id}/`),
 }
 
 export const sizeSystems = {
   list: (params) => client.get('/api/v1/size-systems/', { params }),
+  // C5 — editar a mà les 4 capes de restricció del run (target/grup/construcció/fit). El
+  // ViewSet ja era un ModelViewSet amb escriptura gated CONFIGURE i el serializer ja tenia
+  // les quatre llistes escrivibles per CODI: aquí només faltava la porta del client.
+  update: (id, data) => client.patch(`/api/v1/size-systems/${id}/`, data),
+  remove: (id) => client.delete(`/api/v1/size-systems/${id}/`),
+  // A2 — ON S'USA un run. Germà de `poms.us`, i amb la mateixa forma de resposta a posta: la
+  // fitxa d'un run i la d'un POM fan la mateixa pregunta. Compta també les regles ANCORADES a
+  // les seves TALLES, que no apunten al run i que el cens directe no pot veure (lliçó TGIRL).
+  us: (id) => client.get(`/api/v1/size-systems/${id}/us/`),
 }
 
 export const sizeDefinitions = {
@@ -261,12 +383,23 @@ export const sizeMap = {
 export const gradingRuleSets = {
   list: (params) => client.get('/api/v1/grading-rule-sets/', { params }),
   get: (id) => client.get(`/api/v1/grading-rule-sets/${id}/`),
+  // A3 — les portes d'escriptura del catàleg de jocs. El `GradingRuleSetViewSet` ja era un
+  // ModelViewSet amb escriptura gated CONFIGURE: aquí no hi ha backend nou, només el client
+  // que fins avui cridava `fetch()` a pèl des de la pàgina (sense refresh de token ni base URL).
+  create: (data) => client.post('/api/v1/grading-rule-sets/', data),
+  update: (id, data) => client.patch(`/api/v1/grading-rule-sets/${id}/`, data),
+  remove: (id, force) => client.delete(`/api/v1/grading-rule-sets/${id}/${force ? '?force=1' : ''}`),
   editRule: (setId, pom, payload) =>
     client.patch(`/api/v1/grading-rule-sets/${setId}/regles/${pom}/editar/`, payload),
 }
 
 export const gradingRules = {
   list: (params) => client.get('/api/v1/grading-rules/', { params }),
+  // ⚠️ `remove` NO esborra: el ViewSet marca `actiu=False` i torna 200 (no 204). El motor
+  // només llegeix regles actives, i el mateix ViewSet respon 409 a un PATCH sobre una regla
+  // inactiva («editar-la no tindria cap efecte»).
+  update: (id, data) => client.patch(`/api/v1/grading-rules/${id}/`, data),
+  remove: (id) => client.delete(`/api/v1/grading-rules/${id}/`),
 }
 
 // Capa de Projecte — instàncies ModelTask (model-task-items/, ModelViewSet + row-level scope).
@@ -288,6 +421,13 @@ export const modelTasks = {
   transition: (id, data) => client.post(`/api/v1/model-task-items/${id}/transition/`, data),
   // Self-claim entre tècnics (P4a-back, gated execute_tasks, self-only). Sense body: assignee = jo.
   claim: (id) => client.post(`/api/v1/model-task-items/${id}/claim/`),
+  // F2.5 · D-2 — temps DECLARAT per a les tasques Externa-lliure (les que es fan fora de l'eina
+  // i que cap batec pot observar). Cos: {minuts} XOR {inici, fi}. El backend rebutja les internes.
+  tempsDeclarat: (id, data) => client.post(`/api/v1/model-tasks/${id}/temps-declarat/`, data),
+  // T3 · el CRONO declarat. Una sola porta amb quatre accions —engegar · aturar · descartar ·
+  // corregir— perquè les quatre parlen del mateix tram i el servidor n'és l'amo: el navegador no
+  // en guarda estat, el demana. `engegar` és idempotent (re-enganxar-s'hi després d'un F5).
+  crono: (modelId, data) => client.post(`/api/v1/models/${modelId}/crono/`, data),
 }
 // Alias retrocompatible (KanbanTasks vell encara importa `tasks`; es reconstrueix al tram 4).
 export const tasks = modelTasks
@@ -444,6 +584,8 @@ export const garmentTypeItems = {
   create: (data) => client.post('/api/v1/garment-type-items/', data),
   update: (id, data) => client.patch(`/api/v1/garment-type-items/${id}/`, data),
   remove: (id) => client.delete(`/api/v1/garment-type-items/${id}/`),
+  // U2 — el catàleg de POMs ACUMULAT (grup + família + item), amb el «Ve de» de cada fila.
+  acumulacio: (id) => client.get(`/api/v1/garment-type-items/${id}/acumulacio/`),
 }
 
 // Mòdul Comercial Studio (B1) — mestre d'articles. Escriptura gated CONFIGURE.
@@ -669,6 +811,25 @@ export const pieceFittings = {
   discard: (id) => client.post(`/api/v1/piece-fittings/${id}/discard/`),
 }
 
+// E1/B3 — LA PRESA DE L'ESCALAT (pas 1): la xifra de la peça FÍSICA arribada, per talla.
+//
+// ⚠️ NO ÉS `escalatAjustarTalla`, i la diferència és tota la peça: aquella EDITA LA CORBA
+// TEÒRICA (escriu `BaseMeasurement`/`ModelGradingOverride` i re-deriva els specs); aquesta
+// ANOTA UNA OBSERVACIÓ a `PieceFittingLine.valor_real` i no toca res del domini. Consolidar
+// és del `close` de «Mesurar prenda» i propagar té la seva porta.
+//
+// El `desa` retorna la cel·la sencera resolta pel servidor —{teoric, real, desviacio, estat}—
+// perquè el vermell de R1 no depengui de com arrodoneixi cada client.
+// 409 `sense_presa_oberta` = no hi ha cap presa viva del model: la pantalla ha d'oferir el
+// gest d'obrir-la, que és el mateix que obre «Mesurar prenda».
+export const presaEscalat = {
+  get: (modelId) => client.get(`/api/v1/fitting/model/${modelId}/presa/`),
+  desa: (modelId, pomId, talla, valor, eixos = {}) =>
+    client.post(`/api/v1/fitting/model/${modelId}/presa/`,
+                { pom_id: pomId, talla, valor, capa: eixos.capa,
+                  instancia: eixos.instancia, garment: eixos.garment }),
+}
+
 // Autosave de cel·la: només PATCH de valor_real / nota.
 export const pieceFittingLines = {
   update: (id, data) => client.patch(`/api/v1/piece-fitting-lines/${id}/`, data),
@@ -720,8 +881,9 @@ export const pomAlerts = {
 
 export const timers = {
   list: (params) => client.get('/api/v1/timers/', { params }),
-  create: (data) => client.post('/api/v1/timers/', data),
-  tancar: (id) => client.post(`/api/v1/timers/${id}/tancar/`),
+  // F1.7 — `create` i `tancar` JUBILATS. El viewset és ReadOnly des de 89009858 (el temps
+  // facturable era inventable des del navegador) i l'acció `tancar` tancava un tram sense passar
+  // per la màquina d'estats, deixant la tasca En curs sense tram. El Stop és qui tanca feina.
   // Guard de tasca oblidada: segella el tram obert del PROPI tècnic (sense pk — el backend el
   // busca pel perfil). Confirmar el modal rearma el llindar des del segell nou. 404 si ja no hi
   // ha cap tasca En curs (pausada des d'una altra pestanya) → el front s'ha de resincronitzar.

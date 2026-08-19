@@ -75,7 +75,10 @@ export default function FileDropCard({
 
   const ple = !!file
   const problema = errExt || error
-  const vora = problema ? 'var(--err)' : sobre ? 'var(--gold)' : ple ? 'var(--ok)' : 'var(--gray-l)'
+  // La vora DE REPÒS era `--gray-l` (#f0f0f0): un àlies de FARCIMENT fent de vora, en gris
+  // fred. Els altres tres estats d'aquesta mateixa expressió ja són de paleta —era l'únic que
+  // desentonava—, i és qui pinta 12 vores al tab Patró i 4 a l'editor .ftt i al Taller.
+  const vora = problema ? 'var(--err)' : sobre ? 'var(--gold)' : ple ? 'var(--ok)' : 'var(--line)'
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 260px', minWidth: 240 }}>

@@ -140,7 +140,11 @@ class PomNomesOverrideGraduaTest(_D2Base):
         generate_graded_specs(self.sf.id)
         prev = preview_graded_specs(
             self.model, {self.pom_regla.id: 100.0, self.pom_ovr.id: 58.5})
-        unica = (MeasurementLayer.SLUG_DEFECTE, '')
+        # SET-2/T6a (2026-08-11) — LA CLAU DE SORTIDA DEL PREVIEW TÉ UN TRAM MÉS: el
+        # `garment`, darrere de la instància, igual que la d'ENTRADA i igual que la del
+        # generador. Pin de FORMA i era el seu ofici caure avui: els VALORS no s'han
+        # mogut ni un decimal (la mateixa fila, les mateixes talles) — només la clau.
+        unica = (MeasurementLayer.SLUG_DEFECTE, '', '')
         self.assertEqual(prev[(self.pom_ovr.id, *unica)], self._taula(self.pom_ovr))
         self.assertEqual(prev[(self.pom_regla.id, *unica)], self._taula(self.pom_regla))
 
@@ -161,6 +165,74 @@ class CelLaAbsentTest(_D2Base):
             model=self.model, pom=pom_orfe, base_value_cm=42.0, is_active=True, ordre=2)
         generate_graded_specs(self.sf.id)
         self.assertEqual(self._taula(pom_orfe), {})
+
+
+class LaTracaDeCoberturaParcialNoMenteixTest(_D2Base):
+    """SET-2/T6a (2026-08-11) — un POM només-override NO és «sense regla», i la traça ho ha de dir.
+
+    `sense_regla` no mou cap cel·la: les dues branques del `rule is None` acaben igual amb un
+    `continue`. El que decideix és l'avís de COBERTURA PARCIAL (`pom/services.py`, «N POM(s)
+    amb mesura base i sense regla»), que és el rastre que la llei D2 va posar precisament
+    perquè el silenci era el bug. Un avís que compta POMs ben coberts és el mateix silenci amb
+    una altra disfressa: qui el llegeixi anirà a buscar una regla que no falta.
+
+    Va quedar trencat perquè `_poms_amb_override` va passar a claus de quatre trams a
+    SET-2/T4 i aquesta comparació es va quedar amb tres — la SEGONA PORTA del dany que
+    `31e05db7` va tancar a `_load_grading_rules` i a `_identitat`. Cap assert de valors el
+    podia veure, i per això el pin mira els LOGS i no la taula.
+    """
+
+    LOGGER = 'fhort.pom.services'
+
+    def _pom_nomes_override_PARCIAL(self):
+        """Un POM sense regla amb override a UNA talla, no a totes. És el cas que cal.
+
+        ⚠️ El `pom_ovr` del fixture compartit NO serveix per a aquest pin, i la primera versió
+        d'aquest test el feia servir: té override a TOTES les talles no-base i la base la
+        cobreix el rescat de D2, o sigui que les seves cel·les surten totes per les branques
+        de l'override i **no arriba mai** a la branca `rule is None` on viu el predicat. El
+        mutant (tornar la comparació a tres trams) hi va SOBREVIURE, i el defecte era del
+        test: no exercia la línia que deia vigilar.
+
+        Amb override només a XXS, les talles XS/M/L sí que hi cauen — que és exactament el
+        cas que el comentari de `services.py` descriu: «segueix valent per a les talles del
+        run que el POM només-override no cobreix».
+        """
+        pom = POMMaster.objects.create(codi_client='P1', nom_client='Parcial')
+        BaseMeasurement.objects.create(
+            model=self.model, pom=pom, base_value_cm=30.0, is_active=True, ordre=3)
+        ModelGradingOverride.objects.create(
+            model=self.model, pom=pom, size_label='XXS', value_cm=28.0,
+            created_by=self.profile, motiu='Import W5 — cobertura parcial')
+        return pom
+
+    def test_un_pom_nomes_override_no_compta_com_a_sense_regla(self):
+        # Cobert per override a XXS i per la base: les altres tres talles són cel·la absent
+        # LEGÍTIMA, no manca de regla. No ha de sortir a la traça de cobertura parcial.
+        self._pom_nomes_override_PARCIAL()
+        with self.assertNoLogs(self.LOGGER, level='WARNING'):
+            generate_graded_specs(self.sf.id)
+
+    def test_el_cas_de_control_SI_que_hi_entra(self):
+        """El control ha de TRENCAR la coincidència: sense ell el test de dalt passaria igual
+        amb l'avís desactivat del tot. Un POM amb base i sense CAP override ni regla sí que és
+        cobertura parcial, i ha de sortir a la traça amb el seu id."""
+        pom_mut = POMMaster.objects.create(codi_client='Z9', nom_client='Mut')
+        BaseMeasurement.objects.create(
+            model=self.model, pom=pom_mut, base_value_cm=42.0, is_active=True, ordre=2)
+
+        with self.assertLogs(self.LOGGER, level='WARNING') as capturat:
+            generate_graded_specs(self.sf.id)
+
+        traca = '\n'.join(capturat.output)
+        self.assertIn('sense regla', traca)
+        # ⚠️ La LLISTA sencera, no `assertIn(id)` ni `assertNotIn(id)` sobre el text pelat: la
+        # primera versió d'aquest assert feia `assertNotIn(str(self.pom_ovr.id), traca)` amb
+        # l'id 2 i queia contra el «D2» de «llei D2 de cel·la absent». Un id d'una xifra dins
+        # d'una frase que parla de la llei D2 casa amb qualsevol cosa; el que s'ha de fixar és
+        # el conjunt que l'avís publica.
+        self.assertIn(f'POMs: [{pom_mut.id}]', traca)   # només ell: ni dos ids, ni el només-override
+        self.assertIn('1 POM(s)', traca)
 
 
 class ParitatSenseOverridesTest(_D2Base):

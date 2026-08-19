@@ -17,6 +17,7 @@ from django.db import connection
 from django_tenants.test.cases import TenantTestCase
 from django_tenants.utils import get_tenant_model, schema_context
 
+from fhort.pom.catalog_testing import desactiva_unicitat_codi_client
 from fhort.pom.models import POMCategory, POMMaster, SizeSystem, Target
 from fhort.tenants.models import Client
 
@@ -129,7 +130,22 @@ class BootstrapAdditiveTest(TenantTestCase):
     # ── clau AMBIGUA al destí (deute de dades): saltar i reportar, mai crear ───
     def test_additiu_clau_ambigua_al_desti(self):
         """Reprodueix el cas PROD: 2 POMMaster amb el mateix codi_client (categoria 13 i NULL)
-        al destí + un tercer amb el mateix codi a l'origen → saltat, reportat, cap 3a fila."""
+        al destí + un tercer amb el mateix codi a l'origen → saltat, reportat, cap 3a fila.
+
+        ⚠️ **AQUESTA PROVA ESTAVA VERMELLA I NINGÚ HO SABIA.** La migració `pom/0075` va posar
+        `uniq_pommaster_codi_client_ci` i, amb ella, l'estat que aquesta prova ha de fabricar
+        —dos POMs amb el mateix `codi_client`— **el rebutja la BD**. El bloc A ja va caçar
+        aquesta família sencera i li va fer l'eina (`pom/catalog_testing.py`), però la va
+        aplicar només a `fhort.pom`: aquesta viu a `fhort.tasks`, una app que aquell bloc **no
+        va córrer**, i s'hi va quedar el vermell fins que la part B ha corregut la suite de les
+        apps que tocava. **Una prova vermella en una app que ningú corre és una prova que no
+        existeix.**
+        El remei és el de la casa i no se n'inventa cap: la constraint es treu DINS de la
+        transacció de la prova, i el `rollback` del `TestCase` la restaura (a PostgreSQL el DDL
+        és transaccional). El GUARD de producció que aquesta prova defensa —el 409
+        `codi_duplicat` amb candidats— segueix viu, i mentre hi sigui ha de tenir xarxa.
+        """
+        desactiva_unicitat_codi_client()
         with schema_context(self.dest_schema):
             cat = POMCategory.objects.create(codi='C1')
         self._pom(self.dest_schema, 'DUP-1', categoria=cat)   # categoria != NULL

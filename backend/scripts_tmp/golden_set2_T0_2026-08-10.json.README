@@ -1,0 +1,65 @@
+GOLDEN T0 DE SET-2/T4 — 10/08/2026, corpus de staging
+=====================================================
+
+Fitxer: golden_set2_T0_2026-08-10.json
+md5   : 165d6701cf5d3be40c1115b613f095f0
+sha256: bdef456fb1e44c499f3ed05fdb2f5c3651dfa1af26f89812ffd4491f77291430
+Clau  : model_id|pom_id|capa|instancia|size_label
+Cotes : 280 cel·les de preview · 280 de generador · 2 models (1320, 1322)
+        cap segellat fora de la mètrica
+
+AQUEST ÉS EL GOLDEN VIU. El de 2026-08-03 ja no ho és — v. l'avís al seu README.
+
+COM ES TORNA A CONSTRUIR (la recepta sencera, i és al repo a posta)
+------------------------------------------------------------------
+  1. python manage.py clone_model_for_qa --schema fhort --source 1320 \
+       --assignee <tècnic> --tag '[QA-SET2]' [--recreate]
+  2. python manage.py qa_set2_forats --schema fhort --model <pk del clon>
+  3. python manage.py shell -c "MODELS=[1320,<pk>]; OUT='…'; \
+       exec(open('scripts_tmp/golden_c3_snapshot.py').read())"
+
+El pas 2 NO és idempotent contra un model ja tractat (tria la primera regla que encara
+no sigui STEP, o sigui que una segona passada en converteix una altra). Per refer el
+banc net: `--recreate` al pas 1 i després el 2 una sola vegada.
+
+QUÈ EXERCITA AQUEST BANC, I PER QUÈ SÓN DOS MODELS
+--------------------------------------------------
+El cens del corpus viu (10/08) va donar, sobre el 1320: 142 regles = 98 LINEAR (les 98
+AMB break) + 44 FIXED, **0 STEP**, **0 overrides**; run XXS·XS·S·M·L amb base S, o sigui
+propagació a les dues bandes; i germanes als POMs 981 i 1039.
+
+El que hi faltava el porta el clon (1322), i NOMÉS això — un clon amb el mateix perfil
+que l'origen no aporta cap camí nou a una paritat:
+  · POM 904 → regla STEP amb `valors_step` irregulars {XXS 0.7, XS 0.7, M 1.3, L 2.1} i
+    amb `increment_base`=2.00 i break='S' poblats A POSTA. `pom/services.py:1014` diu que
+    STEP no gradua canònic encara que `increment_base` hi sigui: aquestes 4 cel·les són
+    el pin d'aquell guard.
+  · POM 920 → dos ModelGradingOverride (XS=40.0, M=41.0) amb els eixos de la seva fila
+    base (capa 'exterior', instancia 'relaxed'), que és l'única manera que el motor els
+    casi (`services.py:252`).
+
+CONTRAST ORIGEN↔CLON, verificat amb la clau SENCERA: de les 140 cel·les, **134 idèntiques
+i exactament 6 diferents** — les 4 de STEP i les 2 d'override. O sigui: el clon és fidel
+i els dos forats són reals.
+
+⚠️ NO ET FIÏS del missatge «grading DIFEREIX en N specs» que escup `clone_model_for_qa`
+al final: la seva comprovació indexa per `(pom_id, size_label)`, una clau PLANA que
+COL·LAPSA les germanes, i per això denuncia els POMs 981 i 1039 sense que hi hagi cap
+divergència. Amb la clau sencera no en queda cap.
+
+   🔗 I NO ÉS UN CAS AÏLLAT: aquell comprovador és **un lector més de la clau curta**, de
+   la mateixa família que el cens d'escriptors i lectors recull (T5) — `_poda_mesures`,
+   `_load_base_measurements`, els lookups sense eix… El símptoma canvia (aquí menteix, en
+   altres llocs col·lapsa o peta) però la causa és la mateixa: indexar per menys camps
+   dels que la identitat té. Queda enllaçat aquí a posta, perquè qui el trobi d'aquí a
+   tres mesos no el "corregeixi" com un bug solt sense saber de quina família és.
+
+L'ABAST D'AQUESTA PARITAT (llegiu-ho abans de citar-la)
+-------------------------------------------------------
+Prova **NO-REGRESSIÓ del camí `garment=''`**: que tocar el motor a T4 no mou cap cel·la
+del que ja hi havia. **NO prova que el multipeça gradui bé**, i no ho pot provar: les
+comportes `*_garment_gate_set2` impedeixen que existeixi cap fila '02' mentre T4/T5 no
+hagin adaptat la cadena. Que ningú la llegeixi després com el que no és.
+
+EL BANC NO S'ESBORRA mentre SET-2 corri. El model 1322 porta `[QA-SET2]` al nom_prenda
+justament per això.

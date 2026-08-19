@@ -10,6 +10,9 @@ import EditorHeader from '../components/model/EditorHeader'
 import { buildFittingGroups, buildFittingRows, regimeLeadCol } from '../components/model/fittingGridAdapter'
 import { thStyle, SaveStatus, useDebouncedSave, fmtMeasure, useUnit } from './fittingShared'
 import { orderedSizes } from '../utils/sizeRun'
+import { identitatMesura } from '../utils/identitatMesura'
+import { etiquetaInstancia } from '../utils/capaInstancia'
+import { useSessioSegellada } from '../utils/vocabulariDominiFont'
 
 const estatVariant = { Oberta: 'warn', Tancada: 'ok', Anullada: 'gray' }
 
@@ -19,18 +22,31 @@ function useSessionField(sessionId, field) {
   return useDebouncedSave(persist)
 }
 
+// Q4 — el mateix camp, en LECTURA: una acta no s'edita ni per la capçalera. La persona provada
+// i el lloc són part del que es va gravar aquell dia.
+function ContextField({ sessionId, field, label, value, readOnly }) {
+  if (readOnly) {
+    return (
+      <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>
+        {label}: <span style={{ color: 'var(--text-main)' }}>{value || '—'}</span>
+      </span>
+    )
+  }
+  return <EditableContextField sessionId={sessionId} field={field} label={label} value={value} />
+}
+
 function EditableContextField({ sessionId, field, label, value }) {
   const [v, setV] = useState(value ?? '')
   const [state, schedule] = useSessionField(sessionId, field)
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+    <span style={{ display: 'inline-flex', alignItems: 'center', fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>
       {label}:&nbsp;
       <input
         value={v} onChange={e => { setV(e.target.value); schedule(e.target.value) }}
         placeholder="—"
         style={{
           width: 120, padding: '1px 2px', fontSize: 'var(--fs-body)', color: 'var(--text-main)',
-          border: 'none', borderBottom: '1px solid var(--border)', borderRadius: 0,
+          border: 'none', borderBottom: '1px solid var(--line)', borderRadius: 0,
           background: 'transparent', boxSizing: 'border-box',
         }}
       />
@@ -67,11 +83,11 @@ function ModelFilesPanel({ modelId }) {
 
   const renderGroup = (label, files) => (
     <div style={{ marginBottom: 14 }}>
-      <div style={{ fontSize: 'var(--fs-label)', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 500, marginBottom: 6 }}>
+      <div style={{ fontSize: 'var(--fs-label)', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-soft)', fontWeight: 500, marginBottom: 6 }}>
         {label}
       </div>
       {(!files || files.length === 0) ? (
-        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', fontStyle: 'italic' }}>{t('fitting.info.no_files')}</div>
+        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', fontStyle: 'italic' }}>{t('fitting.info.no_files')}</div>
       ) : (
         files.map(f => {
           // D13: URL signada de curta vida. Un <a href> no pot portar Authorization.
@@ -96,7 +112,7 @@ function ModelFilesPanel({ modelId }) {
   return (
     <Card title={t('fitting.info.title')} icon="ti-info-circle" style={{ marginBottom: '1.5rem' }}>
       {groups === null ? (
-        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{t('app.loading')}</div>
+        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>{t('app.loading')}</div>
       ) : (
         <>
           {renderGroup(t('fitting.info.patterns'), groups.patterns)}
@@ -121,8 +137,20 @@ function changedRows(grid) {
   const baseLabel = (grid.model?.base_size_label || '').trim()
   const pomMap = new Map()
   for (const l of lines) {
-    if (!pomMap.has(l.pom_id)) pomMap.set(l.pom_id, { pom_id: l.pom_id, codi: l.codi, nom: l.nom, is_key: l.is_key, cells: {} })
-    pomMap.get(l.pom_id).cells[l.size_label] = l
+    // C4/BLOC 1-BIS — s'agrupa per la MESURA, no pel POM: dues germanes són dues files.
+    const ident = identitatMesura(l)
+    // Q4 — ELS CODIS I ELS NOMS SÓN ELS DEL MODEL D'AVUI, com a totes les altres taules
+    // (llei de `nomenclaturaPom.js` i de `fittingGridAdapter:142`: `nom_fitxa` primer). Aquí la
+    // columna POM pintava el codi del CATÀLEG i la columna NOM hi tornava a pintar la
+    // nomenclatura: el full de canvis parlava una llengua que el model no fa servir, i dues
+    // germanes hi sortien amb el mateix rètol.
+    if (!pomMap.has(ident)) pomMap.set(ident, {
+      pom_id: l.pom_id, capa: l.capa, instancia: l.instancia,
+      codi: l.nom_fitxa || l.codi,
+      nom: l.nom_en || l.nom_local || l.nom,
+      is_key: l.is_key, cells: {},
+    })
+    pomMap.get(ident).cells[l.size_label] = l
   }
   const baseOf = (l) => l?.evolucio?.[0]?.valor_cm ?? null
   const isMod = (l) => {
@@ -133,8 +161,15 @@ function changedRows(grid) {
   return { sizeLabels, baseLabel, rows, isMod }
 }
 
-// Estats en què una sessió és de només lectura (mirall de SEALED_SESSION_ESTATS del backend).
-const SEALED_ESTATS = ['Tancada', 'Anullada']
+// QUINS ESTATS SEGELLEN UNA SESSIÓ HO DIU EL BACKEND, i ara ho diu de debò: `/vocabulari/` marca
+// cada `estats_sessio_fitting` amb `segellat`, i la marca surt del MATEIX `SEALED_SESSION_ESTATS`
+// que `fitting_line_is_locked` fa complir a l'escriptura. Abans això era un «mirall» escrit a mà
+// —el comentari ho deia—, i un mirall és exactament el que deixa de reflectir el dia que algú
+// afegeix un tercer estat segellat: la pantalla hauria seguit deixant escriure fins que el 403
+// del backend l'aturés, sense saber per què.
+//
+// ⚠️ SENSE VOCABULARI, DE LECTURA. «No sé si aquesta sessió està segellada» no pot caure del
+// costat d'obrir-la per escriure: aquí el dubte va cap a la banda que no fa mal.
 
 // Una peça té canvis a gravar si alguna línia de la TALLA BASE té valor_real ≠ valor_teoric.
 // El filtre per talla base NO és redundant amb l'adapter (que ja només pinta la base): `grid.lines`
@@ -289,19 +324,25 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
       .finally(() => { setUploading(false); e.target.value = '' })
   }
 
-  const muted = { fontSize: 'var(--fs-body)', color: 'var(--text-muted)', fontStyle: 'italic' }
+  const muted = { fontSize: 'var(--fs-body)', color: 'var(--text-soft)', fontStyle: 'italic' }
 
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.25rem' }}>
         <button onClick={onBack} disabled={busy} style={{
-          background: 'none', border: 'none', color: 'var(--text-muted)', cursor: busy ? 'default' : 'pointer', fontSize: 'var(--fs-body)', padding: 0, marginRight: 12,
+          background: 'none', border: 'none', color: 'var(--text-soft)', cursor: busy ? 'default' : 'pointer', fontSize: 'var(--fs-body)', padding: 0, marginRight: 12,
         }}>← {t('fitting.save.back')}</button>
-        <span style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, color: 'var(--text-main)' }}>{t('fitting.save.title')}</span>
+        {/* Q4 (06/08) — UNA ACTA NO PORTA TÍTOL D'ACCIÓ. La capçalera deia «Gravar el fitting»
+            sobre una sessió que el badge de dalt declarava «Tancada · només lectura»: dos estats
+            a la mateixa vista, i el que manava era el que no es podia fer. La fitxa d'una sessió
+            tancada diu què és —la fitxa— i prou. */}
+        <span style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, color: 'var(--text-main)' }}>
+          {t(readOnly ? 'fitting.save.title_acta' : 'fitting.save.title')}
+        </span>
       </div>
 
       {grids === null ? (
-        <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>{t('app.loading')}</div>
+        <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-soft)', fontSize: 'var(--fs-body)' }}>{t('app.loading')}</div>
       ) : (
         <>
           {/* D3 — TAULA DE MESURES (opcional): registrar/veure mesures. No bloqueja la revisió. */}
@@ -314,7 +355,7 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
                 }}>{t('fitting.save.view_measures')}</button>
               ) : (
                 <>
-                  <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 8 }}>
+                  <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', marginBottom: 8 }}>
                     {t('fitting.save.no_measures')}
                   </div>
                   <button onClick={registrarMesures} disabled={creatingPiece} style={{
@@ -344,27 +385,36 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
                           <th style={{ ...thStyle, textAlign: 'left' }}>{t('fitting.grid.pom')}</th>
                           <th style={{ ...thStyle, textAlign: 'left' }}>{t('fitting.grid.name')}</th>
                           {sizeLabels.map(s => (
-                            <th key={s} style={{ ...thStyle, textAlign: 'right', background: s === baseLabel ? 'var(--gold-pale)' : undefined }}>{s}</th>
+                            <th key={s} style={{ ...thStyle, textAlign: 'right', background: s === baseLabel ? 'var(--sel)' : undefined }}>{s}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
                         {rows.map((row, i) => {
-                          const rowBg = i % 2 === 0 ? 'var(--white)' : 'var(--bg-card)'
+                          const rowBg = i % 2 === 0 ? 'var(--white)' : 'var(--bg-page)'
                           return (
-                            <tr key={row.pom_id} style={{ background: rowBg }}>
-                              <td style={{ padding: '5px 10px', borderBottom: '0.5px solid var(--border)', fontWeight: 500, color: 'var(--gold)', whiteSpace: 'nowrap' }}>
-                                {row.codi}{row.is_key && <i className="ti ti-star-filled" style={{ fontSize: 9, marginLeft: 3, color: 'var(--gold)' }} />}
+                            // La clau és la MESURA sencera: amb dues germanes, `pom_id` sol es
+                            // repetia i React en descartava una fila en silenci.
+                            <tr key={identitatMesura(row)} style={{ background: rowBg }}>
+                              <td style={{ padding: '5px 10px', borderBottom: '1px solid var(--line-soft)', fontWeight: 500, color: 'var(--gold)', whiteSpace: 'nowrap' }}>
+                                {row.codi}{row.is_key && <i className="ti ti-star" style={{ fontSize: 14, marginLeft: 3, color: 'var(--gold)' }} />}
                               </td>
-                              <td style={{ padding: '5px 10px', borderBottom: '0.5px solid var(--border)', color: 'var(--text-muted)' }}>{row.nom}</td>
+                              <td style={{ padding: '5px 10px', borderBottom: '1px solid var(--line-soft)', color: 'var(--text-soft)' }}>
+                                {row.nom}
+                                {etiquetaInstancia(row.instancia) && (
+                                  <span style={{ fontWeight: 500, color: 'var(--text-main)' }}>
+                                    {` · ${etiquetaInstancia(row.instancia)}`}
+                                  </span>
+                                )}
+                              </td>
                               {sizeLabels.map(s => {
                                 const line = row.cells[s]
                                 const mod = isMod(line)
                                 return (
                                   <td key={s} style={{
-                                    padding: '5px 10px', borderBottom: '0.5px solid var(--border)', textAlign: 'right',
+                                    padding: '5px 10px', borderBottom: '1px solid var(--line-soft)', textAlign: 'right',
                                     fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
-                                    background: s === baseLabel ? 'var(--gold-pale)' : undefined,
+                                    background: s === baseLabel ? 'var(--sel)' : undefined,
                                     color: mod ? 'var(--err)' : 'var(--text-main)', fontWeight: mod ? 700 : 400,
                                   }}>
                                     {fmtMeasure(line?.valor_real, unit) ?? '—'}
@@ -382,38 +432,51 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
             })()}
           </Card>
 
-          {/* b) OBSERVACIONS — session.notes (editable, autosave on blur) */}
+          {/* b) OBSERVACIONS — session.notes.
+              Q4 — EN UNA ACTA VAN EN TEXT PLA. El `textarea` amb autosave seguia obert sobre una
+              sessió tancada: es podia reescriure el que es va dir aquell dia, i el desat passava
+              sense que cap guard del backend hi digués res (el guard de segellat cobreix les
+              LÍNIES, no `session.notes`). */}
           <Card title={t('fitting.save.observations')} style={{ marginBottom: '1.25rem' }}>
-            <textarea
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              onBlur={saveNotes}
-              placeholder={t('fitting.save.no_observations')}
-              style={{
-                width: '100%', minHeight: 80, padding: '8px 10px', fontSize: 'var(--fs-body)',
-                border: '1px solid var(--border)', borderRadius: 6, background: 'var(--white)',
-                color: 'var(--text-main)', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit',
-              }}
-            />
+            {readOnly ? (
+              <div style={{ fontSize: 'var(--fs-body)', color: notes ? 'var(--text-main)' : 'var(--text-soft)',
+                            whiteSpace: 'pre-wrap', fontStyle: notes ? 'normal' : 'italic' }}>
+                {notes || t('fitting.save.no_observations')}
+              </div>
+            ) : (
+              <textarea
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                onBlur={saveNotes}
+                placeholder={t('fitting.save.no_observations')}
+                style={{
+                  width: '100%', minHeight: 80, padding: '8px 10px', fontSize: 'var(--fs-body)',
+                  border: '1px solid var(--line)', borderRadius: 6, background: 'var(--white)',
+                  color: 'var(--text-main)', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit',
+                }}
+              />
+            )}
           </Card>
 
-          {/* c) IMATGES — pujada (multipart a /fitting-photos/) + miniatures */}
+          {/* c) IMATGES — miniatures sempre; la PUJADA només amb la sessió viva (Q4). */}
           <Card title={t('fitting.save.images')} style={{ marginBottom: '1.25rem' }}>
-            <label style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 10,
-              cursor: uploading ? 'default' : 'pointer', fontSize: 'var(--fs-body)', color: 'var(--gold)',
-            }}>
-              <input type="file" accept="image/*" multiple onChange={onUpload} disabled={uploading} style={{ display: 'none' }} />
-              <i className="ti ti-upload" style={{ fontSize: 14 }} />
-              {uploading ? t('fitting.save.uploading') : t('fitting.save.add_images')}
-            </label>
+            {!readOnly && (
+              <label style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 10,
+                cursor: uploading ? 'default' : 'pointer', fontSize: 'var(--fs-body)', color: 'var(--gold)',
+              }}>
+                <input type="file" accept="image/*" multiple onChange={onUpload} disabled={uploading} style={{ display: 'none' }} />
+                <i className="ti ti-upload" style={{ fontSize: 14 }} />
+                {uploading ? t('fitting.save.uploading') : t('fitting.save.add_images')}
+              </label>
+            )}
             {photos.length === 0 ? (
               <div style={muted}>{t('fitting.save.no_images')}</div>
             ) : (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
                 {photos.map(f => (
                   <a key={f.id} href={f.fitxer} target="_blank" rel="noopener noreferrer"
-                    style={{ display: 'block', width: 160, height: 160, borderRadius: 8, overflow: 'hidden', border: '0.5px solid var(--border)' }}>
+                    style={{ display: 'block', width: 160, height: 160, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--line-soft)' }}>
                     <img src={f.fitxer} alt={f.caption || ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   </a>
                 ))}
@@ -427,25 +490,26 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
             <div style={{ color: 'var(--err)', fontSize: 'var(--fs-body)', marginBottom: 12 }}>{error}</div>
           )}
           {progress && busy && (
-            <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)', marginBottom: 12 }}>
+            <div style={{ color: 'var(--text-soft)', fontSize: 'var(--fs-body)', marginBottom: 12 }}>
               {t('fitting.save.saving_progress', { done: progress.done, total: progress.total })}
             </div>
           )}
 
           {/* ACCIONS */}
           {readOnly ? (
-            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', paddingTop: 4 }}>
-              {t('fitting.save.read_only')}
+            // Q4 — cap botó: el que queda és la nota de què és aquesta pàgina.
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', paddingTop: 4 }}>
+              {t('fitting.save.acta_hint')}
             </div>
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 4, flexWrap: 'wrap' }}>
               <button onClick={doSave} disabled={busy} style={{
-                background: 'var(--gold)', color: 'var(--white)', border: 'none', borderRadius: 8,
+                background: 'var(--accio)', color: 'var(--white)', border: 'none', borderRadius: 8,
                 padding: '8px 18px', fontSize: 'var(--fs-body)', fontWeight: 500, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1,
               }}>{t('fitting.save.save_and_back')}</button>
               {hasPieces && (
                 <button onClick={doDiscard} disabled={busy} style={{
-                  background: 'var(--white)', color: 'var(--text-muted)', border: '0.5px solid var(--border)', borderRadius: 8,
+                  background: 'var(--white)', color: 'var(--text-soft)', border: '1px solid var(--line-soft)', borderRadius: 8,
                   padding: '8px 18px', fontSize: 'var(--fs-body)', cursor: busy ? 'default' : 'pointer',
                 }}>{t('fitting.save.discard_changes')}</button>
               )}
@@ -459,13 +523,13 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
                 <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                   <input type="text" value={discardMotiu} onChange={e => setDiscardMotiu(e.target.value)}
                     placeholder={t('fitting.save.discard_motiu_ph')}
-                    style={{ fontSize: 'var(--fs-body)', padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 6, minWidth: 200 }} />
+                    style={{ fontSize: 'var(--fs-body)', padding: '6px 10px', border: '1px solid var(--line)', borderRadius: 6, minWidth: 200 }} />
                   <button onClick={doDiscardSession} disabled={busy} style={{
                     background: 'var(--err)', color: 'var(--white)', border: 'none', borderRadius: 8,
                     padding: '8px 14px', fontSize: 'var(--fs-body)', cursor: busy ? 'default' : 'pointer',
                   }}>{t('common.confirm')}</button>
                   <button onClick={() => { setDiscardOpen(false); setDiscardMotiu('') }} disabled={busy} style={{
-                    background: 'var(--white)', color: 'var(--text-muted)', border: '0.5px solid var(--border)', borderRadius: 8,
+                    background: 'var(--white)', color: 'var(--text-soft)', border: '1px solid var(--line-soft)', borderRadius: 8,
                     padding: '8px 14px', fontSize: 'var(--fs-body)', cursor: busy ? 'default' : 'pointer',
                   }}>{t('common.cancel')}</button>
                 </span>
@@ -482,6 +546,7 @@ export default function FittingDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { t } = useTranslation()
+  const esSegellat = useSessioSegellada()
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
   const [activePieceId, setActivePieceId] = useState(null)
@@ -514,7 +579,7 @@ export default function FittingDetail() {
       // Sprint Y — l'auto-open D2 (Programada→Oberta en entrar) DESAPAREIX: les sessions vives ja no
       // es treballen aquí (redirect a Mesures, sota), i la sessió s'obre en obrir la TASCA (open-task,
       // Y1). Aquí només queda el landing de lectura de sessions segellades.
-      .then(s => { setReviewMode(!s || SEALED_ESTATS.includes(s.estat)) })
+      .then(s => { setReviewMode(!s || esSegellat(s.estat)) })
       .finally(() => setLoading(false))
   }, [loadSession])
 
@@ -548,12 +613,12 @@ export default function FittingDetail() {
   }
 
   if (loading) {
-    return <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>{t('app.loading')}</div>
+    return <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-soft)', fontSize: 'var(--fs-body)' }}>{t('app.loading')}</div>
   }
   if (!session) return null
 
   // Sessió tancada/anul·lada → tota la revisió és de lectura (split 40/60 amb taula en lectura).
-  const readOnly = SEALED_ESTATS.includes(session.estat)
+  const readOnly = esSegellat(session.estat)
 
   // Sprint Y — DISSOLUCIÓ: una sessió VIVA (Oberta/Programada) no es treballa aquí; es dissol a la
   // superfície Mesures amb context (ModelSheet materialitza la tasca en muntar amb ?fitting_session=).
@@ -567,6 +632,8 @@ export default function FittingDetail() {
   const model = grid?.model || {}
   // Trim perquè base_size_label coincideixi amb les etiquetes de talla (poden venir amb espais).
   const baseLabel = (model.base_size_label || '').trim()
+  // El run del MODEL, per traduir la talla de break a convenció de document (v. breakConvention).
+  const sizeRunModel = (model.size_run_model || '').split('·').map(x => x.trim()).filter(Boolean)
 
   // Identificació (codi/nom): del grid si hi ha peça; si no, de la primera peça.
   const idCodi = model.codi || pieces[0]?.model_codi || null
@@ -577,8 +644,11 @@ export default function FittingDetail() {
   // Matriu: files = POM. P1 — l'única columna de talla és la BASE (l'eix multi-talla viu a Escalat).
   const pomMap = new Map()
   for (const l of lines) {
-    if (!pomMap.has(l.pom_id)) pomMap.set(l.pom_id, {
-      pom_id: l.pom_id, codi: l.codi, nom: l.nom, is_key: l.is_key,
+    // C4/BLOC 1-BIS — s'agrupa per la MESURA, no pel POM: dues germanes són dues files.
+    const ident = identitatMesura(l)
+    if (!pomMap.has(ident)) pomMap.set(ident, {
+      pom_id: l.pom_id, capa: l.capa, instancia: l.instancia,
+      codi: l.codi, nom: l.nom, is_key: l.is_key,
       // Nomenclatura 2 línies (nom EN canònic dalt · idioma usuari sota) — heretada per MeasureGrid (P5).
       nom_en: l.nom_en, nom_local: l.nom_local, nom_fitxa: l.nom_fitxa, bm_id: l.bm_id,
       // Règim per POM (mateix valor a cada talla) → etiqueta de regla a la capçalera de fila.
@@ -586,7 +656,7 @@ export default function FittingDetail() {
       increment_break: l.increment_break, talla_break_label: l.talla_break_label,
       cells: {},
     })
-    pomMap.get(l.pom_id).cells[l.size_label] = l
+    pomMap.get(ident).cells[l.size_label] = l
   }
   const pomRows = [...pomMap.values()]
 
@@ -636,9 +706,9 @@ export default function FittingDetail() {
               <Badge variant={estatVariant[session.estat] || 'gray'}>{session.estat_display || session.estat}</Badge>
               {collection && <span>{t('fitting.id.collection')}: {collection}</span>}
               {clientRef && <span>{t('fitting.id.client_ref')}: {clientRef}</span>}
-              <EditableContextField sessionId={session.id} field="model_persona" label={t('fitting.id.persona')} value={session.model_persona} />
+              <ContextField sessionId={session.id} field="model_persona" label={t('fitting.id.persona')} value={session.model_persona} readOnly={readOnly} />
               <span>{t('fitting.id.responsible')}: {session.responsable_nom || '—'}</span>
-              <EditableContextField sessionId={session.id} field="lloc" label={t('fitting.id.location')} value={session.lloc} />
+              <ContextField sessionId={session.id} field="lloc" label={t('fitting.id.location')} value={session.lloc} readOnly={readOnly} />
               {/* Icona Info cablada al panell de fitxers (B1); ti-photo/ti-note stub fins a B2 */}
               <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 6 }}>
                 {[
@@ -650,10 +720,10 @@ export default function FittingDetail() {
                     title={wired ? label : `${label} · (B2)`}
                     onClick={wired ? onClick : () => {}}
                     style={{
-                      background: active ? 'var(--gold-pale)' : 'transparent',
-                      border: `0.5px solid ${active ? 'var(--gold)' : 'var(--border)'}`, borderRadius: 8,
+                      background: active ? 'var(--sel)' : 'transparent',
+                      border: `0.5px solid ${active ? 'var(--gold)' : 'var(--line)'}`, borderRadius: 8,
                       padding: '5px 9px', cursor: 'pointer',
-                      color: active ? 'var(--gold)' : 'var(--text-muted)',
+                      color: active ? 'var(--gold)' : 'var(--text-soft)',
                     }}><i className={`ti ${icon}`} style={{ fontSize: 14 }} /></button>
                 ))}
               </span>
@@ -688,13 +758,13 @@ export default function FittingDetail() {
           <div style={{ flex: '1 1 60%', minWidth: 0, overflow: 'auto', maxHeight: 'calc(100vh - 180px)' }}>
             {!activePieceId ? null
               : lines.length === 0
-                ? <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>{t('fitting.grid.empty')}</div>
+                ? <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-soft)', fontSize: 'var(--fs-body)' }}>{t('fitting.grid.empty')}</div>
                 : (
                   <MeasureGrid
                     key={activePieceId}
                     editable={false}
                     rows={gridRows} groups={gridGroups}
-                    leadCols={[regimeLeadCol(t, onRegimChange, true)]}
+                    leadCols={[regimeLeadCol(t, onRegimChange, true, { sizeRun: sizeRunModel })]}
                   />
                 )}
           </div>

@@ -186,7 +186,7 @@ function PickCard({ rs, selected, suggested = false, motiu = null, actionLabel, 
           onClick={onPick}
           style={{
             fontSize: 'var(--fs-body)', padding: '6px 16px', borderRadius: 6, cursor: 'pointer',
-            background: selected ? 'var(--white)' : 'var(--gold)',
+            background: selected ? 'var(--white)' : 'var(--accio)',
             color: selected ? 'var(--gold)' : 'var(--white)',
             border: selected ? '1px solid var(--gold)' : 'none', fontWeight: 600,
           }}

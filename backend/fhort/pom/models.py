@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.db.models.functions import Upper
 
 
 # ─────────────────────────────────────────────────────────────
@@ -242,6 +243,98 @@ class MeasurementLayer(models.Model):
         return f'{self.slug} · {self.nom_ca or self.nom_en}'
 
 
+class MeasurementInstance(models.Model):
+    """INSTÀNCIA d'una mesura: QUINA de les repeticions del mateix POM és aquesta (D-31.26).
+
+    Bessona de `MeasurementLayer` i pel mateix motiu d'infraestructura (`fhort.pom` és
+    l'única app que és a SHARED **i** a TENANT alhora), amb el mateix contracte: el `slug`
+    és el que desen les columnes `instancia` de les taules de mesura —mai la PK, llei G9—
+    i els tres noms són per als ulls.
+
+    **NO ÉS UN CATÀLEG DE POMS.** El catàleg té UN POM per mesura; el MODEL diu quantes
+    cares en té (D-31.19). Aquesta taula és el vocabulari amb què s'anomenen aquelles cares,
+    no una llista de mesures noves: `left`/`right` no són dos POMs de sisa, són la mateixa
+    sisa dita dues vegades.
+
+    **DOS EIXOS, NO UN.** Una germana es distingeix per ON es mesura (POSICIÓ: la sisa
+    esquerra, la cintura per dalt) o per COM (ESTAT: la goma relaxada, la goma estirada).
+    Són ortogonals i es componen amb guió al slug que es desa (`'left-relaxed'`), tal com
+    ja el desmunta `frontend/src/utils/capaInstancia.js`. Separar-los aquí és el que permet
+    que el gest de crear una germana ofereixi les vuit posicions i els dos estats sense
+    barrejar-los en una sola llista de deu.
+
+    **EL SUFIX ÉS DE LA POSICIÓ, MAI DE L'ESTAT.** La instància AMPLIA la nomenclatura: el
+    sistema PROPOSA `codi base + sufix` en crear la germana (B→BT, FS→FSCF), estil Brownie
+    —concatenació directa, sense guió— i el patronista el pot editar, perquè el `nom_fitxa`
+    és lliure. Els estats no componen sufix: fan servir el codi oficial del client si en té
+    (B1 = «stretched waist width») o la descripció. Per això `sufix` és buit als dos estats
+    i no és un oblit.
+
+    **LA PROPOSTA NO ÉS L'OBLIGACIÓ.** `instancia_exigeix_nom` (invariant viva de BD) demana
+    que tota germana porti nom; qui el posa és el patronista. Aquesta taula li dona el
+    vocabulari i una proposta de codi, no li tria el nom.
+
+    Mateixa llei de catàleg que la capa: **la sembra no esborra mai** (`update_or_create` per
+    `slug`), `is_system=True` és propietat de la casa, i un tenant pot crear-se la seva
+    instància (`is_system=False`, `pendent_revisio=True`) sense que la sembra la toqui.
+    """
+
+    ORIGEN_SEED = 'SEED'
+    ORIGEN_MANUAL = 'MANUAL'
+    ORIGEN_IMPORT = 'IMPORT'
+    ORIGEN_CHOICES = [
+        (ORIGEN_SEED, 'Sembra'),
+        (ORIGEN_MANUAL, 'Manual'),
+        (ORIGEN_IMPORT, 'Importació'),
+    ]
+
+    #: ON es mesura (lateralitat, vora, costura de referència).
+    EIX_POSICIO = 'POSICIO'
+    #: COM es mesura (amb tensió o sense).
+    EIX_ESTAT = 'ESTAT'
+    EIX_CHOICES = [
+        (EIX_POSICIO, 'Posició'),
+        (EIX_ESTAT, 'Estat'),
+    ]
+    #: EL NOM DE L'EIX, trilingüe, per a qui n'ha de pintar una COLUMNA (D-31.18: la taula de
+    #: mesures té un grup de columnes per eix). Viu aquí, al costat de `EIX_CHOICES`, perquè
+    #: l'eix es DEFINEIX aquí i no té fila pròpia a cap taula: és el discriminant de les que hi
+    #: ha. Que el front se'ls escrigui seria el segon lloc que sap quins eixos hi ha, i el dia
+    #: que se n'afegís un tercer la columna nova sortiria sense nom.
+    EIX_NOMS = {
+        EIX_POSICIO: {'nom_en': 'Position', 'nom_ca': 'Posició', 'nom_es': 'Posición'},
+        EIX_ESTAT: {'nom_en': 'State', 'nom_ca': 'Estat', 'nom_es': 'Estado'},
+    }
+
+    #: La instància ÚNICA: cadena buida, no una fila d'aquesta taula. Una mesura que només
+    #: es fa un cop no té res a qualificar (v. `sufixIdentitat`, que hi torna `''`).
+    SLUG_UNICA = ''
+
+    slug = models.SlugField(max_length=30, unique=True)
+    nom_en = models.CharField(max_length=120)
+    nom_ca = models.CharField(max_length=120)
+    nom_es = models.CharField(max_length=120)
+    eix = models.CharField(max_length=8, choices=EIX_CHOICES, db_index=True)
+    #: Sufix que s'enganxa al codi base per PROPOSAR el codi de la germana (B→BT). Buit a
+    #: l'eix ESTAT per decisió, i buit també a `waistband_seam`, que és un DATUM: es diu a la
+    #: descripció, no al codi (full INSTANCIES, decisió Agus 05/08).
+    sufix = models.CharField(max_length=4, blank=True, default='')
+    #: Propietat de la casa: no s'esborra (mateix guard que `MeasurementLayer.is_system`).
+    is_system = models.BooleanField(default=False)
+    #: Instància nascuda al tenant i encara no promoguda a canònica.
+    pendent_revisio = models.BooleanField(default=False)
+    origen = models.CharField(max_length=10, choices=ORIGEN_CHOICES, default=ORIGEN_MANUAL)
+    display_order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        verbose_name = 'Instància de mesura'
+        verbose_name_plural = 'Instàncies de mesura'
+        ordering = ['eix', 'display_order', 'slug']
+
+    def __str__(self):
+        return f'{self.slug} · {self.nom_ca or self.nom_en}'
+
+
 class POMEstadisticaGlobal(models.Model):
     pom_global = models.ForeignKey(POMGlobal, on_delete=models.CASCADE, related_name='estadistiques_globals')
     garment_type_global = models.ForeignKey(GarmentTypeGlobal, on_delete=models.CASCADE, related_name='estadistiques_globals')
@@ -325,6 +418,31 @@ class POMMaster(models.Model):
     class Meta:
         verbose_name = 'POM (tenant)'
         verbose_name_plural = 'POMs (tenant)'
+        constraints = [
+            # EL CODI DEL CATÀLEG ÉS ÚNIC PER TENANT, I LES MAJÚSCULES NO EL DISTINGEIXEN.
+            #
+            # Fins al 08/08 no hi havia cap unicitat i `fhort` va acumular 12 codis duplicats
+            # (24 files). La causa és coneguda i estava escrita al codi: `pom/wizard_views.py`
+            # ja deia que copiar el codi del client al codi de la casa «és exactament el que va
+            # fabricar els 12 duplicats». La validació hi era —`codi_client__iexact` al camí 4—;
+            # el que faltava era que la BD la fes complir, perquè una validació que només viu a
+            # una vista deixa fora l'import, l'admin i el shell, que són els qui els van fer.
+            #
+            # `Upper(...)` la fa d'EXPRESSIÓ (índex funcional únic a PostgreSQL): `u1` i `U1` són
+            # el mateix codi per a una patronista. SENSE `Trim`, a posta: retallar aquí faria que
+            # la BD acceptés desar `'U1 '` i el rebutgés com a duplicat d'ell mateix al desat
+            # següent; l'espai sobrant es neteja a l'ENTRADA, que és on ja es fa.
+            #
+            # PER TENANT = PER SCHEMA: `fhort.pom` és SHARED i TENANT alhora (`settings.py:55,68`),
+            # o sigui que l'índex existeix a cada schema i dos clients poden compartir codi.
+            models.UniqueConstraint(
+                Upper('codi_client'),
+                name='uniq_pommaster_codi_client_ci',
+                violation_error_message=(
+                    "Ja hi ha un POM al catàleg amb aquest codi (les majúscules no el distingeixen)."
+                ),
+            ),
+        ]
 
     def __str__(self):
         return f'{self.codi_client} · {self.nom_client}'
@@ -383,9 +501,18 @@ class CustomerPOMAlias(models.Model):
     opening vs H.16 cuff opening) → unicitat (customer, client_code), NO (customer, pom).
     El matcher el consumeix com a estratègia (a) prioritària de find_pom_master (N3 fet,
     models_app/extraction_views.py:543)."""
+    # `MODEL` (06/08) — l'àlies neix perquè un model necessitava una mesura que el catàleg del
+    # client no tenia, i algú la va crear des del cercador de Definició POM («Crear POM propi del
+    # model»). NO és un àlies de menys categoria: entra a l'espai de nomenclatura del client com
+    # qualsevol altre, la validació de col·lisió el veu, i un altre model del mateix client el pot
+    # reutilitzar pel cercador. Això és coneixement del client acumulant-se, que és el que ha de
+    # passar (decisió d'Agus, 06/08).
+    #
+    # El que marca és la PROVINENÇA: d'on va sortir aquest codi. Serveix per saber què s'ha
+    # d'ensenyar al diccionari com a pendent de consolidar i què ve d'un document oficial.
     ORIGEN_CHOICES = [
         ('IMPORT', 'Import'), ('MANUAL', 'Manual'), ('MIGRACIO', 'Migració'),
-        ('DICCIONARI', 'Diccionari'),
+        ('DICCIONARI', 'Diccionari'), ('MODEL', 'Nascut d\'un model'),
     ]
     # db_constraint=False: `pom` és SHARED+TENANT però `tasks.Customer` és tenant-only → la FK
     # creua schemas (mateix patró que GarmentPOMMap). PROTECT a nivell ORM, sense constraint de BD.
@@ -413,6 +540,26 @@ class CustomerPOMAlias(models.Model):
     language = models.CharField(max_length=2, blank=True, default='')
     origen = models.CharField(max_length=10, choices=ORIGEN_CHOICES, default='MANUAL')
     pendent_revisio = models.BooleanField(default=False)
+    # F3/D-31.26 — ÀLIES D'INSTÀNCIA: aquest codi del client no és una mesura pròpia, és una
+    # REPETICIÓ de la del `pom`. El doc oficial de Brownie declara A2/A3 variants de la mateixa
+    # fila que A: no són tres amplades de pit, són l'amplada de pit dita tres vegades.
+    #
+    # Sense aquesta marca els dos casos són indistingibles per al matcher —un codi que resol a
+    # un POM— i acabaria vinculant A2 al pit i donant la feina per feta. El que ha de passar és
+    # l'altra cosa: resol el POM i DEIXA LA FILA A «assignar instància», perquè QUINA cara és
+    # (la 2a? la de l'esquerra? l'estirada?) no ho diu el codi, ho diu qui mesura. Auto-triar-la
+    # seria inventar-se una dada que el document no porta.
+    #
+    # ⚠️ AQUÍ NOMÉS HI HA LA DADA, NO LA REGLA. El comportament del matcher és el full MATCHER i
+    # s'implementa al seu lloc; aquesta columna és el que llegirà quan hi sigui.
+    #
+    # Deliberadament NO desa QUINA instància és (ni l'ordinal «2a/3a» ni l'eix). Desar-ho seria
+    # exactament l'auto-tria que la regla prohibeix, i el `nom_fitxa` del model ja és el lloc on
+    # viu la resposta un cop una persona l'ha donada.
+    es_instancia = models.BooleanField(
+        default=False,
+        help_text="Aquest codi és una REPETICIÓ del POM apuntat, no una mesura pròpia. "
+                  "El matcher hi resol el POM però deixa la fila a «assignar instància».")
     creat_at = models.DateTimeField(auto_now_add=True)
     actualitzat_at = models.DateTimeField(auto_now=True)
 
@@ -473,12 +620,89 @@ class SizeSystem(models.Model):
         verbose_name='Codi client',
     )
 
+    # ── N1 (2026-08-06 nit) · EL RUN ES DESCRIU A SI MATEIX ────────────────────────────
+    # Fins ara el run era una escala muda: qui deia per a qui servia era el `SizingProfile`
+    # (la combinació target×família×construcció×fit). Això obligava a inventar-se un perfil
+    # —i amb ell una graduació— per declarar que un run existeix per a un àmbit. Aquestes
+    # etiquetes són del RUN i NOMÉS descriuen a qui s'assembla: cap camp de graduació, cap
+    # FK a POMs, res que lligui capes.
+    TIPUS_ESCALA_CHOICES = [
+        ('ALPHA', 'Alpha (XS/S/M/L…)'),
+        ('NUM', 'Numèrica (34/36/38…)'),
+        ('MESOS', 'Mesos i edat (0M/3M · 2/4/6 anys)'),
+        ('ALTURA', 'Alçada en cm (50/56/62…)'),
+    ]
+    tipus_escala = models.CharField(
+        max_length=10, blank=True, default='',
+        choices=TIPUS_ESCALA_CHOICES,
+        verbose_name='Tipus d\'escala',
+        help_text="Deduït de les etiquetes de talla. Buit = no deduïble sol.",
+    )
+    # Les tres capes que faltaven, amb el patró que la casa ja fa servir per a `targets`:
+    # M2M al vocabulari, exposat i escrit per CODI (SlugRelatedField). 0..n per capa, i
+    # **buit NO vol dir universal** — mateixa llei que `targets` (v. serializers.py).
+    construccions = models.ManyToManyField(
+        'ConstructionType', blank=True, related_name='size_systems',
+        verbose_name='Construccions',
+    )
+    fits = models.ManyToManyField(
+        'FitType', blank=True, related_name='size_systems',
+        verbose_name='Fits',
+    )
+    # GRUP: el vocabulari surt de GARMENT TYPES (`GarmentGroup`), no de POM System
+    # (decisió d'Agus, 2026-08-06 nit). El vocabulari alternatiu —`POMCategory`— descriu
+    # àrees de cos, no famílies de peça, i no és font d'àmbit.
+    grups = models.ManyToManyField(
+        'GarmentGroup', blank=True, related_name='size_systems',
+        verbose_name='Grups de peça',
+    )
+    # Eix client com a FK (`customer_codi` és el codi curt heretat i es manté intacte).
+    # db_constraint=False + SET_NULL: mateix patró que `SizingProfile.customer`
+    # (models.py:1521) — `pom` és SHARED+TENANT i `tasks.Customer` és tenant-only.
+    customer = models.ForeignKey(
+        'tasks.Customer', on_delete=models.SET_NULL,
+        null=True, blank=True, db_constraint=False,
+        related_name='size_systems', verbose_name='Client',
+    )
+
     class Meta:
         verbose_name = 'Sistema de talles'
         verbose_name_plural = 'Sistemes de talles'
 
     def __str__(self):
         return self.codi
+
+    # ── C4 (2026-08-07) · el deute §7.4.3, pagat en CODI ──────────────────────────────
+    # N1 va posar l'algorisme (`size_labels`) i el va fer servir una vegada, a la data
+    # migration. Faltava la porta: res no impedia tornar a escriure un `base_unit` que
+    # contradiu les etiquetes, que és exactament com havia arribat `TODDLER_EU` a dir
+    # `AGE_YEARS` amb unes talles en cm. Amb C1 aplicat, ara mateix no hi ha CAP run en
+    # conflicte als tres schemes — o sigui que aquesta validació neix amb el terra net.
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        from fhort.pom.size_labels import _tipus_de_les_etiquetes, BASE_UNIT_A_TIPUS
+
+        super().clean()
+        if not self.pk:
+            return                     # sense pk no hi ha talles: no hi ha res a contrastar
+        etiquetes = list(self.talles.values_list('etiqueta', flat=True))
+        segons_etiquetes = _tipus_de_les_etiquetes(etiquetes)
+        if not segons_etiquetes:
+            return                     # les etiquetes no donen veredicte: `base_unit` mana
+
+        errors = {}
+        segons_base = BASE_UNIT_A_TIPUS.get((self.base_unit or '').strip().upper())
+        if segons_base and segons_base != segons_etiquetes:
+            errors['base_unit'] = (
+                f"«{self.base_unit}» contradiu les etiquetes del run, que són de tipus "
+                f"{segons_etiquetes}. L'etiqueta mana: v. DIAGNOSI_VOCABULARIS §T3."
+            )
+        if self.tipus_escala and self.tipus_escala != segons_etiquetes:
+            errors['tipus_escala'] = (
+                f"«{self.tipus_escala}» contradiu les etiquetes, que són {segons_etiquetes}."
+            )
+        if errors:
+            raise ValidationError(errors)
 
 
 class SizeDefinition(models.Model):
@@ -509,7 +733,12 @@ class SizeDefinition(models.Model):
         verbose_name = 'Talla'
         verbose_name_plural = 'Talles'
         ordering = ['size_system', 'ordre']
-        unique_together = [('size_system', 'etiqueta')]
+        # C4 (2026-08-07) · deute §7.4.4. `ordering` ordena per `ordre`, i si dos `ordre`
+        # empaten l'ordre real el decideix Postgres — o sigui que el run es llegeix diferent
+        # segons el dia. **Un run desordenat és un grading incorrecte**: el motor compta per
+        # POSICIÓ. La unicitat és el que converteix `ordre` en una seqüència de debò, i de
+        # passada DRF en fabrica sol un UniqueTogetherValidator per a l'API.
+        unique_together = [('size_system', 'etiqueta'), ('size_system', 'ordre')]
 
     def __str__(self):
         return f'{self.size_system.codi} · {self.etiqueta}'
@@ -543,6 +772,22 @@ class GarmentType(models.Model):
     codi_client = models.CharField(max_length=60)
     nom_client = models.CharField(max_length=120)
     grup = models.CharField(max_length=40)
+    # ── C6 · PAS 1 (2026-08-07) · l'amo del vocabulari de grup és la BD ───────────────
+    # Decisió 1 de DIAGNOSI_VOCABULARIS §2.6. La FK i el string CONVIUEN a posta: el pas 2
+    # (retirar el string) està ATURAT, i no per prudència genèrica sinó per una dada
+    # concreta — el tenant `los` té un `GarmentType` amb `grup='TOPS'` i la taula
+    # `GarmentGroup` BUIDA, o sigui que allà el backfill no pot resoldre res i retirar el
+    # string perdria l'única informació de grup que hi ha. V. REPORT_CATALEG_TALLES.md §C6.
+    #
+    # Mentre convisquin, la font de veritat segueix sent `grup` (tots els lectors del cens hi
+    # continuen apuntant, i cap contracte d'API canvia). `save()` manté la FK alineada perquè
+    # no neixi rància: una FK que ningú escriu és pitjor que no tenir-la.
+    grup_ref = models.ForeignKey(
+        GarmentGroup, on_delete=models.PROTECT,
+        null=True, blank=True, related_name='garment_types',
+        verbose_name='Grup (FK)',
+        help_text='Pas 1 de C6: conviu amb `grup`. NULL = el codi no existeix a GarmentGroup.',
+    )
     actiu = models.BooleanField(default=True)
 
     # Sprint S13-A — multilanguage + system flag
@@ -561,6 +806,23 @@ class GarmentType(models.Model):
     # Fi Sprint S1
     # Pas previ 5 — descripció de família (construcció)
     descripcio = models.TextField(blank=True, default='')
+
+    def save(self, *args, **kwargs):
+        # C6 · pas 1 — la FK segueix el string, no al revés. Mentre `grup` sigui la font de
+        # veritat (que ho és fins que el pas 2 es pugui fer), qualsevol escriptura del string
+        # ha de reflectir-se aquí o la FK naixeria rància el primer dia. Si el codi no existeix
+        # a `GarmentGroup` es deixa NULL: inventar-hi un grup seria exactament el que aquesta
+        # migració vol acabar. `update_fields` es respecta perquè un save parcial que no toca
+        # `grup` no ha de disparar cap query de més.
+        camps = kwargs.get('update_fields')
+        if camps is None or 'grup' in camps:
+            codi = (self.grup or '').strip()
+            actual = GarmentGroup.objects.filter(codi=codi).first() if codi else None
+            if (actual.pk if actual else None) != self.grup_ref_id:
+                self.grup_ref = actual
+                if camps is not None:
+                    kwargs['update_fields'] = list(camps) + ['grup_ref']
+        super().save(*args, **kwargs)
 
     class Meta:
         verbose_name = 'Tipus garment (tenant)'
@@ -624,21 +886,116 @@ class GarmentPOMMap(models.Model):
         constraints = [
             # C1/T4 — la comporta (v. `models_app.BaseMeasurement.Meta`, on hi ha
             # l'argument sencer). C4 la retira per migració.
-            models.CheckConstraint(
-                condition=models.Q(capa='exterior'),
-                name='pom_garmentpommap_capa_gate_c1',
-            ),
+            # ✅ C4/G4 (04/08) — retirada per la migració pom/0057. El CATÀLEG és l'últim grup
+            # a posta: una germana declarada aquí es propaga a tots els models que en neixin
+            # (C-31.h, la sembra item→model), o sigui que obrir-lo abans que les superfícies
+            # del model sabessin llegir-les hauria escampat el problema en comptes de
+            # contenir-lo. És l'única de les quatre taules d'aquest grup que viu també a
+            # `public`: el catàleg és compartit.
             # C1-ins — la comporta d'instància (v. `models_app.BaseMeasurement.Meta`).
             # C4-ins la retira per migració.
-            models.CheckConstraint(
-                condition=models.Q(instancia=''),
-                name='pom_garmentpommap_instancia_gate_cins',
-            ),
+            # ✅ C4/G4 (04/08) — retirada per la migració pom/0057. El CATÀLEG és l'últim grup
+            # a posta: una germana declarada aquí es propaga a tots els models que en neixin
+            # (C-31.h, la sembra item→model), o sigui que obrir-lo abans que les superfícies
+            # del model sabessin llegir-les hauria escampat el problema en comptes de
+            # contenir-lo. És l'única de les quatre taules d'aquest grup que viu també a
+            # `public`: el catàleg és compartit.
         ]
 
     def __str__(self):
         anchor = self.garment_type_item.code if self.garment_type_item_id else '?'
         return f'{anchor} · {self.pom.codi_client}'
+
+
+# ── U2 · LA LLEI DE L'ACUMULACIÓ (decisió Agus, 2026-08-07) ───────────────────────────────────
+#
+# El catàleg de POMs **s'acumula per nivell i PROPOSA**: el grup aporta, la família suma, l'item
+# suma. Res exclou res, i un mateix POM pot ser a molts items. Fins avui la pertinença només
+# sabia viure a l'ITEM (`GarmentPOMMap`, 1.748 files), i els dos nivells de sobre no hi cabien.
+#
+# **PER QUÈ TRES TAULES GERMANES I NO UNA AMB FKs NULLABLES** (la decisió, amb el seu motiu):
+#   1. A Postgres els NULL **no comparen iguals**, o sigui que un `unique_together` sobre una FK
+#      nullable deixaria de protegir exactament els dos nivells nous. Un constraint que existeix
+#      i no protegeix és pitjor que cap.
+#   2. El «Ve de» de la pantalla ha de dir de QUIN nivell arriba cada POM. Amb tres taules la
+#      resposta és la taula mateixa; amb FKs nullables es respondria **per absència**, que és
+#      fràgil.
+#   3. Risc zero per a les 1.748 files vives i els 103 lectors de `GarmentPOMMap`, que no
+#      s'assabenten que existeixen aquestes dues.
+#
+# L'acumulació és, doncs, una **UNIÓ A LA LECTURA** (v. `acumula_poms_de_item`), no una jerarquia
+# a la BD. Cap fila existent es migra: el que avui és de l'item, de l'item es queda.
+#
+# ⚠️ Les FK d'aquestes dues van cap a `GarmentType` i `GarmentGroup`, que viuen a **la mateixa
+# app** (`pom`) — per això SÍ que porten constraint de BD real, a diferència de la germana de
+# l'item, que ha de creuar cap a `tasks` (tenant-only) amb `db_constraint=False`.
+
+class _POMMapBase(models.Model):
+    """El que les tres pertinences comparteixen: el POM, la seva capa, la seva instància i els
+    tres eixos de com de fort es reclama (`obligatori`/`is_key`/`nivell`).
+
+    Abstracta a posta: no crea taula i no toca `GarmentPOMMap`, que es queda tal com estava.
+    """
+
+    obligatori = models.BooleanField(default=False)
+    is_key = models.BooleanField(default=False)
+    nivell = models.CharField(
+        max_length=1, blank=True, default='O',
+        choices=[('K', 'Key'), ('M', 'Mandatory'), ('O', 'Optional'), ('D', 'Detail-dependent')],
+    )
+    ordre = models.PositiveIntegerField(default=0)
+    pendent_revisio = models.BooleanField(default=False)
+    # Mateixa declaració que a `GarmentPOMMap` i pel mateix motiu: la capa i la instància
+    # formen part de la IDENTITAT de la pertinença (el mateix POM a l'exterior i al folre són
+    # dues pertinences, i la sisa dreta i l'esquerra també). Per slug, mai per PK (llei G9).
+    capa = models.CharField(
+        max_length=20, default='exterior', db_index=True,
+        help_text="Capa de mesura: slug de pom.MeasurementLayer (per SLUG, mai per PK).",
+    )
+    instancia = models.CharField(
+        max_length=60, default='', db_index=True,
+        help_text="Instància del POM dins la capa: slug compost canònic. '' és la instància única.",
+    )
+
+    class Meta:
+        abstract = True
+
+
+class GarmentTypePOMMap(_POMMapBase):
+    """POMs que aporta una FAMÍLIA (`GarmentType`). Se sumen als del grup i als de l'item."""
+
+    garment_type = models.ForeignKey(
+        'pom.GarmentType', on_delete=models.CASCADE, related_name='pom_maps')
+    pom = models.ForeignKey(POMMaster, on_delete=models.PROTECT,
+                            related_name='garment_type_maps')
+
+    class Meta:
+        verbose_name = 'Mapa família ↔ POM'
+        verbose_name_plural = 'Mapes família ↔ POM'
+        ordering = ['garment_type', 'ordre']
+        # La MATEIXA clau que la germana de l'item, amb el nivell com a primer element.
+        unique_together = [('garment_type', 'pom', 'capa', 'instancia')]
+
+    def __str__(self):
+        return f'{self.garment_type.codi_client} · {self.pom.codi_client}'
+
+
+class GarmentGroupPOMMap(_POMMapBase):
+    """POMs que aporta un GRUP (`GarmentGroup`), el nivell més bast de l'acumulació."""
+
+    garment_group = models.ForeignKey(
+        'pom.GarmentGroup', on_delete=models.CASCADE, related_name='pom_maps')
+    pom = models.ForeignKey(POMMaster, on_delete=models.PROTECT,
+                            related_name='garment_group_maps')
+
+    class Meta:
+        verbose_name = 'Mapa grup ↔ POM'
+        verbose_name_plural = 'Mapes grup ↔ POM'
+        ordering = ['garment_group', 'ordre']
+        unique_together = [('garment_group', 'pom', 'capa', 'instancia')]
+
+    def __str__(self):
+        return f'{self.garment_group.codi} · {self.pom.codi_client}'
 
 
 class ItemBaseSet(models.Model):
@@ -925,16 +1282,14 @@ class ItemBaseMeasurement(models.Model):
         unique_together = [('base_set', 'pom', 'capa', 'instancia')]
         constraints = [
             # C1/T4 — la comporta (v. `models_app.BaseMeasurement.Meta`). C4 la retira.
-            models.CheckConstraint(
-                condition=models.Q(capa='exterior'),
-                name='pom_itembasemeasurement_capa_gate_c1',
-            ),
+            # ✅ C4/G4 (04/08) — retirada per la migració pom/0057, al costat de
+            # `GarmentPOMMap` (v. l'argument allà). La base de l'ITEM és la plantilla d'on
+            # surten les mesures d'un model nou.
             # C1-ins — la comporta d'instància (v. `models_app.BaseMeasurement.Meta`).
             # C4-ins la retira per migració.
-            models.CheckConstraint(
-                condition=models.Q(instancia=''),
-                name='pom_itembasemeasurement_instancia_gate_cins',
-            ),
+            # ✅ C4/G4 (04/08) — retirada per la migració pom/0057, al costat de
+            # `GarmentPOMMap` (v. l'argument allà). La base de l'ITEM és la plantilla d'on
+            # surten les mesures d'un model nou.
         ]
 
     def __str__(self):
@@ -1130,6 +1485,24 @@ class GradingRule(models.Model):
     rule_set = models.ForeignKey(GradingRuleSet, on_delete=models.CASCADE, related_name='regles')
     pom = models.ForeignKey(POMMaster, on_delete=models.PROTECT, related_name='regles_grading')
     talla_base = models.ForeignKey(SizeDefinition, on_delete=models.PROTECT, related_name='regles_base')
+    # ── CAT2.1 · PAS (a) · LA BASE, PER ETIQUETA ─────────────────────────────────────
+    # Decisió d'Agus (07/08): les regles referencien l'ETIQUETA de talla, no una FILA d'un run
+    # concret. Mateix patró que el creuament de POMs (per codi, mai per id) — i, sobretot,
+    # mateix patró que el seu propi germà `talla_break_label`, que la Peça A ja va passar a
+    # etiqueta amb el comentari «break ancorat per ETIQUETA, resolt al run de graduació».
+    #
+    # 🔑 El motor NO canvia, i això no és un descuit: `_apply_rule` ja ancora a
+    # `model.base_size_label` sobre el run del MODEL, i `grading_utils.py:72` ja deia en veu
+    # alta que `rule.talla_base` és «mer metadata del seed». La FK no calculava res — però
+    # PROTEGIA files d'un run, i això és el que va lligar 1.267 regles a runs que no són seus
+    # i el que va fer impossible esborrar «Alpha EU — Grading Reference».
+    #
+    # Conviu amb la FK fins que el backfill doni 100% (v. `0069`); el pas (b) la retira.
+    talla_base_label = models.CharField(
+        max_length=30, blank=True, default='',
+        verbose_name='Talla base (etiqueta)',
+        help_text="L'etiqueta, resolta contra el run del model. Buit = encara no backfillat.",
+    )
     logica = models.CharField(max_length=20, choices=LOGICA_CHOICES)
     # Sprint S16-A — decimals 4 → 2 (real precision for garment measurements in cm)
     # NOTA: el camp `valor_base` s'ha eliminat (Sprint Mesures Base per Item, P0). La talla base
@@ -1224,13 +1597,27 @@ class ClientMesuraPerfil(models.Model):
 # =============================================================================
 
 class FitType(models.Model):
-    """Fit type (Slim / Regular / Loose / Oversized). Public schema."""
+    """Fit type del catàleg de la casa. Schema `public`.
+
+    ELS CHOICES ES POSEN AL DIA AMB LA TAULA (F2.1b). Declaraven CINC codis mentre la taula en
+    té DEU, i a sobre un d'ells —`LOOSE`— no existeix com a fila enlloc. Els `choices` de Django
+    no són DDL: la BD no els fa complir i la divergència no petava, però qualsevol `full_clean()`
+    sobre un fit real (FLARED, TAPERED, STRAIGHT, BODYCON, ATHLETIC, CUSTOM) l'hauria declarat
+    invàlid, i tota UI que llegís els choices n'oferia la meitat.
+    `LOOSE` surt: 0 files a `public`, `fhort` i `los`, 0 runs i 0 rulesets que hi apuntin.
+    L'ordre és el `display_order` de la taula, no l'alfabètic.
+    """
     CODI_CHOICES = [
-        ('SLIM','Slim'),
-        ('REGULAR','Regular'),
-        ('RELAXED','Relaxed'),
-        ('LOOSE','Loose'),
-        ('OVERSIZED','Oversized'),
+        ('REGULAR', 'Regular'),
+        ('SLIM', 'Slim / Fitted'),
+        ('RELAXED', 'Relaxed'),
+        ('OVERSIZED', 'Oversized'),
+        ('FLARED', 'Flared'),
+        ('TAPERED', 'Tapered'),
+        ('STRAIGHT', 'Straight'),
+        ('BODYCON', 'Bodycon'),
+        ('ATHLETIC', 'Athletic / Performance'),
+        ('CUSTOM', 'Custom (client)'),
     ]
     codi          = models.CharField(max_length=20, unique=True, choices=CODI_CHOICES)
     nom_en        = models.CharField(max_length=100)
@@ -1411,10 +1798,41 @@ class SizingProfile(models.Model):
 
     class Meta:
         ordering = ['target__display_order', 'garment_type__nom_client']
+        # CAT2.3 (2026-08-07) · el deute §7.4.2, tancat. Les 5 files que la violaven es van
+        # esborrar a `0070` amb la decisió d'Agus (539 es queda del grup A; 288 del grup B).
+        # ⚠️ Conseqüència assumida: una VERSIÓ (`parent_profile`) del mateix àmbit ja no és
+        # possible sense canviar `customer` — el cas del 510 era exactament aquest.
+        unique_together = [('target', 'garment_type', 'construction', 'fit_type',
+                            'size_system', 'customer')]
+
+    #: Els camps que fan que dos perfils siguin EL MATEIX àmbit.
+    CLAU_NATURAL = ('target_id', 'garment_type_id', 'construction_id',
+                    'fit_type_id', 'size_system_id', 'customer_id')
 
     def __str__(self):
         return (f"{self.target.nom_en} | {self.garment_type.nom_en} | "
                 f"{self.construction.nom_en} | {self.fit_type.nom_en}")
+
+    def clean(self):
+        """Frena la proliferació sense tocar les 5 files que ja hi són.
+
+        Un perfil és una declaració d'ÀMBIT. Dos perfils amb el mateix àmbit no diuen dues
+        coses: diuen la mateixa dues vegades, i llavors «quin mana?» no té resposta. Això
+        bloqueja els NOUS; els que ja existeixen es queden fins que l'Agus decideixi.
+        """
+        from django.core.exceptions import ValidationError
+
+        super().clean()
+        clau = {c: getattr(self, c) for c in self.CLAU_NATURAL}
+        germans = SizingProfile.objects.filter(**clau)
+        if self.pk:
+            germans = germans.exclude(pk=self.pk)
+        if germans.exists():
+            raise ValidationError(
+                'Ja hi ha un perfil per a aquest àmbit (mateix target, família, construcció, '
+                f'fit, sistema de talles i client): id {germans.first().pk}. Edita aquell en '
+                'comptes de duplicar-lo.'
+            )
 
 
 class GradingRuleHistory(models.Model):
@@ -1444,3 +1862,62 @@ class GradingRuleHistory(models.Model):
     def __str__(self):
         return (f"{self.pom_codi}: {self.valor_anterior} → {self.valor_nou} "
                 f"({self.modificat_at.strftime('%Y-%m-%d %H:%M')})")
+
+
+# ─────────────────────────────────────────────────────────────
+# TRAM ⓘ — la CACHE de traducció del vocabulari de domini
+# ─────────────────────────────────────────────────────────────
+
+class TranslationCache(models.Model):
+    """La traducció del vocabulari de domini, MEMORITZADA. No és domini: és una còpia.
+
+    **PER QUÈ AQUESTA TAULA I NO COLUMNES A `POMMaster`.** La decisió d'Agus del 09/08 diu que
+    la traducció del vocabulari tècnic NO viu a la BD com a dada de la casa: duplicar-la a
+    `nom_ca`/`nom_es` crearia una segona font de veritat que caldria mantenir a mà per a cada
+    tenant i cada catàleg nou. El que hi ha aquí és el contrari d'una font de veritat: és el
+    resultat d'una pregunta a un tercer, desat perquè no calgui tornar-la a fer. **Es pot buidar
+    sencera sense perdre res** — l'endemà es torna a omplir sola. Aquesta és la prova que no és
+    domini, i és la línia que la separa de `i18n_content.Translation`, que SÍ que és domini (text
+    escrit per una persona, que un refresc de cache no pot trepitjar mai).
+
+    **PER QUÈ VIU AL TENANT i no a `public`.** `POMMaster` és una taula de TENANT: l'id d'un POM
+    només vol dir alguna cosa dins del seu esquema. Una cache compartida a `public` amb
+    `source_ref='pom:142'` faria xocar el POM 142 de `fhort` amb el 142 de `los`, que no són el
+    mateix POM ni tenen per què dir el mateix. La compartició hauria exigit una clau per TEXT
+    —que és exactament el que el disseny prohibeix (per referència, mai per text lliure)— o un
+    prefix d'esquema, que és una taula de tenant disfressada. A més, el dia que hi entrin els
+    àlies de client (`CustomerPOMAlias`), aquells són dada de tenant i no poden sortir-ne.
+    El preu de no compartir és una crida per tenant i idioma: l'univers són ~17k caràcters, i
+    DeepL en regala 500k al mes. Es paga.
+
+    **`source_text` NO és la clau, però hi és.** La clau és `(source_ref, lang)` —el mateix POM
+    dona la mateixa entrada encara que li reformulin el nom, tal com demana el disseny—; el que
+    fa `source_text` és permetre adonar-se que el nom canònic ha canviat i refrescar la FILA
+    sense canviar la CLAU. Sense això, rebatejar un POM deixaria la ⓘ dient el nom vell per sempre.
+    """
+
+    source_ref = models.CharField(
+        max_length=120,
+        help_text="Referència estable de l'objecte traduït (p.ex. 'pom:142').",
+    )
+    lang = models.CharField(max_length=5, help_text='Codi ISO 639-1 en minúscules (ca, es, fr…).')
+    text = models.TextField(blank=True, help_text='La traducció.')
+    source_text = models.TextField(
+        blank=True,
+        help_text="Text original (EN) del qual surt la traducció; si canvia, la fila es refresca.",
+    )
+    provider = models.CharField(max_length=20, blank=True, default='')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Traducció memoritzada'
+        verbose_name_plural = 'Traduccions memoritzades'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['source_ref', 'lang'],
+                name='uniq_translationcache_ref_lang',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.source_ref} [{self.lang}]'

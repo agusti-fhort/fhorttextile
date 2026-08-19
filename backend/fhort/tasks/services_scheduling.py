@@ -18,13 +18,20 @@ def reagenda_tasca(model, data_represa, task_type_code='size_check') -> bool:
     planned_locked. Gate tou: sense tasca o data invàlida → False (no peta)."""
     try:
         from django.utils import timezone as djtz
-        from .models import ModelTask
         from fhort.planning.calendar_service import next_working_slot, add_working_minutes
 
-        task = (ModelTask.objects
-                .filter(model=model, task_type__code=task_type_code)
-                .exclude(status='Done').order_by('-id').first())
-        if task is None:
+        from .services_r import tasca_vigent
+
+        # §S-13 — aquest era el QUART resolutor divergent, i el report de F1 el va deixar anotat
+        # per fer-lo a part: `.exclude(status='Done').order_by('-id').first()` és el criteri vell
+        # de `resolve_size_check`. Amb una ronda oberta, reagendar apuntava a la tasca de la volta
+        # anterior. Ara passa pel resolutor únic com les altres tres portes.
+        #
+        # El guard de `Done` es conserva al call-site: `tasca_vigent` SÍ pot retornar una tancada
+        # (regla 3 — només la descarta si n'hi ha una de viva), i reagendar feina ja acabada no
+        # vol dir res.
+        task = tasca_vigent(model, task_type_code)
+        if task is None or task.status == 'Done':
             return False
         d = _dt.date.fromisoformat(data_represa) if isinstance(data_represa, str) else data_represa
         prof = task.assignee

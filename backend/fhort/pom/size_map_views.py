@@ -801,20 +801,50 @@ def size_map_create_view(request):
 
             # ---- 2. Talles de l'input (merge per (size_system, etiqueta)) ----
             if accio in ('CLONAR', 'CREAR'):
+                # ⚠️ `ordre` és ÚNIC per run des de `pom/0067` (C4). Escriure'l IN-PLACE dins
+                # d'un bucle xoca amb la fila que encara porta el valor que estem a punt
+                # d'assignar, i com que tot això va dins d'un `atomic`, l'IntegrityError no es
+                # menja només aquesta talla: **rebenta el desat sencer del wizard amb un 500**.
+                # Repro que ho treia: clonar un run → esborrar una fila al pas 3 → Desar.
+                # Mateixa recepta que les migracions 0064/0065: aparcar a una banda alta i
+                # només llavors escriure els definitius.
+                APARCADOR = 10000
+                for i, pk in enumerate(SizeDefinition.objects
+                                       .filter(size_system=ss)
+                                       .values_list('pk', flat=True), start=1):
+                    SizeDefinition.objects.filter(pk=pk).update(ordre=APARCADOR + i)
+
+                maxim = 0
                 for idx, t in enumerate(talles):
                     et = (t.get('etiqueta') or '').strip()
                     if not et:
                         continue
+                    try:
+                        ordre = int(t.get('ordre') or (idx + 1))
+                    except (TypeError, ValueError):
+                        ordre = idx + 1
+                    maxim = max(maxim, ordre)
                     SizeDefinition.objects.update_or_create(
                         size_system=ss, etiqueta=et,
                         defaults={
-                            'ordre': t.get('ordre', idx + 1),
+                            'ordre': ordre,
                             'valor_numeric': t.get('valor_numeric'),
                             'age_months_min': t.get('age_months_min'),
                             'age_months_max': t.get('age_months_max'),
                             'body_height_cm': t.get('body_height_cm'),
                         },
                     )
+
+                # Les talles del run que NO venien a l'input s'han quedat aparcades a 10.000+.
+                # Se'ls dona una cua contigua: deixar-les amb un ordre inventat seria canviar
+                # l'escala per la porta del darrere, i **un run desordenat és un grading
+                # incorrecte**. Els forats a `ordre` són legítims (grading_utils.py:374); un
+                # 10.001, no.
+                for pk in (SizeDefinition.objects
+                           .filter(size_system=ss, ordre__gte=APARCADOR)
+                           .order_by('ordre').values_list('pk', flat=True)):
+                    maxim += 1
+                    SizeDefinition.objects.filter(pk=pk).update(ordre=maxim)
 
             # ---- 3. Resoldre la talla base (talla_base és NOT NULL a GradingRule) ----
             base_def = None

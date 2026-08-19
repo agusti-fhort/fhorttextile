@@ -123,6 +123,15 @@ class ModelListSerializer(serializers.ModelSerializer):
     # no exposava ni `garment_set` ni `piece_number`, i un tècnic no podia saber que una fila era
     # la peça d'un producte. Read-only: l'única escriptura de `garment_set` és a la creació.
     garment_set = GarmentSetMiniSerializer(read_only=True)
+    # F2.7 — l'avís de LLIURABLE va a la LLISTA, no només al detall: el PM ha de veure quins
+    # models ja han donat el que havien de donar sense entrar-hi un per un. Llista de `seq` de
+    # rondes lliurades; buida = res a ensenyar (el consumidor no ha de distingir «cap ronda» de
+    # «cap acabada»).
+    lliurable_ronda_n = serializers.SerializerMethodField()
+
+    def get_lliurable_ronda_n(self, obj):
+        from fhort.tasks.services_r import rondes_lliurables   # local: cicle models_app↔tasks
+        return rondes_lliurables(obj)
 
     class Meta:
         model = Model
@@ -152,9 +161,17 @@ class ModelListSerializer(serializers.ModelSerializer):
             'created_at',
             'garment_type',
             'garment_type_item_nom',
+            'lliurable_ronda_n',
             'fase_actual',
             'responsable',
             'prioritat',
+            # A5 · llista canònica (NORMA_LAYOUT §8e) — la columna «Entrada» de la graella és la
+            # DATA D'ENTRADA DEL MODEL (`data_entrada`, auto_now_add), no `entrada_prod`, que és
+            # la petició de producció de la fase actual i té el seu propi nom («Entrada prod.»).
+            # Hi faltava: la llista només podia pintar `created_at`, i ORDENAR per `data_entrada`
+            # —que sí que és a `ordering_fields` des de sempre— hauria ordenat per un camp que la
+            # pantalla no ensenya.
+            'data_entrada',
             'data_objectiu',
             # M1 — predicció del planificador (min start / max end de les tasques; §17). Read-only.
             'predicted_start',
@@ -250,6 +267,14 @@ class ModelDetailSerializer(serializers.ModelSerializer):
     # de tasques segueix escopada exactament com fins ara: aquí no s'exposa cap tasca, ni qui hi
     # treballa, ni quantes n'hi ha — només si la feina de POM del model està tancada.
     pom_task_done = serializers.SerializerMethodField()
+    # F1.6 — les voltes que ja han lliurat, per al PM. NOMÉS EL FET consultable: quines rondes
+    # han donat tot el que havien de donar (`task_type.es_lliurable` totes Done). L'avís visual
+    # —qui el veu, quan i com— és F2; aquí no es notifica ningú. Llista buida = cap ronda, o cap
+    # ronda acabada: el consumidor no ha de distingir-ho per decidir si ensenya res.
+    lliurable_ronda_n = serializers.SerializerMethodField()
+    # F2.0 — la volta VIGENT del model: {seq, motiu, oberta_el} o null (la 1a és implícita).
+    # El modal de F2.1 l'ha de saber per titular la cara B («obrir ronda N+1»).
+    ronda_oberta = serializers.SerializerMethodField()
     # SET-1 · A4 — el conjunt, niuat, amb les germanes per navegar-hi des de la capçalera.
     # DESVIACIÓ ANOTADA: `fields='__all__'` exposava `garment_set` com a pk ESCRIVIBLE; aquesta
     # declaració el fa read-only. Cap caller el feia servir (0 hits al frontend; els dos únics
@@ -268,6 +293,16 @@ class ModelDetailSerializer(serializers.ModelSerializer):
     # Precedència: mana el ruleset quan n'hi ha (porta els noms CANÒNICS del catàleg, en
     # anglès i possiblement multi-target); si no, el camp propi TAL QUAL. No s'inventa res:
     # si el model tampoc no en té, segueix sent None i la capçalera calla.
+    def get_ronda_oberta(self, obj):
+        from fhort.tasks.services_r import _ronda_oberta   # import local: cicle models_app↔tasks
+        r = _ronda_oberta(obj)
+        return None if r is None else {'id': r.pk, 'seq': r.seq, 'motiu': r.motiu,
+                                       'oberta_el': r.oberta_el.isoformat()}
+
+    def get_lliurable_ronda_n(self, obj):
+        from fhort.tasks.services_r import rondes_lliurables   # import local: cicle models_app↔tasks
+        return rondes_lliurables(obj)
+
     def get_pom_task_done(self, obj):
         # La unicitat (model, task_type) només val per a `origen='prevista'` (tasks/models.py),
         # o sigui que un model pot tenir més d'una tasca `pom`. «Feta» = n'hi ha ALGUNA de Done:
@@ -278,13 +313,21 @@ class ModelDetailSerializer(serializers.ModelSerializer):
             model_id=obj.pk, task_type__code='pom', status='Done').exists()
 
     def get_grading_target_nom(self, obj):
+        # N1 — aquí hi havia un tercer graó: si la M2M `targets` era buida, es llegia el FK
+        # legacy `GradingRuleSet.target`. Aquell FK el va RETIRAR la migració `pom/0043` (P7,
+        # «un rol, un vincle»), i des de llavors la branca no era un fallback sinó un
+        # AttributeError: qualsevol model amb ruleset de targets buits feia 500 el seu propi GET.
+        #
+        # S'esborra en comptes de reescriure's sobre `targets` perquè seria codi mort per
+        # construcció: la 0043 reconcilia FK→M2M ABANS de l'esborrat («tot `target` no NULL ha
+        # de constar a `targets`»), o sigui que no existeix cap estat on `targets` sigui buida i
+        # el FK tingués res a dir. El que el graó cobria de debò —ruleset sense cap target— ja
+        # el cobreix l'última línia, que cau al camp lliure del Model.
         rs = obj.grading_rule_set if obj.grading_rule_set_id else None
         if rs:
             noms = [t.nom_en for t in rs.targets.all()]
             if noms:
                 return ' / '.join(noms)
-            if rs.target_id:
-                return rs.target.nom_en
         return (obj.target or '').strip() or None
 
     def get_grading_fit_nom(self, obj):
@@ -323,9 +366,9 @@ class ModelDetailSerializer(serializers.ModelSerializer):
             val = (legacy or '').strip()
             return {idioma: val for idioma in _CATALEG_NOM_ATTR} if val else None
 
+        # Mateix graó mort que a `get_grading_target_nom`, i mateix motiu per esborrar-lo: el FK
+        # `target` no existeix des de `pom/0043`, i la M2M ja conté tot el que ell tenia.
         targets = list(rs.targets.all()) if rs else []
-        if rs and not targets and rs.target_id:
-            targets = [rs.target]
         return {
             'target': per_idiomes(targets, obj.target),
             'fit': per_idiomes([rs.fit_type] if rs and rs.fit_type_id else [], obj.fit_type),
@@ -397,6 +440,13 @@ class BaseMeasurementSerializer(serializers.ModelSerializer):
     # Legacy POMMaster fields (fallback when there is no associated pom_global).
     pom_codi_client = serializers.CharField(source='pom.codi_client', read_only=True)
     pom_nom_client = serializers.CharField(source='pom.nom_client', read_only=True)
+    # Q1 (06/08) — `''` ÉS UN VALOR LEGÍTIM D'INSTÀNCIA: és LA MESURA ÚNICA, i el default del
+    # camp al model. DRF derivava el camp del model —que no declara `blank=True`— i en sortia
+    # `allow_blank=False`: tornar una germana a la identitat base (desfer la píndola) rebia un
+    # 400 «Aquest camp no pot estar en blanc» i el camí de tornada quedava tancat al BACKEND
+    # encara que la pantalla l'oferís. La invariant que sí que mana —amb instància, cal nom— es
+    # segueix comprovant a `validate()`, i és a l'altra banda: prohibeix el nom buit, no el slug.
+    instancia = serializers.CharField(required=False, allow_blank=True, max_length=60)
 
     class Meta:
         model = BaseMeasurement
@@ -405,11 +455,66 @@ class BaseMeasurementSerializer(serializers.ModelSerializer):
             'pom_code', 'pom_name_en', 'pom_name_cat',
             'pom_abbreviation', 'pom_is_key', 'pom_category',
             'pom_codi_client', 'pom_nom_client',
+            # C4 — ELS DOS EIXOS D'IDENTITAT (D-31.22 · D-31.26). Hi entren com a ESCRIVIBLES
+            # perquè la pantalla de PRESA els ha de poder tocar per fila (moure una mesura de
+            # capa, partir-la per instància) i l'únic camí que ho feia fins ara era
+            # `set-measurements`, que reescriu `origen` a 'MANUAL' i les toleràncies de TOTES
+            # les files del payload. Fer passar una presa per allà convertiria una base
+            # 'CHECKED' en 'MANUAL' sense que ningú ho hagués demanat: dany d'auditoria dins
+            # d'un canvi de nom de columna.
+            # SET-2/F1 — I EL TERCER EIX, que era l'únic que NO es podia dir.
+            # `validate()` (més avall) ja el consultava des de T5, i `filterset_fields`
+            # ja l'exposava en LECTURA (`views.py`) — però no era aquí, i per tant DRF
+            # el descartava del payload: `attrs` no en podia portar cap valor. Efecte
+            # doble i tot dos silenciós: una fila de la peça 02 NEIXIA A LA MARE, i si
+            # la mare ja hi era el guard la denunciava com a duplicada (400 FALS). El
+            # camí de crear mesures per peça estava tancat al BACKEND encara que la
+            # pantalla l'oferís.
+            # ⚠️ LLEI S27 — un camp que no és a `fields` passa `manage.py check` VERD.
+            # Aquest tram s'exerceix a `test_set2_f1_escriptura_garment`, no per
+            # introspecció de `Meta`.
+            'capa', 'instancia', 'garment',
             'base_value_cm', 'is_active', 'notes',
             'nom_fitxa', 'origen',
             'updated_at',
         )
         read_only_fields = ('updated_at',)
+
+    def validate(self, attrs):
+        """La CLAU ÚNICA `(model, pom, capa, instancia, garment)` i la invariant del nom, a temps.
+
+        Totes dues viuen a la BD i, sense això, arriben com un IntegrityError —un 500 mut— quan
+        el que ha passat és que l'usuari ha triat una cara que aquesta mesura ja té.
+        """
+        inst = self.instance
+        camps = {
+            'model': attrs.get('model', getattr(inst, 'model', None)),
+            'pom': attrs.get('pom', getattr(inst, 'pom', None)),
+            'capa': attrs.get('capa', getattr(inst, 'capa', '') or ''),
+            'instancia': attrs.get('instancia', getattr(inst, 'instancia', '') or ''),
+            # SET-2/T5 — el tercer eix entra al filtre de germanes. Sense ell el guard donava
+            # un 400 FALS: la fila d'una ALTRA peça casava amb aquests camps i es denunciava
+            # com a duplicat d'aquesta. El default explícit (`''`) segueix el patró de R12 ja
+            # resolt a `pom/test_u2_r2_capa_instancia_api`: un camp amb `default` de model
+            # arriba a DRF només com a `required=False`, i confiar-hi convertiria en 400 tota
+            # crida que avui funciona.
+            'garment': attrs.get('garment', getattr(inst, 'garment', '') or ''),
+        }
+        if camps['model'] and camps['pom']:
+            germanes = BaseMeasurement.objects.filter(**camps)
+            if inst is not None:
+                germanes = germanes.exclude(pk=inst.pk)
+            if germanes.exists():
+                raise serializers.ValidationError({'instancia': (
+                    'Aquesta mesura ja té una fila en aquesta capa, instància i peça.'
+                )})
+        # `models_app_basemeasurement_instancia_exigeix_nom`: amb instància, el nom és obligatori.
+        nom = attrs.get('nom_fitxa', getattr(inst, 'nom_fitxa', '') or '')
+        if camps['instancia'] and not (nom or '').strip():
+            raise serializers.ValidationError({'nom_fitxa': (
+                'Una mesura amb instància ha de portar nomenclatura.'
+            )})
+        return attrs
 
 
 class WatchpointSerializer(serializers.ModelSerializer):

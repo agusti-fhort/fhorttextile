@@ -22,7 +22,7 @@ import MeasurementBaseGrid from '../MeasurementBaseGrid/MeasurementBaseGrid'
 const MONO = 'IBM Plex Mono, monospace'
 
 const btnPrimary = (disabled) => ({
-  background: disabled ? '#ccc' : 'var(--gold)', color: 'var(--white)', border: 'none',
+  background: disabled ? '#ccc' : 'var(--accio)', color: 'var(--white)', border: 'none',
   borderRadius: 6, padding: '7px 16px', fontSize: 'var(--fs-body)', fontWeight: 500,
   cursor: disabled ? 'not-allowed' : 'pointer',
 })

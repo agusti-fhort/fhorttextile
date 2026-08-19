@@ -564,6 +564,24 @@ class ImportSession(models.Model):
     # Model destí (es crea en confirmar)
     model           = models.ForeignKey('models_app.Model', null=True, blank=True,
                         on_delete=models.SET_NULL, related_name='import_sessions')
+    # ── SET-2/T8 · L'EIX DE LA PEÇA, A LA SESSIÓ ─────────────────────────────────────
+    # Decisió Agus (Patró C): **un import = una prenda**, i s'inicia DES DE LA PEÇA. El
+    # garment de destí, doncs, no és una pregunta del wizard ni una decisió que viatgi per
+    # fila: és CONTEXT, i el context d'una sessió viu a la sessió. Es fixa a la iniciació
+    # (`import_session_cribratge_view`) i el confirm hi escriu TOTES les files.
+    #
+    # `''` és la peça mare —el 100% del corpus del 12/08— i per això el default no canvia
+    # el comportament de cap sessió existent: una sessió d'abans d'aquesta columna té ''
+    # i escriu on ha escrit sempre.
+    #
+    # I ÉS TAMBÉ EL REGISTRE import→peça que el brief demana: cada `ImportSession` queda
+    # amb el seu document, el seu model i la seva prenda. Els exemples etiquetats que una
+    # detecció futura haurà de VALIDAR surten d'aquí (no és entrenament ni s'hi anota com
+    # a tal: és el que aquest import va fer, dit en clar).
+    garment         = models.CharField(
+                        max_length=20, blank=True, default='',
+                        help_text="Peça de destí de l'import: codi de ModelGarment ('02', "
+                                  "'03'…). '' és la peça mare, que és el Model mateix.")
     # Resultats per fase
     model_detectat          = models.JSONField(default=dict, blank=True)
     tipologia_confirmada    = models.ForeignKey('tasks.GarmentTypeItem', null=True, blank=True,
@@ -751,6 +769,39 @@ class BaseMeasurement(models.Model):
         help_text="Instància del POM dins la capa: slug compost canònic (p.ex. 'left-relaxed'). "
                   "'' és la instància única. Fins a C4-ins només s'admet '' (comporta CHECK a BD).",
     )
+    # ── SET-2/T2 — EL GARMENT (la peça dins del model). Declaració canònica del camp; les
+    # altres cinc taules de la família en porten una d'igual i apunten aquí.
+    #
+    # TERCER EIX, ORTOGONAL ALS DOS ANTERIORS. La capa diu de quina MATÈRIA parla la mesura;
+    # la instància, de quina de les REPETICIONS del mateix POM sobre la mateixa matèria; el
+    # garment diu de quina PRENDA del model parla — el top i la calceta d'un bikini, la
+    # jaqueta i el pantaló d'un pijama. Fins avui un model era una sola prenda: la segona
+    # mesura de «pit» no podia existir perquè xocava amb la primera.
+    #
+    # ⚠️ «GARMENT», NO «PEÇA» (D2): «peça» ja vol dir un Model sencer a `PieceFitting`, a
+    # `Model.piece_number` i a `GarmentTypeItemPart.nom_peca`. La col·lisió és de codi; a la
+    # UI en català se'n segueix dient «peça».
+    #
+    # CODI, MAI FK — i pel mateix motiu que `capa` i `instancia` (llei G9: per slug/codi, mai
+    # per PK). El codi és el de `ModelGarment.codi` ('02', '03'…), que viatja entre tenants i
+    # entre versions; una PK no viatja. La FK real petaria a `public` com la de la capa.
+    #
+    # `''` (cadena buida, MAI NULL) és la PEÇA MARE: el que fins avui era «el model», sense
+    # qualificar. NULL voldria dir «no se sap», i aquí sempre se sap. (D1, i és la mateixa
+    # llei que ja governa `instancia` just aquí a sobre.)
+    #
+    # CONVENCIÓ MANDROSA (D3): la mare NO té mai fila pròpia a `ModelGarment` — els seus
+    # valors ja viuen als camps de `Model`, i materialitzar-la seria duplicar la font de
+    # veritat. Només es materialitza a partir de la 02.
+    #
+    # La VALIDACIÓ contra `ModelGarment` NO és aquí: arriba amb el tram T2-bis. Fins llavors
+    # mana la COMPORTA — un CHECK a BD que només deixa passar ''.
+    garment = models.CharField(
+        max_length=20, default='', db_index=True,
+        help_text="Peça (garment) dins del model: codi de ModelGarment ('02', '03'…). "
+                  "'' és la peça mare, que és el Model mateix. Fins a la retirada de la "
+                  "comporta només s'admet '' (comporta CHECK a BD).",
+    )
 
     class Meta:
         verbose_name = 'Mesura base'
@@ -766,7 +817,12 @@ class BaseMeasurement(models.Model):
         # columnes + una, amb `instancia` constant ('') a totes les files → estrictament més
         # permissiva, 0 duplicats latents possibles. Qui impedeix la segona instància avui és
         # la comporta `_instancia_gate_cins`, no aquesta clau.
-        unique_together = [('model', 'pom', 'capa', 'instancia')]
+        #
+        # SET-2/T2 — i ara també el GARMENT, pel mateix argument literal per tercera vegada:
+        # mateixes columnes + una, amb `garment` constant ('') a totes les files →
+        # estrictament més permissiva, 0 duplicats latents possibles. Qui impedeix la segona
+        # peça avui és la comporta `_garment_gate_set2`, no aquesta clau.
+        unique_together = [('model', 'pom', 'capa', 'instancia', 'garment')]
         # `capa` entra a l'ordre entre el model i l'ordre de fitxa: quan hi hagi més d'una
         # capa, la fitxa les vol AGRUPADES, no barrejades per `ordre`. Avui és un no-op
         # observable —amb una sola capa el valor és constant i l'ordre relatiu no es mou—,
@@ -793,10 +849,11 @@ class BaseMeasurement(models.Model):
             # **C4 EL RETIRA PER MIGRACIÓ.** És bastida, no arquitectura: el dia que la
             # cadena sap llegir capes, aquest constraint és justament el que ho impedeix.
             # Si el trobes vigent i C4 ja ha passat, és un deute, no una llei.
-            models.CheckConstraint(
-                condition=models.Q(capa='exterior'),
-                name='models_app_basemeasurement_capa_gate_c1',
-            ),
+            # ✅ C4/G1 (04/08) — LA COMPORTA DE CAPA S'HA RETIRAT (migració 0076). Era
+            # bastida i no arquitectura, i el seu propi comentari ho deia: «el dia que la
+            # cadena sap llegir capes, aquest constraint és justament el que ho impedeix».
+            # La cadena ja les sap llegir i escriure: v. `test_c4_germanes_a_les_superficies`
+            # (les 10 superfícies) i `test_c4_escriptura_germanes` (els sis escriptors).
             # ── C1-ins — LA SEGONA COMPORTA. Declaració canònica; les altres vuit taules de
             # la cadena en porten una d'igual i apunten aquí.
             #
@@ -811,10 +868,8 @@ class BaseMeasurement(models.Model):
             # poden esquivar.
             #
             # **C4-ins LA RETIRA PER MIGRACIÓ**, al costat de la seva germana de capa.
-            models.CheckConstraint(
-                condition=models.Q(instancia=''),
-                name='models_app_basemeasurement_instancia_gate_cins',
-            ),
+            # ✅ C4/G1 (04/08) — LA COMPORTA D'INSTÀNCIA S'HA RETIRAT (migració 0076), al
+            # costat de la seva germana de capa, tal com el seu comentari deia.
             # ── C1-ins · DECISIÓ D1 — UNA INSTÀNCIA SENSE NOM DE FITXA ÉS IL·LEGAL.
             #
             # Aquesta no és bastida: és una llei de domini, i sobreviu a C4-ins. Si una
@@ -830,6 +885,36 @@ class BaseMeasurement(models.Model):
                 condition=~models.Q(instancia__gt='', nom_fitxa=''),
                 name='models_app_basemeasurement_instancia_exigeix_nom',
             ),
+            # ── SET-2/T2 — LA TERCERA COMPORTA. Declaració canònica; les altres cinc taules
+            # de la família en porten una d'igual i apunten aquí.
+            #
+            # Mateixa bastida, mateix motiu, eix nou. L'esquema ja sap dir «el pit del top» i
+            # «el pit de la calceta», però la cadena de consumidors —motor, escriptors,
+            # import, graella, Resum, federació— encara assumeix una mesura per
+            # `(model, POM, capa, instancia)` i no s'adapta fins a T4/T5. Entre T2 i T5 hi ha
+            # una finestra en què l'esquema ja admetria una segona peça i el codi encara no
+            # la sabria llegir: una fila '02' escrita per accident en aquesta finestra no
+            # petaria enlloc —es fondria dins les llistes com si fos de la mare— i corrompria
+            # en silenci mesures que són el producte.
+            #
+            # Va a la BD i no a l'aplicació pel mateix motiu que les seves dues germanes: és
+            # l'únic lloc que un `bulk_create`, un `update()`, un loader de paquet o un
+            # `psql` a mà no poden esquivar.
+            #
+            # **QUI LA RETIRA, I QUÈ HA D'ESTAR VERD ABANS.** La retirada NO es fa sense el
+            # test de R3 verd: `germanes_de` (`services_derivacio.py`) filtra per
+            # `(model, pom)` + «un eix diferent» i ESCRIU a les germanes (`aplica()`). Amb
+            # dues peces i el filtre curt, corregir el pit del top mouria el de la calceta
+            # —el mateix valor, en silenci, i creuant peces—: un bug de creuament
+            # indetectable. Mentre aquesta comporta visqui, cap '02' pot existir i el filtre
+            # de R3 és un no-op; per això la comporta és el gate i no la data.
+            # ✅ SET-2/#12 (12/08) — RETIRADA per la migració `0084`, amb les condicions que
+            # la mateixa comporta exigia verdes i mesurades: T4 ensenya el motor a distingir
+            # peces, T5 els escriptors, i el filtre de R3 ja mira l'eix sencer
+            # (`services_derivacio.EIXOS_DE_GERMANOR`) —o sigui que corregir el pit del top
+            # ja no pot moure el de la calceta. Gate obert amb la suite sencera verda
+            # (1841/1841, 12/08) i autorització de l'Agus. A partir d'aquí un '02' és legal
+            # a tota la família i `garment` deixa de ser una columna congelada.
         ]
 
     def __str__(self):
@@ -893,6 +978,16 @@ class MeasurementChangeLog(models.Model):
         help_text="Instància del POM dins la capa: slug compost canònic (p.ex. 'left-relaxed'). "
                   "'' és la instància única. Fins a C4-ins només s'admet '' (comporta CHECK a BD).",
     )
+    # SET-2/T2 — el garment (declaració canònica a `BaseMeasurement.garment`).
+    # Aquesta taula és APPEND-ONLY i no té cap unicitat: si l'eix no neix aquí, el lector
+    # no podrà dir mai de quina peça parlava un canvi ja registrat, i la pèrdua és
+    # IRREVERSIBLE. Per això hi entra al mateix grup que la mesura, com capa i instància.
+    garment = models.CharField(
+        max_length=20, default='', db_index=True,
+        help_text="Peça (garment) dins del model: codi de ModelGarment ('02', '03'…). "
+                  "'' és la peça mare, que és el Model mateix. Fins a la retirada de la "
+                  "comporta només s'admet '' (comporta CHECK a BD).",
+    )
 
     class Meta:
         verbose_name = 'Canvi de mesura'
@@ -900,15 +995,23 @@ class MeasurementChangeLog(models.Model):
         ordering = ['model', 'pom', 'created_at']
         constraints = [
             # C1/T4 — la comporta (v. `BaseMeasurement.Meta`). C4 la retira per migració.
-            models.CheckConstraint(
-                condition=models.Q(capa='exterior'),
-                name='models_app_measurementchangelog_capa_gate_c1',
-            ),
+            # ✅ C4/G1 (04/08) — retirada per la migració 0076 (v. la declaració canònica
+            # a `BaseMeasurement`). Aquesta taula va al MATEIX grup que la mesura perquè el
+            # signal F1 hi escriu dins de la mateixa transacció: separar-les deixaria una
+            # alta de germana escrivint un apunt que la comporta del log rebutjaria.
             # C1-ins — la comporta d'instància (v. `BaseMeasurement.Meta`). C4-ins la retira.
-            models.CheckConstraint(
-                condition=models.Q(instancia=''),
-                name='models_app_measurementchangelog_instancia_gate_cins',
-            ),
+            # ✅ C4/G1 (04/08) — retirada per la migració 0076 (v. la declaració canònica
+            # a `BaseMeasurement`). Aquesta taula va al MATEIX grup que la mesura perquè el
+            # signal F1 hi escriu dins de la mateixa transacció: separar-les deixaria una
+            # alta de germana escrivint un apunt que la comporta del log rebutjaria.
+            # SET-2/T2 — la comporta del garment (v. `BaseMeasurement.Meta`). Aquesta taula
+            # va al MATEIX grup que la mesura, i pel mateix motiu de sempre: el signal F1 hi
+            # escriu dins de la mateixa transacció, o sigui que separar-les deixaria una alta
+            # de peça escrivint un apunt que la comporta del log rebutjaria.
+            # ✅ SET-2/#12 (12/08) — RETIRADA per la migració `0084` (v. `BaseMeasurement`).
+            # Va amb la mesura, com sempre: el signal F1 escriu l'apunt dins de la MATEIXA
+            # transacció que la fila, o sigui que retirar-les per separat hauria deixat una
+            # alta de peça legal escrivint un log il·legal.
         ]
 
     def __str__(self):
@@ -970,24 +1073,34 @@ class ModelGradingOverride(models.Model):
         help_text="Instància del POM dins la capa: slug compost canònic (p.ex. 'left-relaxed'). "
                   "'' és la instància única. Fins a C4-ins només s'admet '' (comporta CHECK a BD).",
     )
+    # SET-2/T2 — el garment (declaració canònica a `BaseMeasurement.garment`).
+    garment = models.CharField(
+        max_length=20, default='', db_index=True,
+        help_text="Peça (garment) dins del model: codi de ModelGarment ('02', '03'…). "
+                  "'' és la peça mare, que és el Model mateix. Fins a la retirada de la "
+                  "comporta només s'admet '' (comporta CHECK a BD).",
+    )
 
     class Meta:
         verbose_name = 'Override de grading (model)'
         verbose_name_plural = 'Overrides de grading (model)'
         # C1/T3 + C1-ins/T3 — la clau incorpora la CAPA i la INSTÀNCIA (v. `BaseMeasurement.Meta`).
-        unique_together = [('model', 'pom', 'size_label', 'capa', 'instancia')]
+        # SET-2/T2 — i el GARMENT (v. `BaseMeasurement.Meta`): mateixes columnes + una.
+        unique_together = [('model', 'pom', 'size_label', 'capa', 'instancia', 'garment')]
         ordering = ['model', 'pom', 'size_label']
         constraints = [
+            # SET-2/T2 — la comporta del garment (v. `BaseMeasurement.Meta`).
+            # ✅ SET-2/#12 (12/08) — retirada per la migració `0084`. L'override és l'ajust
+            # MANUAL d'una cel·la i la seva clau ja porta `garment`: pinar la M de la sisa
+            # del top no pot moure la de la calceta.
             # C1/T4 — la comporta (v. `BaseMeasurement.Meta`). C4 la retira per migració.
-            models.CheckConstraint(
-                condition=models.Q(capa='exterior'),
-                name='models_app_modelgradingoverride_capa_gate_c1',
-            ),
+            # ✅ C4/G3 (04/08) — retirada per la migració 0078. L'override és l'ajust MANUAL
+            # d'una cel·la: pinar la talla M de la sisa dreta no pot moure l'esquerra, i
+            # `escalat/ajustar-talla` ja hi escriu per la identitat sencera des de `959147a5`.
             # C1-ins — la comporta d'instància (v. `BaseMeasurement.Meta`). C4-ins la retira.
-            models.CheckConstraint(
-                condition=models.Q(instancia=''),
-                name='models_app_modelgradingoverride_instancia_gate_cins',
-            ),
+            # ✅ C4/G3 (04/08) — retirada per la migració 0078. L'override és l'ajust MANUAL
+            # d'una cel·la: pinar la talla M de la sisa dreta no pot moure l'esquerra, i
+            # `escalat/ajustar-talla` ja hi escriu per la identitat sencera des de `959147a5`.
         ]
 
     def __str__(self):
@@ -1021,6 +1134,34 @@ class ModelGradingRule(models.Model):
     cicle que **no** travessa CAP dels dos eixos, i és a posta a les dues bandes. El pin que
     ho vigila: `test_instancia_comporta_cins.py` (columna absent a `information_schema`),
     germà del que ja hi ha per a `capa`. El mateix val per a `pom.GradingRule`.
+
+    ── SET-2/T3 (2026-08-10) · **REOBERTURA CONSCIENT DE L'ACTA: LA CLAU CREIX AMB `garment`.**
+
+    Això NO desmenteix res del que hi ha escrit a sobre; n'acota l'abast. L'acta de la Montse
+    parla de **germanes DINS d'una mateixa peça** i segueix sent certa paraula per paraula: la
+    sisa dreta i l'esquerra d'una mateixa prenda gradúen igual, i el folre d'un pit creix el
+    mateix que el seu exterior. El que l'acta no diu —perquè quan es va escriure un model era
+    una sola prenda— és que **un top i una calceta hagin de graduar igual**.
+
+    I no ho fan. Una peça pot tenir el seu propi `grading_rule_set` (D5): un top per talla
+    alfa i una calceta per mesos són dues lleis d'increments que ni tan sols parlen el mateix
+    idioma de talles. Amb la clau `('model','pom')`, dues peces que compartissin un POM no
+    podien tenir regles distintes — i, abans d'arribar-hi, **la sembra petava**: el wipe era
+    per MODEL i el `bulk_create` indexava per `pom_id` sol.
+
+    LA DISTINCIÓ, EN UNA LÍNIA: `capa` i `instancia` són **eixos de germanor** (dues cares de
+    la mateixa mesura → una sola llei); `garment` és una **frontera** (dues mesures de dues
+    prendes → dues lleis possibles). Per això aquesta clau creix amb el tercer i no amb els
+    dos primers. La col·lecció canònica dels eixos de germanor viu a
+    `services_derivacio.EIXOS_DE_GERMANOR`, i és la que llegeix el pin.
+
+    EL PIN, ARA, VIGILA EL PRINCIPI. Els dos que hi havia comprovaven `column_name = 'capa'` i
+    `= 'instancia'` literalment: una columna nova hi passava sense fer-los vermells, i la
+    diagnosi SET-2 ho va demostrar. Ara iteren `EIXOS_DE_GERMANOR`, o sigui que el dia que el
+    sistema aprengui un tercer eix de germanor el pin el vigilarà sol.
+    ⚠️ **`pom.GradingRule` NO es reobre i el seu pin es REFORÇA**: un ruleset és una llei
+    REUTILITZABLE del catàleg, mai propietat d'un model, i per tant no pot portar cap eix de
+    model —`garment` inclòs—. És la línia que separa el catàleg del model.
     """
     # R8 (2026-07-21) — 'CLIENT_RUN' hi faltava. El vocabulari de GradingRuleSet.origen
     # (CANONICAL/CLIENT_RUN/IMPORT) i el d'aquí no s'alineaven, i el wizard resolia la
@@ -1063,14 +1204,68 @@ class ModelGradingRule(models.Model):
     talla_break_pos = models.IntegerField(null=True, blank=True)  # cache opcional (run del model)
 
     origen = models.CharField(max_length=20, default='CANONICAL', choices=ORIGEN_CHOICES)
+    # ── M3 (2026-08-07) · LA TRAÇABILITAT: DE QUIN JOC VE AQUESTA FILA ────────────────────────
+    # L'arrel del parany de la decisió 6.1. `origen` diu «algú hi ha tocat», NO «aquest valor és
+    # seu»: els dos escriptors de pantalla estampen `MANUAL` encara que la regla sigui una còpia
+    # literal de la del joc, i `origen_mgr_des_de_ruleset` també estampa `MANUAL` a tot el que
+    # surt d'un `GradingRuleSet` sense classificar. Amb això, «autoria» i «còpia» es deien igual
+    # i el wipe només podia INFERIR-HO mirant l'estat del joc ANTERIOR del model sencer.
+    # Aquest camp ho deixa dit per FILA, i a la font: qui la materialitza sap d'on la treu.
+    #
+    #   informat  → la fila VE d'aquest joc (encara que després l'hagin editada a mà).
+    #   NULL      → no ve de cap joc, o no se sap. Autoria de pantalla des de zero, federació
+    #               (el joc d'origen viu a l'altra casa i el seu id aquí no vol dir res) i
+    #               TOTES les files anteriors a M3: **no hi ha backfill, i és a posta** —
+    #               d'on venien no es pot saber, i inventar-ho seria tornar a mentir.
+    #
+    # NO canvia cap política: 6.1 i M1 segueixen decidint com ahir. És senyal, no llei; la
+    # política que el llegeixi vindrà quan hi hagi dades (v. `poms_manual_a_preservar`).
+    #
+    # db_constraint=False i SET_NULL pel mateix motiu que `pom` (sobre): 'pom' és app SHARED
+    # (taula també a 'public') i aquest model és tenant-only. Esborrar un joc del catàleg no ha
+    # d'endur-se la regla resident del model —el patrimoni és del model—, només el rastre d'on
+    # va néixer.
+    derivat_de_rule_set = models.ForeignKey(
+        'pom.GradingRuleSet', on_delete=models.SET_NULL, null=True, blank=True,
+        db_constraint=False, related_name='regles_residents_derivades',
+        help_text="Joc del qual es va materialitzar aquesta fila. NULL = autoria de pantalla, "
+                  "federació, o fila anterior a M3 (sense backfill: no es pot saber).",
+    )
     actiu = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    # ── SET-2/T3 — EL GARMENT, i és l'ÚNIC eix que aquesta taula travessa (D4).
+    # L'argument sencer viu a l'acta de la classe: `capa` i `instancia` són eixos de GERMANOR
+    # (dues cares de la mateixa mesura → una sola llei d'increments) i per això no hi entren;
+    # `garment` és una FRONTERA (dues prendes → dues lleis possibles) i per això hi entra.
+    garment = models.CharField(
+        max_length=20, default='', db_index=True,
+        help_text="Peça (garment) dins del model: codi de ModelGarment ('02', '03'…). "
+                  "'' és la peça mare, que és el Model mateix. Fins a la retirada de la "
+                  "comporta només s'admet '' (comporta CHECK a BD).",
+    )
 
     class Meta:
         verbose_name = 'Regla grading (model)'
         verbose_name_plural = 'Regles grading (model)'
-        unique_together = [('model', 'pom')]
+        # SET-2/T3 — la clau creix amb el garment (D4). Mateixes columnes + una →
+        # estrictament més permissiva, amb `garment` constant ('') a totes les files.
+        unique_together = [('model', 'pom', 'garment')]
+        constraints = [
+            # SET-2/T3 — la comporta, amb el mateix argument que les sis de T2 (v.
+            # `BaseMeasurement.Meta`) i tancant una finestra que aquí és MÉS estreta i més
+            # perillosa: `_load_grading_rules` indexa `{r.pom_id: r}` (`pom/services.py:749`),
+            # un escalar SENSE cap eix. Amb dues peces que comparteixin un POM, la segona
+            # regla no petaria: **sobreescriuria la primera en memòria** i el motor graduaria
+            # tota una peça amb la llei de l'altra, sense un sol log. T4 és qui ensenya al
+            # motor a distingir-les; fins llavors, aquí no hi pot haver cap '02'.
+            # ✅ SET-2/#12 (12/08) — RETIRADA per la migració `0084`. La condició que la
+            # comporta posava per escrit ja es compleix: `_load_grading_rules_per_garment`
+            # (`pom/services.py:820`) indexa per `(pom_id, garment)` des de T4 —verificat, no
+            # assumit—, o sigui que dues peces que comparteixin un POM
+            # ja no s'aixafen en memòria. Aquesta és la comporta de T3 —la més estreta i la
+            # més perillosa de les set— i cau amb les altres sis, no abans.
+        ]
 
     def __str__(self):
         return f'{self.model} · {self.pom.codi_client} ({self.logica})'
@@ -1274,24 +1469,41 @@ class SizeCheckLine(models.Model):
         help_text="Instància del POM dins la capa: slug compost canònic (p.ex. 'left-relaxed'). "
                   "'' és la instància única. Fins a C4-ins només s'admet '' (comporta CHECK a BD).",
     )
+    # SET-2/T2 — el garment (declaració canònica a `BaseMeasurement.garment`).
+    garment = models.CharField(
+        max_length=20, default='', db_index=True,
+        help_text="Peça (garment) dins del model: codi de ModelGarment ('02', '03'…). "
+                  "'' és la peça mare, que és el Model mateix. Fins a la retirada de la "
+                  "comporta només s'admet '' (comporta CHECK a BD).",
+    )
 
     class Meta:
         verbose_name = 'Línia de validació de talla'
         verbose_name_plural = 'Línies de validació de talla'
         ordering = ['size_check', 'pom']
         # C1/T3 + C1-ins/T3 — la clau incorpora la CAPA i la INSTÀNCIA (v. `BaseMeasurement.Meta`).
-        unique_together = [('size_check', 'pom', 'capa', 'instancia')]
+        # SET-2/T2 — i el GARMENT (v. `BaseMeasurement.Meta`): mateixes columnes + una.
+        unique_together = [('size_check', 'pom', 'capa', 'instancia', 'garment')]
         constraints = [
+            # SET-2/T2 — la comporta del garment (v. `BaseMeasurement.Meta`). El SizeCheck
+            # segueix penjant del MODEL i sense eix (D6): mesurar una prenda és mesurar tot
+            # el model, i el veredicte es compta per FILA sobre el model sencer. L'eix és de
+            # la LÍNIA, que és la presa, no del check.
+            # ✅ SET-2/#12 (12/08) — retirada per la migració `0084`. El SizeCheck segueix
+            # penjant del MODEL i sense eix (D6): el que s'obre és la LÍNIA, que és la presa,
+            # i pot dir de quina prenda parla.
             # C1/T4 — la comporta (v. `BaseMeasurement.Meta`). C4 la retira per migració.
-            models.CheckConstraint(
-                condition=models.Q(capa='exterior'),
-                name='models_app_sizecheckline_capa_gate_c1',
-            ),
+            # ✅ C4/G2 (04/08) — retirada per la migració 0077. La línia de check és una
+            # PRESA: la modista mesura la sisa dreta i l'esquerra per separat, i el veredicte
+            # de tolerància de cadascuna es jutja amb la SEVA. Amb la comporta viva i les
+            # germanes ja creades, obrir un Size Check petava amb `IntegrityError` —
+            # `_materialize_lines` sembra una línia per mesura amb els seus eixos.
             # C1-ins — la comporta d'instància (v. `BaseMeasurement.Meta`). C4-ins la retira.
-            models.CheckConstraint(
-                condition=models.Q(instancia=''),
-                name='models_app_sizecheckline_instancia_gate_cins',
-            ),
+            # ✅ C4/G2 (04/08) — retirada per la migració 0077. La línia de check és una
+            # PRESA: la modista mesura la sisa dreta i l'esquerra per separat, i el veredicte
+            # de tolerància de cadascuna es jutja amb la SEVA. Amb la comporta viva i les
+            # germanes ja creades, obrir un Size Check petava amb `IntegrityError` —
+            # `_materialize_lines` sembra una línia per mesura amb els seus eixos.
         ]
 
     def __str__(self):
@@ -1473,15 +1685,19 @@ class POMPlacement(models.Model):
                 fields=['item_fitxer', 'pom', 'view_slot', 'capa', 'instancia'],
                 name='uniq_pomplacement_item_pom_view_capa_instancia'),
             # C1/T4 — la comporta (v. `BaseMeasurement.Meta`). C4 la retira per migració.
-            models.CheckConstraint(
-                condition=models.Q(capa='exterior'),
-                name='models_app_pomplacement_capa_gate_c1',
-            ),
+            # ✅ C4/G3 (04/08) — retirada per la migració 0078. La col·locació és on la mesura
+            # es lliga al CROQUIS, i és el punt on «dues cares, dues línies» es veurà de debò:
+            # la sisa dreta i l'esquerra són dues cotes al dibuix, no una.
+            # 🚩 La decisió de producte sobre la col·locació automàtica (una cota o dues per a
+            # un POM amb germanes) segueix OBERTA — v. el commit `b56b2dfb`. Retirar la
+            # comporta no la pren: la deixa possible.
             # C1-ins — la comporta d'instància (v. `BaseMeasurement.Meta`). C4-ins la retira.
-            models.CheckConstraint(
-                condition=models.Q(instancia=''),
-                name='models_app_pomplacement_instancia_gate_cins',
-            ),
+            # ✅ C4/G3 (04/08) — retirada per la migració 0078. La col·locació és on la mesura
+            # es lliga al CROQUIS, i és el punt on «dues cares, dues línies» es veurà de debò:
+            # la sisa dreta i l'esquerra són dues cotes al dibuix, no una.
+            # 🚩 La decisió de producte sobre la col·locació automàtica (una cota o dues per a
+            # un POM amb germanes) segueix OBERTA — v. el commit `b56b2dfb`. Retirar la
+            # comporta no la pren: la deixa possible.
         ]
         indexes = [
             models.Index(fields=['item_fitxer', 'view_slot'],
@@ -1490,3 +1706,105 @@ class POMPlacement(models.Model):
 
     def __str__(self):
         return f'{self.item_fitxer_id} · POM {self.pom_id} @ {self.view_slot}'
+
+
+class ModelGarment(models.Model):
+    """UNA PEÇA DINS D'UN MODEL — l'entitat que D5 pressuposava i que SET-2/T2 no va crear.
+
+    ── QUÈ ÉS, I QUÈ NO ÉS ────────────────────────────────────────────────────────────
+    Un model pot ser més d'una prenda: un pijama té jaqueta i pantaló, i cadascuna té les
+    seves mesures, la seva graduació i potser fins i tot la seva escala de talles (un top
+    per talla alfa i una calceta per mesos són dues lleis d'increments que ni parlen el
+    mateix idioma). El `garment` que les sis taules de mesura porten des de T2 és el CODI
+    d'una d'aquestes peces; aquesta taula és on aquell codi finalment existeix.
+
+    ⚠️ NO CONFONDRE AMB `GarmentSet`, i el paranys és que en llenguatge de domini totes dues
+    són «peces». Són dues ALÇADES distintes:
+      · `GarmentSet.peces` → els MODELS d'un producte comercial (un twin set = 2 models
+        independents, cadascun amb la seva fitxa).
+      · `ModelGarment` → les prendes DINS d'un sol model (un pijama = 1 model, 2 peces, 1
+        fitxa).
+    Per això el `related_name` d'aquí és `garments` i no `peces`: dos atributs amb el mateix
+    nom a dues alçades diferents és la mena de coincidència que fabrica el bug que ningú no
+    veu. El rètol de pantalla sí que dirà «peces»; l'atribut, no.
+
+    ── D3 · LA MARE NO TÉ FILA, I ÉS DELIBERAT ────────────────────────────────────────
+    El `garment=''` de les taules de mesura és la PEÇA MARE, i la peça mare **és el model
+    mateix**: el seu run, la seva talla base i el seu joc de graduació ja viuen als camps de
+    `Model`. Materialitzar-li una fila aquí duplicaria la font de veritat i obriria la
+    pregunta «quin dels dos mana» a cada lectura. Per això hi ha una comporta CHECK que
+    prohibeix `codi=''`: no és una validació de formulari, és la llei D3 escrita a Postgres.
+
+    ── D5 · ELS OVERRIDES SÓN NULLABLES, I NULL VOL DIR «HERETA» ──────────────────────
+    Els quatre camps heretables neixen `NULL`. NULL **no és** «buit» ni «cap»: és «pregunta-ho
+    al model». Una peça acabada de crear no ha de re-declarar res per començar a funcionar, i
+    canviar el run del model el canvia a totes les peces que no l'hagin sobreescrit.
+
+    🔑 La resolució viu en UN SOL PUNT —`services_garment.valor_efectiu`— i enlloc més. És la
+    raó per la qual es va revertir `7cc133b5`: una vora que serveixi el valor CRU al costat
+    d'una altra que serveixi el RESOLT són dos orígens per al mateix camp, i acaben divergint.
+    Qui necessiti el valor efectiu, que passi per allà.
+
+    ── EL QUE AQUESTA TAULA NO PORTA, I PER QUÈ ───────────────────────────────────────
+    `garment_type_item` NO hi és. El brief el demanava «nullable i sense cap lector», i un
+    camp sense lector és exactament la bastida que aquest sprint ha après a no construir: la
+    clau `garment` de `base-measurements/` es va revertir el 10/08 amb aquest argument literal
+    («bastida sense funció; barata de treure ara i cara de treure després»). A més, la decisió
+    de domini és que **el GTI no baixa a la peça**, o sigui que la columna codificaria una
+    capacitat que el domini nega. Censat: cap dels lectors actuals de `garment_type_item`
+    (`patterns/views.py`, `patterns/services.py`, `patterns/serializers.py`) pregunta per una
+    peça — tots resolen la propietat d'un `PatternFile`, que penja d'un model O d'un item.
+    Si algun dia el GTI ha de baixar, és una migració d'una línia i una decisió humana.
+    """
+
+    #: Els camps que una peça pot sobreescriure. Font única: el resolutor, el serializer i
+    #: les proves en surten tots d'aquí, de manera que afegir-ne un és un sol canvi.
+    CAMPS_HERETABLES = ('size_system', 'grading_rule_set', 'size_run_model', 'base_size_label')
+
+    model = models.ForeignKey(
+        'models_app.Model',
+        on_delete=models.CASCADE,
+        related_name='garments',
+        help_text='El model del qual aquesta peça forma part.',
+    )
+    codi = models.CharField(
+        max_length=20,
+        help_text="Codi de la peça dins del model ('02', '03'…). Mai '': la peça mare és el "
+                  "model mateix i no té fila (D3).",
+    )
+    nom = models.CharField(
+        max_length=200, blank=True, default='',
+        help_text='Bateig del tècnic («Pantaló», «Caputxa»). Buit = encara sense batejar.',
+    )
+    ordre = models.PositiveSmallIntegerField(
+        default=0, help_text='Ordre de presentació dins del model.')
+
+    # ── Overrides (D5). NULL = hereta del model. ──────────────────────────────────────
+    size_system = models.ForeignKey(
+        'pom.SizeSystem', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='garments_override',
+    )
+    grading_rule_set = models.ForeignKey(
+        'pom.GradingRuleSet', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='garments_override',
+    )
+    size_run_model = models.CharField(max_length=200, null=True, blank=True)
+    base_size_label = models.CharField(max_length=20, null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Peça de model'
+        verbose_name_plural = 'Peces de model'
+        ordering = ['model_id', 'ordre', 'codi']
+        unique_together = [('model', 'codi')]
+        constraints = [
+            models.CheckConstraint(
+                condition=~models.Q(codi=''),
+                name='models_app_modelgarment_codi_no_buit',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.model_id} · peça {self.codi}{f" ({self.nom})" if self.nom else ""}'

@@ -29,7 +29,7 @@ export default function ProposalsPanel({
 
   if (!propostes.length) {
     return (
-      <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', margin: 0 }}>
+      <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', margin: 0 }}>
         {t('pattern.taller.proposals_empty')}
       </p>
     )
@@ -55,7 +55,7 @@ export default function ProposalsPanel({
             fluixes: descartats.sota_llindar, conflicte: descartats.en_conflicte,
           })}
           style={{
-            fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
+            fontSize: 'var(--fs-caption)', color: 'var(--text-soft)',
             margin: '0.2rem 0 0', display: 'flex', alignItems: 'center', gap: '0.3rem',
           }}
         >
@@ -93,8 +93,8 @@ function Proposta({ t, p, unit, marcat, onMarca, onConfirma, onRebutja, onRessal
       onMouseEnter={() => onRessalta(p)}
       onMouseLeave={() => onRessalta(null)}
       style={{
-        border: '1px solid var(--border)', borderLeft: '3px solid var(--gold)',
-        borderRadius: 4, padding: '0.35rem 0.5rem', background: 'var(--bg-card)',
+        border: '1px solid var(--line)', borderLeft: '3px solid var(--gold)',
+        borderRadius: 4, padding: '0.35rem 0.5rem', background: 'var(--panel)',
         display: 'flex', flexDirection: 'column', gap: 3,
         opacity: ocupat ? 0.5 : 1,
       }}
@@ -118,7 +118,7 @@ function Proposta({ t, p, unit, marcat, onMarca, onConfirma, onRebutja, onRessal
             {titol}
           </div>
           <div style={{
-            fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
+            fontSize: 'var(--fs-caption)', color: 'var(--text-soft)',
             fontFamily: 'var(--mono)',
           }}>
             {/* El tipus i, si n'hi ha, el frunzit INFERIT: la xifra que el motor ha llegit de la
@@ -138,8 +138,8 @@ function Proposta({ t, p, unit, marcat, onMarca, onConfirma, onRebutja, onRessal
           title={p.senyals.map(s => `${s.punts >= 0 ? '+' : ''}${s.punts} · ${s.detall}`).join('\n')}
           style={{
             fontFamily: 'var(--mono)', fontSize: 'var(--fs-caption)', fontWeight: 600,
-            color: p.confianca >= 0.66 ? 'var(--ok)' : 'var(--text-muted)',
-            border: '1px solid var(--border)', borderRadius: 10, padding: '0 6px',
+            color: p.confianca >= 0.66 ? 'var(--ok)' : 'var(--text-soft)',
+            border: '1px solid var(--line)', borderRadius: 10, padding: '0 6px',
             flexShrink: 0,
           }}
         >
@@ -181,6 +181,11 @@ function Proposta({ t, p, unit, marcat, onMarca, onConfirma, onRebutja, onRessal
         </span>
       </div>
 
+      {/* C2 · «Confirma» era daurat ple. No pot passar a blau: és una acció DE FILA i n'hi ha
+          una per proposta a la llista, mentre que la §5.1 dona UNA primària per pantalla —
+          N blaus alhora no diuen «el que has vingut a fer», diuen soroll. Va a SECUNDÀRIA
+          (§5.2), que és el que la norma reserva a les accions de la casa; el pes contra
+          «Rebutja» el segueix marcant el filet d'or contra el filet neutre. */}
       <div style={{ display: 'flex', gap: '0.35rem' }}>
         <button
           onClick={() => acte(() => onConfirma(p))}
@@ -188,8 +193,8 @@ function Proposta({ t, p, unit, marcat, onMarca, onConfirma, onRebutja, onRessal
           style={{
             flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
             gap: '0.3rem', padding: '0.2rem 0.4rem',
-            background: 'var(--gold)', color: 'var(--white)',
-            border: '1px solid var(--gold)', borderRadius: 4,
+            background: 'var(--panel)', color: 'var(--text-main)',
+            border: '1px solid var(--gold-border)', borderRadius: 4,
             cursor: ocupat ? 'wait' : 'pointer', fontSize: 'var(--fs-caption)',
           }}
         >
@@ -202,8 +207,8 @@ function Proposta({ t, p, unit, marcat, onMarca, onConfirma, onRebutja, onRessal
           title={t('pattern.taller.proposal_reject_title')}
           style={{
             display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.2rem 0.5rem',
-            background: 'var(--white)', color: 'var(--text-muted)',
-            border: '1px solid var(--border)', borderRadius: 4,
+            background: 'var(--panel)', color: 'var(--text-soft)',
+            border: '1px solid var(--line)', borderRadius: 4,
             cursor: ocupat ? 'wait' : 'pointer', fontSize: 'var(--fs-caption)',
           }}
         >
@@ -280,7 +285,7 @@ function Senyal({ t, senyal, unit }) {
       style={{
         display: 'flex', alignItems: 'flex-start', gap: '0.3rem',
         fontSize: 'var(--fs-caption)',
-        color: contra ? 'var(--err)' : nul ? 'var(--text-muted)' : 'var(--text-main)',
+        color: contra ? 'var(--err)' : nul ? 'var(--text-soft)' : 'var(--text-main)',
       }}
     >
       <i

@@ -205,8 +205,8 @@ def generate_graded_specs(size_fitting_id: int) -> int:
     # S24b — la geometria (ordre i distància) surt del SizeSystem, no de la llista del run.
     size_run, run_sistema, _pos, base_idx = escala_del_model(model)
 
-    # Load the RuleSet rules
-    rules = _load_grading_rules(model)
+    # Load the RuleSet rules — la font PER GARMENT (v. l'acta de `_load_grading_rules`).
+    rules = _load_grading_rules_per_garment(model)
     # Sprint 5B.3: per-model overrides from validated fittings (highest priority).
     model_overrides = _load_model_overrides(model.pk)
     poms_nomes_override = _poms_amb_override(model_overrides)
@@ -230,13 +230,17 @@ def generate_graded_specs(size_fitting_id: int) -> int:
     created = 0
     warnings: list[str] = []
     sense_regla: set[int] = set()   # D2: POMs amb base i sense regla → no emeten cap cel·la
-    for (pom_id, capa, instancia), base_val in base_measurements.items():
-        # C3/B2 — el `pom_id` s'EXTREU de la clau. La regla de graduació NO porta eixos (v.
-        # `_load_grading_rules`): el mateix POM té el mateix increment a totes les capes i a
-        # totes les instàncies, i per tant es busca per POM sol. Si aquí s'hi passés la tupla,
-        # `rules.get(...)` no trobaria mai res i TOTS els POMs caurien a la branca `rule is
-        # None`: el motor quedaria mut i no emetria cap cel·la.
-        rule = rules.get(pom_id)
+    for (pom_id, capa, instancia, garment), base_val in base_measurements.items():
+        # C3/B2 — el `pom_id` s'EXTREU de la clau. La regla NO travessa capa ni instància:
+        # el mateix POM té el mateix increment a totes les capes i a totes les instàncies
+        # (són EIXOS DE GERMANOR: dues cares de la mateixa mesura, una sola llei). Si aquí
+        # s'hi passés la tupla sencera, `rules.get(...)` no trobaria mai res i TOTS els POMs
+        # caurien a `rule is None`: el motor quedaria mut i no emetria cap cel·la.
+        #
+        # SET-2/T4 — el `garment` SÍ que hi entra, i és l'única part de la identitat que la
+        # regla travessa (D4): és una FRONTERA, no un eix de germanor. `_regla_de` fa la
+        # busca per peça amb herència de la mare.
+        rule = _regla_de(rules, pom_id, garment)
 
         for size_label in size_run:
             # S24b: `i` és la posició EN ESPAI DE SISTEMA, no dins la llista del run. És
@@ -249,7 +253,7 @@ def generate_graded_specs(size_fitting_id: int) -> int:
             # ('exterior', ''): l'àncora impedia que un override de folre es colés a la cel·la
             # de l'exterior, però al preu de fer invisibles els overrides de qualsevol altra
             # capa. Ara que la clau distingeix, l'àncora sobra i s'ha retirat.
-            override = model_overrides.get((pom_id, capa, instancia, size_label))
+            override = model_overrides.get((pom_id, capa, instancia, garment, size_label))
             if override is not None:
                 # Per-model validated-fitting override wins over everything.
                 # G6/1a: aquí hi havia una segona branca, `elif exc:` (GradingException), que
@@ -257,7 +261,7 @@ def generate_graded_specs(size_fitting_id: int) -> int:
                 # ni tan sols distingia quin dels dos forks havia guanyat. Jubilada.
                 graded_val = override
                 gt_applied = 'EXCEPTION'
-            elif (pom_id, capa, instancia) in poms_nomes_override and i == base_idx:
+            elif (pom_id, capa, instancia, garment) in poms_nomes_override and i == base_idx:
                 # D2 — POM NOMÉS-OVERRIDE, cel·la de la talla BASE. Vegeu `_poms_amb_override`.
                 # L'import mai escriu override a la talla base (el seu valor viu a
                 # BaseMeasurement), de manera que aquesta és l'ÚNICA cel·la de la fila que la
@@ -275,7 +279,22 @@ def generate_graded_specs(size_fitting_id: int) -> int:
                 # Segueix valent per a les talles del run que el POM només-override no cobreix:
                 # el rescat de dalt és NOMÉS la base. Un POM que gradua pels seus overrides no
                 # és cobertura parcial per manca de regla → no entra a `sense_regla`.
-                if (pom_id, capa, instancia) not in poms_nomes_override:
+                # SET-2/T6a (2026-08-11) — LA TUPLA SENCERA, i és el germà exacte de la
+                # línia 264. `_poms_amb_override` retorna claus de QUATRE trams des de T4
+                # (`_poms_amb_override`, aquí sota) i aquesta comparació en portava tres: no
+                # coincidia MAI, el `not in` era sempre cert, i tot POM només-override entrava
+                # a `sense_regla` —el conjunt que compta l'avís de cobertura parcial de sota—,
+                # que és exactament el que el comentari d'aquí sobre diu que no ha de passar.
+                #
+                # SEGONA PORTA del dany de 31e05db7, trobada seguint la llei del cens: allà
+                # l'aritat es va restaurar a `_load_grading_rules` i a `_identitat`, i aquest
+                # predicat va quedar enrere. No mou cap cel·la —el `continue` és el mateix per
+                # totes dues branques— i per això ni la paritat ni cap assert de valors el
+                # podien veure: només menteix a la traça.
+                #
+                # Re-verificable: `grep -n "poms_nomes_override" pom/services.py` — les DUES
+                # comparacions han de tenir els quatre trams.
+                if (pom_id, capa, instancia, garment) not in poms_nomes_override:
                     sense_regla.add(pom_id)
                 continue
             else:
@@ -305,6 +324,7 @@ def generate_graded_specs(size_fitting_id: int) -> int:
                 generated_from_version=current_version,
                 capa=capa,
                 instancia=instancia,
+                garment=garment,
             )
             created += 1
 
@@ -355,9 +375,19 @@ def preview_graded_specs(model, base_values: dict, warnings: list | None = None)
     SizeFitting/GradingVersion/GradedSpec. Pensat per omplir talles buides a la taula del
     wizard abans del desament definitiu (W5).
 
-    base_values: {(pom_id, capa, instancia): base_value_cm}
-    Retorna: {(pom_id, capa, instancia): {size_label: graded_value}} (buit si manquen
-    regles/run/base).
+    base_values: {(pom_id, capa, instancia, garment): base_value_cm} — o una clau ESCALAR
+    (`pom_id`), o de menys trams: `_identitat` normalitza l'aritat, perquè això arriba d'un
+    COS HTTP i el contracte d'entrada no és nostre.
+    Retorna: {(pom_id, capa, instancia, garment): {size_label: graded_value}} (buit si
+    manquen regles/run/base).
+
+    SET-2/T6a (2026-08-11) — LA SORTIDA CREIX ALS MATEIXOS QUATRE TRAMS QUE L'ENTRADA, i
+    fins avui no ho feia: `_identitat` en desempaquetava quatre i `out` se n'indexava tres.
+    Amb dues peces vives, les dues files del mateix POM cauen a la mateixa entrada i
+    l'última guanya — o sigui que el PREVIEW ensenyaria una fila on el GENERADOR n'escriurà
+    dues. La paritat preview↔generador és la invariant que aquest fitxer declara i que el
+    test de D2 comprova (`test_preview_diu_el_mateix_que_el_generador`): una clau més curta
+    a un dels dos costats la trenca en silenci.
 
     C3/B5 — LA CLAU CREIX AMB LA DEL GENERADOR, i ha de créixer alhora: hi ha tests que
     exigeixen que el preview i el generador diguin exactament el mateix (`test_g6_grading_gates
@@ -376,10 +406,23 @@ def preview_graded_specs(model, base_values: dict, warnings: list | None = None)
     from fhort.pom.models import MeasurementLayer
 
     def _identitat(clau):
-        """Clau escalar → identitat completa. Clau ja completa → tal qual."""
+        """Clau escalar → identitat completa. Clau ja completa → tal qual.
+
+        SET-2/T4 — la identitat completa és ara de QUATRE camps: el `garment` hi entra
+        darrere de la instància, i el seu tram buit és la peça mare (mai NULL).
+        """
         if isinstance(clau, tuple):
-            return clau
-        return (clau, MeasurementLayer.SLUG_DEFECTE, '')
+            # ⚠️ NORMALITZA L'ARITAT, no la deixa passar tal qual. `base_values` pot arribar
+            # d'un COS HTTP (el wizard d'import), o sigui que un cridador extern encara pot
+            # enviar la clau de tres trams d'abans de SET-2. Retornar-la sencera feia petar el
+            # desempaquetat de quatre amb `ValueError: not enough values to unpack` — un error
+            # de producció, no de test. Els trams que faltin són els seus valors buits.
+            clau = tuple(clau)
+            return (clau[0],
+                    clau[1] if len(clau) > 1 else MeasurementLayer.SLUG_DEFECTE,
+                    clau[2] if len(clau) > 2 else '',
+                    clau[3] if len(clau) > 3 else '')
+        return (clau, MeasurementLayer.SLUG_DEFECTE, '', '')
     # G6/0b — el mateix criteri que el gate dur de generate_graded_specs (via `_te_regles`), i no
     # una còpia amb matisos: si el generador i el preview no coincideixen en "aquest model pot
     # graduar?", el wizard ensenya una taula buida per a un model que després gradua igualment.
@@ -396,29 +439,30 @@ def preview_graded_specs(model, base_values: dict, warnings: list | None = None)
     except ValueError:
         return {}
 
-    rules = _load_grading_rules(model)
+    rules = _load_grading_rules_per_garment(model)
     model_overrides = _load_model_overrides(model.pk)
     poms_nomes_override = _poms_amb_override(model_overrides)
 
     out = {}
     for clau, base_val in base_values.items():
-        pom_id, capa, instancia = _identitat(clau)
+        pom_id, capa, instancia, garment = _identitat(clau)
         # D2 — base absent O A ZERO: el POM no existeix per a aquest model → cap cel·la.
         # Mateix criteri que _load_base_measurements, perquè el preview no pot prometre
         # una taula que el generador després no emetrà.
         if base_val is None or float(base_val) == 0.0:
             continue
         base_val = float(base_val)
-        # El `pom_id` extret de la identitat: la regla no porta eixos (v. `_load_grading_rules`).
-        rule = rules.get(pom_id)
+        # El `pom_id` extret de la identitat: la regla no travessa capa ni instància.
+        # SET-2/T4 — però SÍ el garment (D4), amb herència de la peça mare (`_regla_de`).
+        rule = _regla_de(rules, pom_id, garment)
         row = {}
         for size_label in size_run:
             i = _pos(size_label)          # S24b: posició en espai de sistema
             steps = i - base_idx
-            override = model_overrides.get((pom_id, capa, instancia, size_label))
+            override = model_overrides.get((pom_id, capa, instancia, garment, size_label))
             if override is not None:
                 graded_val = float(override)
-            elif (pom_id, capa, instancia) in poms_nomes_override and i == base_idx:
+            elif (pom_id, capa, instancia, garment) in poms_nomes_override and i == base_idx:
                 # D2 — talla base d'un POM només-override. MATEIXA branca que el generador
                 # (v. `_poms_amb_override`): si el preview se la saltés, el wizard ensenyaria
                 # la fila coixa que la propagació després omple.
@@ -438,7 +482,7 @@ def preview_graded_specs(model, base_values: dict, warnings: list | None = None)
         # D2 — POM que no emet cap cel·la no apareix a la taula (fila ABSENT, no fila buida):
         # el generador tampoc no en crearà cap GradedSpec.
         if row:
-            out[(pom_id, capa, instancia)] = row
+            out[(pom_id, capa, instancia, garment)] = row
     return out
 
 
@@ -707,6 +751,14 @@ def _te_regles(model) -> bool:
     per les REGLES. Un model apuntant a un GradingRuleSet BUIT passava el gate i graduava a
     FIXED tota la taula. Ara la segona branca compta regles actives del set: mateixa pregunta
     que respon `_load_grading_rules`, que és de qui ha de ser el mirall.
+
+    ── SET-2/PRED-3 (2026-08-12) · PER QUÈ AQUESTA **SÍ** QUE ES QUEDA PER MODEL ────────
+    El tram que va donar subjecte al predicat del fallback (`_load_grading_rules_per_garment`)
+    NO toca aquest, i no per oblit: són dues preguntes distintes. Aquesta és la porta
+    d'entrada del MOTOR i el que decideix és si la generació sencera arrenca; un model on
+    ALGUNA prenda pot graduar no s'ha de refusar en bloc perquè una altra no pugui. Qui
+    reparteix per peça és `_regla_de`, i el que passa amb una peça sense llei ja té llei
+    pròpia i explícita: la cel·la absent de D2 (cap cel·la, mai un FIXED fabricat).
     """
     from fhort.models_app.models import ModelGradingRule
     if ModelGradingRule.objects.filter(model_id=model.id, actiu=True).exists():
@@ -720,14 +772,68 @@ def _te_regles(model) -> bool:
 
 
 def _load_grading_rules(model) -> dict:
-    # C3/B6 — AQUESTA CLAU NO CREIX, i és a posta. La regla de graduació no porta capa ni
-    # instància ni a l'ORM ni a Postgres: verificat contra `information_schema` el 02/08, cap
-    # de les dues taules (`models_app_modelgradingrule`, `pom_gradingrule`) té aquestes
-    # columnes. És decisió de domini —mateix POM, mateix increment a totes les capes i a totes
-    # les instàncies— i per això el motor busca la regla amb el `pom_id` EXTRET de la identitat
-    # i no amb la identitat sencera. Si algun dia la regla ha de distingir capes, això és una
-    # decisió humana i una migració, no un retoc d'aquest lookup.
-    """Return {pom_id: rule_obj} for the model's grading rules.
+    """Return {pom_id: rule_obj} — LES REGLES DE LA PEÇA MARE. Contracte PÚBLIC.
+
+    ⚠️ **NO CANVIÏS EL CONTRACTE D'AQUESTA FUNCIÓ SENSE CENSAR-NE ELS CRIDADORS** (acta
+    2026-08-10, escrita després de trencar-los). Sembla una funció interna del motor i no
+    ho és: té **SIS consumidors fora de `pom/services.py`**, i tots indexen per `pom_id`
+    pelat —
+        · `fitting/serializers.py:264`        (règim per POM del desplegable)
+        · `fitting/views.py:676`              `.get(line.pom_id)`
+        · `fitting/graded_spec_views.py:143`
+        · `models_app/views.py:1947` i `:3272`
+        · `models_app/serializers_size_check.py:97`
+    Quan SET-2/T4 li va canviar la clau a `(pom_id, garment)`, tots sis van passar a rebre
+    `None` **en silenci**: `propagat` a False, `talla_break_label` buit, règim per POM
+    desaparegut. 13 tests vermells, i cap el va veure ni el guard del motor ni la paritat
+    del golden —perquè cap de les dues toca aquestes sis superfícies—.
+    Adaptar-los a l'eix és feina de T5/T6; fins llavors, aquesta funció els serveix el que
+    els servia: la llei de la peça mare, que avui és l'única que existeix.
+    Re-verificable: `grep -rn "_load_grading_rules" --include=*.py backend/fhort/`.
+
+    És una VISTA de `_load_grading_rules_per_garment`, no una segona consulta: la font és
+    aquella i aquí només se'n filtra la peça mare. Dues implementacions paral·leles de la
+    mateixa consulta divergirien el dia que se'n toqui una.
+
+    ── SET-2/T5 (2026-08-10) · DECISIÓ PRESA PER ALS SIS CONSUMIDORS ────────────────────
+    Un s'ha ADAPTAT i cinc es queden LLEGINT LA MARE, i la línia que els separa no és
+    l'app on viuen sinó **si escriuen**:
+
+      · ADAPTAT — `fitting/views.py` (propagació). No és presentació: decideix una
+        ESCRIPTURA cap a la mesura base. Amb la llei de la mare, propagar una línia de la
+        02 hi aplicaria una llei que no és la seva, i D4 diu que poden divergir. La línia
+        sap dir la peça, o sigui que no hi havia excusa.
+
+      · LLEGEIXEN LA MARE, a posta — `fitting/serializers.py` (règim per POM del
+        desplegable) · `fitting/graded_spec_views.py` (etiqueta de regla de la taula) ·
+        `models_app/views.py` ×2 (quina regla serveix cada fila; ordre de fitxa) ·
+        `models_app/serializers_size_check.py` (etiqueta de règim de la línia).
+        Tots sis pinten un RÈTOL, cap no decideix ni escriu res. Mentre les comportes
+        visquin, `garment` és '' a tot arreu i la mare és l'única llei que hi ha: llegir-la
+        no és una aproximació, és la resposta exacta.
+
+    QUAN ES REVISA, i és una condició, no una data: **el dia que es retirin les comportes
+    `*_garment_gate_set2`**. A partir d'aquell punt un '02' pot existir i aquests cinc
+    rètols podrien anunciar la llei de la mare sobre una fila que en té una altra — un
+    error de presentació, no de dada, però un error. La feina és mecànica (canviar la crida
+    per `_regla_de(_load_grading_rules_per_garment(...), pom_id, garment)`, com ja fa el
+    sisè) i el que la fa segura és que la font ja existeix.
+    Re-verificable: `grep -rn "_load_grading_rules(" --include=*.py backend/fhort/`.
+    """
+    return {pom_id: regla
+            for (pom_id, garment), regla in _load_grading_rules_per_garment(model).items()
+            if garment == ''}
+
+
+def _load_grading_rules_per_garment(model) -> dict:
+    # C3/B6 — LA CLAU NO CREIX AMB CAPA NI INSTÀNCIA, i és a posta. La regla de graduació no
+    # porta cap dels dos eixos ni a l'ORM ni a Postgres: verificat contra `information_schema`
+    # el 02/08, cap de les dues taules (`models_app_modelgradingrule`, `pom_gradingrule`) té
+    # aquestes columnes. És decisió de domini —mateix POM, mateix increment a totes les capes i
+    # a totes les instàncies, perquè són EIXOS DE GERMANOR— i per això el motor busca la regla
+    # amb el `pom_id` EXTRET de la identitat i no amb la identitat sencera.
+    # SET-2/T4 — el `garment` SÍ que hi entra (D4): és una FRONTERA, no un eix de germanor.
+    """Return {(pom_id, garment): rule_obj} — la FONT. La busca la fa `_regla_de`.
 
     PG-1 — Fallback: ModelGradingRule (resident al model) té prioritat; si el model
     no en té cap, recau a GradingRule del GradingRuleSet extern (camí vell). Així el
@@ -742,21 +848,79 @@ def _load_grading_rules(model) -> dict:
     error carregant-les es convertia en graduar-ho tot a FIXED amb un 200 OK. Era la segona
     porta al mateix símptoma del 163, independent del ruleset buit. Ara un error de càrrega
     puja: val més una propagació que peta que una que menteix.
+
+    ── SET-2/PRED-3 (2026-08-12) · EL PREDICAT DEL FALLBACK GUANYA EL SUBJECTE ──────────
+    El predicat era `rules.exists()` sobre **TOT el model**, i decidia una cosa que no és
+    del model sinó d'una peça: **si el contenidor del client es llegeix o no**. Amb dues
+    prendes vives el resultat era asimètric, i la direcció que fa mal NO és la que sembla:
+
+      · mare amb residents + 02 sense → la 02 **hereta** la de la mare (`_regla_de`). Això
+        ja era correcte i no canvia: D5-bis diu exactament això.
+      · **02 amb residents + mare sense** → `rules.exists()` deia que sí, el contenidor no
+        es llegia MAI, i la mare (i tota germana sense residents) queia a `rule is None`
+        → **llei de cel·la absent: cap cel·la emesa**. La graduació de la mare desapareix
+        sencera i només en queda un avís de «cobertura parcial». És l'estat que fabrica
+        l'import per prenda (SET-2/T8) quan la mare gradua pel catàleg del client.
+
+    LA PREGUNTA BONA NO ÉS «té residents el model?» NI «en té aquesta peça?», SINÓ **«en té
+    LA MARE?»**, i el motiu és que el contenidor no pot portar garment: quan entra, entra
+    sempre com a llei de la peça mare. Preguntar per la peça seria confondre els dos estats
+    que D5-bis separa —«no en té» (hereta) i «ningú no en té» (contenidor)—: una peça sense
+    llei pròpia no ha de fer baixar el catàleg per ella, ha d'heretar la de la mare.
+
+    Amb una sola prenda tots els residents són `''` i el predicat val EXACTAMENT el que
+    valia: `te_mare == rules.exists()`. Comportament idèntic, byte a byte, per al 100% del
+    corpus d'avui.
     """
     from fhort.models_app.models import ModelGradingRule
     rules = ModelGradingRule.objects.filter(model_id=model.id, actiu=True)
-    if rules.exists():
-        return {r.pom_id: r for r in rules}
-    if model.grading_rule_set_id:
+    out = {(r.pom_id, r.garment): r for r in rules}
+    # El subjecte del predicat: LA MARE, no el model. Es llegeix del `out` ja materialitzat
+    # per no fer una segona consulta que pogués divergir de la primera.
+    te_residents_la_mare = any(garment == '' for (_pom_id, garment) in out)
+    if not te_residents_la_mare and model.grading_rule_set_id:
         from fhort.pom.models import GradingRule
-        return {r.pom_id: r for r in GradingRule.objects.filter(
+        # El joc del CATÀLEG no porta garment i no en pot portar (és una llei reutilitzable,
+        # mai propietat d'un model: v. el pin de `pom.GradingRule`). Entra, doncs, com a llei
+        # de la PEÇA MARE, i `_regla_de` la fa heretar a totes les altres peces.
+        #
+        # `update` i no `return`: les residents d'una FILLA conviuen amb el catàleg que
+        # governa la mare. Abans era un `return` perquè les dues branques s'excloïen per
+        # força —o residents o catàleg, mai els dos—, i és justament aquella exclusió la que
+        # deixava la mare muda.
+        out.update({(r.pom_id, ''): r for r in GradingRule.objects.filter(
             rule_set_id=model.grading_rule_set_id, actiu=True
-        )}
-    return {}
+        )})
+    return out
+
+
+def _regla_de(rules, pom_id, garment):
+    """La regla que governa aquest POM DINS D'AQUESTA PEÇA.
+
+    SET-2/T4 — el lookup deixa de ser `rules.get(pom_id)`, i és la conseqüència directa de
+    D4: ara la regla SÍ que travessa el garment, perquè una peça pot tenir el seu propi
+    `grading_rule_set` (un top per talla alfa i una calceta per mesos són dues lleis
+    d'increments que ni parlen el mateix idioma de talles).
+
+    HERÈNCIA, i és la lectura de D5 («els altres garments porten override nullable, NULL =
+    hereten») aplicada a la regla: primer la llei PRÒPIA de la peça; si no en té, la de la
+    PEÇA MARE (`garment=''`), que és la definició principal del model. Una peça sense regles
+    sembrades no es queda muda —cauria a la llei de cel·la absent i no emetria cap fila—,
+    hereta la del model, que és el que fa que afegir una segona peça no obligui a re-sembrar
+    res per començar.
+
+    Amb les comportes de T2 vives, `garment` és '' a tot arreu i això és un no-op observable:
+    la primera busca falla sempre i cau a la mare, que és l'única que existeix.
+    """
+    if garment:
+        propia = rules.get((pom_id, garment))
+        if propia is not None:
+            return propia
+    return rules.get((pom_id, ''))
 
 
 def _load_model_overrides(model_id: int) -> dict:
-    """Return {(pom_id, capa, instancia, size_label): value_cm} of per-model fitting overrides.
+    """Return {(pom_id, capa, instancia, garment, size_label): value_cm}.
 
     C3/B4 — LA CLAU HA CRESCUT I LES DUES ÀNCORES HAN MARXAT, tal com el codi d'aquesta
     funció ja anunciava: «quan `_load_base_measurements` creixi, aquesta clau ha de créixer
@@ -775,7 +939,7 @@ def _load_model_overrides(model_id: int) -> dict:
     try:
         from fhort.models_app.models import ModelGradingOverride
         return {
-            (o.pom_id, o.capa, o.instancia, o.size_label): o.value_cm
+            (o.pom_id, o.capa, o.instancia, o.garment, o.size_label): o.value_cm
             for o in ModelGradingOverride.objects.filter(model_id=model_id)
         }
     except Exception as e:
@@ -809,11 +973,19 @@ def _poms_amb_override(model_overrides: dict) -> set:
     diferents, i la branca de rescat de la talla base del motor escriuria el valor base d'una
     germana a la cel·la de l'altra.
     """
-    return {(pom_id, capa, instancia) for pom_id, capa, instancia, _label in model_overrides}
+    return {(pom_id, capa, instancia, garment)
+            for pom_id, capa, instancia, garment, _label in model_overrides}
 
 
 def _load_base_measurements(model_id: int) -> dict:
-    """Return {(pom_id, capa, instancia): base_value_cm}.
+    """Return {(pom_id, capa, instancia, garment): base_value_cm}.
+
+    SET-2/T4 — LA CLAU CREIX AMB EL GARMENT, i pel MATEIX motiu literal que la va fer créixer
+    a C3/B1 (sota). La unicitat de `BaseMeasurement` és `(model, pom, capa, instancia, garment)`
+    des de T2: sense el quart camp aquí, el pit del top i el pit de la calceta tornaven a
+    entrar al dict amb la mateixa clau i l'última llegida guanyava. I la perdedora no perdia
+    una cel·la —perdia la FILA GRADUADA SENCERA, sense excepció, sense log i sense rastre—,
+    que és exactament el mode de fallada que aquest node ja havia tingut una vegada.
 
     C3/B1 — LA CLAU CREIX A LA IDENTITAT DE LA MESURA. Fins aquí la clau era `pom_id` sol,
     i era el node mestre del col·lapse: la unicitat de `BaseMeasurement` és
@@ -835,7 +1007,7 @@ def _load_base_measurements(model_id: int) -> dict:
         # sigui que el POM no existeix per a aquest model. No gradua, no emet cel·la. Que
         # un 0 no arribi mai a la base és feina de la validació d'entrada (autoria/import).
         return {
-            (bm.pom_id, bm.capa, bm.instancia): bm.base_value_cm
+            (bm.pom_id, bm.capa, bm.instancia, bm.garment): bm.base_value_cm
             for bm in BaseMeasurement.objects.filter(
                 model_id=model_id, is_active=True, base_value_cm__isnull=False
             ).exclude(base_value_cm=0).order_by('ordre')
@@ -1076,6 +1248,7 @@ def _upsert_graded_spec(
     generated_from_version: int | None = None,
     capa: str | None = None,
     instancia: str = '',
+    garment: str = '',
 ):
     """Create or update a GradedSpec.
 
@@ -1085,19 +1258,19 @@ def _upsert_graded_spec(
     segellada sense passar per la porta. Cap `GradedSpec` no pot aterrar sobre un segell.
 
     🚨 FASE_3/C1-ins — **AQUEST ERA EL NODE QUE ARMAVA L'ACCIDENT DE C4.** La unicitat de
-    `GradedSpec` és `(grading_version, pom, size_label, capa, instancia)` i el lookup en deia
-    TRES: mentre només hi hagi una fila per (versió, pom, talla) l'`update_or_create` la
-    reescriu i sembla que funciona; el dia que la comporta caigui i n'hi hagi dues, o bé en
+    `GradedSpec` és `(grading_version, pom, size_label, capa, instancia, garment)` i el lookup
+    en deia TRES: mentre només hi hagi una fila per (versió, pom, talla) l'`update_or_create`
+    la reescriu i sembla que funciona; el dia que la comporta caigui i n'hi hagi dues, o bé en
     reescriu una a l'atzar o bé el `get()` intern llança `MultipleObjectsReturned`. La clau
     de lookup ha d'anar SEMPRE alineada amb la unicitat real de la taula: aquesta és la llei
-    de tota la fase.
+    de tota la fase, i és la que fa que `garment` entri al LOOKUP i no als `defaults`.
 
-    Els eixos són PARÀMETRES amb default explícit, no literals amagats dins del cos, i el
-    motiu és la FRONTERA C3: l'únic cridador d'avui recorre el dict de
-    `_load_base_measurements` —zona intocable— que indexa per POM sol i **no els sap dir**.
-    Amb la signatura oberta, el dia que C3 doni eixos al motor només cal passar-los-hi; sense
-    ella, caldria tornar a tocar aquesta funció. El default declara el que el sistema fa avui,
-    i no ho amaga.
+    Els eixos són PARÀMETRES amb default explícit, no literals amagats dins del cos. Quan es
+    va escriure això, el motiu era la frontera C3: el cridador recorria un dict indexat per POM
+    sol i no els sabia dir. **Ja no és així** —C3 va donar-li capa i instància, i SET-2/T4 el
+    garment: avui el cridador recorre una identitat de quatre camps i els hi passa tots. El
+    patró d'eixos-per-paràmetre es queda perquè ha demostrat el seu valor: ha absorbit tres
+    creixements de clau sense tornar a tocar aquesta funció més que per afegir-hi un argument.
     """
     from fhort.fitting.models import GradedSpec, GradingVersion
     from fhort.pom.models import MeasurementLayer
@@ -1122,6 +1295,11 @@ def _upsert_graded_spec(
             size_label=size_label,
             capa=capa,
             instancia=instancia,
+            # SET-2/T4 — el garment entra al LOOKUP, no als defaults: la unicitat de
+            # `GradedSpec` és de sis columnes des de T2, i la llei d'aquesta fase és que la
+            # clau de lookup vagi SEMPRE alineada amb la unicitat real de la taula. Als
+            # defaults reescriuria la fila d'una altra peça; al lookup, l'hi distingeix.
+            garment=garment,
             defaults={
                 'graded_value_cm': graded_value_cm,
                 'grading_type_applied': grading_type_applied,
@@ -1133,5 +1311,5 @@ def _upsert_graded_spec(
     except Exception as e:
         logger.error(
             f"Error creating GradedSpec pom={pom_id} size={size_label} "
-            f"capa={capa} instancia={instancia!r}: {e}")
+            f"capa={capa} instancia={instancia!r} garment={garment!r}: {e}")
         raise

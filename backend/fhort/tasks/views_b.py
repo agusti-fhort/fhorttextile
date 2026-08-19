@@ -4,7 +4,7 @@ from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.filters import SearchFilter
+from rest_framework.filters import OrderingFilter, SearchFilter
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Count, Q, ProtectedError, Min
 from django.db.models.functions import Coalesce
@@ -21,12 +21,14 @@ from .serializers_b import (TaskTypeSerializer, ModelTaskSerializer,
                             SupplierSerializer, ProductionSerializer,
                             GarmentTypeItemSerializer, TaskTimeEstimateSerializer,
                             CustomerSerializer)
-from .services_c import transition_task, TransitionError, rectification_count
+from .services_c import (transition_task, traspassa_tram, TransitionError,
+                         rectification_count)
 from .services_d import (advance_phase_gate, advance_phases_chain, regress_phase,
                          model_ready_for_gate, GateError)
 from .services_e import (request_production, set_production_status,
                          ProductionError, has_delivered_production)
 from .services_g import lookup_estimated_minutes
+from .services_r import tasca_vigent
 
 
 class TaskTypeViewSet(viewsets.ReadOnlyModelViewSet):
@@ -458,7 +460,17 @@ def transition_task_view(request, pk):
     try:
         result = transition_task(task, to_status, profile, auto=auto)
     except TransitionError as e:
-        return Response({'error': str(e)}, status=http_status.HTTP_400_BAD_REQUEST)
+        cos = {'error': str(e)}
+        codi = getattr(e, 'code', None)
+        if codi:
+            cos['code'] = codi
+        # F1.7 · §S-2 — la MATEIXA paret sortia amb dos codis HTTP segons la porta: 409 per
+        # `open-task` i 400 per aquí. Un client que discrimini per status (i n'hi ha: ModelSheet
+        # i WorkPlan miren `err.response.status`) veia dues coses diferents pel mateix motiu, i
+        # D-5 penja d'aquest disparador. El conflicte d'estat és 409 a les dues portes; la resta
+        # de rebuigs —transició il·legal— segueixen sent 400, que és el que són.
+        return Response(cos, status=(http_status.HTTP_409_CONFLICT if codi
+                                     else http_status.HTTP_400_BAD_REQUEST))
     return Response(result, status=http_status.HTTP_200_OK)
 
 
@@ -505,6 +517,10 @@ def claim_task_view(request, pk):
     if old_assignee_id == profile.id:
         return Response(ModelTaskSerializer(task).data, status=http_status.HTTP_200_OK)
     # Self-claim: SEMPRE a mi mateix. Mai un tercer.
+    # F1.5 · D-7 — el relleu tanca el tram de qui la tenia i n'obre un per a mi, amb la seva fila
+    # al log (`auto='handoff'`). Aquesta porta i la branca de claim d'`open-task` fan el MATEIX:
+    # dues portes, un sol relleu.
+    traspassa_tram(task, profile)
     task.assignee = profile
     task.save(update_fields=['assignee', 'updated_at'])
     # Mateixa cascada que ModelTaskViewSet.perform_update: old != new → neteja l'ordre manual i
@@ -553,8 +569,11 @@ def open_model_task_view(request, model_id):
         return Response({'error': f"No pots obrir una tasca del tipus '{code}' (no és a la teva allow-list).",
                          'code': 'task_type_not_allowed'},
                         status=http_status.HTTP_403_FORBIDDEN)
-    # 1. Crea-si-falta (mirall de define_model_tasks_view). La canònica és la prevista.
-    task = ModelTask.objects.filter(model=model, task_type=tt, origen='prevista').first()
+    # 1. Crea-si-falta (mirall de define_model_tasks_view). QUINA és «la tasca del model» ho
+    # decideix `tasca_vigent` i ningú més (F1.0): amb una ronda oberta, la porta ha d'obrir la
+    # tasca de la RONDA, no la prevista de sota. Si no en troba cap, el que es crea segueix sent
+    # una `prevista` — la ronda no es crea per aquí, es crea amb `obrir_ronda`.
+    task = tasca_vigent(model, code)
     created = False
     if task is None:
         order = ModelTask.objects.filter(model=model).count()
@@ -570,9 +589,18 @@ def open_model_task_view(request, model_id):
             transition_task(task, 'InProgress', profile)
             started = True
         except TransitionError as e:
-            return Response({'error': str(e)}, status=http_status.HTTP_409_CONFLICT)
+            # El `code` viatja quan n'hi ha: és l'única manera que el client pugui dir el motiu
+            # en comptes del toast genèric. Sense codi, la resposta és exactament la d'abans.
+            cos = {'error': str(e)}
+            if getattr(e, 'code', None):
+                cos['code'] = e.code
+            return Response(cos, status=http_status.HTTP_409_CONFLICT)
     elif task.assignee_id != profile.id:
+        # F1.5 · D-7 — HANDOFF CONSCIENT. Abans això reassignava i prou: el tram de l'anterior
+        # quedava OBERT i seguia imputant-li temps a ell mentre el nou hi treballava sense
+        # rellotge propi, i no en quedava cap fila al log. Ara el relleu és un acte visible.
         old_assignee_id = task.assignee_id
+        handoff_de = traspassa_tram(task, profile)
         task.assignee = profile
         task.save(update_fields=['assignee', 'updated_at'])
         from fhort.planning.plan_service import recompute_for_technicians, cleanup_queue_order
@@ -719,6 +747,19 @@ class SupplierViewSet(viewsets.ModelViewSet):
     queryset = Supplier.objects.all()
     serializer_class = SupplierSerializer
     filterset_fields = ['active', 'type']
+    # ⚠️ NO HI HAVIA `search_fields`, I ÉS EL GERMÀ EXACTE DEL DEFECTE DE `CustomerViewSet`, AL
+    # REVÉS: aquí el `SearchFilter` sí que hi és (els backends no se sobreescriuen) i el que
+    # faltava era la llista de camps. Sense `search_fields`, el `SearchFilter` de DRF **deixa
+    # passar el queryset sencer**: mesurat pel lot comercial, `?search=zzzz` retornava
+    # exactament el mateix `count` que sense filtrar. `/proveïdors` va quedar sense cercador
+    # amb el motiu escrit a la pantalla, perquè un camp de cerca que no filtra és pitjor que
+    # no tenir-ne. Els tres camps són els presentables de la fitxa.
+    search_fields = ['name', 'nif', 'ciutat']
+    # ORDENACIÓ EXPLÍCITA. Avui ja ordenava —hereta l'`OrderingFilter` del defecte i DRF
+    # accepta els camps del serializer com a implícits—, però l'implícit és justament el
+    # contracte que es trenca en silenci el dia que algú toca el serializer. Escrit, no.
+    ordering_fields = ['name', 'type', 'active']
+    ordering = ['name']
 
     def get_permissions(self):
         if self.action in ('list', 'retrieve'):
@@ -752,9 +793,35 @@ def _vol_desactivar(data):
 class CustomerViewSet(viewsets.ModelViewSet):
     queryset = Customer.objects.all()
     serializer_class = CustomerSerializer
-    filter_backends = [DjangoFilterBackend, SearchFilter]
+    # ⚠️ AQUÍ HI HAVIA `[DjangoFilterBackend, SearchFilter]` I ES MENJAVA L'ORDENACIÓ EN SILENCI.
+    # `DEFAULT_FILTER_BACKENDS` (settings.py:222-225) porta els TRES —DjangoFilterBackend,
+    # SearchFilter i OrderingFilter—, i declarar-ne dos aquí no n'afegeix: els SUBSTITUEIX tots.
+    # Conseqüència viva: `pages/Customers.jsx` envia `ordering=codi` a cada crida i DRF el
+    # descarta sense error ni avís. La pàgina demanava un ordre que ningú aplicava, i no fallava
+    # mai: la llista sortia en l'ordre del `Meta.ordering` del model i semblava que funcionés.
+    # (Trobat pel lot comercial de la part B en anar a posar capçaleres ordenables a `/clients`,
+    # que és el que la §8e mana a tota llista del producte.)
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['active']
     search_fields = ['codi', 'nom']   # cercador de la pàgina Clients (codi, nom)
+    # Els camps de dada de la llista + els QUATRE COMPTADORS. Els comptadors són `annotate` del
+    # `get_queryset` (una sola consulta, cap N+1) i per tant ordenables sense cost afegit: si la
+    # §8e diu que tota capçalera de llista és ordenable, una columna de comptador que no ordena
+    # és una capçalera que menteix. `ordering` explícit encara que `Customer.Meta.ordering` ja
+    # digui el mateix: qui llegeix el ViewSet ha de poder saber en quin ordre surt la llista
+    # sense anar a buscar el `Meta` del model.
+    #
+    # ⚠️ **EL NOM AMB QUÈ S'ORDENA HA DE SER EL NOM AMB QUÈ ES LLEGEIX.** Les anotacions es deien
+    # `cnt_quotes_sent`… i el que el client rep es diu `quotes_sent`… — o sigui que ordenar per
+    # una columna hauria demanat un nom que la resposta no conté enlloc. Això no és un detall
+    # d'estil: `?ordering=quotes_sent` amb el nom d'anotació vell hauria estat DESCARTAT EN
+    # SILENCI per DRF (exactament el defecte que aquest commit arregla, un nivell més avall).
+    # Les anotacions passen a dir-se com els camps de la resposta i els quatre `getattr` del
+    # serializer (`serializers_b.py:195-205`) els segueixen. Cap altre consumidor: censat.
+    ordering_fields = ['codi', 'nom', 'active',
+                       'quotes_sent', 'quotes_accepted',
+                       'orders_open', 'delivery_notes_count']
+    ordering = ['codi']
 
     def get_queryset(self):
         """Comptadors agregats en UNA sola consulta (annotate, cap N+1): ofertes presentades
@@ -762,10 +829,10 @@ class CustomerViewSet(viewsets.ModelViewSet):
         amaga el customer propi (is_self) — només la pàgina Clients l'envia; la resta de consumidors
         (selectors de client) segueixen veient-lo."""
         qs = Customer.objects.annotate(
-            cnt_quotes_sent=Count('quotes', filter=Q(quotes__status='SENT'), distinct=True),
-            cnt_quotes_accepted=Count('quotes', filter=Q(quotes__status='ACCEPTED'), distinct=True),
-            cnt_orders_open=Count('salesorders', filter=Q(salesorders__status='OPEN'), distinct=True),
-            cnt_delivery_notes=Count('deliverynotes', distinct=True),
+            quotes_sent=Count('quotes', filter=Q(quotes__status='SENT'), distinct=True),
+            quotes_accepted=Count('quotes', filter=Q(quotes__status='ACCEPTED'), distinct=True),
+            orders_open=Count('salesorders', filter=Q(salesorders__status='OPEN'), distinct=True),
+            delivery_notes_count=Count('deliverynotes', distinct=True),
         )
         p = self.request.query_params.get('exclude_self')
         if p and p.lower() not in ('0', 'false', ''):
@@ -1340,3 +1407,192 @@ def time_by_model_view(request):
         out.append({'model_id': m['model_id'], 'label': m['label'], 'nom': m['nom'],
                     'est': m['est'], 'real': m['real'], 'n': m['n'], 'fases': fases})
     return Response({'models': out})
+
+
+@api_view(['POST'])
+@permission_classes([_ExecuteTasks])
+def temps_declarat_view(request, pk):
+    """POST /api/v1/model-tasks/<pk>/temps-declarat/  ·  {minuts} XOR {inici, fi}
+
+    F1.7 · D-2, tercera pota: «externes = temps declarat». Una tasca `Externa-lliure` es fa fora
+    de l'eina —patró a mà, revisió de disseny— i no hi ha cap escriptura que batre: el rellotge
+    no hi arriba mai i, fins avui, aquell temps no existia enlloc.
+
+    Crea un `TimerEntrada` ja TANCAT amb `origen='declarat'`, que el Welford aprèn igual que un
+    de mesurat (una tasca, una mostra — D-3). Guard dur a `declara_temps`: sobre una tasca
+    Interna es rebutja, perquè allà el temps SÍ que es mesura sol i declarar-lo a mà seria poder
+    inventar hores facturables.
+    """
+    from django.utils.dateparse import parse_datetime
+
+    from .models import ModelTask
+    from .services_r import TempsDeclaratError, declara_temps
+
+    profile = getattr(request.user, 'profile', None)
+    if profile is None:
+        return Response({'error': 'Usuari sense perfil en aquest tenant.'},
+                        status=http_status.HTTP_403_FORBIDDEN)
+    try:
+        task = ModelTask.objects.select_related('task_type').get(pk=pk)
+    except ModelTask.DoesNotExist:
+        return Response({'error': 'ModelTask no trobada.'}, status=http_status.HTTP_404_NOT_FOUND)
+
+    dades = request.data or {}
+    inici, fi = dades.get('inici'), dades.get('fi')
+    try:
+        tram = declara_temps(
+            task, profile,
+            minuts=dades.get('minuts'),
+            inici=parse_datetime(inici) if inici else None,
+            fi=parse_datetime(fi) if fi else None)
+    except TempsDeclaratError as e:
+        return Response({'error': str(e), 'code': 'temps_declarat_invalid'},
+                        status=http_status.HTTP_400_BAD_REQUEST)
+    return Response({'timer_id': tram.pk, 'model_task': task.pk, 'minuts': tram.minuts,
+                     'inici': tram.inici.isoformat(), 'fi': tram.fi.isoformat(),
+                     'origen': tram.origen},
+                    status=http_status.HTTP_201_CREATED)
+
+
+@api_view(['POST'])
+@permission_classes([_ExecuteTasks])
+def crono_declarat_view(request, model_id):
+    """POST /api/v1/models/<model_id>/crono/  ·  {code, accio: engegar|aturar|descartar|corregir}
+
+    T3 · LA PORTA DEL CRONO DECLARAT. La maqueta aprovada mana una cosa per sobre de tota la
+    resta: «viu al servidor; sobreviu a recarregar, canviar de pestanya i tancar el navegador».
+    Per això aquí no hi ha cap cronòmetre de navegador que després desa: `engegar` obre un
+    `TimerEntrada` REAL amb `origen='declarat'`, i el que el navegador fa és pintar-lo.
+
+    Les quatre accions són les quatre de la maqueta, i cap d'elles tanca la tasca: acabar-la és
+    un gest propi (T4). `corregir` accepta {minuts} XOR {inici, fi}, la mateixa regla de D-2.
+    """
+    from django.utils.dateparse import parse_datetime
+
+    from .models import ModelTask, TaskType, TimerEntrada
+    from .services_g import lookup_estimated_minutes
+    from .services_r import (TempsDeclaratError, atura_crono_declarat, corregeix_tram_declarat,
+                             descarta_tram_declarat, engega_crono_declarat, tasca_vigent)
+
+    profile = getattr(request.user, 'profile', None)
+    if profile is None:
+        return Response({'error': 'Usuari sense perfil en aquest tenant.'},
+                        status=http_status.HTTP_403_FORBIDDEN)
+
+    dades = request.data or {}
+    code, accio = dades.get('code'), dades.get('accio')
+    try:
+        model = Model.objects.get(pk=model_id)
+    except Model.DoesNotExist:
+        return Response({'error': 'Model no trobat.'}, status=http_status.HTTP_404_NOT_FOUND)
+    try:
+        tt = TaskType.objects.get(code=code, active=True)
+    except TaskType.DoesNotExist:
+        return Response({'error': f"Tipus de tasca '{code}' no trobat o inactiu."},
+                        status=http_status.HTTP_404_NOT_FOUND)
+    # La porta és per (model, code) i no per id de tasca, igual que `open-task` i per la mateixa
+    # raó (G9): el panell treballa amb el CATÀLEG, i la tasca d'una externa sovint encara no
+    # existeix quan el tècnic prem el botó. Qui és «la tasca» ho diu `tasca_vigent` i ningú més.
+    task = tasca_vigent(model, code)
+    if task is None:
+        if accio != 'engegar':
+            return Response({'error': 'Aquesta tasca no té cap crono.'},
+                            status=http_status.HTTP_404_NOT_FOUND)
+        task = ModelTask.objects.create(
+            model=model, task_type=tt, order=ModelTask.objects.filter(model=model).count(),
+            status='Pending', origen='prevista',
+            estimated_minutes=lookup_estimated_minutes(model, tt))
+
+    def _tram_per_id():
+        """El tram sobre el qual s'actua. Sempre d'AQUESTA tasca: un id de fora no val."""
+        tram = TimerEntrada.objects.filter(pk=dades.get('timer_id'), model_task=task).first()
+        if tram is None:
+            raise TempsDeclaratError('Tram no trobat en aquesta tasca.')
+        return tram
+
+    try:
+        if accio == 'engegar':
+            tram = engega_crono_declarat(task, profile)
+        elif accio == 'aturar':
+            tram = atura_crono_declarat(task, profile)
+        elif accio == 'descartar':
+            descarta_tram_declarat(_tram_per_id())
+            return Response({'descartat': True, 'model_task': task.pk},
+                            status=http_status.HTTP_200_OK)
+        elif accio == 'corregir':
+            inici, fi = dades.get('inici'), dades.get('fi')
+            tram = corregeix_tram_declarat(
+                _tram_per_id(),
+                minuts=dades.get('minuts'),
+                inici=parse_datetime(inici) if inici else None,
+                fi=parse_datetime(fi) if fi else None)
+        else:
+            return Response({'error': "`accio` ha de ser engegar|aturar|descartar|corregir.",
+                             'code': 'accio_desconeguda'},
+                            status=http_status.HTTP_400_BAD_REQUEST)
+    except TempsDeclaratError as e:
+        return Response({'error': str(e), 'code': 'crono_invalid'},
+                        status=http_status.HTTP_400_BAD_REQUEST)
+
+    task.refresh_from_db()
+    return Response({'timer_id': tram.pk, 'model_task': task.pk, 'status': task.status,
+                     'inici': tram.inici.isoformat(),
+                     'fi': tram.fi.isoformat() if tram.fi else None,
+                     'minuts': tram.minuts, 'origen': tram.origen},
+                    status=http_status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([_ExecuteTasks])
+def obrir_ronda_view(request, model_id):
+    """POST /api/v1/models/<model_id>/obrir-ronda/  ·  {motiu, codes: [...]}
+
+    F2.1 — LA PORTA que a F1 no es va construir. El servei `obrir_ronda` hi era des de F1.1 i no
+    tenia manera d'invocar-se des de la UI, de manera que la sortida de D-5 existia només al
+    backend: el model 188 seguia tapiat a la pràctica.
+
+    `motiu`: `nova_mostra` (el client demana una altra volta) | `correccio` (ho refem nosaltres).
+    `codes`: slugs de `TaskType` que entren a la volta (G9: mai ids).
+    """
+    from .models import Ronda
+    from .services_r import RondaError, obrir_correccio, obrir_ronda
+
+    profile = getattr(request.user, 'profile', None)
+    if profile is None:
+        return Response({'error': 'Usuari sense perfil en aquest tenant.'},
+                        status=http_status.HTTP_403_FORBIDDEN)
+    try:
+        model = Model.objects.get(pk=model_id)
+    except Model.DoesNotExist:
+        return Response({'error': 'Model no trobat.'}, status=http_status.HTTP_404_NOT_FOUND)
+
+    dades = request.data or {}
+    codes = dades.get('codes') or []
+    # Els codes han de ser executables per qui obre la ronda: la mateixa allow-list que
+    # `open-task`. Obrir una volta és crear feina, i no es crea feina que un mateix no pot fer.
+    permesos = get_allowed_task_types(request.user)
+    fora = [c for c in codes if c not in permesos]
+    if fora:
+        return Response({'error': f"No pots obrir tasques del tipus: {', '.join(fora)}.",
+                         'code': 'task_type_not_allowed'},
+                        status=http_status.HTTP_403_FORBIDDEN)
+    # S-20 — les dues sortides d'aquesta porta ja no fan el mateix. Una nova MOSTRA obre volta i
+    # puja el comptador; una CORRECCIÓ no, perquè `seq` compta mostres i no esmenes nostres. El
+    # client segueix demanant-ho igual (`motiu`): qui sap la diferència és el servei.
+    motiu = dades.get('motiu')
+    try:
+        if motiu == Ronda.MOTIU_CORRECCIO:
+            ronda, tasques = obrir_correccio(model, codes, profile=profile)
+        else:
+            ronda = obrir_ronda(model, motiu, codes, profile=profile)
+            tasques = list(ronda.tasques.all())
+    except RondaError as e:
+        return Response({'error': str(e), 'code': 'ronda_invalida'},
+                        status=http_status.HTTP_400_BAD_REQUEST)
+    # `ronda_id`/`seq` poden ser NULL en una correcció: la de la mare quan n'hi havia, i res quan
+    # la mare és la prevista (la volta 1, implícita). El client no els llegeix; el contracte ho diu.
+    return Response({'ronda_id': ronda.pk if ronda else None,
+                     'seq': ronda.seq if ronda else None,
+                     'motiu': motiu,
+                     'tasques': [t.id for t in tasques]},
+                    status=http_status.HTTP_201_CREATED)

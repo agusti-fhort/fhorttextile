@@ -54,6 +54,194 @@ def fitting_line_is_non_base(line) -> bool:
     return line.size_label.strip() != base
 
 
+# ── E1/B1 — EL GUARD ES PARTEIX: PRENDRE ≠ DECIDIR ───────────────────────────
+#
+# P1 tancava TOTA escriptura de línia no-base, i era correcte mentre l'únic que es podia fer
+# amb una línia fos decidir-la. El flux E1 hi separa dos gestos:
+#
+#   · PRENDRE  — anotar la xifra de la peça FÍSICA arribada en aquella talla. Dada
+#                d'observació, i n'hi ha a totes les talles del run: és el pas 1.
+#   · DECIDIR  — el veredicte (`decisio`). R2: **els ajustos només s'accepten a la TALLA
+#                BASE**, i la propagació surt d'allà. Segueix sent 400.
+#
+# 🔑 EL GUARD ÉS PER CAMP, NO PER ENDPOINT, i el motiu és el payload mixt: un PATCH amb
+# `valor_real` i `decisio` alhora entra per la porta legal de la presa i colaria el veredicte.
+# Per això el predicat mira QUÈ es vol escriure, no per on ha entrat.
+#
+# ⚠️ OBRIR LA PRESA NO OBRE CAP ESCRIPTURA DE DOMINI, i està comprovat per cens (17/08): la
+# presa no-base no arriba a `consolidate_base_from_fitting` (:515 `size_label != base →
+# continue`), i per tant tampoc al `close`. Els lectors que sí que canvien de resposta ho han
+# de fer: `esdeveniments.linia_te_contingut` (algú HA mesurat) i els exports S8/S10, que
+# sempre han llistat totes les talles. El banc que ho congela és
+# `test_e1_guard_partit.ConsolidacioIgnoraPresaNoBaseTest`.
+#
+# `propagar` NO entra aquí: l'ancoratge que escampa el delta és el gest de la base per
+# definició (R2) i es queda amb el guard sencer, `fitting_line_is_non_base`.
+
+#: Camps que constitueixen una DECISIÓ sobre la cel·la. La resta del serializer
+#: (`valor_real`, `nota`) és PRESA. `decisio` hi és sola a posta: desdir-se (escriure `''`)
+#: també és decidir, i per això el predicat mira la PRESÈNCIA de la clau i mai el seu valor.
+CAMPS_DE_DECISIO = ('decisio',)
+
+NON_BASE_DECISIO_DETAIL = (
+    "Els ajustos només s'accepten a la talla base del model. "
+    "A les altres talles s'hi pot anotar la presa, però no decidir-la."
+)
+
+
+def escriptura_es_decisio(camps) -> bool:
+    """True si el payload declara algun camp de decisió. Predicat pur, sense DRF.
+
+    `camps` és qualsevol iterable de noms (típicament `request.data.keys()`). Mira la
+    presència de la clau i no el valor: `{'decisio': ''}` és el gest de TREURE el veredicte,
+    que és una decisió tant com posar-n'hi un.
+    """
+    return any(c in CAMPS_DE_DECISIO for c in (camps or ()))
+
+
+def fitting_line_decisio_fora_de_base(line, camps) -> bool:
+    """True si aquest payload DECIDEIX sobre una línia que no és de la talla base (R2).
+
+    Reusa `fitting_line_is_non_base` i no en duplica la normalització: si la font de la talla
+    base divergís entre els dos predicats, la vista acceptaria veredictes que el `close`
+    descartaria en silenci — el mateix forat que P1 va tapar, un gest més tard.
+    """
+    return escriptura_es_decisio(camps) and fitting_line_is_non_base(line)
+
+
+# ── E1/B3 — LA PRESA DE L'ESCALAT ────────────────────────────────────────────
+#
+# Pas 1 del flux E1: quan arriben les peces FÍSIQUES del model, es mesura cada talla i s'anota
+# a la columna «Fit actual» de l'Escalat. Fins avui aquella columna EDITAVA LA CORBA TEÒRICA
+# (`escalat_ajustar_talla_view` → `BaseMeasurement`/`ModelGradingOverride` + re-derivació dels
+# specs), i per això el pas 2 hidratava del que el pas 1 acabava d'escriure: desviació zero i
+# acceptació buida. V. `docs/diagnosis/DIAGNOSI_E1_MESURA_ESCALAT.md` §3.2.
+#
+# 🔑 EL CANVI ÉS DE NATURALESA, NO DE DESTÍ: la presa és una DADA D'OBSERVACIÓ i va a
+# `PieceFittingLine.valor_real`, que és el magatzem que ja té els cinc eixos
+# (pom · capa · instancia · garment · size_label), el teòric al costat i el veredicte a sobre.
+# **Aquesta porta NO toca `BaseMeasurement` i NO crida `generate_graded_specs`.** El dia que
+# algú hi afegeixi qualsevol de les dues coses, el pas 2 tornarà a mirar-se al mirall.
+#
+# ⚠️ NO CREA SESSIÓ. Obrir una presa és un acte —crea `FittingSession` + `PieceFitting` + N
+# línies— i fer-lo néixer d'una tecla en una cel·la seria el mateix error que aquesta peça
+# arregla. Sense presa viva es retorna `PresaNoObertaError` i la pantalla ofereix el gest
+# explícit, que és el mateix que obre «Mesurar prenda». (Decisió D5 de la diagnosi: OBERTA.)
+
+
+class PresaNoObertaError(Exception):
+    """No hi ha cap `PieceFitting` viva del model: no hi ha on anotar la presa."""
+
+
+class PresaSenseLiniaError(Exception):
+    """La presa viva no té línia per a aquesta mesura i talla (mesura morta o talla fora del
+    run de la versió). No se n'inventa cap: una línia nova ha de néixer de la reconciliació,
+    que sap què és una mesura viva del model."""
+
+
+def peca_de_presa_del_model(model):
+    """La `PieceFitting` VIVA del model, o `None`. Punt únic, i NO crea res.
+
+    «Viva» = la seva sessió és `Programada` o `Oberta` (`SESSIONS_VIVES`), el mateix predicat
+    que fa servir `reconcilia_linies` per decidir si una peça encara es pot posar al dia. Una
+    sessió segellada és ACTA i no admet preses noves.
+
+    Amb més d'una de viva mana LA MÉS RECENT per data de sessió (desempat per id), que és el
+    mateix ordre cronològic que `esdeveniments.peces_amb_contingut` — mai per id de peça sol,
+    que és l'ordre en què es van OBRIR les graelles.
+    """
+    from fhort.fitting.models import PieceFitting
+    return (PieceFitting.objects
+            .filter(model=model, session__estat__in=SESSIONS_VIVES)
+            .select_related('session', 'model', 'grading_version__size_fitting')
+            .order_by('-session__data', '-session__id', '-id')
+            .first())
+
+
+def darrera_peca_de_presa_segellada(model):
+    """La `PieceFitting` de la DARRERA presa SEGELLADA del model, o `None`. NO crea res.
+
+    🚨 EL FORAT QUE TANCA (E3a, `DIAGNOSI_QA_2054_REGRESSIO_O_FORAT.md`): sense això, el GET de
+    presa serveix `session: null` per a una sessió `Tancada` EXACTAMENT IGUAL que per a un model
+    que no n'ha tingut mai cap. Una presa segellada quedava **indistingible del no-res**, i d'aquí
+    penjaven tres símptomes que semblaven tres bugs: la graella seguia editable i contestava 409
+    per cel·la, el sub-tab «Decisió» no obria, i el racó oferia «obrir una presa» sobre un model
+    que n'acabava de tancar una. Una acta que no es pot llegir no és una acta.
+
+    Mateix ordre cronològic que `peca_de_presa_del_model` —`-session__data`, desempat per id— i
+    pel mateix motiu: la que mana és LA MÉS RECENT, no la que es va obrir primer. Amb l'històric
+    complet no s'hi arriba per aquí: això serveix l'ÚLTIMA, que és l'estat de la pantalla; el
+    passat sencer és del Repàs.
+    """
+    from fhort.fitting.models import PieceFitting
+    return (PieceFitting.objects
+            .filter(model=model, session__estat__in=SEALED_SESSION_ESTATS)
+            .select_related('session', 'model', 'grading_version__size_fitting')
+            .order_by('-session__data', '-session__id', '-id')
+            .first())
+
+
+def desa_presa_escalat(model, *, pom_id, capa, instancia, garment, talla, valor, nota=None):
+    """Anota la presa d'UNA mesura a UNA talla sobre la presa viva del model.
+
+    Retorna la `PieceFittingLine` desada. Alça `PresaNoObertaError`, `PresaSenseLiniaError` o
+    `ValueError` (sessió segellada) — la traducció a codis HTTP la fa la vista.
+
+    ⚠️ ELS EIXOS ARRIBEN JA RESOLTS. Qui els llegeix del cos d'una petició els passa per
+    `models_app.views._identitat_de_mesura`, que és el punt únic que decideix què rep qui no
+    els diu (l'exterior de la instància única de la mare). Aquí NO s'hi torna a aplicar cap
+    default: dos llocs decidint el mateix literal són dues lleis, i el dia que una canviés,
+    aquesta porta escriuria a una fila que la resta del sistema no busca mai.
+
+    `valor=None` esborra la presa: la línia torna al seu teòric, que és el mateix gest que
+    «treure l'ancoratge» a `propagar` (`views.py:664`). No s'esborra la línia: la línia és de
+    la peça, no de qui l'ha mesurada.
+
+    🚨 LES DUES COSES QUE AQUESTA FUNCIÓ NO FA, i que la vista que substitueix SÍ feia:
+      · no escriu `BaseMeasurement` (això és consolidar, i consolidar és del `close`);
+      · no crida `generate_graded_specs` (això és propagar, i propagar té la seva porta).
+    Si un dia calen, no van aquí: van al gest que les mereix.
+    """
+    from fhort.fitting.models import PieceFittingLine
+
+    pf = peca_de_presa_del_model(model)
+    if pf is None:
+        raise PresaNoObertaError(
+            "El model no té cap presa oberta: obre-la abans d'anotar mesures.")
+    if pf.session.estat in SEALED_SESSION_ESTATS:      # cinturó: `peca_de_presa_del_model` ja
+        raise ValueError('Sessió de fitting tancada; no es pot modificar.')   # les exclou
+
+    linia = (PieceFittingLine.objects
+             .filter(piece_fitting=pf, pom_id=pom_id, capa=capa,
+                     instancia=instancia, garment=garment,
+                     size_label=(talla or '').strip())
+             .first())
+    if linia is None:
+        raise PresaSenseLiniaError(
+            f"La presa oberta no té línia per a aquesta mesura a la talla {talla}.")
+
+    # ── E2/B1 · LA MARCA DEL GEST ────────────────────────────────────────────────────────
+    # Això deia: «escriure-hi el teòric és treure la presa, no anotar-ne una», i era una
+    # conseqüència del predicat inferit, no una decisió. Amb E2b l'usuari pot CONFIRMAR el
+    # pre-omplert tal qual —un gest legítim que dona `valor == valor_teoric`— i això SÍ que és
+    # anotar una presa. Qui distingeix les dues coses ja no és el número: és `presa_at`.
+    #
+    #   · `valor` amb número (coincideixi o no amb la teòrica) → PRESA: marca posada.
+    #   · `valor` buit → DESDIR-SE: la línia torna al teòric i la marca se'n va. Deixar-la
+    #     seria dir que algú ha mesurat una cel·la que ja no té cap presa.
+    #
+    # `_now()` i no `timezone.now()` inline: la data la posa el servidor i mai el client.
+    from django.utils import timezone
+    linia.valor_real = linia.valor_teoric if valor is None else float(valor)
+    linia.presa_at = None if valor is None else timezone.now()
+    camps = ['valor_real', 'presa_at']
+    if nota is not None:
+        linia.nota = nota
+        camps.append('nota')
+    linia.save(update_fields=camps)
+    return linia
+
+
 # ── Peça 1 — guard de solapament ─────────────────────────────────────────────
 class SessionOverlapError(Exception):
     """Conflicte DUR: ja hi ha una sessió viva del mateix model que solapa la franja
@@ -342,13 +530,140 @@ def create_piece_fitting(session_id: int, model_id: int, *, created_by_id: int |
             size_label=spec.size_label,
             capa=spec.capa,
             instancia=spec.instancia,
+            # SET-2/T5c — i el TERCER eix, pel mateix argument literal: si l'spec és de la
+            # segona peça, la línia és de la segona peça. La sembra i la reconciliació han de
+            # dir el mateix o la reconciliació que ve tot seguit (Q3) retiraria el que la
+            # sembra acaba de crear.
+            garment=spec.garment,
             valor_teoric=spec.graded_value_cm,
             valor_real=spec.graded_value_cm,  # copy, editable before close
         )
         n += 1
 
+    # Q3 — i tot seguit es reconcilia amb el model VIU. La sembra ve de l'spec, que és una foto
+    # de l'últim grading generat: un POM entrat al model després d'aquella generació no hi és, i
+    # un d'esborrat hi segueix sent. La peça neix, doncs, ja quadrada amb el model.
+    reconcilia_linies(pf)
+    n = pf.linies.count()
+
     logger.info(f"PieceFitting {pf.pk} created for model {model_id}: {n} lines")
     return pf, n
+
+
+# ── Q3 (06/08) — LA PRESA ES RECONCILIA AMB EL MODEL EN OBRIR-LA ─────────────────────────────
+#
+# 🔴 EL DEFECTE: `create_piece_fitting` SEMBRA les línies de l'spec en CREAR la peça, i mai més
+# se les torna a mirar. Amb el MILEY (06/08), l'Agus va esborrar els POMs del model i en va
+# entrar dotze de nous una hora abans del fitting: la presa i el PDF seguien portant els VELLS
+# (SK L, A.2, CF L TOT, CH, HI, SK SW) — un model que ja no existeix, imprès i portat a la sala.
+#
+# LA REGLA: en OBRIR una presa (sessió Programada/Oberta) les línies es reconcilien amb els
+# BaseMeasurement ACTIUS del model EN AQUELL MOMENT. POM nou al model → línia nova a la presa;
+# POM esborrat del model → la línia no es pinta.
+#
+# ⚠️ LES SESSIONS TANCADES NO ES RECONCILIEN MAI. Una sessió segellada és ACTA: diu què es va
+# mesurar aquell dia, i el model d'avui no la pot reescriure. Per això el primer que fa la
+# funció és mirar l'estat i tornar sense tocar res.
+#
+# PER QUÈ ES BORREN les línies sobreres i no es filtren a la lectura: perquè el que es GRAVA ha
+# de ser l'estat reconciliat (Q4). Si la línia visqués amagada, en segellar la sessió tornaria a
+# sortir a l'acta i al PDF —congelada— una mesura que el model ja no té. La reconciliació passa
+# sempre amb la sessió VIVA, o sigui que no toca cap acta.
+#
+# EL LLINDAR D'UNA MESURA MESURABLE és el mateix que ja aplica el size check
+# (`services_size_check._materialize_lines`): `is_active=True` i `base_value_cm` informat. Una
+# mesura sense valor base no té contra què comparar-se, i `valor_teoric` no admet NULL.
+SESSIONS_VIVES = ('Programada', 'Oberta')
+
+
+def reconcilia_linies(pf) -> dict:
+    """Posa les línies d'una PieceFitting al dia amb els BaseMeasurement actius del model.
+
+    Retorna {'creades', 'retirades', 'congelada'}. Amb la sessió segellada no toca res i
+    torna `congelada=True`.
+    """
+    from fhort.fitting.models import GradedSpec, PieceFittingLine
+    from fhort.models_app.models import BaseMeasurement
+
+    if pf.session.estat not in SESSIONS_VIVES:
+        return {'creades': 0, 'retirades': 0, 'congelada': True}
+
+    model = pf.model
+    base_size = (model.base_size_label or '').strip()
+
+    # SET-2/T5c (2026-08-11) — LA CLAU PORTA EL `garment`, A LES TRES BANDES ALHORA.
+    # La identitat d'una línia és de sis camps (`fitting/0026`) i la del seu origen de
+    # quatre; aquí se'n comparaven tres. El dany NO era esborrar de més —deixant caure
+    # l'eix als DOS costats, el predicat de `sobreres` queda més AMPLI que la identitat i
+    # la línia de la 02 troba recer a la germana de la mare—: era per ABSÈNCIA.
+    #   · `actives` col·lapsava les dues peces en una entrada → `a_crear` no podia generar
+    #     mai més d'una línia i la mesura de la segona peça no arribava al full de presa.
+    #   · `ja_hi_son` col·lapsava igual → amb una línia de la 02 ja existent, la de la mare
+    #     es donava per feta i no naixia.
+    # Els tres conjunts creixen ALHORA, com les quatre mapes de `graded-table`: si un
+    # cresqués i un altre no, la reconciliació esborraria el que acaba de crear.
+    actives = {
+        (bm.pom_id, bm.capa, bm.instancia, bm.garment): bm
+        for bm in BaseMeasurement.objects.filter(
+            model=model, is_active=True, base_value_cm__isnull=False)
+    }
+
+    linies = list(PieceFittingLine.objects.filter(piece_fitting=pf))
+    sobreres = [l.pk for l in linies
+                if (l.pom_id, l.capa, l.instancia, l.garment) not in actives]
+    if sobreres:
+        PieceFittingLine.objects.filter(pk__in=sobreres).delete()
+
+    fora = set(sobreres)
+    ja_hi_son = {(l.pom_id, l.capa, l.instancia, l.garment)
+                 for l in linies if l.pk not in fora}
+    a_crear = [clau for clau in actives if clau not in ja_hi_son]
+
+    creades = 0
+    if a_crear:
+        # El teòric d'una mesura nova: l'spec de la versió activa si n'hi ha (llavors la línia
+        # neix amb totes les seves talles, com les seves germanes) i, si no, la base del model a
+        # la talla base — que és l'única talla que la presa i el full pinten.
+        specs = {}
+        for s in GradedSpec.objects.filter(
+                grading_version=pf.grading_version, is_active=True).values(
+                'pom_id', 'capa', 'instancia', 'garment', 'size_label', 'graded_value_cm'):
+            clau = (s['pom_id'], s['capa'], s['instancia'], s['garment'])
+            specs.setdefault(clau, {})[s['size_label']] = s['graded_value_cm']
+
+        for clau in a_crear:
+            bm = actives[clau]
+            per_talla = specs.get(clau)
+            if not per_talla:
+                if not base_size:
+                    logger.warning(
+                        'reconcilia_linies: %s sense talla base ni spec per %s — no es crea línia',
+                        pf.pk, clau)
+                    continue
+                per_talla = {base_size: bm.base_value_cm}
+            for size_label, valor in per_talla.items():
+                PieceFittingLine.objects.create(
+                    piece_fitting=pf,
+                    pom_id=bm.pom_id,
+                    size_label=size_label,
+                    capa=bm.capa,
+                    instancia=bm.instancia,
+                    # SET-2/T5c — la línia neix de la seva MESURA i n'hereta la peça, igual
+                    # que ja n'heretava els dos eixos de germanor. Sense això la línia de la
+                    # 02 naixeria a la mare i la reconciliació següent l'esborraria.
+                    garment=bm.garment,
+                    valor_teoric=valor,
+                    # Mateix criteri que la sembra (`create_piece_fitting`): el real neix com a
+                    # còpia del teòric i és editable. Canviar-lo aquí faria que dues línies de
+                    # la mateixa presa es comportessin diferent segons quan van néixer.
+                    valor_real=valor,
+                )
+                creades += 1
+
+    if sobreres or creades:
+        logger.info('PieceFitting %s reconciliada: +%s línies, -%s línies',
+                    pf.pk, creades, len(sobreres))
+    return {'creades': creades, 'retirades': len(sobreres), 'congelada': False}
 
 
 def consolidate_base_from_fitting(pf, *, auth_user=None):
@@ -369,7 +684,18 @@ def consolidate_base_from_fitting(pf, *, auth_user=None):
     sf = pf.grading_version.size_fitting
     base_size = (model.base_size_label or '').strip()
     consolidated = []
-    for line in PieceFittingLine.objects.filter(piece_fitting=pf).select_related('pom'):
+    # D-31.21 — «la darrera mesura VÀLIDA escrita». Una línia REJECTED es desa i es veu, però
+    # NO sembra: el rebuig diu que la PRESA no val, i consolidar-la escriuria a la mesura base
+    # un número que la modista acaba de declarar dolent. L'exclusió va al queryset i no a un
+    # `continue` del cos perquè d'aquest helper en pengen TRES coses —la consolidació a
+    # `BaseMeasurement`, la derivació a les germanes i el Welford del cridador, que menja
+    # `consolidated`—: filtrant a la font cap de les tres no la pot veure, i cap refosa futura
+    # del cos no la pot perdre.
+    linies = (PieceFittingLine.objects
+              .filter(piece_fitting=pf)
+              .exclude(decisio=PieceFittingLine.DECISIO_REJECTED)
+              .select_related('pom'))
+    for line in linies:
         if line.valor_real is None:
             continue
         if abs(line.valor_real - line.valor_teoric) < 1e-6:
@@ -381,7 +707,11 @@ def consolidate_base_from_fitting(pf, *, auth_user=None):
         # els ha de dir també, o la rectificació d'una germana aterraria sobre l'altra i el
         # `get()` intern petaria amb MultipleObjectsReturned el dia que n'hi hagi dues.
         bm, _created = BaseMeasurement.objects.get_or_create(
+            # SET-2/T5 — el tercer eix, i la línia el sap dir com sap dir els altres dos
+            # (l'ha heretat de l'spec): la rectificació d'una peça ha d'aterrar a la SEVA
+            # mesura base, no a la de l'altra.
             model=model, pom=line.pom, capa=line.capa, instancia=line.instancia,
+            garment=line.garment,
             defaults={'base_value_cm': line.valor_real, 'origen': 'FITTED'},
         )
         # C3/E1 — el valor d'ABANS, capturat abans de trepitjar-lo: és el que fa calculable
@@ -449,6 +779,12 @@ def close_piece_fitting(piece_fitting_id: int, *, user_profile_id: int | None = 
     # MeasurementChangeLog i el Welford junts: cap escriptura residual. El ValueError propaga
     # fora del `with` (rollback) i la view el converteix en 400. Cap reordenació interna.
     with transaction.atomic():
+        # Q3/Q4 — EL QUE ES GRAVA ÉS L'ESTAT RECONCILIAT. La sessió encara és viva (el segell ve
+        # al final d'aquesta mateixa transacció), o sigui que aquesta és l'última finestra per
+        # quadrar-la amb el model abans que l'acta es congeli. Sense això, l'acta i el PDF d'una
+        # sessió tancada podrien portar mesures que el model ja no té.
+        reconcilia_linies(pf)
+
         # PEÇA 4 / B3: la consolidació de la talla base a BaseMeasurement viu al helper
         # consolidate_base_from_fitting (compartit amb la propagació conscient). Les talles
         # no-base s'ignoren (els breaks per talla van per ModelGradingOverride). Welford i el

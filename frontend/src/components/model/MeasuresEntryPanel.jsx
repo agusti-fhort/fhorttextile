@@ -1,10 +1,13 @@
-import { useState, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import EditableTable from '../EditableTable/EditableTable'
-import ImportWizard from '../ImportWizard/ImportWizard'
+import PecesDelModel from './PecesDelModel'
+import { filesDeLaPeca } from '../../utils/identitatMesura'
 import Modal from '../ui/Modal'
+import ImportWizard from '../ImportWizard/ImportWizard'
 import ModelPicker from './ModelPicker'
 import { IconBulb, IconX } from '@tabler/icons-react'
+import { botoPorta } from '../ui/buttons'
 import { models } from '../../api/endpoints'
 
 const API = import.meta.env.VITE_API_URL || ''
@@ -24,17 +27,28 @@ const COPY_FLAGS = ['copy_values', 'copy_run', 'copy_grading', 'copy_files']
 // NO inclou el camí 'size_check' (CheckMeasureEditor): això és el flux de TREBALL del tab, no la
 // genesi (es reapuntarà a J1b). Quan la base queda materialitzada, crida onMaterialized() perquè el
 // tab rellegeixi taula-mesures i passi a la superfície de consulta/treball (CheckMeasureEditor).
-export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, entryMode = false, intent = null, onGraduacio = null }) {
+export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, entryMode = false,
+                                            intent = null, onGraduacio = null, onBack = null }) {
   const { t } = useTranslation()
   const id = model?.id
   const token = localStorage.getItem('access_token')
   const authHeaders = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
 
   const [mode, setMode] = useState('loading')   // 'loading' | 'selector' | 'manual' | 'import'
+  // SET-2/T8 — LA PRENDA DES D'ON S'HA OBERT L'IMPORT. **Un import = una peça**, i la peça la
+  // dedueix el CONTEXT: el botó viu a la capçalera de cada contenidor i el que hi porta és la
+  // seva. `null` = la mare (el camí del selector, que és el del model verge). No és una
+  // pregunta del wizard i no viatja per fila: és context, i el context viu aquí.
+  const [importPeca, setImportPeca] = useState(null)
+  // SET-2/T7-fix4 — ¿HEM PASSAT MAI PER LA TRIA? El ← de la graella tornava SEMPRE al selector
+  // (les tres targetes Introduir/Importar/Copiar), i en mode ENTRADA no s'hi ha estat mai: amb
+  // files ja poblades s'entra DIRECTE a 'manual' (v. el `if (entryMode)` de la càrrega). Tornar
+  // a un lloc on no has estat no és tornar. És un ref i no un estat perquè no ha de repintar res.
+  const vistSelector = useRef(false)
+  if (mode === 'selector') vistSelector.current = true
   const [pomsSuggerits, setPomsSuggerits] = useState([])
   const [taulaRows, setTaulaRows] = useState([])
   const [sizesAmbDades, setSizesAmbDades] = useState(null)
-  const [deltes, setDeltes] = useState(null)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   // B4 — quan la sembra retorna code='base_set_absent', el món del model (item × sistema de
@@ -44,6 +58,15 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
   const [baseSetAbsent, setBaseSetAbsent] = useState(null)
   const [seedBusy, setSeedBusy] = useState(false)
   const [savingPom, setSavingPom] = useState(false)
+  // ── QUINS CONTENIDORS TENEN FEINA SENSE DESAR (SET-2/T7-B5c) ────────────────────────
+  // Clau = codi de prenda (`''` = la mare). Es guarda per contenidor i no com un booleà
+  // sol perquè el desat ÉS per contenidor: el guarda de sortida ha de poder dir DE QUINA
+  // peça són els canvis, no només que n'hi ha.
+  const [brutsPerPeca, setBrutsPerPeca] = useState({})
+  const marcaBrut = useCallback((codi, brut) => setBrutsPerPeca(
+    prev => (prev[codi] === brut ? prev : { ...prev, [codi]: brut })), [])
+  const pecesBrutes = Object.entries(brutsPerPeca).filter(([, b]) => b).map(([c]) => c)
+  const [avisSortida, setAvisSortida] = useState(false)
   // Confirmació de Gravar POM (paral·lel a "Propagar"): missatge SIMPLE la 1a vegada; ADVERTÈNCIA si
   // resembra (el model JA tenia base → llenç net que substitueix). `hadBaseRef` captura l'estat ABANS
   // de cap sembra (primer cop que veiem files de taula-mesures). `confirmRef` desa la promesa que
@@ -60,9 +83,10 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
   const toggleIn = (setter) => (pom) => setter(prev =>
     prev.includes(pom.pom_id) ? prev.filter(x => x !== pom.pom_id) : [...prev, pom.pom_id])
 
+  // Els `deltes` de la resposta ja no es guarden: eren per a la columna Δ, que aquesta taula ja
+  // no té (05/08). El backend els segueix servint per a Escalat, que és qui els treballa.
   const refreshTableMeta = (d) => {
     setSizesAmbDades(d.sizes_amb_dades || null)
-    setDeltes(d.deltes || null)
   }
 
   // Recarrega la taula i fixa el mode (mirall de ModelMeasurements.reloadTable, sense l'estat 'tancat':
@@ -278,13 +302,13 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
                 fit: baseSetAbsent.fit_type || t('base_set_panel.fit_regular'),
               })}
             </div>
-            <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-label)', marginTop: 4 }}>
+            <div style={{ color: 'var(--text-soft)', fontSize: 'var(--fs-label)', marginTop: 4 }}>
               {t('measures_entry.base_set_absent_hint')}
             </div>
           </div>
           <button type="button" onClick={() => setBaseSetAbsent(null)}
             style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2,
-                     color: 'var(--text-muted)', display: 'inline-flex' }}
+                     color: 'var(--text-soft)', display: 'inline-flex' }}
             title={t('common.close')}>
             <IconX size={16} stroke={1.5} />
           </button>
@@ -325,13 +349,13 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
               </label>
             ))}
           </div>
-          <p style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', margin: '10px 0 0' }}>
+          <p style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)', margin: '10px 0 0' }}>
             {t('measures_entry.copy_sobirania_hint')}
           </p>
           {copySrcPoms.length > 0 && (
             <>
               <p style={{ fontSize: 'var(--fs-body)', margin: '12px 0 0',
-                          color: copyPomIds.length === 0 ? 'var(--warn)' : 'var(--text-muted)' }}>
+                          color: copyPomIds.length === 0 ? 'var(--warn)' : 'var(--text-soft)' }}>
                 {copyPomIds.length === 0
                   ? t('measures_entry.copy_count_zero')
                   : t('measures_entry.copy_count', { total: copySrcPoms.length, tria: copyPomIds.length })}
@@ -358,7 +382,7 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
           confirmDisabled={savingPom}
         >
           <p style={{ fontSize: 'var(--fs-body)', margin: 0, display: 'flex', alignItems: 'flex-start', gap: 8,
-                      color: pomReseed ? 'var(--err)' : 'var(--text-muted)' }}>
+                      color: pomReseed ? 'var(--err)' : 'var(--text-soft)' }}>
             {pomReseed && <i className="ti ti-alert-triangle" style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }} />}
             {pomReseed ? t('model_measurements.gravar_confirm_reseed') : t('model_measurements.gravar_confirm_simple')}
           </p>
@@ -366,7 +390,7 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
       )}
 
       {mode === 'loading' && !error && (
-        <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+        <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-soft)' }}>
           {t('model_sheet.loading')}
         </div>
       )}
@@ -376,7 +400,7 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
           <h2 style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, margin: '0 0 0.5rem' }}>
             {t('model_measurements.pom_title')}
           </h2>
-          <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
+          <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', marginBottom: '1.5rem' }}>
             {t('model_measurements.intro')}
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
@@ -386,7 +410,7 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
                        opacity: seedBusy ? 0.6 : 1 }}>
               <div style={{ fontSize: 28, marginBottom: 8 }}><i className="ti ti-pencil" style={{ color: 'var(--gold)' }} /></div>
               <div style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginBottom: 6 }}>{t('model_measurements.manual_title')}</div>
-              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>
                 {t('model_measurements.manual_desc', { type: model?.garment_type_nom || t('model_measurements.this_garment') })}
               </div>
               {pomsSuggerits.length > 0 && (
@@ -395,12 +419,12 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
                 </div>
               )}
             </div>
-            <div onClick={() => setMode('import')}
+            <div onClick={() => { setImportPeca(null); setMode('import') }}
               style={{ background: 'var(--bg-main)', border: '0.5px solid var(--border)',
                        borderRadius: 12, padding: '1.5rem', cursor: 'pointer' }}>
               <div style={{ fontSize: 28, marginBottom: 8 }}><i className="ti ti-bolt" style={{ color: 'var(--gold)' }} /></div>
               <div style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginBottom: 6 }}>{t('model_measurements.import_title')}</div>
-              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{t('model_measurements.import_desc')}</div>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>{t('model_measurements.import_desc')}</div>
             </div>
             {/* Sprint B — tercera via de gènesi: el patrimoni d'un model germà. Ni manual ni
                 import: el que ja està mesurat en un altre model d'aquesta col·lecció. */}
@@ -409,7 +433,7 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
                        borderRadius: 12, padding: '1.5rem', cursor: 'pointer' }}>
               <div style={{ fontSize: 28, marginBottom: 8 }}><i className="ti ti-copy" style={{ color: 'var(--gold)' }} /></div>
               <div style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginBottom: 6 }}>{t('measures_entry.copy_title')}</div>
-              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{t('measures_entry.copy_desc')}</div>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>{t('measures_entry.copy_desc')}</div>
             </div>
           </div>
         </div>
@@ -417,39 +441,53 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
 
       {mode === 'manual' && (
         <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, marginBottom: 14 }}>
-            <div>
-              <h2 style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, margin: '0 0 0.25rem' }}>
-                {t('model_measurements.pom_title')}
-              </h2>
-              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
-                {t('model_measurements.pom_subtitle')}
-              </div>
+        {/* SET-2/T7-B9 — LA CAPÇALERA I LA GRADUACIÓ, A DALT I FORA DELS CONTENIDORS. La
+            graduació travessa totes les prendes (és el joc del model), i el patró de Mesures i
+            Escalat ja diu que el que travessa peces viu a dalt. Dins d'un contenidor es
+            repetiria una vegada per prenda i cada còpia prometria ser «la d'aquesta peça». */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, marginBottom: 14 }}>
+          <div>
+            <h2 style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, margin: '0 0 0.25rem' }}>
+              {t('model_measurements.pom_title')}
+            </h2>
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>
+              {t('model_measurements.pom_subtitle')}
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
               {/* GRADUACIÓ des d'AQUÍ (31/07): és la vista on es treballa la taula, i on les
                   columnes de Regla es veuen buides esperant. Obre el mateix wizard al pas 4
                   que el botó de la barra de consulta. */}
               {onGraduacio && (
                 <button type="button" onClick={onGraduacio}
-                  style={{ background: 'transparent', color: 'var(--gold)', border: '0.5px solid var(--gold)',
-                           borderRadius: 6, padding: '7px 12px', fontSize: 'var(--fs-body)', cursor: 'pointer' }}>
-                  <i className="ti ti-chart-arrows-vertical" /> {t('graduacio.button')}
+                  style={botoPorta}>
+                  <i className="ti ti-chart-arrows-vertical" aria-hidden="true"
+                     style={{ fontSize: 14, color: 'currentColor' }} /> {t('graduacio.button')}
                 </button>
               )}
-              <button type="button" onClick={() => setMode('import')}
-                style={{ background: 'transparent', color: 'var(--gold)', border: '0.5px solid var(--gold)',
-                         borderRadius: 6, padding: '7px 12px', fontSize: 'var(--fs-body)', cursor: 'pointer' }}>
-                <i className="ti ti-upload" /> {t('model_measurements.import_table')}
-              </button>
-            </div>
           </div>
+        </div>
+
+        {/* SET-2/T7-B9 — UN CONTENIDOR PER PRENDA amb la GRAELLA REAL. El text d'espera se'n
+            va: des del #12c l'upsert de `gravar-pom` resol per la identitat sencera i les files
+            noves neixen amb el seu `garment`, o sigui que gravar des del contenidor de la 02 ja
+            no cau sobre la mare. Les files es reparteixen per l'eix, com a Mesures i Escalat.
+            (Aquí NO cal la vora `garments` del #12b: en aquest camí el desat buit mor amb un
+            400 abans d'arribar a la poda.) */}
+        <PecesDelModel model={model} accionsPeca={peca => <BotoImportarPeca
+          onImportar={() => { setImportPeca(peca); setMode('import') }} />}>{peca => {
+        const filesDelContenidor = filesDeLaPeca(taulaRows, peca ? (peca.codi || '') : null)
+        return (<>
           {/* C2 — els xips de POMs suggerits han mort. La taula ARRENCA amb totes les files de
               l'item i el tècnic hi treu el que no vol amb la ✕ de cada fila (i n'afegeix amb el
               cercador del peu de taula). Triar sobre una llista de 48 xips per després tornar a
               mirar-la a la taula era fer dues vegades la mateixa lectura. */}
           <EditableTable
-            rows={taulaRows.length > 0 ? taulaRows : [...pomsSuggerits]
+            rows={filesDelContenidor.length > 0 ? filesDelContenidor
+              // ELS SUGGERITS SÓN DE L'ITEM, i l'item és del MODEL: sembren la prenda que
+              // encara no té res, no totes alhora. Amb dues prendes buides, oferir-los a les
+              // dues seria proposar la mateixa taula dues vegades.
+              : (peca && !peca.es_mare ? [] : [...pomsSuggerits]
               // Ordre de l'ITEM (GarmentPOMMap.ordre); `poms-suggerits` els serveix amb els KEY
               // al davant, i aquí el que mana és l'ordre en què l'item declara les mesures.
               .sort((a, b) => (a.ordre ?? 0) - (b.ordre ?? 0))
@@ -458,36 +496,110 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
                 nom_ca: p.nom_ca, nom_en: p.nom_en, nom_fitxa: '', is_key: p.is_key,
                 client_code: p.client_code, client_name_en: p.client_name_en, client_name_local: p.client_name_local,
                 base_value_cm: null, graded: {}, ordre: i,
-              }))}
+              })))}
             sizeRun={sizeRun}
             baseSize={model?.base_size_label}
-            deltes={deltes}
             modelId={id}
             isImport={false}
             saveLabel={savingPom ? t('common.saving') : t('model_measurements.save_pom')}
             onPomSave={savePom}
             onSaved={(newRows) => setTaulaRows(newRows)}
+            onDirtyChange={(b) => marcaBrut(peca?.codi ?? '', b)}
+            /* DE QUINA PRENDA SÓN AQUESTES FILES. Entra al payload i, sobretot, a
+               `keep_mesures`: sense l'eix, la poda del backend deixa les files de la peça
+               fora del conjunt a conservar i les desactiva en silenci. */
+            garment={peca?.codi ?? ''}
           />
+        </>)
+        }}</PecesDelModel>
 
+          {/* LA SORTIDA ÉS DE PÀGINA i per això viu FORA dels contenidors, com el desat viu a
+              DINS de cadascun. Són dues alçades i no s'han de barrejar: desar és per prenda,
+              sortir és de la vista. */}
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginTop: 24 }}>
-            <button type="button" onClick={() => setMode('selector')}
+            {/* EL PUNT D'ENTRADA MANA EL DESTÍ DE TORNADA, no un destí fix: si has vingut per
+                la tria, hi tornes; si has vingut de Mesures (que és el cas d'Editar POM), en
+                surts cap a Mesures. Sense `onBack` es conserva el comportament de sempre.
+                I ABANS DE SORTIR, EL GUARDA: amb feina sense desar es pregunta, mai es descarta
+                en silenci. El predicat és el de `utils/taulaBruta` —el que s'enviaria contra el
+                que ja hi ha desat— justament perquè no salti amb un edita-i-desfés. */}
+            <button type="button"
+              onClick={() => {
+                if (pecesBrutes.length) { setAvisSortida(true); return }
+                return (vistSelector.current || !onBack) ? setMode('selector') : onBack()
+              }}
               style={{ padding: '8px 16px', border: '0.5px solid var(--border)', borderRadius: 6,
                        background: 'transparent', cursor: 'pointer', fontSize: 'var(--fs-body)' }}>
               ← {t('app.back')}
             </button>
-            {hasValues && <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{t('model_measurements.unsaved_pom_hint')}</span>}
+            {hasValues && <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>{t('model_measurements.unsaved_pom_hint')}</span>}
           </div>
+
+          {/* EL GUARDA. Diu DE QUINA prenda són els canvis —el desat és per contenidor, i amb
+              tres targetes obertes «tens canvis» no diria on mirar— i no ofereix desar des
+              d'aquí: el desat viu al seu contenidor i tenir-ne una segona porta seria tenir dos
+              camins cap al mateix POST. Qui vulgui desar, tanca l'avís i grava on estava. */}
+          {avisSortida && (
+            <Modal
+              title={t('model_measurements.sortir_amb_canvis_titol')}
+              subtitle={t('model_measurements.sortir_amb_canvis_peces', {
+                peces: pecesBrutes.map(c => (c ? t('graduacio.confirma.peca_codi', { codi: c })
+                  : t('graduacio.confirma.peca_mare'))).join(' · '),
+              })}
+              confirmLabel={t('model_measurements.sortir_sense_desar')}
+              cancelLabel={t('model_measurements.quedar_me')}
+              onCancel={() => setAvisSortida(false)}
+              onConfirm={() => {
+                setAvisSortida(false)
+                if (vistSelector.current || !onBack) setMode('selector'); else onBack()
+              }}>
+              <p style={{ fontSize: 'var(--fs-body)', margin: 0 }}>
+                {t('model_measurements.sortir_amb_canvis_cos')}
+              </p>
+            </Modal>
+          )}
         </div>
       )}
 
       {mode === 'import' && (
         <ImportWizard
           model={model}
+          /* L'EIX, com a FET. El wizard no el pregunta mai: el MOSTRA («Important a:
+             Llaçada») i el porta a la iniciació de la sessió, que és l'única porta per on
+             entra al pipeline. */
+          garment={importPeca?.codi ?? ''}
+          garmentNom={importPeca && !importPeca.es_mare
+            ? (importPeca.nom || importPeca.codi) : (model?.nom_prenda || '')}
           onCancel={() => setMode('selector')}
           onComplete={() => reloadTable('manual')}
         />
       )}
     </div>
+  )
+}
+
+/**
+ * «IMPORTAR TAULA», a la fila superior del contenidor de la peça — SET-2/T7-B9.
+ *
+ * Decisió T8 (Agus): **un import = una peça**, i s'inicia des de la peça. Per això el botó surt
+ * de la capçalera de la pàgina i baixa a cada contenidor.
+ *
+ * ✅ SET-2/T8 — I JA NO ESTÀ APAGAT A LES FILLES. B9 el va deixar `disabled` amb el motiu al
+ * `title` perquè el pipeline d'importació no coneixia l'eix de peça (censat el 12/08: zero
+ * referències a `garment` a les sis vistes d'`extraction_views.py`) i un import llançat des del
+ * contenidor de la Llaçada hauria escrit les seves files a la MARE, en silenci. Aquell dia es
+ * va escriure que «el dia que l'import guanyi l'eix, això és treure el `disabled`»: és avui.
+ * La sessió porta la prenda des de la iniciació i el confirm hi escriu totes les files.
+ *
+ * L'ordre importa i és el del brief: treure-la ha estat l'ÚLTIM pas, no el primer.
+ */
+function BotoImportarPeca({ onImportar }) {
+  const { t } = useTranslation()
+  return (
+    <button type="button" onClick={onImportar} style={botoPorta}>
+      <i className="ti ti-upload" aria-hidden="true"
+         style={{ fontSize: 14, color: 'currentColor' }} /> {t('model_measurements.import_table')}
+    </button>
   )
 }
 
@@ -498,7 +610,7 @@ function POMChipSuggerit({ pom, selected, onToggle }) {
         padding: '3px 10px', borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer',
         border: selected ? '1.5px solid var(--gold)' : '0.5px solid var(--border)',
         background: selected ? 'var(--gold-pale)' : 'transparent',
-        color: selected ? 'var(--gold)' : 'var(--text-muted)',
+        color: selected ? 'var(--gold)' : 'var(--text-soft)',
       }}>
       <span style={{ marginRight: 4 }}>{pom.pom_code}</span>
       {pom.nom_ca || pom.nom_en}

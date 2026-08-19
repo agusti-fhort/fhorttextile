@@ -169,7 +169,11 @@ class GateDeLesReglesResidentsTest(_G6Base):
         """
         preview = preview_graded_specs(self.model, {self.pom.id: 40.0})
 
-        unica = (self.pom.id, MeasurementLayer.SLUG_DEFECTE, '')
+        # SET-2/T6a (2026-08-11) — LA CLAU DE SORTIDA DEL PREVIEW TÉ UN TRAM MÉS: el
+        # `garment`, darrere de la instància, igual que la d'ENTRADA i igual que la del
+        # generador. Pin de FORMA i era el seu ofici caure avui: els VALORS no s'han
+        # mogut ni un decimal (la mateixa fila, les mateixes talles) — només la clau.
+        unica = (self.pom.id, MeasurementLayer.SLUG_DEFECTE, '', '')
         self.assertEqual(preview, {unica: {'S': 38.0, 'M': 40.0, 'L': 42.0}})
 
     def test_un_model_SENSE_regles_enlloc_continua_sense_poder_graduar(self):

@@ -8,6 +8,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 
+from fhort.accounts.capabilities import CONFIGURE, get_capabilities
+
 logger = logging.getLogger(__name__)
 
 
@@ -76,7 +78,13 @@ def sizing_profiles_view(request):
 
         qs = SizingProfile.objects.select_related(
             'target', 'construction', 'fit_type',
-            'size_system', 'size_system__parent', 'grading_rule_set', 'customer'
+            'size_system', 'size_system__parent', 'size_system__customer',
+            'grading_rule_set', 'customer'
+        ).prefetch_related(
+            # N1 — les 4 capes del run les recorre el serializer per fila; sense prefetch
+            # són 4 queries per perfil (mateix motiu que el prefetch de `targets` al ViewSet).
+            'size_system__targets', 'size_system__construccions',
+            'size_system__fits', 'size_system__grups',
         )
 
         target_codi = request.query_params.get('target')
@@ -336,7 +344,26 @@ def tenant_config_view(request):
     """
     GET  /api/v1/tenant-config/ — Return the tenant configuration
     PATCH /api/v1/tenant-config/ — Update unitat_mesura or norma_referencia
+
+    ⚠️ EL TALL VA PER MÈTODE, i els dos costats tenen motiu propi.
+
+    El GET queda obert a qualsevol autenticat: tota la SPA el consulta per saber
+    `unitat_mesura`, i tancar-lo trencaria qualsevol pantalla de mesures.
+
+    El PATCH exigeix CONFIGURE. La llista blanca de sota porta `hourly_rate`, `iban`,
+    `tax_id`, `legal_name` i `legal_footer`: fins al 14/08 un tècnic hi podia escriure la
+    TARIFA DE COST PER HORA de la casa — la mateixa que alimenta `internal_cost` a les
+    línies d'albarà (`commerce/serializers.py:449-457`) — i la identitat fiscal que va a la
+    capçalera de tots els PDF. La UI que ho edita ja demanava `configure`
+    (`frontend/src/pages/GeneralConfig.jsx:43`); el backend, no. Era l'única escriptura
+    sense gate de tot el mòdul (diagnosi 2026-08-14 §4.3).
+
+    Va abans del `try` a posta: el `except Exception` d'aquesta vista torna 500, i un gate
+    que es pugui degradar a 500 en comptes de 403 no és un gate.
     """
+    if request.method == 'PATCH' and CONFIGURE not in get_capabilities(request.user):
+        return Response({'detail': 'Cal la capacitat de configuració per editar '
+                                   "la configuració de l'empresa."}, status=403)
     try:
         from fhort.accounts.models import TenantConfig
         from fhort.pom.s2_serializers import TenantConfigSerializer

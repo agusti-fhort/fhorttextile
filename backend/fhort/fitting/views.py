@@ -34,6 +34,8 @@ from .serializers import (
     PieceFittingLineSerializer,
     FittingPhotoSerializer,
 )
+from fhort.tasks.services_batec import SUP_PRESA, batec_de_request
+
 from . import services
 from fhort.accounts.capabilities import HasCapability, SCHEDULE_FITTINGS
 
@@ -515,6 +517,24 @@ class PieceFittingViewSet(mixins.RetrieveModelMixin,
             return PieceFittingSummarySerializer
         return PieceFittingGridSerializer
 
+    def retrieve(self, request, *args, **kwargs):
+        """Q3 — OBRIR LA PRESA ÉS RECONCILIAR-LA.
+
+        Aquesta és la porta per on la pantalla de presa i el full imprès demanen la graella:
+        el `GET` d'aquí és l'acte d'obrir. Amb la sessió VIVA (Programada/Oberta) les línies es
+        posen al dia amb els BaseMeasurement actius del model abans de servir-les; amb la sessió
+        segellada, `reconcilia_linies` no toca res i l'acta es llegeix tal com es va gravar.
+
+        La reconciliació no pot fer caure la lectura: si peta, es registra i es serveix la
+        graella igualment (val més la d'ahir que cap).
+        """
+        pf = self.get_object()
+        try:
+            services.reconcilia_linies(pf)
+        except Exception:
+            logger.exception('reconcilia_linies ha fallat per a la peça %s', pf.pk)
+        return Response(self.get_serializer(pf).data)
+
     @action(detail=True, methods=['post'], url_path='set-gate')
     def set_gate(self, request, pk=None):
         resultat = request.data.get('resultat')
@@ -525,6 +545,7 @@ class PieceFittingViewSet(mixins.RetrieveModelMixin,
             )
         except ValueError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        batec_de_request(request, pf.model_id, SUP_PRESA)   # F1.3
         return Response({
             'id': pf.pk, 'gate': pf.gate, 'gate_motiu': pf.gate_motiu, 'gate_at': pf.gate_at,
         })
@@ -548,12 +569,14 @@ class PieceFittingViewSet(mixins.RetrieveModelMixin,
             if 'segellada a producció' in str(e):
                 body['code'] = 'grading_sealed'
             return Response(body, status=status.HTTP_400_BAD_REQUEST)
+        batec_de_request(request, self.get_object().model_id, SUP_PRESA)   # F1.3
         return Response(result)
 
     @action(detail=True, methods=['post'])
     def discard(self, request, pk=None):
         """Revert valor_real := valor_teoric for all lines (pure measurement revert)."""
         result = services.discard_piece_fitting(int(pk))
+        batec_de_request(request, self.get_object().model_id, SUP_PRESA)   # F1.3
         return Response(result)
 
 
@@ -569,27 +592,50 @@ class PieceFittingLineViewSet(mixins.UpdateModelMixin,
         'pom', 'piece_fitting__session', 'piece_fitting__model').all()
     http_method_names = ['get', 'patch', 'post', 'head', 'options']
 
-    def _rebuig_escriptura(self, line):
+    def _rebuig_escriptura(self, line, camps=None):
         """Guards d'escriptura, compartits per `partial_update` i `propagar`. Retorna una
-        Response de rebuig, o None si la línia és editable.
+        Response de rebuig, o None si l'escriptura és admissible.
 
         Ordre deliberat: primer l'estat de la sessió (una sessió segellada no s'edita ni tan
-        sols a la base), després l'eix (P1).
+        sols a la base), després l'eix.
+
+        E1/B1 — L'EIX ES MIRA DIFERENT SEGONS QUÈ S'ESCRIU, i `camps` és qui ho diu:
+
+          · `camps=None` (`propagar`) — l'ancoratge que escampa el delta és el gest de la
+            BASE per definició (R2). Guard sencer, com sempre: `fitting_line_is_non_base`.
+          · `camps=<claus del payload>` (`partial_update`) — PRENDRE una talla no-base és
+            legal (pas 1 d'E1); DECIDIR-LA no ho és. El predicat viu a `services`
+            (`fitting_line_decisio_fora_de_base`), que és on hi ha el banc.
+
+        🔑 **Per CAMP i no per endpoint**: un payload mixt `{valor_real, decisio}` entra per
+        la porta legal de la presa, i sense mirar les claus hi colaria el veredicte.
         """
         if services.fitting_line_is_locked(line):
             return Response({'detail': SEALED_SESSION_DETAIL}, status=status.HTTP_409_CONFLICT)
-        if services.fitting_line_is_non_base(line):
-            # 400, no 409: no és conflicte d'estat sinó escriptura fora de l'eix del fitting.
-            return Response({'detail': services.NON_BASE_LINE_DETAIL},
+        if camps is None:
+            if services.fitting_line_is_non_base(line):
+                # 400, no 409: no és conflicte d'estat sinó escriptura fora de l'eix del fitting.
+                return Response({'detail': services.NON_BASE_LINE_DETAIL},
+                                status=status.HTTP_400_BAD_REQUEST)
+        elif services.fitting_line_decisio_fora_de_base(line, camps):
+            # Mateix codi i mateixa forma de resposta que el guard sencer; el que canvia és
+            # el DETALL, perquè el que es rebutja no és el mateix gest i qui ho llegeix ha de
+            # poder distingir «aquí no es mesura» de «aquí no es decideix».
+            return Response({'detail': services.NON_BASE_DECISIO_DETAIL},
                             status=status.HTTP_400_BAD_REQUEST)
         return None
 
     def partial_update(self, request, *args, **kwargs):
-        # Guards ABANS de desar; delega només si la línia és editable.
-        rebuig = self._rebuig_escriptura(self.get_object())
+        # Guards ABANS de desar; delega només si l'escriptura és admissible. Les claus del
+        # payload hi entren: v. `_rebuig_escriptura` (prendre ≠ decidir).
+        linia = self.get_object()
+        rebuig = self._rebuig_escriptura(linia, camps=(request.data or {}).keys())
         if rebuig is not None:
             return rebuig
-        return super().partial_update(request, *args, **kwargs)
+        resposta = super().partial_update(request, *args, **kwargs)
+        # F1.3 — l'autosave d'una presa és el batec més fi: el tècnic hi és, mesurant.
+        batec_de_request(request, linia.piece_fitting.model_id, SUP_PRESA)
+        return resposta
 
     @action(detail=True, methods=['post'], url_path='propagar')
     def propagar(self, request, pk=None):
@@ -600,7 +646,7 @@ class PieceFittingLineViewSet(mixins.UpdateModelMixin,
         STEP/FIXED/ZERO/EXCEPTION o sense regla → només desa la cel·la (germanes intactes).
         Permís = el del viewset (IsAuthenticated), igual que l'autosave."""
         from django.db import transaction
-        from fhort.pom.services import _load_grading_rules
+        from fhort.pom.services import (_load_grading_rules_per_garment, _regla_de)
         from fhort.pom.grading_utils import propaga_ancoratges
 
         line = self.get_object()
@@ -637,8 +683,21 @@ class PieceFittingLineViewSet(mixins.UpdateModelMixin,
         if anchor_val is None:                       # treure ancoratge → no propaga
             return _resp(False, 'sense_ancoratge')
 
+        # D-31.21 — el segon camí que propaga mesures des d'una línia, i per tant el segon que
+        # ha de respectar el rebuig. La cel·la ancorada ES DESA igual (just aquí sobre: desar i
+        # decidir són gestos separats i el rebuig no pot fer desaparèixer el que s'ha mesurat),
+        # però el seu delta no viatja a les germanes de talla: escampar-lo voldria dir derivar
+        # tota una fila d'una presa que la modista acaba de declarar dolenta.
+        if line.decisio == PieceFittingLine.DECISIO_REJECTED:
+            return _resp(False, 'linia_rebutjada')
+
         # 3. Regla resident → fallback (cadena de _load_grading_rules).
-        rule = _load_grading_rules(pf.model).get(line.pom_id)
+        # SET-2/T5 — AQUEST DELS SIS S'ADAPTA, i no per simetria: és l'únic que no és
+        # presentació sinó que decideix una ESCRIPTURA (propaga el valor mesurat cap a la
+        # base). Amb la regla de la mare, propagar una línia de la peça 02 hi aplicaria una
+        # llei que no és la seva —i D4 diu que poden divergir—. La línia sap dir la peça.
+        rule = _regla_de(_load_grading_rules_per_garment(pf.model),
+                         line.pom_id, line.garment)
         if rule is None:
             return _resp(False, 'sense_regla')
 
@@ -674,9 +733,14 @@ class PieceFittingLineViewSet(mixins.UpdateModelMixin,
                 # surten de `line`, l'ancoratge que el tècnic ha fet.
                 # Segueix sent `.update()` de queryset —no dispara signal— i `valor_teoric` no
                 # es toca: les dues coses estan documentades a :596-598 i no canvien.
+                # SET-2/T5c — i el SISÈ camp, pel mateix argument que C3/E3 i un eix més
+                # tard: la unicitat declarada porta el `garment` des de `fitting/0026`, o
+                # sigui que aquest filtre tornava a ser més ampli que la identitat i
+                # escampava el `valor_real` derivat a la germana de l'ALTRA PEÇA. Surt de
+                # `line`, l'ancoratge que el tècnic ha fet.
                 (PieceFittingLine.objects
                  .filter(piece_fitting=pf, pom=line.pom, size_label=sl,
-                         capa=line.capa, instancia=line.instancia)
+                         capa=line.capa, instancia=line.instancia, garment=line.garment)
                  .update(valor_real=val))
         return _resp(True, logica or 'CANONIC', warnings)
 

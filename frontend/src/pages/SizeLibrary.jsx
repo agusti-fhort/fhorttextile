@@ -1,10 +1,23 @@
 import { useState } from "react"
 import { useSearchParams } from "react-router-dom"
 import { useTranslation } from "react-i18next"
-import { SizeSetDetail } from "../components/SizeSetDetail"
-import { SizingProfileSelector } from "../components/SizingProfileSelector"
+import RunsCataleg from "../components/SizeLibrary/RunsCataleg"
 import SizeAuthoringDrawer from "../components/SizeAuthoringDrawer"
-import { sizingProfiles } from "../api/endpoints"
+
+// A2 (08/08) — AQUESTA PANTALLA ERA EL SELECTOR DE PRESETS i ara és el CATÀLEG DE RUNS.
+//
+// La maqueta v3 ho diu amb totes les lletres: «els presets amb graduació dins han desaparegut.
+// Un run és una escala; els increments de POM viuen als jocs de regles. Aquí no hi ha ni un
+// delta». El que hi havia —`SizingProfileSelector` + `SizeSetDetail`— era justament allò: chips
+// d'eixos i targetes de preset amb la graduació a dins.
+//
+// ⚠️ ELS DOS COMPONENTS NO S'ESBORREN, i el cens diu per què: `SizingProfileSelector` i
+// `SizeSetDetail` NOMÉS els muntava aquesta pàgina, o sigui que retirar-los d'aquí els deixa
+// sense cap consumidor. Esborrar-los seria una decisió d'abast que aquest tram no té; queden al
+// disc, sense muntar, i anotats al report.
+//
+// EL DRAWER D'AUTORIA ES QUEDA: és qui crea runs de debò (i `GradingRuleSets` també el munta),
+// i és on porta el deep-link `?prefill=` de l'ImportWizard.
 
 // 1C-3b — ?prefill= (base64 unicode-safe d'un JSON), mateix patró que SizeMapSetup.readPrefill.
 function readPrefill(p) {
@@ -16,7 +29,6 @@ export default function SizeLibrary() {
   const { t } = useTranslation()
   const [searchParams, setSearchParams] = useSearchParams()
 
-  const [detailProfileId, setDetailProfileId] = useState(null)
   const [msg, setMsg] = useState(null)
   // Si venim de l'ImportWizard amb ?prefill=, obrim el drawer auto-omplert (decisió ii: sense represa).
   const [drawerPrefill, setDrawerPrefill] = useState(() => readPrefill(searchParams.get('prefill')))
@@ -31,78 +43,25 @@ export default function SizeLibrary() {
     setSearchParams(next, { replace: true })
   }
 
-  const handleClone = async (profile) => {
-    try {
-      const { data: d } = await sizingProfiles.clone(profile.id, { nom_client: `Custom ${profile.size_system?.nom}` })
-      setMsg({ type: 'ok', text: d?.missatge })
-    } catch (e) {
-      if (e.response) {
-        setMsg({ type: 'error', text: e.response.data?.error || t('size_library.clone_error') })
-      } else {
-        setMsg({ type: 'error', text: String(e) })
-      }
-    }
-  }
-
   return (
-    <div style={{ padding: "24px", maxWidth: 1100, margin: "0 auto", fontFamily: "IBM Plex Mono, monospace" }}>
-      {/* Header */}
-      <div style={{ marginBottom: 24, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-        <div>
-          <h1 style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, color: "var(--text-main)", margin: "0 0 4px" }}>
-            {t('nav.size_library')}
-          </h1>
-          <div style={{ fontSize: 'var(--fs-body)', color: "var(--text-muted)" }}>
-            {t('size_library.subtitle')}
-          </div>
-        </div>
-        {/* Sprint ÀMBIT (B.3) — el botó d'autoria del CONTENIDOR de client s'ha mogut a Grading Rules
-            (és allà on viuen els jocs de regles que aquest wizard autora). El drawer es queda muntat
-            aquí NOMÉS per al deep-link ?prefill= que hi porta l'ImportWizard (1C-3b). */}
-      </div>
-
-      {/* Missatge global */}
+    <div style={{ padding: '0 20px 60px' }}>
       {msg && (
-        <div style={{
-          padding: "8px 12px", marginBottom: 16, borderRadius: 4, fontSize: 'var(--fs-body)',
-          background: msg.type === 'ok' ? "#f0f9f0" : "#fff0f0",
-          border: `1px solid ${msg.type === 'ok' ? "#c0dd97" : "#f09595"}`,
-          color: msg.type === 'ok' ? "#3b6d11" : "#a32d2d",
-          display: "flex", justifyContent: "space-between",
+        <div role="alert" style={{
+          padding: '8px 12px', margin: '12px 0', borderRadius: 'var(--r-ctrl)',
+          fontSize: 'var(--fs-body)', display: 'flex', justifyContent: 'space-between',
+          background: msg.type === 'ok' ? 'var(--ok-bg)' : 'var(--err-bg)',
+          border: `1px solid ${msg.type === 'ok' ? 'var(--ok)' : 'var(--err)'}`,
+          color: msg.type === 'ok' ? 'var(--ok)' : 'var(--err)',
         }}>
           {msg.text}
-          <button onClick={() => setMsg(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit" }}>×</button>
+          <button onClick={() => setMsg(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit' }}>×</button>
         </div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: detailProfileId ? "1fr 420px" : "1fr", gap: 24, alignItems: "start" }}>
-        <SizingProfileSelector
-          key={selectorKey}
-          initialTarget={searchParams.get('target')}
-          onDetail={(profile) => setDetailProfileId(profile.id)}
-          onClone={handleClone}
-          onSelectionChange={() => setDetailProfileId(null)}
-        />
+      <RunsCataleg key={selectorKey} onNou={() => setDrawerOpen(true)} />
 
-        {/* Panel de detall */}
-        {detailProfileId && (
-          <div style={{
-            border: "1px solid var(--border)", borderRadius: 8,
-            padding: "16px", background: "#fdf9f5",
-            position: "sticky", top: 24,
-            maxHeight: "calc(100vh - 120px)", overflowY: "auto",
-          }}>
-            <SizeSetDetail
-              profileId={detailProfileId}
-              onClose={() => setDetailProfileId(null)}
-              onRefresh={() => { setDetailProfileId(null); setSelectorKey(k => k + 1) }}
-            />
-          </div>
-        )}
-      </div>
-
-      {/* Drawer d'autoria de talles (1C-3) — prefill nul en autoria directa, o el de
-          ?prefill quan venim de l'ImportWizard (1C-3b). */}
+      {/* Drawer d'autoria de talles (1C-3): prefill nul en autoria directa, o el de ?prefill
+          quan venim de l'ImportWizard (1C-3b). És qui CREA runs; la fitxa només els edita. */}
       <SizeAuthoringDrawer
         open={drawerOpen}
         prefill={drawerPrefill}

@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maqueta v9 · Mesures · carril + instàncies · NORMA_LAYOUT v1</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  /* ══ TOKENS NORMA_LAYOUT v1 — estructura i JS idèntics a la v8.1 ══ */
+  :root{
+    --bg:#fbfaf8; --panel:#fff; --ink:#1d1d1b; --ink-soft:#6e6a64; --ink-faint:#98938b;
+    --line:#e8e5e0; --line-soft:#f0eeea;
+    --gold:#c27a2a; --gold-border:#e0c8a0; --sel:#f7f5f2;
+    --accio:#2b65c2;
+    --ok:#2e7d32; --ok-bg:#e9f3ea; --warn:#ff9942; --warn-bg:#ffedd9;
+    --err:#b42318; --err-bg:#fbebe9;
+    --col-talla:100px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px;line-height:16px;
+       display:grid;grid-template-columns:220px 1fr;min-height:100vh}
+
+  /* MENÚ LATERAL (sistema, no es toca) */
+  .side{background:var(--panel);border-right:1px solid var(--line);padding:16px 0}
+  .side .logo{padding:0 16px 16px;font-weight:600;color:var(--gold);font-size:14px}
+  .side .sec{padding:12px 16px 4px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+             color:var(--ink-soft);font-weight:600}
+  .side a{display:block;padding:7px 16px;color:var(--ink-soft);cursor:pointer;font-size:12px}
+  .side a.on{background:var(--sel);box-shadow:inset 3px 0 0 var(--gold);color:var(--ink);font-weight:600}
+  .main{min-width:0;display:flex;flex-direction:column}
+
+  /* §8b · TOP BAR */
+  .topbar{background:var(--panel);border-bottom:1px solid var(--line);
+          display:flex;align-items:center;gap:8px;padding:10px 20px}
+  .crumb .tenant{font-weight:600} .crumb .sep{color:var(--ink-faint)}
+  .crumb a{color:var(--ink-soft);cursor:pointer} .crumb .here{font-weight:600}
+  .topbar .right{margin-left:auto;display:flex;align-items:center;gap:10px;
+                 font-size:11px;color:var(--ink-soft);white-space:nowrap}
+  .topbar .right b{color:var(--ink)}
+  .swi{border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:10px;cursor:pointer}
+
+  /* §8b · MENÚ DE PANTALLA */
+  .pmenu-bar{background:var(--panel);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .pmenu{padding:8px 20px;display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+  .back{width:32px;height:32px;border:1px solid var(--line);border-radius:6px;background:var(--panel);
+        display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
+  .back:hover{background:var(--sel)}
+  .back svg{width:16px;height:16px;stroke:var(--ink-soft);fill:none;stroke-width:1.75;
+            stroke-linecap:round;stroke-linejoin:round}
+  .psep{width:1px;height:20px;background:var(--line);margin:0 6px}
+  .pill{border:1px solid transparent;border-radius:999px;background:none;padding:6px 14px;
+        font-family:inherit;font-size:12px;color:var(--ink-soft);cursor:pointer;line-height:16px}
+  .pill:hover{background:var(--sel);color:var(--ink)}
+  .pill.on{background:var(--sel);border-color:var(--gold-border);color:var(--ink);font-weight:600}
+  .pmenu .right{margin-left:auto;display:flex;gap:8px}
+
+  .btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--gold-border);
+       background:var(--panel);color:var(--ink);border-radius:6px;padding:8px 16px;
+       font-family:inherit;font-size:12px;font-weight:500;cursor:pointer;line-height:16px}
+  .btn:hover{background:var(--sel)}
+  .btn.pri{background:var(--accio);border-color:var(--accio);color:#fff}
+  .btn.ter{border-color:transparent;background:none;color:var(--ink-soft)}
+  .btn.sm{padding:6px 12px;font-size:11px}
+  .btn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round}
+
+  /* §8b · IDENTITAT sobre fons */
+  .mx{padding:0 20px 120px}
+  .ident{display:flex;align-items:center;gap:12px;padding:16px 0 12px;flex-wrap:wrap}
+  .ident .code{font-size:10px;color:var(--ink-faint);letter-spacing:.04em;display:block}
+  .ident .name{font-size:22px;line-height:28px;font-weight:500}
+  .ident .right{margin-left:auto;display:flex;gap:8px}
+  .b{font-size:10px;line-height:12px;font-weight:600;letter-spacing:.04em;padding:3px 10px;border-radius:999px}
+  .b.fase{background:var(--sel);color:var(--ink);border:1px solid var(--line)}
+
+  /* STEPPER de flux (§6) */
+  .flow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+  .step{display:flex;align-items:center;gap:6px;padding:5px 12px;border-radius:6px;
+        border:1px solid var(--line);font-size:11px;background:var(--panel)}
+  .step .n{width:16px;height:16px;border-radius:50%;border:1px solid currentColor;
+           display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700}
+  .step.done{background:var(--ok-bg);border-color:var(--ok);color:var(--ok)}
+  .step.done .n{background:var(--ok);border-color:var(--ok);color:#fff}
+  .step.now{background:var(--sel);border-color:var(--gold-border);box-shadow:inset 3px 0 0 var(--gold);font-weight:600}
+  .step.now .n{border-color:var(--gold);color:var(--gold)}
+  .step.locked{color:var(--ink-faint);background:var(--bg)}
+  .step.locked .n{border-color:var(--ink-faint)}
+  .arrow{color:var(--ink-faint);font-size:10px}
+
+  .kbd-hint{font-size:10px;color:var(--ink-soft);margin-bottom:12px;line-height:1.8}
+  kbd{background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:1px 6px;
+      font-family:inherit;font-size:10px;color:var(--ink)}
+  .hot{color:var(--gold);font-weight:600}
+
+  /* ══ LA TAULA — mateixa estructura, pell normada ══ */
+  .scroll{border:1px solid var(--line);border-radius:12px;background:var(--panel);overflow:visible}
+  table{border-collapse:collapse;width:100%}
+  thead th{background:var(--panel);border-bottom:1px solid var(--line);font-weight:600;font-size:10px;
+           line-height:12px;text-transform:uppercase;letter-spacing:.08em;
+           color:var(--ink-soft);text-align:left;padding:8px 10px;white-space:nowrap;vertical-align:bottom}
+  thead th.grp{text-align:center;border-left:1px solid var(--line);border-bottom:none;padding-bottom:2px;
+               background:var(--panel);color:var(--gold);font-weight:600}
+  thead tr.r2 th{font-size:10px;padding:2px 12px 8px;text-align:center;border-left:1px solid var(--line-soft);
+                 text-transform:uppercase;letter-spacing:.08em;color:var(--ink-faint)}
+  thead tr.r2 th:first-child{border-left:1px solid var(--line)}
+  /* columna base: --sel + marc --gold-border + etiqueta --gold + talla 14/600 */
+  /* ACTA D'ESMENA · CODA DEL BLOC B (Agus, vist a pantalla real): LA LLETRA DE LA TALLA VA
+     CENTRADA, no arrambada a la dreta. El carril és una columna d'amplada fixa amb un camp més
+     estret a dins; alineat a la dreta, l'etiqueta i la lletra queden enganxades al filet i tot
+     el buit se'n va a l'esquerra. El NÚMERO de dins del camp segueix a la dreta i tabular. */
+  th.baseh{text-align:center;border-left:1px solid var(--gold-border);border-right:1px solid var(--gold-border);
+           border-top:2px solid var(--gold-border);background:var(--sel)}
+  th.baseh .lbl{display:block;font-size:10px;line-height:12px;letter-spacing:.08em;text-transform:uppercase;
+                margin-bottom:2px;font-weight:600;color:var(--gold)}
+  th.baseh .sz{display:block;font-size:14px;font-weight:600;color:var(--ink);line-height:18px}
+  tbody td{border-bottom:1px solid var(--line-soft);padding:4px 10px;vertical-align:middle;white-space:nowrap}
+  tbody tr.cur td{background:var(--sel)}
+  tbody tr.cur td:first-child{box-shadow:inset 3px 0 0 var(--gold)}
+  tbody tr.lin td{background:var(--bg)}
+  tbody tr.lin.cur td{background:var(--sel)}
+  tbody tr.void td .pomwrap{opacity:.45}
+  tbody tr.void .pomname::after{content:'  · es descartarà';font-size:10px;color:var(--ink-faint);font-style:italic}
+  tbody tr.born td{animation:born 1s ease-out}
+  @keyframes born{0%{background:var(--ok-bg)}100%{background:transparent}}
+  @media (prefers-reduced-motion:reduce){tbody tr.born td{animation:none}}
+  .hnd{color:var(--ink-faint);cursor:grab;width:20px}
+  .num{color:var(--ink-soft);width:26px;font-size:10px}
+
+  .laywrap{display:flex;align-items:center;gap:4px}
+  select.cell{font-family:inherit;font-size:11px;color:var(--ink);background:var(--panel);
+              border:1px solid var(--line);border-radius:6px;padding:3px 6px;min-width:90px}
+  select.cell.def{color:var(--ink-faint)}
+  input.nomen{font-family:inherit;font-size:12px;font-weight:600;color:var(--gold);background:transparent;
+         border:1px solid transparent;border-radius:6px;padding:3px 6px;width:76px}
+  input.nomen:hover{border-color:var(--line)}
+  input.nomen:focus{border-color:var(--gold);outline:none;background:var(--panel);
+                    box-shadow:0 0 0 3px rgba(194,122,42,.15)}
+  .pomwrap{display:flex;align-items:center;gap:7px}
+  .pomname{font-size:12px}
+  .pomext{color:var(--gold);font-weight:500}
+  .info{flex:none;color:var(--ink-faint);font-size:10px;line-height:1;cursor:help;
+        position:relative;font-style:normal}
+  .info:hover{color:var(--gold)}
+  .info::after{content:attr(data-t);position:absolute;left:50%;transform:translateX(-50%);
+    bottom:calc(100% + 6px);white-space:nowrap;background:var(--ink);color:#fff;font-style:normal;
+    font-size:10px;padding:4px 8px;border-radius:6px;opacity:0;pointer-events:none;transition:opacity .12s;z-index:20}
+  .info:hover::after{opacity:1}
+
+  /* grups d'instància — píndoles; TRIADA = VERD (inclusió, §1) */
+  td.dimcell{border-left:1px solid var(--line-soft);text-align:center;padding:4px 8px}
+  .qw{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:3px 10px;
+      font-family:inherit;font-size:10px;line-height:12px;color:var(--ink-faint);cursor:pointer;
+      position:relative;margin:0 2px}
+  tr:hover .qw,tr.cur .qw{color:var(--ink-soft)}
+  .qw:hover:not(:disabled){border-color:var(--ok);color:var(--ok)}
+  .qw:focus-visible{outline:2px solid var(--gold);outline-offset:1px}
+  .qw.on{background:var(--ok-bg);border-color:var(--ok);color:var(--ok);font-weight:600}
+  .qw:disabled:not(.on){opacity:.4;cursor:default}
+  .qw::after{content:attr(data-tip);position:absolute;left:50%;transform:translateX(-50%);
+    bottom:calc(100% + 6px);white-space:nowrap;background:var(--ink);color:#fff;font-size:10px;
+    padding:4px 9px;border-radius:6px;opacity:0;pointer-events:none;transition:opacity .12s;z-index:30;font-weight:400}
+  .qw:hover::after{opacity:1}
+  .qmore{background:none;border:1px dashed var(--line);border-radius:999px;padding:3px 9px;
+         font-family:inherit;font-size:10px;color:var(--ink-faint);cursor:pointer;position:relative}
+  .qmore:hover{border-color:var(--gold-border);color:var(--gold)}
+  .qmore::after{content:attr(data-tip);position:absolute;left:50%;transform:translateX(-50%);
+    bottom:calc(100% + 6px);white-space:nowrap;background:var(--ink);color:#fff;font-size:10px;
+    padding:4px 9px;border-radius:6px;opacity:0;pointer-events:none;transition:opacity .12s;z-index:30}
+  .qmore:hover::after{opacity:1}
+
+  .g{background:none;border:1px solid transparent;border-radius:6px;padding:3px;line-height:0;
+     color:var(--ink-faint);cursor:pointer;position:relative;display:inline-flex}
+  tr:hover .g,tr.cur .g{color:var(--ink-soft)}
+  .g:hover{color:var(--gold);border-color:var(--line)}
+  .g:focus-visible{outline:2px solid var(--gold);outline-offset:1px}
+  .g svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.5;
+         stroke-linecap:round;stroke-linejoin:round}
+  .g::after{content:attr(data-tip);position:absolute;left:0;bottom:calc(100% + 6px);
+    white-space:nowrap;background:var(--ink);color:#fff;font-size:10px;padding:4px 9px;
+    border-radius:6px;opacity:0;pointer-events:none;transition:opacity .12s;z-index:30}
+  .g:hover::after{opacity:1}
+  .del{color:var(--ink-faint)}
+  .del:hover{color:var(--err);border-color:var(--err-bg)}
+
+  /* columna de valor: --sel + marc daurat */
+  /* ACTA D'ESMENA · CODA DEL BLOC B: el CAMP va centrat a la columna (v. `th.baseh`). */
+  td.valcell{border-left:1px solid var(--gold-border);border-right:1px solid var(--gold-border);
+             background:var(--sel);text-align:center;width:var(--col-talla)}
+  input.val{font-family:inherit;font-size:12px;font-weight:600;text-align:right;color:var(--ink);
+            font-variant-numeric:tabular-nums;
+            border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:4px 8px;width:78px}
+  tr.cur input.val{border-color:var(--gold)}
+  input.val:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(194,122,42,.15)}
+  input.val.bad{border-color:var(--err);background:var(--err-bg)}
+
+  tr.newrow td{background:var(--bg);padding:6px 10px}
+  .finder{position:relative;display:flex;align-items:center;gap:10px}
+  input.search{font-family:inherit;font-size:12px;color:var(--ink);border:1px solid var(--gold);
+               border-radius:6px;background:var(--panel);padding:7px 10px;width:320px}
+  input.search:focus{outline:none;box-shadow:0 0 0 3px rgba(194,122,42,.15)}
+  input.search::placeholder{color:var(--ink-faint);font-size:11px}
+  .fhint{font-size:10px;color:var(--ink-faint)}
+  .drop{position:absolute;bottom:calc(100% + 4px);left:0;z-index:40;background:var(--panel);
+        border:1px solid var(--line);border-radius:12px;box-shadow:0 -8px 24px rgba(29,29,27,.10);
+        min-width:410px;max-height:290px;overflow:auto}
+  .grp2{font-size:10px;line-height:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-faint);
+       padding:8px 12px 4px;border-top:1px solid var(--line-soft)}
+  .grp2:first-child{border-top:none}
+  .opt{display:flex;align-items:center;gap:10px;padding:6px 12px;cursor:pointer;font-size:12px}
+  .opt .c{color:var(--gold);font-weight:600;min-width:56px}
+  .opt .lv{margin-left:auto;font-size:10px;color:var(--ink-faint)}
+  .opt.on{background:var(--sel);box-shadow:inset 3px 0 0 var(--gold)}
+  .opt.new{font-style:italic;color:var(--ink-soft)}
+  .opt.new .c{color:var(--ink-faint)}
+  .xip{background:var(--sel);color:var(--ink);border:1px solid var(--gold-border);border-radius:999px;
+       padding:2px 8px;font-size:10px;white-space:nowrap}
+
+  .statusbar{position:fixed;bottom:0;left:220px;right:0;background:var(--panel);
+             border-top:1px solid var(--line);padding:10px 20px;display:flex;gap:22px;
+             align-items:center;font-size:11px;color:var(--ink-soft)}
+  .statusbar b{color:var(--ink)}
+  .statusbar .save{margin-left:auto;color:var(--ok)}
+  .foot{margin-top:16px;padding:14px 16px;border:1px solid var(--gold-border);border-left:3px solid var(--gold);
+        border-radius:0 8px 8px 0;background:var(--panel);color:var(--ink-soft);font-size:11px;line-height:1.75}
+  .foot b{color:var(--ink)}
+</style>
+</head>
+<body>
+
+<div class="side">
+  <div class="logo">Fhort<br><span style="font-weight:400;color:var(--ink-soft);font-size:10px">Textile Tech</span></div>
+  <div class="sec">Projectes</div>
+  <a>Desenvolupament</a><a class="on">Models</a><a>Planificació</a><a>Fittings</a>
+  <div class="sec">Configuració tècnica</div>
+  <a>Garment Types</a><a>POM Systems</a><a>Size Library</a><a>Grading Rules</a>
+</div>
+
+<div class="main">
+  <!-- §8b · TOP BAR -->
+  <div class="topbar">
+    <span class="crumb"><span class="tenant">Fhort Textile Tech</span>
+      <span class="sep">›</span><a>Models</a><span class="sep">›</span><span class="here">Mesures</span></span>
+    <span class="right"><b>Agustí Devant</b> · 08/08/26 · 08:55
+      <span class="swi">cm → inch</span><span class="swi">CA ▾</span><span class="swi">👤</span></span>
+  </div>
+
+  <!-- §8b · MENÚ DE PANTALLA -->
+  <div class="pmenu-bar">
+    <div class="pmenu">
+      <button class="back" title="Tornar a Models"><svg viewBox="0 0 24 24"><path d="M19 12H5M11 18l-6-6 6-6"/></svg></button>
+      <span class="psep"></span>
+      <button class="pill">Dashboard</button>
+      <button class="pill">Resum</button>
+      <button class="pill on">Mesures</button>
+      <button class="pill">Escalat</button>
+      <button class="pill">Patró</button>
+      <button class="pill">Fitxa tècnica</button>
+      <button class="pill">Fitxers</button>
+      <button class="pill">Registre d'activitat</button>
+      <button class="pill">Tasques</button>
+      <span class="right"><button class="btn sm"><svg viewBox="0 0 24 24"><path d="M5 5h14v10H9l-4 4z"/></svg>Watchpoints</button></span>
+    </div>
+  </div>
+
+  <div class="mx">
+    <!-- §8b · IDENTITAT sobre fons -->
+    <div class="ident">
+      <span><span class="code">BRW-FW27-0051 · Definició de POMs i talla base</span>
+        <span class="name">Jersei coll rodó</span></span>
+      <span class="b fase">Desenvolupament</span>
+      <span class="right">
+        <button class="btn">Accions ▾</button>
+        <button class="btn pri">Desar mesures</button>
+      </span>
+    </div>
+
+    <!-- §6 · STEPPER DE FLUX (seqüència pendent de validació de domini) -->
+    <div class="flow">
+      <span class="step now"><span class="n">1</span>POM i talla base</span>
+      <span class="arrow">→</span>
+      <span class="step locked"><span class="n">2</span>Graduació</span>
+      <span class="arrow">→</span>
+      <span class="step locked"><span class="n">3</span>Mesurar prenda</span>
+      <span class="arrow">→</span>
+      <span class="step locked"><span class="n">4</span>Propagar</span>
+    </div>
+
+    <p class="kbd-hint">
+      <kbd>↓</kbd>/<kbd>Enter</kbd> següent · <kbd>↑</kbd> anterior ·
+      <span class="hot"><kbd>L</kbd></span> germana de capa ·
+      <span class="hot"><kbd>I</kbd></span> focus als grups d'instància ·
+      <kbd>N</kbd> nomenclatura · última fila <kbd>↓</kbd> = cercador · buit = es descarta
+    </p>
+
+    <div class="scroll">
+    <table>
+      <thead>
+        <tr>
+          <th rowspan="2" class="hnd"></th><th rowspan="2" class="num">#</th>
+          <th rowspan="2" style="width:126px">Layer</th>
+          <th rowspan="2" style="width:74px"></th>
+          <th rowspan="2">POM name</th>
+          <th colspan="3" class="grp">Instance</th>
+          <th rowspan="2" class="baseh"><span class="lbl">Talla base</span><span class="sz">S</span></th>
+          <th rowspan="2" style="width:34px"></th>
+        </tr>
+        <tr class="r2">
+          <th style="width:132px">Laterality</th>
+          <th style="width:152px">State</th>
+          <th style="width:52px">més</th>
+        </tr>
+      </thead>
+      <tbody id="tb"></tbody>
+    </table>
+    </div>
+
+    <div class="foot">
+      <b>Què canvia respecte de la v8.1:</b> només la PELL. Estructura, columnes, gestos, tecles i JS
+      són idèntics. · §8b a dalt (top bar amb breadcrumb, menú blanc amb ← i píndoles, identitat sobre
+      fons amb el blau «Desar mesures»). · Columna base: --sel + marc --gold-border + etiqueta --gold +
+      talla a 14/600. · Fila activa: --sel + filet d'or 3px. · Les paraules d'instància triades passen a
+      VERD (--ok-bg + --ok): marcar una instància és INCLUSIÓ, no navegació. · Cap text per sota de 10px
+      (la v8.1 tenia 9.5). · Radis 6 control / 12 targeta · icones a 16 · «desat» en --ok.
+      · <b>Stepper</b>: la seqüència mostrada és provisional — el contingut de cada flux és domini
+      (Montse), la forma ja és norma.
+    </div>
+  </div>
+</div>
+
+<div class="statusbar">
+  <span><b id="nfull">0</b> informats</span>
+  <span><b id="nvoid">0</b> en blanc → es descartaran</span>
+  <span class="save" id="save">desat</span>
+</div>
+
+<script>
+const T={'CHEST WIDTH':'Ample de pit','WAIST WIDTH':'Ample de cintura','BOTTOM WIDTH':'Ample baix',
+'FRONT ARMHOLE':'Sisa davant','TOTAL SIDE LENGTH':'Llarg total lateral','CUFF WIDTH':'Ample de puny',
+'TOTAL LENGTH':'Llargada total','POCKET WIDTH':'Ample de butxaca','WAISTBAND HEIGHT':'Alçada de cinturó',
+'THORAX BACK WIDTH':'Ample de tòrax esquena'};
+const CAT=[
+ {c:'A',n:'CHEST WIDTH',lv:'item'},{c:'C',n:'WAIST WIDTH',lv:'item'},{c:'D',n:'BOTTOM WIDTH',lv:'item'},
+ {c:'F1',n:'TOTAL SIDE LENGTH',lv:'item'},{c:'S',n:'FRONT ARMHOLE',lv:'item'},
+ {c:'J1',n:'CUFF WIDTH',lv:'type'},{c:'E3',n:'THORAX BACK WIDTH',lv:'type'},{c:'M',n:'TOTAL LENGTH',lv:'type'},
+ {c:'O.20',n:'POCKET WIDTH',lv:'catàleg'},{c:'C.11',n:'WAISTBAND HEIGHT',lv:'catàleg'}];
+const LAYERS=['Exterior','Lining','Interlining','Padding'];
+const SUF={Left:'L',Right:'R',Relaxed:'RE',Extended:'EX'};
+const COMP={Left:'Right',Right:'Left',Relaxed:'Extended',Extended:'Relaxed'};
+const DIMS=[{key:'lat',opts:['Left','Right']},{key:'st',opts:['Relaxed','Extended']}];
+const dimOf=v=>DIMS.find(d=>d.opts.includes(v))?.key;
+const ICO={
+ layer:'<svg viewBox="0 0 24 24"><path d="M12 4l8 4-8 4-8-4 8-4z"/><path d="M4 12l8 4 8-4"/><path d="M4 16l8 4 8-4"/></svg>',
+ trash:'<svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"/></svg>'};
+
+let rows=[
+ {c:'A',n:'CHEST WIDTH',layer:'Exterior',inst:[],val:'46'},
+ {c:'C',n:'WAIST WIDTH',layer:'Exterior',inst:[],val:'44'},
+ {c:'D',n:'BOTTOM WIDTH',layer:'Exterior',inst:[],val:''},
+ {c:'S',n:'FRONT ARMHOLE',layer:'Exterior',inst:[],val:''}
+];
+const tb=document.getElementById('tb');
+let fitems=[],fsel=0;
+
+const instTxt=inst=>inst.join(' · ');
+const codeOf=(base,inst)=>base+inst.map(v=>SUF[v]).join('');
+
+function dimState(i,dim){
+  const r=rows[i];
+  const mine=r.inst.find(v=>dimOf(v)===dim);
+  const famVals=new Set();
+  rows.forEach(x=>{if(x.n===r.n&&x.layer===r.layer)
+    x.inst.forEach(v=>{if(dimOf(v)===dim)famVals.add(v);});});
+  return {mine,taken:famVals.size>0};
+}
+
+function render(focus,toFinder,born){
+  tb.innerHTML=rows.map((r,i)=>{
+    const cells=DIMS.map(d=>{
+      const st=dimState(i,d.key);
+      return `<td class="dimcell">${d.opts.map(o=>{
+        const on=st.mine===o;
+        const dis=st.taken&&!on;
+        return `<button class="qw ${on?'on':''}" data-o="${o}" data-i="${i}"
+          data-tip="${on?o+' — aquesta fila':dis?'Repartida — la germana és '+o:o+' — parteix el POM (valors heretats)'}"
+          ${st.taken?'disabled':''}>${o}</button>`;}).join('')}</td>`;
+    }).join('');
+    const ext=r.inst.length?` <span class="pomext">· ${instTxt(r.inst)}</span>`:'';
+    return `
+   <tr data-i="${i}" class="${r.val.trim()===''?'void ':''}${r.layer!=='Exterior'?'lin ':''}${i===born?'born':''}">
+    <td class="hnd">⠿</td><td class="num">${i+1}</td>
+    <td><div class="laywrap">
+      <select class="cell ${r.layer==='Exterior'?'def':''}" data-i="${i}" tabindex="-1">
+        ${LAYERS.map(l=>`<option ${l===r.layer?'selected':''}>${l}</option>`).join('')}</select>
+      <button class="g" data-act="layer" data-i="${i}" data-tip="Germana de capa · tecla L" tabindex="-1">${ICO.layer}</button>
+    </div></td>
+    <td><input class="nomen" data-i="${i}" value="${r.c}"></td>
+    <td><div class="pomwrap"><span class="pomname">${r.n}${ext}</span>
+      <span class="info" data-t="${T[r.n]||''}">i</span></div></td>
+    ${cells}
+    <td class="dimcell"><button class="qmore" data-full="${i}" data-tip="Posició i combinacions — modal complet">＋</button></td>
+    <td class="valcell"><input class="val" data-i="${i}" value="${r.val}" inputmode="decimal"></td>
+    <td><button class="g del" data-act="del" data-i="${i}" data-tip="Treu el POM" tabindex="-1">${ICO.trash}</button></td>
+   </tr>`;}).join('')
+   +`<tr class="newrow"><td class="hnd">＋</td><td colspan="9">
+      <div class="finder">
+        <input class="search" id="finder" placeholder="codi o nom…  «C.f» folre · «S.l» left · ↓ des de l'última fila">
+        <span class="fhint">Enter confirma · Esc torna al carril</span>
+        <div class="drop" id="drop" style="display:none"></div>
+      </div></td></tr>`;
+  bind();
+  if(toFinder)document.getElementById('finder').focus();
+  else if(focus!=null){const inp=tb.querySelector(`input.val[data-i="${focus}"]`);
+    if(inp){inp.focus();inp.select();markCur(focus);}}
+  refreshBar();
+}
+function markCur(i){tb.querySelectorAll('tr').forEach(t=>t.classList.remove('cur'));
+  const tr=tb.querySelector(`tr[data-i="${i}"]`);if(tr)tr.classList.add('cur');}
+function refreshBar(){const f=rows.filter(r=>r.val.trim()!=='').length;
+  document.getElementById('nfull').textContent=f;
+  document.getElementById('nvoid').textContent=rows.length-f;}
+let saveT;
+function flashSave(){const s=document.getElementById('save');s.textContent='desant…';
+  clearTimeout(saveT);saveT=setTimeout(()=>s.textContent='desat',450);}
+function commit(i,inp){let v=inp.value.replace(',','.').trim();
+  if(v!==''&&isNaN(parseFloat(v))){inp.classList.add('bad');return false;}
+  inp.classList.remove('bad');rows[i].val=v;
+  inp.closest('tr').classList.toggle('void',v==='');
+  flashSave();refreshBar();return true;}
+
+function mkLayerSibling(i){
+  const src=rows[i];
+  const next=LAYERS[Math.min(LAYERS.indexOf(src.layer)+1,LAYERS.length-1)];
+  if(next===src.layer)return;
+  if(rows.some(r=>r.c===src.c&&r.layer===next&&instTxt(r.inst)===instTxt(src.inst)))return;
+  rows.splice(i+1,0,{...src,inst:[...src.inst],layer:next,val:src.val});
+  render(i+1,false,i+1);flashSave();
+}
+function splitPair(i,opt){
+  const src=rows[i],d=dimOf(opt);
+  const base=src.c.replace(new RegExp((src.inst.map(v=>SUF[v]).join(''))+'$'),'')||src.c;
+  const instA=[...src.inst.filter(v=>dimOf(v)!==d),opt];
+  const instB=[...src.inst.filter(v=>dimOf(v)!==d),COMP[opt]];
+  const ord=x=>DIMS.findIndex(dd=>dd.opts.includes(x));
+  instA.sort((a,b)=>ord(a)-ord(b));instB.sort((a,b)=>ord(a)-ord(b));
+  const rootCode=src.inst.length? base : src.c;
+  const a={...src,inst:instA,c:codeOf(rootCode,instA),val:src.val};
+  const b={...src,inst:instB,c:codeOf(rootCode,instB),val:src.val};
+  rows.splice(i,1,a,b);
+  render(i,false,i);flashSave();
+}
+
+function bind(){
+  tb.querySelectorAll('input.val').forEach(inp=>{
+    const i=+inp.dataset.i;
+    inp.addEventListener('focus',()=>{inp.select();markCur(i);});
+    inp.addEventListener('blur',()=>commit(i,inp));
+    inp.addEventListener('keydown',e=>{
+      const k=e.key.toLowerCase();
+      if(e.key==='ArrowDown'||e.key==='Enter'){e.preventDefault();commit(i,inp);
+        if(i<rows.length-1)tb.querySelector(`input.val[data-i="${i+1}"]`).focus();
+        else document.getElementById('finder').focus();}
+      else if(e.key==='ArrowUp'){e.preventDefault();commit(i,inp);
+        if(i>0)tb.querySelector(`input.val[data-i="${i-1}"]`).focus();}
+      else if(e.key==='Escape'){inp.value=rows[i].val;inp.select();}
+      else if(k==='l'&&!e.ctrlKey&&!e.metaKey){e.preventDefault();commit(i,inp);mkLayerSibling(i);}
+      else if(k==='i'&&!e.ctrlKey&&!e.metaKey){e.preventDefault();commit(i,inp);
+        const b=tb.querySelector(`tr[data-i="${i}"] .qw:not(:disabled)`);if(b)b.focus();}
+      else if(k==='n'&&!e.ctrlKey&&!e.metaKey){e.preventDefault();commit(i,inp);
+        const nm=tb.querySelector(`input.nomen[data-i="${i}"]`);nm.focus();nm.select();}
+    });
+  });
+  tb.querySelectorAll('.qw').forEach(b=>{
+    if(b.disabled)return;
+    b.onclick=()=>splitPair(+b.dataset.i,b.dataset.o);
+    b.addEventListener('keydown',e=>{
+      const i=+b.dataset.i,k=e.key.toLowerCase();
+      if(k==='l'){e.preventDefault();splitPair(i,'Left');}
+      else if(k==='r'){e.preventDefault();splitPair(i,'Right');}
+      else if(k==='e'){e.preventDefault();splitPair(i,'Relaxed');}
+      else if(k==='x'){e.preventDefault();splitPair(i,'Extended');}
+      else if(e.key==='ArrowRight'){e.preventDefault();
+        const all=[...b.closest('tr').querySelectorAll('.qw:not(:disabled)')];
+        const ix=all.indexOf(b);if(ix<all.length-1)all[ix+1].focus();}
+      else if(e.key==='ArrowLeft'){e.preventDefault();
+        const all=[...b.closest('tr').querySelectorAll('.qw:not(:disabled)')];
+        const ix=all.indexOf(b);if(ix>0)all[ix-1].focus();}
+      else if(e.key==='Escape'||e.key==='Enter'&&b.classList.contains('on')){e.preventDefault();
+        tb.querySelector(`input.val[data-i="${i}"]`).focus();}
+      else if(e.key==='Enter'){e.preventDefault();splitPair(i,b.dataset.o);}
+    });
+  });
+  tb.querySelectorAll('.qmore').forEach(b=>{
+    b.onclick=()=>alert('Maqueta: modal complet aprovat (posició, combinacions, complementària desmarcable).');
+  });
+  tb.querySelectorAll('input.nomen').forEach(nm=>{
+    const i=+nm.dataset.i;
+    nm.addEventListener('keydown',e=>{
+      if(e.key==='Enter'||e.key==='Escape'){e.preventDefault();
+        if(e.key==='Enter'){rows[i].c=nm.value;flashSave();}
+        else nm.value=rows[i].c;
+        tb.querySelector(`input.val[data-i="${i}"]`).focus();}
+    });
+    nm.addEventListener('blur',()=>{rows[i].c=nm.value;flashSave();});
+  });
+  tb.querySelectorAll('select.cell').forEach(s=>{
+    s.addEventListener('change',()=>{rows[+s.dataset.i].layer=s.value;render(+s.dataset.i);flashSave();});
+  });
+  tb.querySelectorAll('.g').forEach(b=>{
+    b.onclick=()=>{const i=+b.dataset.i;
+      if(b.dataset.act==='layer')mkLayerSibling(i);
+      else if(b.dataset.act==='del'){rows.splice(i,1);render(Math.min(i,rows.length-1));flashSave();}};
+  });
+
+  const f=document.getElementById('finder');
+  f.addEventListener('input',()=>filter(f.value));
+  f.addEventListener('keydown',e=>{
+    if(e.key==='ArrowDown'){e.preventDefault();if(fitems.length){fsel=Math.min(fsel+1,fitems.length-1);paint();}}
+    else if(e.key==='ArrowUp'){e.preventDefault();
+      if(fsel===0||document.getElementById('drop').style.display==='none'){
+        closeF();const l=rows.length-1;
+        if(l>=0)tb.querySelector(`input.val[data-i="${l}"]`).focus();}
+      else{fsel--;paint();}}
+    else if(e.key==='Enter'){e.preventDefault();if(fitems[fsel])pick(fitems[fsel]);}
+    else if(e.key==='Escape'){e.preventDefault();f.value='';closeF();
+      const l=rows.length-1;if(l>=0)tb.querySelector(`input.val[data-i="${l}"]`).focus();}
+  });
+}
+function closeF(){document.getElementById('drop').style.display='none';}
+function filter(q){
+  const drop=document.getElementById('drop');q=q.trim();
+  if(!q){drop.style.display='none';return;}
+  let layer='Exterior',inst=[],base=q;
+  const m=q.match(/^(.*?)\.(f|l|r|re|ex)$/i);
+  if(m){base=m[1];const s=m[2].toLowerCase();
+    if(s==='f')layer='Lining';else if(s==='l')inst=['Left'];else if(s==='r')inst=['Right'];
+    else if(s==='re')inst=['Relaxed'];else if(s==='ex')inst=['Extended'];}
+  const ql=base.toLowerCase();
+  const hit=CAT.filter(p=>p.c.toLowerCase().startsWith(ql)||p.n.toLowerCase().includes(ql));
+  const order={item:0,type:1,'catàleg':2};
+  hit.sort((a,b)=>order[a.lv]-order[b.lv]||a.c.localeCompare(b.c));
+  fitems=hit.slice(0,8).map(p=>({...p,layer,inst}));fsel=0;
+  fitems.push({newPom:true,q:base});
+  paint();drop.style.display='block';
+}
+function paint(){
+  const drop=document.getElementById('drop');let html='',last=null;
+  fitems.forEach((p,k)=>{
+    if(p.newPom){html+=`<div class="grp2">no és al catàleg</div>
+      <div class="opt new ${k===fsel?'on':''}" data-k="${k}"><span class="c">＋</span>
+      crear «${p.q.toUpperCase()}» — acte conscient, demana confirmació</div>`;}
+    else{if(p.lv!==last){html+=`<div class="grp2">${p.lv==='item'?"de l'item":p.lv==='type'?'del type':'del catàleg del client'}</div>`;last=p.lv;}
+      const ex=(p.layer!=='Exterior'?p.layer:'')+(p.inst.length?(p.layer!=='Exterior'?' · ':'')+p.inst.join(' · '):'');
+      html+=`<div class="opt ${k===fsel?'on':''}" data-k="${k}"><span class="c">${p.c}</span>${p.n}
+        ${ex?`<span class="xip">${ex}</span>`:''}<span class="lv">${p.lv}</span></div>`;}
+  });
+  drop.innerHTML=html;
+  drop.querySelectorAll('.opt').forEach(o=>o.onclick=()=>pick(fitems[+o.dataset.k]));
+}
+function pick(p){
+  if(p.newPom){alert('Maqueta: porta de creació conscient. Mai per defecte.');return;}
+  rows.push({c:codeOf(p.c,p.inst),n:p.n,layer:p.layer,inst:[...p.inst],val:''});
+  document.getElementById('finder').value='';closeF();
+  render(rows.length-1,false,rows.length-1);flashSave();
+}
+render(0);
+</script>
+</body>
+</html>
