@@ -92,8 +92,17 @@ class Command(BaseCommand):
             talles = list(ss.talles.order_by('ordre'))
             base, run = talles[0], [t.etiqueta for t in talles]
 
-            rs, rs_nou = GradingRuleSet.objects.get_or_create(
-                nom=RULESET, customer=brw, defaults={'size_system': ss})
+            # El joc s'identifica pel CODI ESTABLE (`codi_sistema`), no pel `nom`: el nom és
+            # de PRESENTACIÓ i canvia (el 19/08 va passar a «GRADING BROWNIE 2026»). Buscar-lo
+            # pel nom feia que, un cop rebatejat, la segona passada no el trobés i en creés un
+            # de nou amb les 142 regles duplicades — la idempotència moria amb el rebateig.
+            # Es neix amb `codi_sistema` poblat perquè la clau existeixi des del primer dia.
+            rs = (GradingRuleSet.objects.filter(codi_sistema=RULESET, customer=brw).first()
+                  or GradingRuleSet.objects.filter(nom=RULESET, customer=brw).first())
+            rs_nou = rs is None
+            if rs_nou:
+                rs = GradingRuleSet.objects.create(
+                    nom=RULESET, codi_sistema=RULESET, customer=brw, size_system=ss)
             notes.append(f'GradingRuleSet {RULESET}: {"CREAT" if rs_nou else "ja existia"} '
                          f'(id={rs.id}, {rs.regles.count()} regles)')
 
