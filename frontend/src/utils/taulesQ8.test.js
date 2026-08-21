@@ -9,7 +9,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { diferencia, filesFitting, filesGrading, filesNotes, filesSizeSet, filesSizeSetConsolidat } from './taulesQ8.js'
+import { diferencia, filesFitting, filesGrading, filesNotes, filesSizeSet, filesSizeSetConsolidat, resumBreakQ8 } from './taulesQ8.js'
 
 const MODEL = { base_size_label: 'S', size_run_model: 'XS·S·M' }
 
@@ -127,6 +127,40 @@ test('GRADING: la BASE surt de `base_value_cm` i la resta de `graded` (criteri d
   assert.deepEqual(f.valors, { XS: 48, S: 50, M: 52 })
   assert.equal(f.regla, 'LINEAR')
   assert.equal(f.delta, 2)
+})
+
+test('Q8b · el resum del relleu: 1 break parla en DOCUMENT, els intervals en MOTOR', () => {
+  const RUN = ['XS', 'S', 'M', 'L', 'XL']
+  // El cas del banc 1383: ib=2 · brk=3 · break M desat (convenció de motor) → el full del
+  // client el nomena S, que és l'última talla del tram petit.
+  const unBreak = resumBreakQ8(
+    { delta_break: 3, talla_break: 'M', breaks: [] }, RUN)
+  assert.deepEqual(unBreak, { delta: 3, etiqueta: 'S', mes: 0 })
+  // El cas del 1384 (TRAM F): les etiquetes de l'interval NO es tradueixen.
+  const ambInterval = resumBreakQ8(
+    { delta_break: null, talla_break: null, breaks: [{ inici: 'S', final: 'L', delta: 3 }] }, RUN)
+  assert.deepEqual(ambInterval, { delta: 3, etiqueta: 'S→L', mes: 0 })
+  // Amb intervals manen ells, encara que la fila arrossegui un break vell.
+  const tots_dos = resumBreakQ8(
+    { delta_break: 9, talla_break: 'M', breaks: [{ inici: 'S', final: 'L', delta: 3 }] }, RUN)
+  assert.equal(tots_dos.delta, 3)
+  // Tres trams: es diu el primer i quants en queden (l'A4 no dona per a més).
+  const tres = resumBreakQ8({ breaks: [
+    { inici: 'XS', final: 'XS', delta: 2 },
+    { inici: 'M', final: 'L', delta: 3 },
+    { inici: 'XL', final: 'XL', delta: 4 },
+  ] }, RUN)
+  assert.deepEqual(tres, { delta: 2, etiqueta: 'XS→XS', mes: 2 })
+  // Sense res a dir, res: `null` i que qui pinti hi posi el guió.
+  assert.deepEqual(resumBreakQ8({ breaks: [] }, RUN), { delta: null, etiqueta: null, mes: 0 })
+})
+
+test('TRAM F: els INTERVALS surten crus i sempre com a llista (mai null)', () => {
+  const breaks = [{ inici: 'S', final: 'L', delta: 3 }]
+  const [amb] = filesGrading([filaTM({ breaks })], ['XS', 'S', 'M'], 'S')
+  assert.deepEqual(amb.breaks, breaks, 'crus: la volta de convenció no és d\'aquest constructor')
+  const [sense] = filesGrading([filaTM()], ['XS', 'S', 'M'], 'S')
+  assert.deepEqual(sense.breaks, [], 'una fila sense intervals en porta una llista buida')
 })
 
 test('una fila SENSE regla no s\'inventa règim: tot a null i la corba igualment', () => {

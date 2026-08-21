@@ -23,6 +23,7 @@
 // Les files que en surten porten `garment`, o sigui que `agrupaPerGarment`/`grupsDelFull` les
 // saben repartir per peça sense cap adaptador pel mig.
 
+import { aDocument } from './breakConvention.js'
 import { identitatMesura } from './identitatMesura.js'
 import { construeixTaulaPresaPerTalla } from './taulaPresaPerTalla.js'
 
@@ -189,6 +190,32 @@ export function filesNotes(grid) {
 }
 
 /**
+ * Q8b · EL RESUM DEL RELLEU D'UNA FILA — quina de les DUES formes parla, i com es diu.
+ *
+ * Torna `{delta, etiqueta, mes}`: el Δ del trencament, l'etiqueta que s'ha de pintar a la
+ * columna «B. Size», i quants trams queden per dir (0 si no en queda cap).
+ *
+ * 🔑 LES DUES FORMES NO ES PRESENTEN IGUAL, i és a posta:
+ *   · **break d'1 tram** → l'etiqueta es tradueix a convenció de DOCUMENT (`aDocument`), que és
+ *     com l'escriu el full del client;
+ *   · **intervals (TRAM F)** → en convenció de MOTOR i SENSE volta, perquè `inici` i `final`
+ *     són les etiquetes que la pantalla ofereix i que la BD desa. Traduir-ne l'inici i no el
+ *     final (o els dos, que voldria dir sortir del run) donaria una etiqueta que no casa amb res.
+ *
+ * Amb més d'un interval només hi cap el primer + un `+N`: l'amplada de la taula està repartida
+ * en bandes per no passar l'A4 i cada mil·límetre és una talla que deixa de cabre. La corba
+ * sencera hi és igualment, xifra a xifra, a les columnes de talla de la mateixa fila.
+ */
+export function resumBreakQ8(fila, talles) {
+  const ivs = (fila?.breaks || []).filter(
+    iv => iv && iv.delta !== null && iv.delta !== undefined && iv.inici && iv.final)
+  if (ivs.length) {
+    return { delta: ivs[0].delta, etiqueta: `${ivs[0].inici}→${ivs[0].final}`, mes: ivs.length - 1 }
+  }
+  return { delta: fila?.delta_break ?? null, etiqueta: aDocument(fila?.talla_break, talles), mes: 0 }
+}
+
+/**
  * Q8b · LA TAULA DE GRADING — règim + corba, per mesura i per talla.
  *
  * El VALOR d'una talla es resol amb el mateix criteri que la pantalla d'Escalat
@@ -226,6 +253,12 @@ export function filesGrading(rows, talles, base) {
     delta: r.increment_base ?? null,
     delta_break: r.increment_break ?? null,
     talla_break: r.talla_break_label || null,
+    // TRAM F — ELS INTERVALS, CRUS, com tota la resta d'aquest constructor. Les seves etiquetes
+    // van en convenció de MOTOR i **no es tradueixen mai** (a diferència de `talla_break`, que
+    // sí que fa la volta just abans de pintar): `inici` és la primera talla que creix amb el Δ
+    // nou, que és el que la BD desa i el que el picker de la pantalla ofereix. Amb un sol break
+    // les dues convencions es diuen diferent; amb intervals només n'hi ha una, i és aquesta.
+    breaks: Array.isArray(r.breaks) ? r.breaks : [],
     valors: Object.fromEntries((talles || []).map(s => [
       s, s === base ? (r.base_value_cm ?? null) : (r.graded?.[s] ?? null),
     ])),

@@ -40,10 +40,11 @@ import { ambFormat, hidratarPagines } from '../utils/paginesFtt'
 import { GARMENT_MARE, agrupaPerGarment, calArbrePerGarment, garmentDeFila } from '../utils/garmentFitxa'
 import { ampladaPerTextos, paginesDelRepartiment, repartimentEnPagines, trossosDeTalles } from '../utils/repartimentTaules'
 import { grupsDelFull } from '../utils/grupsDelFull'
-import { aDocument } from '../utils/breakConvention'
+// La volta de convenció del break ja no es fa AQUÍ: viu a `resumBreakQ8`, que és qui decideix
+// si la fila parla amb un break d'1 tram (convenció de document) o amb intervals (de motor).
 import { nomDeLaPeca } from '../utils/pecaDefinicio'
 import { etiquetaCapa, etiquetaInstancia } from '../utils/capaInstancia'
-import { filesBase, filesFitting, filesGrading, filesNotes, filesSizeSet, filesSizeSetConsolidat } from '../utils/taulesQ8'
+import { filesBase, filesFitting, filesGrading, filesNotes, filesSizeSet, filesSizeSetConsolidat, resumBreakQ8 } from '../utils/taulesQ8'
 import { identitatMesura } from '../utils/identitatMesura'
 
 const PaperFlatEditor = lazy(() => import('./PaperFlatEditor'))
@@ -5352,6 +5353,34 @@ export default function TechSheetEditor() {
     const n = xifra(Math.abs(v))
     return { text: Number(v) > 0 ? `+${n}` : `−${n}`, centrat: true }
   }
+  // ── TRAM F · ELS INTERVALS A LA FITXA (Q8b) ────────────────────────────────────────────────
+  //
+  // La corba d'una regla amb intervals no cap en «Δ break + Talla break» pensades per a UN
+  // trencament. Però tampoc cal una columna nova: les DUES que ja hi ha diuen exactament el que
+  // un interval necessita, i llegides juntes donen la frase de l'ordre —«+2,0 · S→L +3,0»—,
+  // amb el Δ general a la columna `delta` i el tram a les altres dues:
+  //
+  //      Rule    Δ       Break    B.Size
+  //      LINEAR  +2.0    +3.0     S→L
+  //
+  // ⚠️ AQUÍ NO ES FA LA VOLTA DE CONVENCIÓ, i és la diferència amb la línia del costat: el break
+  // d'un sol tram es pinta en convenció de DOCUMENT (`aDocument`), però les etiquetes d'un
+  // interval van en convenció de MOTOR —són les que la pantalla ofereix i les que la BD desa—.
+  // Traduir-ne l'inici i no el final (o els dos, que voldria dir sortir del run) donaria una
+  // etiqueta que no casa amb res.
+  //
+  // Amb més d'un interval hi cap el primer i un `+N` que diu quants en queden: l'amplada
+  // d'aquesta taula està repartida en bandes per no passar l'A4 (**mai A3: la fitxa s'imprimeix
+  // en A4**) i cada mil·límetre que es prengui aquí és una talla que deixa de cabre. La corba
+  // sencera hi és igualment, xifra a xifra, a les columnes de talla de la mateixa fila.
+  // QUI DECIDEIX quina de les dues formes parla és `resumBreakQ8`, al costat dels constructors
+  // Q8 i amb banc propi: aquí només se li dona el vestit de cel·la d'aquesta taula.
+  const cellaBreakDelta = (f, talles) => cellaIncrement(resumBreakQ8(f, talles).delta)
+  const cellaBreakTalla = (f, talles) => {
+    const { etiqueta, mes } = resumBreakQ8(f, talles)
+    if (!etiqueta) return { text: '—', centrat: true }
+    return { text: mes ? `${etiqueta} +${mes}` : etiqueta, centrat: true }
+  }
 
   // ── Q8e · TAULA DE MESURES DE TALLA BASE, PER PEÇA ──────────────────────────
   //
@@ -5589,12 +5618,14 @@ export default function TechSheetEditor() {
           capaQ8(f), cellaCodi(f), cellaPom(f),
           // El RÈGIM és dada de domini (LINEAR/STEP/FIXED): no es tradueix ni s'abreuja.
           { text: f.regla || '—', centrat: true },
-          cellaIncrement(f.delta), cellaIncrement(f.delta_break),
-          // 🔒 EL BREAK ES PRESENTA EN CONVENCIÓ DE DOCUMENT, i la dada NO es toca: la BD desa la
-          // PRIMERA talla del tram gran i el full del client escriu l'ÚLTIMA del tram petit, que
-          // és una posició de diferència dins del run. Sense run o sense traducció possible, «—»:
-          // una etiqueta desplaçada per error és indistingible d'una de correcta.
-          { text: aDocument(f.talla_break, talles) || '—', centrat: true },
+          cellaIncrement(f.delta), cellaBreakDelta(f, talles),
+          // 🔒 EL BREAK D'UN TRAM ES PRESENTA EN CONVENCIÓ DE DOCUMENT, i la dada NO es toca: la
+          // BD desa la PRIMERA talla del tram gran i el full del client escriu l'ÚLTIMA del tram
+          // petit, que és una posició de diferència dins del run. Sense run o sense traducció
+          // possible, «—»: una etiqueta desplaçada per error és indistingible d'una de correcta.
+          // Els INTERVALS (TRAM F) hi entren per la mateixa columna i **sense volta** —v.
+          // `cellaBreakTalla`, que és qui decideix quina de les dues formes parla.
+          cellaBreakTalla(f, talles),
           ...talles.slice(bi, bf).map(sl => xifra(f.valors?.[sl]) || '–'),
         ]),
         style: { fontSize: 9, capcaleraFina: true, zebra: true },
