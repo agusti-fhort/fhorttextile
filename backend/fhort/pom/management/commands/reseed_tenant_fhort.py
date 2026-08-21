@@ -395,12 +395,30 @@ class Command(BaseCommand):
                     valors_step = None
                     if d['increment_above_xl'] is not None:
                         valors_step = {'above_xl': d['increment_above_xl']}
+                    # FIX-A/PAS-1b — EL DELTA HI VA AL CAMP QUE MANA.
+                    #
+                    # Aquest reseed poblava NOMÉS `increment` i deixava `increment_base` a NULL:
+                    # el motor hi queia pel fallback llegat i graduava uniforme. Des del PAS 3
+                    # aquell fallback no hi és, i les regles que en sortien NO graduarien fins
+                    # que algú corregués `backfill_grading_break`. Era una de les DUES aixetes
+                    # que quedaven obertes, i el cens de LECTORS no la podia veure perquè no
+                    # llegeix: ESCRIU.
+                    #
+                    # ⚠️ EL BREAK `above_xl` NO ES DERIVA AQUÍ, I ÉS DELIBERAT. La forma ISO
+                    # (`valors_step={'above_xl': …}`) la resol la branca (b) de
+                    # `backfill_grading_break`, que necessita el run del ruleset per saber quina
+                    # talla és «la de sobre de XL» — i aquest bucle no el té a mà. Copiar-hi el
+                    # delta base sol reprodueix EXACTAMENT la corba que el fallback llegat
+                    # produïa (uniforme, sense relleu): aquest commit no mou cap valor, només
+                    # el posa al camp on el motor el busca. El segon pas del backfill segueix
+                    # sent el que hi afegeix el relleu, igual que abans.
                     rules_objs.append(GradingRule(
                         rule_set=rs,
                         pom=pm,
                         talla_base=sd,
                         logica=d['logica'],
                         increment=d['increment'],
+                        increment_base=d['increment'],
                         valors_step=valors_step,
                         actiu=d['actiu'],
                     ))
