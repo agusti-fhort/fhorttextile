@@ -697,17 +697,26 @@ def base_measurements_view(request, model_id):
             'tol_minus': _tol_vigent(bm.tolerancia_minus, bm.pom.tolerancia_default_minus),
             'tol_plus': _tol_vigent(bm.tolerancia_plus, bm.pom.tolerancia_default_plus),
             'notes': bm.notes or '',
+            # QUAN es va escriure aquesta base, i és la peça que faltava per poder DATAR la
+            # taula de mesures base de la fitxa tècnica. La llei del domini és que l'última
+            # mesura escrita és la veritat —temporal, no d'origen—: `base_value_cm` ja porta
+            # l'últim fit vàlid (`consolidate_base_from_fitting`), i sense saber de QUAN és,
+            # la fila de títol de la fitxa hauria d'anar muda o amb una data inventada, que en
+            # un document que va al fabricant és pitjor. Camp del model (`auto_now`), servit
+            # des del mateix `bms`: ZERO queries de més, cap camp existent tocat.
+            'updated_at': bm.updated_at.isoformat() if bm.updated_at else None,
             'nom_fitxa': bm.nom_fitxa or '',
             'origen': bm.origen or '',
             # F3 — secció d'origen ('01.- DRESS', 'Bodice:'…). '' quan el document no en
             # tenia. La fitxa tècnica la fa servir per partir la taula en una per peça.
             'seccio': bm.seccio or '',
-            # SET-2/T9 (2026-08-10) — aquest payload servirà l'eix de la PEÇA quan existeixi
-            # `ModelGarment`, i no abans: la resolució `garment.X or model.X` viu en UN SOL
-            # punt (D5) i aquesta és una de les vores on s'ha de veure. Servir aquí un eco cru
-            # de la columna `garment` faria dos orígens per al mateix camp a la mateixa vora.
-            # T9 no l'anticipa (per això no hi ha cap clau `garment`): l'editor de fitxa deriva
-            # les branques de les dades que ja rep, i avui totes són de la peça mare.
+            # ⚠️ AQUÍ HI DEIA «per això no hi ha cap clau `garment`» (SET-2/T9, 10/08) I FA
+            # TEMPS QUE ÉS FALS: la clau hi és, trenta línies més amunt (`'garment': bm.garment`),
+            # posada per SET-2/F1 quan es va obrir el camí d'escriure mesures per peça. Es
+            # corregeix i no s'hi deixa: aquest comentari, llegit per sobre, va fer concloure a
+            # una diagnosi que aquesta font no servia l'eix —i per poc no fa néixer un endpoint
+            # nou per a la taula de mesures base de la fitxa (Q8e). Un comentari datat no descriu
+            # el codi d'avui: el COS de la funció, sí.
             'pom_abbreviation': bm.pom.pom_global.abbreviation if bm.pom.pom_global_id else '',
             'pom_code_global': bm.pom.pom_global.codi if bm.pom.pom_global_id else '',
             'pom_is_key': bool(bm.pom.pom_global.is_key) if bm.pom.pom_global_id else False,
