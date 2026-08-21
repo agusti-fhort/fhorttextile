@@ -75,6 +75,11 @@ ROWS = [
         {'inici': 'M', 'final': 'L', 'delta': 1},
         {'inici': 'XL', 'final': 'XL', 'delta': 1.5}]),
     fila(6, 'G1', 'Bottom finish height', 2, 'FIXED'),                        # ⑥
+    # ⑦ (21/08) LA REGLA DEL SILENCI · LINEAR amb break llegat que repeteix el general: mut.
+    # És la forma de les 8 files del banc que van fer saltar el passi visual d'Agus.
+    fila(7, 'E5', 'Sleeve opening', 12, 'LINEAR', ib=0, brk=0, lbl='M'),
+    # I una FIXED amb residus llegats: la columna calla i la dada es queda a la BD.
+    fila(8, 'U', 'Under placket', 4, 'FIXED', ib=0, brk=0, lbl='M'),
 ]
 
 _MODEL = {
@@ -119,7 +124,7 @@ def regla(n, codi, nom, logica, ib=None, brk=None, lbl=None, breaks=None):
 _JOC = {
     'id': 1, 'nom': 'QA-F4BIS', 'codi': 'QA-F4BIS', 'actiu': True, 'is_system_default': False,
     'size_system': 1, 'applies_to': [], 'targets_codis': [], 'construction_codi': None,
-    'fit_type_codi': None, 'garment_group_codi': None, 'n_regles': 6,
+    'fit_type_codi': None, 'garment_group_codi': None, 'n_regles': 8,
     'regles': [
         regla(1, 'EK', 'Neck width', 'LINEAR', ib=0),
         regla(2, 'A', '1/2 chest width', 'LINEAR', ib=2, brk=3, lbl='M'),      # LLEGAT
@@ -132,10 +137,15 @@ _JOC = {
             {'inici': 'M', 'final': 'L', 'delta': 1},
             {'inici': 'XL', 'final': 'XL', 'delta': 1.5}]),
         regla(6, 'G1', 'Bottom finish height', 'FIXED'),
+        regla(7, 'E5', 'Sleeve opening', 'LINEAR', ib=0, brk=0, lbl='M'),
+        regla(8, 'U', 'Under placket', 'FIXED', ib=0, brk=0, lbl='M'),
     ],
 }
-_VOCAB = {'elements': [{'codi': c, 'autorable': True, 'nom': c}
-                       for c in ('LINEAR', 'STEP', 'FIXED')]}
+# ⚠️ LA FORMA LA MANA `elementsDe`: el vocabulari és `{<clau>: [...]}`, no `{elements: [...]}`.
+# Amb la clau equivocada `regimsAutorables` queda buit i el desplegable només ofereix el règim
+# que la fila ja porta — que és exactament el que va fer petar la prova ⑧ la primera vegada.
+_VOCAB = {'regims_graduacio': [{'codi': c, 'autorable': True, 'nom': c}
+                               for c in ('LINEAR', 'STEP', 'FIXED')]}
 
 
 def _stub(path):
@@ -272,11 +282,15 @@ def main():
               c5.locator('button[title*="Afegir"]').count() == 0, t5)
         c5.screenshot(path=OUT / 'f4bis_5_maxim.png')
 
-        # ── ⑥ FIXED: columna inerta ────────────────────────────────────────────────────────
+        # ── ⑥ FIXED: COLUMNA BUIDA DEL TOT ─────────────────────────────────────────────────
+        # ⚠️ CONTRACTE ACTUALITZAT (Agus, 21/08). Aquí s'asseia que el [+] hi era APAGAT, que és
+        # el que dibuixava el mockup. La regla del silenci el retira: sota un règim que no
+        # gradua la columna calla sencera —ni xips ni [+]—, perquè un control apagat en una
+        # fila que no té res a dir només convida a preguntar-se què hi fa.
         c6 = _cel_la(page, 'G1')
-        prova('⑥ FIXED: el [+] està apagat',
-              c6.locator('button[disabled]').count() >= 1,
-              c6.inner_html()[:120])
+        prova('⑥ FIXED: cap xip i cap [+] — la columna calla sencera',
+              c6.locator('button').count() == 0 and c6.inner_text().strip() == '',
+              c6.inner_html()[:160])
         c6.screenshot(path=OUT / 'f4bis_6_fixed.png')
 
         # ── ④ EDICIÓ INLINE + LA IMPOSSIBILITAT DE SOLAPAR ─────────────────────────────────
@@ -322,6 +336,37 @@ def main():
         prova('el ✕ treu el xip i torna a sortir el [+]',
               t7.count('→') == 2 and 'màx. 3' not in t7, t7)
 
+        # ── ⑧ DESAR UN FIXED NETEJA EL RELLEU · el PAYLOAD, no només la pantalla ───────────
+        # El fum captura el cos del POST: sense això es podria comprovar que la columna calla i
+        # no que la neteja arriba a viatjar, que és la meitat que de debò treu el fòssil.
+        pagats = []
+        page.route('**/regim/', lambda r: (pagats.append(r.request.post_data),
+                                           r.fulfill(status=200, content_type='application/json',
+                                                     body='{}')))
+        fila_d = page.locator('tbody tr:has(td:text-is("D"))')
+        fila_d.locator('select').first.select_option('FIXED')
+        page.wait_for_timeout(200)
+        page.get_by_role('button', name='Gravar').first.click()
+        page.wait_for_timeout(700)
+        cos_env = pagats[0] if pagats else ''
+        prova('⑧ desar un FIXED envia la NETEJA (breaks buits + llegats a null)',
+              '"breaks":[]' in cos_env and '"increment_break":null' in cos_env
+              and '"talla_break_label":null' in cos_env, cos_env or '(cap POST)')
+        page.unroute('**/regim/')
+        page.reload(wait_until='networkidle')
+        page.wait_for_timeout(900)
+
+        # ── ⑦ LA REGLA DEL SILENCI ─────────────────────────────────────────────────────────
+        c7 = _cel_la(page, 'E5')
+        prova('⑦ LINEAR amb break llegat MUT (+0 sobre general 0): cap xip, però el [+] hi és',
+              '→' not in c7.inner_text()
+              and c7.locator('button[title*="Afegir"]').count() == 1, c7.inner_text())
+        c7.screenshot(path=OUT / 'f4bis_10_llegat_mut.png')
+        cU = _cel_la(page, 'U')
+        prova('⑦ FIXED amb residus llegats: la columna calla sencera',
+              cU.locator('button').count() == 0 and cU.inner_text().strip() == '',
+              cU.inner_html()[:160])
+
         # ══ LA SEGONA SUPERFÍCIE: «Generar regles» ═════════════════════════════════════════
         # 🔑 La prova no és que «també funcioni»: és que sigui LA MATEIXA COLUMNA. Les dues
         # taules tenen amplades, capçaleres i estat propis, i el precedent de la casa és que
@@ -346,8 +391,9 @@ def main():
               'màx. 3' in t5b
               and _cel_la(page, 'I').locator('button[title*="Afegir"]').count() == 0, t5b)
         c6b = _cel_la(page, 'G1')
-        prova('«Generar regles»: FIXED té la columna inerta',
-              c6b.locator('button[disabled]').count() >= 1, c6b.inner_html()[:120])
+        prova('«Generar regles»: FIXED també calla sencera',
+              c6b.locator('button').count() == 0 and c6b.inner_text().strip() == '',
+              c6b.inner_html()[:160])
 
         # El solapament, també impossible aquí: amb S→L i XL→XL ocupats només queda XS.
         _cel_la(page, 'D').locator('button[title*="Afegir"]').click()

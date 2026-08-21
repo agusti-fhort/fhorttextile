@@ -38,6 +38,10 @@ from django.contrib.auth import get_user_model            # noqa: E402
 from django_tenants.utils import schema_context           # noqa: E402
 from rest_framework.test import APIRequestFactory, force_authenticate  # noqa: E402
 
+class _Revert(Exception):
+    """Senyal per desfer la transacció de la prova ⑦: escriure al banc no és gratis."""
+
+
 CODI = 'QA-TRAMF-0001'
 BANC = 1383
 RUN = ['XS', 'S', 'M', 'L', 'XL']
@@ -48,18 +52,45 @@ _MIRALL_JS = r'''
 import { readFileSync } from 'node:fs'
 import { intervalsVisibles } from './src/utils/gradingRegime.js'
 const { run, casos } = JSON.parse(readFileSync(process.argv[1], 'utf8'))
+
+// El delta que mana a cada posició del run, donada una llista d'intervals i el general.
+// És el mateix que fa `delta_de_posicio` al motor, i és el que decideix cada cel·la.
+const corba = (ivs, general) => run.map((_, p) => {
+  for (const iv of ivs) {
+    const i = run.indexOf(iv.inici), f = run.indexOf(iv.final)
+    if (i >= 0 && f >= 0 && p >= i && p <= f) return iv.delta
+  }
+  return general
+})
+
 const mal = []
+let callats = 0
 for (const c of casos) {
   const front = intervalsVisibles(c.regla, run)
     .map(iv => ({ inici: iv.inici, final: iv.final, delta: iv.delta }))
-  if (JSON.stringify(front) !== JSON.stringify(c.motor)) {
-    mal.push(`${c.pom}: front=${JSON.stringify(front)} motor=${JSON.stringify(c.motor)}`)
+  const general = c.regla.increment_base ?? 0
+  // 🚨 LA PROVA QUE IMPORTA DES DE LA REGLA DEL SILENCI: el front pot CALLAR un tram, però
+  // callar-lo no pot moure ni una xifra. Es comparen les CORBES, no les llistes — que és el
+  // que de debò declara el mirall: «la pantalla diu el mateix que el motor calcularà».
+  const cf = corba(front, general), cm = corba(c.motor, general)
+  if (JSON.stringify(cf) !== JSON.stringify(cm)) {
+    mal.push(`${c.pom}: corba front=${cf} motor=${cm}`)
+  }
+  // I el que calla ha de ser NOMÉS soroll: cap tram amb delta diferent del que ja manava.
+  if (front.length < c.motor.length) {
+    callats += c.motor.length - front.length
+    for (const iv of c.motor) {
+      if (!front.some(f => f.inici === iv.inici && f.final === iv.final && f.delta === iv.delta)
+          && iv.delta !== general) {
+        mal.push(`${c.pom}: calla un tram que SÍ que diu alguna cosa (${JSON.stringify(iv)})`)
+      }
+    }
   }
 }
 if (mal.length) { console.error(mal.join(' | ')); process.exit(1) }
-const mostra = casos.slice(0, 3).map(c => `${c.pom} ${c.motor.map(
-  iv => `${iv.inici}→${iv.final} ${iv.delta >= 0 ? '+' : ''}${iv.delta}`).join(' · ') || '—'}`)
-console.log(`${casos.length} regles · idèntiques · p.ex. ${mostra.join(' | ')}`)
+const vius = casos.filter(c => c.motor.length).length
+console.log(`${casos.length} regles · ${vius} amb relleu al motor · ${callats} trams callats `
+  + `per la regla del silenci · CAP corba mòbil`)
 '''
 
 
@@ -231,6 +262,92 @@ def main():
         ok(node.returncode == 0,
            f'les {len(casos)} regles del banc: el front en diu el MATEIX que el motor',
            node.stderr[-300:])
+
+        # ── ⑦ EL CAS F DEL 1383 · general 0 + intervals vius ha de ser LEGAL ────────────────
+        #
+        # És EL cas canònic del disseny d'intervals («XXS→XS no creix, a partir de S creix 2»).
+        # 🔑 ES FA EN TRANSACCIÓ REVERTIDA: la F és regla VIVA del banc, i provar-la escrivint-hi
+        # mouria el `HASH RESIDENTS` i les 5 cel·les de F a tots dos blocs del gate. La mateixa
+        # evidència sense deriva — l'ordre autoritzava la deriva, però no cal pagar-la.
+        print('\n⑦ el cas F del 1383 (general 0 + intervals) · en transacció REVERTIDA')
+        from django.db import transaction
+        from fhort.models_app.models import BaseMeasurement
+        from fhort.pom.grading_regime import es_linear_degenerada
+        from fhort.pom.serializers import GradingRuleSerializer
+        IV_F = [{'inici': 'M', 'final': 'L', 'delta': 2}, {'inici': 'XL', 'final': 'XL', 'delta': 3}]
+
+        # ⓐ el PUNT ÚNIC, que és el que comparteixen les quatre portes.
+        ok(es_linear_degenerada('LINEAR', 0, None, None, None, IV_F) is False,
+           'ⓐ punt únic: general 0 + intervals vius NO és degenerada')
+        ok(es_linear_degenerada('LINEAR', 0, None, None, None,
+                                [{'inici': 'M', 'final': 'L', 'delta': 0}]) is True,
+           'ⓐ punt únic: tot a zero amb breaks informats SEGUEIX degenerada')
+        ok(es_linear_degenerada('LINEAR', 0, None, 2, 'M', None) is False,
+           'ⓐ punt únic: regla vella d\'1 break amb ib=0 i brk=2 SEGUEIX legal')
+        ok(es_linear_degenerada('LINEAR', 0, None, None, None, None) is True,
+           'ⓐ punt únic: general 0 i cap tram → degenerada (com sempre)')
+
+        regla_f = ModelGradingRule.objects.get(model_id=BANC, pom__codi_client='F', garment='')
+        base_f = float(BaseMeasurement.objects.get(
+            model_id=BANC, pom=regla_f.pom, capa='exterior', instancia='',
+            garment='').base_value_cm)
+        try:
+            with transaction.atomic():
+                # ⓑ porta ① — la resident, que és la que l'Agus té a pantalla.
+                resp = _post(set_pom_regim_view, {
+                    'logica': 'LINEAR', 'breaks': IV_F,
+                    'increment_break': None, 'talla_break_label': None,
+                }, BANC, regla_f.pom_id)
+                ok(resp.status_code == 200,
+                   'ⓑ porta ① `set_pom_regim_view`: la F es DESA', resp.data)
+
+                # ⓒ porta ③ — el serializer del catàleg, amb la mateixa forma.
+                from fhort.pom.models import GradingRule
+                rj = GradingRule.objects.filter(
+                    rule_set_id=Model.objects.get(pk=BANC).grading_rule_set_id,
+                    pom=regla_f.pom).first()
+                ser = GradingRuleSerializer(rj, data={'breaks': IV_F, 'increment_break': None,
+                                                      'talla_break_label': None}, partial=True)
+                ok(ser.is_valid(), 'ⓒ porta ③ `GradingRuleSerializer`: la mateixa forma passa',
+                   getattr(ser, 'errors', None))
+
+                # ⓓ propagar i llegir la corba.
+                sf_banc = SizeFitting.objects.filter(model_id=BANC).order_by('numero').first()
+                _post(generate_grading_view, {'new_version': True}, BANC)
+                gv = vigent_grading_version(sf_banc)
+                corba = {sp.size_label: float(sp.graded_value_cm) for sp in
+                         GradedSpec.objects.filter(grading_version=gv, pom=regla_f.pom)}
+                esperat = {'XS': base_f, 'S': base_f, 'M': base_f + 2,
+                           'L': base_f + 4, 'XL': base_f + 7}
+                ok(corba == esperat,
+                   f'ⓓ propagat: XS/S al pas 0 · M→L al 2 · XL al 3  (base {base_f})',
+                   f'{corba} != {esperat}')
+                print(f'      {corba}')
+                raise _Revert()
+        except _Revert:
+            pass
+        ok(ModelGradingRule.objects.get(pk=regla_f.pk).breaks is None,
+           '⑦ REVERTIT: la F del banc segueix com era (breaks NULL)')
+
+        # ── ⑧ LINEAR → FIXED → LINEAR no ressuscita cap xip fantasma ────────────────────────
+        print('\n⑧ canviar de règim no deixa fòssils')
+        _post(set_pom_regim_view, {'logica': 'LINEAR', 'increment_base': 2,
+                                   'breaks': [{'inici': 'M', 'final': 'L', 'delta': 4}]},
+              model.pk, pom.pk)
+        ok(rule().breaks is not None, 'la regla té relleu abans de canviar de règim')
+        # El payload que la pantalla envia quan desa un règim que no gradua (`relleuResidual`).
+        resp = _post(set_pom_regim_view, {'logica': 'FIXED', 'breaks': [],
+                                          'increment_break': None, 'talla_break_label': None},
+                     model.pk, pom.pk)
+        ok(resp.status_code == 200, 'es desa com a FIXED', resp.data)
+        r = rule()
+        ok(r.breaks is None and r.increment_break is None and r.talla_break_label is None,
+           '🚨 el FIXED ha quedat NET: cap fòssil a la BD',
+           (r.breaks, r.increment_break, r.talla_break_label))
+        resp = _post(set_pom_regim_view, {'logica': 'LINEAR', 'increment_base': 2},
+                     model.pk, pom.pk)
+        ok(resp.status_code == 200 and rule().breaks is None,
+           '🚨 tornant a LINEAR no ressuscita cap xip fantasma', resp.data)
 
         # Deixa el model de prova amb la forma NOVA, que és el que la QA de pantalla vol veure.
         _post(set_pom_regim_view, {
