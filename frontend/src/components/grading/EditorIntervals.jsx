@@ -209,7 +209,11 @@ export default function ColumnaBreaks({ rule, run, onCanvi, readOnly = false, mo
 
         {/* AL MÀXIM, EL [+] DESAPAREIX I HO DIU. Un control apagat que ningú pot fer servir
             ocupa el lloc d'una explicació; el rètol la dóna. */}
-        {ple ? (
+        {/* 🚨 SOTA UN RÈGIM QUE NO GRADUA, LA COLUMNA ÉS BUIDA DEL TOT (Agus, 21/08 — esmena
+            del mockup, que hi deixava un [+] apagat). Ni xips —`intervalsVisibles` ja calla— ni
+            [+]: un FIXED no creix i cap interval no li aplica, o sigui que un control apagat
+            només convida a preguntar-se què hi fa. La columna sencera callada ÉS la resposta. */}
+        {readOnly ? null : ple ? (
           <span style={{ fontSize: 10, color: 'var(--text-soft)', fontStyle: 'italic' }}>
             {t('grading.intervals.max_curt', { max: MAX_BREAKS })}
           </span>

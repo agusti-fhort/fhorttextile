@@ -7,7 +7,9 @@ import Xip from '../ui/Xip'
 import { useEixos } from './eixosFont'
 import { useGarmentGroups } from './garmentCatalog'
 import { useElements } from '../../utils/vocabulariDominiFont'
-import { isDegenerateLinear, intervalsIncomplets, relleuLlegat } from '../../utils/gradingRegime'
+import {
+  isDegenerateLinear, intervalsIncomplets, relleuLlegat, relleuResidual,
+} from '../../utils/gradingRegime'
 import ColumnaBreaks from './EditorIntervals'
 import { etiquetesDelRun } from '../../utils/breakConvention'
 import useConfirmacioRuleset from '../model/useConfirmacioRuleset'
@@ -543,7 +545,15 @@ function Joc({ joc, run, runs, vocabularis, regimsAutorables, accions, onTanca, 
       const desades = []
       for (const [id, patch] of edicions) {
         try {
-          const { data } = await gradingRules.update(id, patch)
+          // 🔑 CANVIAR DE RÈGIM NO DEIXA FÒSSILS (mateix criteri que «Graduació del model»).
+          // Desar una regla com a FIXED/ZERO en retira el relleu; tornar-la a LINEAR demà ha de
+          // trobar la fila neta, no un trencament que ningú ha escrit i que la columna —per la
+          // regla del silenci— ni ensenyava. MAI sota STEP: allà el relleu és LATENT (PG-4b-3a).
+          const viva = { ...regles.find(r => r.id === id), ...patch }
+          const cos = relleuResidual(viva)
+            ? { ...patch, breaks: [], increment_break: null, talla_break_label: null }
+            : patch
+          const { data } = await gradingRules.update(id, cos)
           desades.push(data)
         } catch (e) {
           // Els `BREAKS_*` tenen adreça: la columna d'aquella regla. La resta segueix al toast.

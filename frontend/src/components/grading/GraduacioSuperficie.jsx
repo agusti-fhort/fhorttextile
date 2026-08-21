@@ -10,7 +10,9 @@ import { useTraduccioPoms } from '../../utils/traduccioPomFont'
 import { useElements } from '../../utils/vocabulariDominiFont'
 import { InfoTraduccio, AMPLADES } from '../EditableTable/EditableTable'
 import ColumnaBreaks from './EditorIntervals'
-import { intervalsDe, intervalsIncomplets, relleuLlegat } from '../../utils/gradingRegime'
+import {
+  intervalsIncomplets, isDegenerateLinear, relleuLlegat, relleuResidual,
+} from '../../utils/gradingRegime'
 
 // LA GRADUACIÓ ÉS UNA SUPERFÍCIE PRÒPIA (P0.5d · Agus, 06/08, a pantalla).
 //
@@ -100,19 +102,18 @@ const acceptaDeltes = (logica) => logica === 'LINEAR' || !logica
 
 const buit = (v) => v === null || v === undefined || v === ''
 
-// Mirall EXACTE de `es_linear_degenerada` (backend `pom/grading_regime.py`): LINEAR amb delta 0 i
-// sense trencament no gradua res i el backend el rebutja amb 400 LINEAR_INCREMENT_ZERO. Es mira
-// aquí perquè la persona ho vegi a la fila i no en un toast després d'haver premut Gravar.
-function esLinearDegenerada(r) {
-  if (r.logica !== 'LINEAR') return false
-  if (!buit(r.increment_base) && Number(r.increment_base) !== 0) return false
-  // TRAM F — el relleu compta si porta un delta NO-ZERO, vingui del break d'1 tram o d'un
-  // interval. Amb `ib=0 · brk=0` i talla de break informada la regla no gradua res, i abans
-  // passava la porta només per tenir l'etiqueta posada (defecte 4 de la diagnosi de PROD).
-  if (!buit(r.increment_break) && Number(r.increment_break) !== 0) return false
-  if (intervalsDe(r).some(iv => !buit(iv?.delta) && Number(iv.delta) !== 0)) return false
-  return true
-}
+// 🚨 AQUÍ HI HAVIA UNA TERCERA CÒPIA DEL PREDICAT (retirada el 21/08).
+//
+// `es_linear_degenerada` (backend) declara tenir UN mirall al front, i és `gradingRegime.js`.
+// Aquest fitxer en tenia un SEGON, transcrit a mà, que feia exactament el mateix — i per tant
+// era la còpia que un dia diria una altra cosa. La llei que la casa ja ha pagat dues vegades
+// (les amplades d'`EditableTable`, el fallback del llegat a DOS nodes del fix A) diu que dues
+// implementacions del mateix predicat es bifurquen el dia que algú en toca una: aquí n'hi
+// havia tres per a una sola llei.
+//
+// Ara la fila consulta `isDegenerateLinear` del punt únic. La llei, dita un sol cop:
+//     DEGENERADA ⟺ delta general == 0  I  cap interval amb delta ≠ 0
+//                  (la forma vella hi compta: un `increment_break` llegat ≠ 0 la salva)
 
 /** Text lliure → número o null. Accepta la coma decimal, que és com s'escriu aquí. */
 function num(v) {
@@ -240,7 +241,7 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
     const out = new Set()
     files.forEach(r => {
       if (!edicions.has(clauRegla(r))) return
-      if (esLinearDegenerada(reglaDe(r))) out.add(r.pom_id)
+      if (isDegenerateLinear(reglaDe(r))) out.add(r.pom_id)
     })
     return out
   }, [files, edicions, reglaDe])
@@ -262,7 +263,14 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
   const grava = useCallback(async () => {
     if (!reglesTocades.length || gravant) return
     if (degenerades.size) {
-      setFeedback({ type: 'err', text: t('graduacio.superficie.err_linear_zero') })
+      // 🔑 EL MISSATGE DIU QUINES FILES. Un lot pot portar sis regles i el text genèric obligava
+      // a endevinar quina el barrava — i quan el que s'acabava d'editar era una ALTRA fila, la
+      // conclusió natural era que el guard es queixava de la que tenies a la mà. És el mateix
+      // criteri que ja regeix per als `BREAKS_*`: un error té adreça.
+      const noms = files.filter(r => degenerades.has(r.pom_id))
+        .map(r => r.pom_code).filter((v, i, a) => a.indexOf(v) === i)
+      setFeedback({ type: 'err',
+        text: `${t('graduacio.superficie.err_linear_zero')} (${noms.join(', ')})` })
       return
     }
     if (incompletes.size) {
@@ -288,6 +296,17 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
       // s'envia no es toca), però un interval esborrat només es pot dir enviant la llista tal
       // com ha quedat: `[]` vol dir «aquesta regla ja no en té cap», i el servidor el desa NULL.
       if ('breaks' in camps) payload.breaks = camps.breaks || []
+      // 🔑 CANVIAR DE RÈGIM NO DEIXA FÒSSILS. Desar una regla com a FIXED (o ZERO) en retira
+      // el relleu: els intervals i els dos camps llegats. Sense això, tornar-la a LINEAR demà
+      // ressuscitaria un trencament que ningú ha escrit —i que la columna, per la regla del
+      // silenci, ni tan sols ensenyava mentre era FIXED: un fòssil invisible.
+      // ⚠️ MAI SOTA STEP: allà el relleu és LATENT per llei (PG-4b-3a, el pas STEP↔LINEAR
+      // no-destructiu). Un STEP està de pas; un FIXED és una destinació.
+      if (relleuResidual(reglaDe(files.find(r => clauRegla(r) === clau) || {}))) {
+        payload.breaks = []
+        payload.increment_break = null
+        payload.talla_break_label = null
+      }
       if (!Object.keys(payload).length) continue
       try {
         // SET-2/#12d — L'EIX HI VA. `set_pom_regim_view` resol per `(model, pom, garment)`
