@@ -426,6 +426,88 @@ dues derives pel mateix motiu (`5715f4a2…` → `59b84241…` → `6e55bc13…`
 
 ---
 
+# 9 · REOBERTURA · L'ESBORRANY NO ÉS LA REGLA
+
+Amb l'evidència del navegador d'Agus (captura de les 21:22) el símptoma es reprodueix. §8.1
+seguia sent cert —la porta dona 200 i el guard no és cec— i alhora insuficient: **la
+divergència era al front, i no al predicat sinó a QUIN ESTAT es jutja.**
+
+## 9.1 · El gest, i les DUES cares del mateix defecte
+
+Reproduït conduint tres seqüències sobre el bundle real (`/tmp/probe_draft.py`, el patró del
+fum):
+
+| | Gest | Abans |
+|---|---|---|
+| **G1** | editar el xip llegat → **✓** → `[+]` → escriure Δ → **Gravar sense ✓** | grava **i llença el xip en silenci** |
+| **G2** | **✕** el xip llegat → `[+]` → escriure Δ → **Gravar sense ✓** | **«no gradua res (F)»** amb un `+2` a la pantalla |
+| G3 | tot confirmat (control) | grava ✅ |
+
+**G2 és la captura d'Agus, literalment.** Treure el xip llegat deixa la regla sense relleu
+DESAT (`breaks: []` + els llegats a null); el xip nou viu **només** a l'estat de
+`ColumnaBreaks`. El guard mirava la regla; la persona mirava la pantalla. Tècnicament cert,
+pràcticament una mentida.
+
+**G1 és el mateix defecte per la cara bona, i ningú l'havia vist perquè no es queixa:** amb un
+xip ja confirmat i un segon a mig escriure, «Gravar» funcionava i **el segon desapareixia sense
+dir res**. Un guard que et barra és molest; una pèrdua muda de feina escrita és pitjor.
+
+De les tres hipòtesis de l'ordre, **(a) i (b) alhora** —el mirall jutja la fila sense el draft,
+i el payload es serialitza sense ell—. La **(c)** queda descartada: el nom «F» era correcte, la
+fila era F de debò; el que era fals era el *motiu*.
+
+## 9.2 · El fix
+
+`ColumnaBreaks` avisa cap amunt que té un xip pendent (`onEsborrany`, cridat des dels **gestos**
+i no des d'un efecte — un `setState` dins d'un efecte encadena renders i el lint ho canta), i el
+«Gravar» de les **dues** superfícies el barra **NOMENANT LA FILA**, i **abans** dels altres dos
+guards:
+
+```
+Hi ha un interval a mig escriure: confirma'l amb ✓ o cancel·la'l amb ✕ abans de gravar. (F)
+```
+
+Va primer a posta: és el que la persona pot resoldre amb un clic, i és el que **explica** per
+què el que té escrit a pantalla encara no consta enlloc.
+
+**El ✓ segueix sent el gest.** No s'auto-confirma res: escriure el que ningú ha confirmat seria
+guanyar comoditat pagant amb la llei que sosté tota la casa. Amb el ✓ premut, la mateixa
+pantalla i la mateixa fila graven — el guard és un recordatori, no una paret.
+
+## 9.3 · QA
+
+| Prova | Abans | Ara |
+|---|---|---|
+| **G1** (confirmat + draft) | POST que llença el xip | **cap POST** · missatge amb el gest ✅ |
+| **G2** (✕ + draft) | «no gradua res (F)» | **cap POST** · missatge amb el gest ✅ |
+| **G3** (control) | grava | grava ✅ |
+| Amb el ✓ premut | — | la MATEIXA fila grava amb el Δ escrit ✅ |
+
+Al banc de fum com a **⑨** (`qa_f4bis_columna_breaks.py`, **27 → 30 → 33** en tres addendes del
+mateix dia), amb tres assercions: cap POST · el missatge diu el gest **i no** «no gradua res»
+—comprovat pels dos costats, perquè dir la frase bona no serveix si l'altra segueix sortint— i
+el desat després del ✓. Captura: `ops/qa/captures/f4bis_11_esborrany_obert.png`.
+
+> 🔑 **PER QUÈ AIXÒ NO ES PODIA CAÇAR AMB EL PORT.** El defecte no és del payload —el payload
+> directe dona 200— sinó de l'**estat que viu entre les tecles i el botó**. Només existeix
+> mentre algú té un xip obert, i només un navegador conduït pot tenir-lo obert. És exactament
+> la classe de defecte que `qa_mount_modelsheet.py` va néixer per caçar, i la raó per la qual
+> el fum ha de conduir GESTOS i no només comprovar píxels.
+
+## 9.4 · Gate i commits
+
+```
+A=✔(105)  B=✔(525)  C=✔(4)  ·  HASH JOC IDÈNTIC  ·  HASH RESIDENTS 50982bbe…1f08 (estable)
+node --test 21/21 · fum 33/33 · staging 30/30 · eslint 0 errors · build i check nets
+```
+
+| Commit | Concern |
+|---|---|
+| `0955e606` | **el fix** · `onEsborrany` + el guard que nomena la fila, a les dues superfícies · i18n |
+| `88523ec6` | **⑨ al fum** · el gest que cap QA de port veu mai |
+
+---
+
 *Acta del 2026-08-21. Cada xifra d'aquest document surt d'una correguda que hi ha al repo i es
-pot repetir; les divergències respecte de les ordres (§5.1, §5.2 i §8.1) estan dites amb el
-motiu al davant i cap d'elles s'ha tapat.*
+pot repetir; les divergències respecte de les ordres (§5.1, §5.2, §8.1 i §9.1) estan dites amb
+el motiu al davant i cap d'elles s'ha tapat.*
