@@ -402,6 +402,50 @@ class IntervalsPerLaPortaHTTPTest(TenantTestCase):
         self.assertEqual(resp.status_code, 400)
         self.assertEqual(resp.data.get('codi'), 'LINEAR_INCREMENT_ZERO')
 
+    # ─────────────────────────────────────────────────────────────────────────────────────
+    # FUM ⑩ · EL GEST D'AGUS, TAL COM EL FA LA PANTALLA (2026-08-21)
+    #
+    # 🚨 LA DIVERGÈNCIA QUE AIXÒ TANCA. El 400 `LINEAR_INCREMENT_ZERO` que Agus va veure NO
+    # venia de cap guard duplicat al codi: venia del BINARI. El gunicorn de staging va
+    # arrencar a les 12:37:55 UTC amb `ea03184e`, i el tram F (`c07b1d5a` 15:49, `a4d179eb`
+    # 17:11) va entrar DESPRÉS. La vista que servia el 400 no coneixia el camp `breaks` —ni
+    # el llegia ni el validava— i `es_linear_degenerada` d'aquella versió tenia CINC
+    # paràmetres: jutjava «general 0 i cap break llegat» sense mirar cap interval. Els fums
+    # d'aquest fitxer donaven 200 perquè corren en PROCÉS contra el codi del DISC.
+    #
+    # Per això aquest fum imita el gest EXACTE i no una versió neta d'ell:
+    #   · la fila JA existeix amb general 0 i intervals (és el que Agus tenia a la taula),
+    #   · el payload NO porta `increment_base` ni `logica` —`GraduacioSuperficie.jsx:301-312`
+    #     només envia el que s'ha tocat—, i sí que porta `increment_break: null`,
+    #     `talla_break_label: null` i `garment: ''`.
+    # Si algun dia algú torna a llegir «increment 0» sense mirar els intervals, aquí peta.
+    # ─────────────────────────────────────────────────────────────────────────────────────
+    def test_FUM_10_el_gest_dAgus_general_0_amb_intervals_confirmats(self):
+        from fhort.models_app.models import ModelGradingRule
+        ModelGradingRule.objects.create(
+            model=self.model, pom=self.pom, garment='', actiu=True, logica='LINEAR',
+            increment_base=0, increment=None, origen='MANUAL',
+            breaks=[{'inici': 'M', 'final': 'L', 'delta': 2.0}])
+
+        resp = self._regim({
+            'breaks': [{'inici': 'M', 'final': 'L', 'delta': 2},
+                       {'inici': 'XL', 'final': 'XL', 'delta': 3}],
+            'increment_break': None,
+            'talla_break_label': None,
+            'garment': '',
+        })
+        self.assertEqual(resp.status_code, 200, getattr(resp, 'data', None))
+        self.assertEqual(resp.data['breaks'],
+                         [{'inici': 'M', 'final': 'L', 'delta': 2.0},
+                          {'inici': 'XL', 'final': 'XL', 'delta': 3.0}])
+        # I es PROPAGA: 0 · 0 · 2 · 2 · 3 comptats entre talles consecutives des de la base.
+        taula = self._taula()
+        self.assertEqual(taula, {'XS': 100.0, 'S': 100.0, 'M': 102.0, 'L': 104.0, 'XL': 107.0})
+        run = ['XS', 'S', 'M', 'L', 'XL']
+        deltes = [round(taula[b] - taula[a], 2) for a, b in zip(run, run[1:])]
+        self.assertEqual([0.0] + deltes, [0.0, 0.0, 2.0, 2.0, 3.0],
+                         'el relleu que Agus va escriure, cel·la a cel·la')
+
     def test_el_payload_de_la_taula_serveix_els_intervals_i_el_run_del_sistema(self):
         from fhort.models_app.views import measurements_table_view
         self._regim({'logica': 'LINEAR', 'increment_base': 2,
