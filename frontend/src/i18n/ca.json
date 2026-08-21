@@ -3901,6 +3901,21 @@
       "rules_saved_one": "{{count}} regla desada.",
       "rules_saved_other": "{{count}} regles desades.",
       "back_title": "Tornar a Configuració tècnica"
+    },
+    "intervals": {
+      "linia": "Interval {{n}}",
+      "afegir": "Afegir un interval de graduació",
+      "max": "Màxim {{max}} intervals per regla",
+      "sense_run": "Sense run de talles no es pot definir cap interval",
+      "nomes_linear": "Els intervals només tenen sentit sota LINEAR",
+      "talla_inici": "Talla d’inici de l’interval",
+      "talla_inici_help": "La PRIMERA talla que creix amb el Δ d’aquest interval.",
+      "talla_final": "Talla final de l’interval",
+      "talla_final_help": "L’ÚLTIMA talla que creix amb el Δ d’aquest interval (hi entra).",
+      "delta": "Δ de l’interval",
+      "delta_help": "Creixement entre dues talles consecutives dins de l’interval.",
+      "treure": "Treure aquest interval",
+      "incomplet": "Hi ha un interval a mitges: li falta la talla o el Δ."
     }
   },
   "export_button": {

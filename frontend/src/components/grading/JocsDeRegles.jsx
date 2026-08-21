@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { gradingRuleSets, gradingRules, sizeSystems } from '../../api/endpoints'
 import PageMenu from '../ui/PageMenu'
@@ -7,7 +7,8 @@ import Xip from '../ui/Xip'
 import { useEixos } from './eixosFont'
 import { useGarmentGroups } from './garmentCatalog'
 import { useElements } from '../../utils/vocabulariDominiFont'
-import { isDegenerateLinear } from '../../utils/gradingRegime'
+import { isDegenerateLinear, intervalsIncomplets } from '../../utils/gradingRegime'
+import { BotoAfegirInterval, FilesIntervals } from './EditorIntervals'
 import { aDocument, aMotor, etiquetesDelRun, opcionsDocument } from '../../utils/breakConvention'
 import useConfirmacioRuleset from '../model/useConfirmacioRuleset'
 
@@ -503,6 +504,13 @@ function Joc({ joc, run, runs, vocabularis, regimsAutorables, accions, onTanca, 
 
   const gravaRegles = async () => {
     if (!edicions.size) return
+    // TRAM F — un interval a mitges (sense talla o sense Δ) el rebutjaria el backend amb 400.
+    // Es diu ABANS, i amb el nom de la fila, que és el que la persona busca.
+    const aMitges = regles.filter(r => intervalsIncomplets({ ...r, ...(edicions.get(r.id) || {}) }))
+    if (aMitges.length) {
+      onError(`${t('grading.intervals.incomplet')} (${aMitges.map(r => r.pom_codi).join(', ')})`)
+      return
+    }
     setGravant(true)
     try {
       const desades = []
@@ -769,6 +777,8 @@ function Joc({ joc, run, runs, vocabularis, regimsAutorables, accions, onTanca, 
                     // l'anomena el full del client. `aDocument`/`aMotor` (utils/breakConvention)
                     // fan la volta i la desfan; cap dels dos sentits es fa a mà en aquest fitxer.
                     const potBrk = potRebreBreak({ ...r, ...(editada || {}) })
+                    // TRAM F — els intervals VIUS de la fila (edició a sobre de la dada).
+                    const intervalsViu = viu(r, 'breaks') || []
                     const breakDoc = aDocument(viu(r, 'talla_break_label'), etiquetesRun) || ''
                     const opcionsBreak = [...new Set(
                       [...opcionsDocument(etiquetesRun), breakDoc].filter(Boolean))]
@@ -777,7 +787,8 @@ function Joc({ joc, run, runs, vocabularis, regimsAutorables, accions, onTanca, 
                       // un filet taronja. No fa servir `--sel`: `--sel` és «on soc» i el verd és
                       // «inclòs» (§1), i «pendent» és una tercera cosa. El taronja és marca de
                       // dada, que és exactament el que això és.
-                      <tr key={r.id} style={editada
+                      <Fragment key={r.id}>
+                      <tr style={editada
                         ? { boxShadow: 'inset 3px 0 0 var(--warn-state)' } : undefined}>
                         <td style={{ ...cx.td, color: 'var(--text-faint)' }}>{i + 1}</td>
                         <td style={{ ...cx.td, ...cx.tall, color: 'var(--gold)', fontWeight: 600 }}
@@ -822,16 +833,25 @@ function Joc({ joc, run, runs, vocabularis, regimsAutorables, accions, onTanca, 
                         </td>
                         {/* LA TALLA DE TRENCAMENT S'EDITA AQUÍ, i només aquí (Agus, 10/08). */}
                         <td style={{ ...cx.td, textAlign: 'right' }}>
-                          <select value={breakDoc} disabled={!potBrk}
-                                  aria-label={t('grading.jocs.col_break_size')}
-                                  title={potBrk ? undefined : t('grading.jocs.break_size_needs_delta')}
-                                  onChange={e => edita(r.id, {
-                                    talla_break_label: aMotor(e.target.value, etiquetesRun) })}
-                                  style={{ ...cx.selr, fontVariantNumeric: 'tabular-nums',
-                                           ...(potBrk ? null : off) }}>
-                            <option value="">—</option>
-                            {opcionsBreak.map(o => <option key={o} value={o}>{o}</option>)}
-                          </select>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6,
+                                         justifyContent: 'flex-end' }}>
+                            <select value={breakDoc} disabled={!potBrk}
+                                    aria-label={t('grading.jocs.col_break_size')}
+                                    title={potBrk ? undefined : t('grading.jocs.break_size_needs_delta')}
+                                    onChange={e => edita(r.id, {
+                                      talla_break_label: aMotor(e.target.value, etiquetesRun) })}
+                                    style={{ ...cx.selr, fontVariantNumeric: 'tabular-nums',
+                                             ...(potBrk ? null : off) }}>
+                              <option value="">—</option>
+                              {opcionsBreak.map(o => <option key={o} value={o}>{o}</option>)}
+                            </select>
+                            {/* TRAM F — EL SIGNE [+], LA MATEIXA GRAMÀTICA QUE A GRADUACIÓ DEL
+                                MODEL: mateix component, mateixa sub-línia, mateix sostre. */}
+                            <BotoAfegirInterval intervals={intervalsViu} run={etiquetesRun}
+                              disabled={logica !== 'LINEAR'}
+                              motiu={logica === 'LINEAR' ? '' : t('grading.intervals.nomes_linear')}
+                              onCanvi={llista => edita(r.id, { breaks: llista })} />
+                          </span>
                         </td>
                         <td style={cx.td}>
                           <Boto variant="ter" onClick={() => treuRegla(r)}
@@ -841,6 +861,12 @@ function Joc({ joc, run, runs, vocabularis, regimsAutorables, accions, onTanca, 
                           </Boto>
                         </td>
                       </tr>
+                      {/* TRAM F — les sub-línies dels intervals, sota la seva fila. */}
+                      <FilesIntervals intervals={intervalsViu} run={etiquetesRun}
+                        clau={`iv-${r.id}`} colSpanEsquerra={3} colSpanDreta={5}
+                        readOnly={logica !== 'LINEAR'}
+                        onCanvi={llista => edita(r.id, { breaks: llista })} />
+                      </Fragment>
                     )
                   })}
                 </tbody>

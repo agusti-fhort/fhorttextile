@@ -22,6 +22,7 @@ import AvisDiccionari from '../ui/AvisDiccionari'
 import { boto, botoTer } from '../ui/buttons'
 import BateigInput from '../model/BateigInput'
 import { baseMeasurements, poms } from '../../api/endpoints'
+import { intervalsDe } from '../../utils/gradingRegime'
 import { aDocument } from '../../utils/breakConvention'
 import { esBruta } from '../../utils/taulaBruta'
 import { construeixPayload } from '../../utils/payloadMesures'
@@ -68,12 +69,23 @@ const COLS_GRADING = [
   { clau: 'regim', i18n: 'fitting.grid.regime', ample: AMPLADES.regim, valor: r => r.logica || null },
   { clau: 'delta', i18n: 'editable_table.col.delta', ample: AMPLADES.delta,
     valor: r => (r.increment_base == null ? null : r.increment_base) },
+  // TRAM F — amb INTERVALS no hi ha UN Δ de break ni UNA talla de break: n'hi ha un per tram.
+  // Les dues columnes es diuen compacte (`S→L +3`) en comptes d'inventar-se quin dels tres és
+  // «el» break. Les etiquetes d'un interval van en convenció de MOTOR, com al seu editor.
   { clau: 'delta_break', i18n: 'editable_table.col.delta_break', ample: AMPLADES.delta_break,
-    valor: r => (r.increment_break == null ? null : r.increment_break) },
+    valor: r => (intervalsDe(r).length ? null
+      : (r.increment_break == null ? null : r.increment_break)) },
   // La talla del break es pinta com l'anomena el DOCUMENT del client (l'última del tram petit),
   // no com la desa el motor. La volta viu a `utils/breakConvention` i enlloc més.
   { clau: 'talla_break', i18n: 'editable_table.col.talla_break', ample: AMPLADES.talla_break,
-    valor: (r, sizeRun) => aDocument(r.talla_break_label, sizeRun) },
+    valor: (r, sizeRun) => {
+      const ivs = intervalsDe(r).filter(iv => iv && iv.delta !== null && iv.delta !== undefined)
+      if (ivs.length) {
+        const primer = `${ivs[0].inici}→${ivs[0].final} ${Number(ivs[0].delta) < 0 ? '' : '+'}${ivs[0].delta}`
+        return ivs.length > 1 ? `${primer} +${ivs.length - 1}` : primer
+      }
+      return aDocument(r.talla_break_label, sizeRun)
+    } },
 ]
 
 const FS_HEAD = '9.5px'   // capçaleres, versaletes

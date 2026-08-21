@@ -3901,6 +3901,21 @@
       "rules_saved_one": "{{count}} rule saved.",
       "rules_saved_other": "{{count}} rules saved.",
       "back_title": "Back to Technical configuration"
+    },
+    "intervals": {
+      "linia": "Interval {{n}}",
+      "afegir": "Add a grading interval",
+      "max": "At most {{max}} intervals per rule",
+      "sense_run": "No size run: intervals cannot be defined",
+      "nomes_linear": "Intervals only make sense under LINEAR",
+      "talla_inici": "Interval start size",
+      "talla_inici_help": "The FIRST size that grows by this interval’s Δ.",
+      "talla_final": "Interval end size",
+      "talla_final_help": "The LAST size that grows by this interval’s Δ (inclusive).",
+      "delta": "Interval Δ",
+      "delta_help": "Growth between two consecutive sizes inside the interval.",
+      "treure": "Remove this interval",
+      "incomplet": "An interval is half-written: it is missing a size or its Δ."
     }
   },
   "export_button": {

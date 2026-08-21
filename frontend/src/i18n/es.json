@@ -3901,6 +3901,21 @@
       "rules_saved_one": "{{count}} regla guardada.",
       "rules_saved_other": "{{count}} reglas guardadas.",
       "back_title": "Volver a Configuración técnica"
+    },
+    "intervals": {
+      "linia": "Intervalo {{n}}",
+      "afegir": "Añadir un intervalo de graduación",
+      "max": "Máximo {{max}} intervalos por regla",
+      "sense_run": "Sin run de tallas no se puede definir ningún intervalo",
+      "nomes_linear": "Los intervalos solo tienen sentido con LINEAR",
+      "talla_inici": "Talla de inicio del intervalo",
+      "talla_inici_help": "La PRIMERA talla que crece con la Δ de este intervalo.",
+      "talla_final": "Talla final del intervalo",
+      "talla_final_help": "La ÚLTIMA talla que crece con la Δ de este intervalo (incluida).",
+      "delta": "Δ del intervalo",
+      "delta_help": "Crecimiento entre dos tallas consecutivas dentro del intervalo.",
+      "treure": "Quitar este intervalo",
+      "incomplet": "Hay un intervalo a medias: le falta la talla o la Δ."
     }
   },
   "export_button": {

@@ -74,11 +74,32 @@ export function opcionsDocument(run) {
  * Torna `''` quan no hi ha res a dir. `tBreak` és el rètol ja traduït («trencament»).
  * Sense run traduïble el break s'OMET i queda el delta base: val més dir menys que dir-ho mal.
  */
-export function etiquetaRegla({ increment_base, increment_break, talla_break_label }, run, tBreak) {
+export function etiquetaRegla({ increment_base, increment_break, talla_break_label, breaks },
+  run, tBreak) {
   if (increment_base === null || increment_base === undefined) return ''
+
+  // TRAM F — ELS INTERVALS PRIMER, i es diuen amb la seva pròpia gramàtica: `+2 · S→L +3`.
+  // Van en convenció de MOTOR i SENSE volta (v. `EditorIntervals.jsx`): les etiquetes d'un
+  // interval són les que la BD desa i les que el picker ofereix, i traduir-ne l'inici però no
+  // el final —o els dos, que voldria dir moure el final una talla amunt i sortir del run—
+  // diria una cosa que no es pot tornar a triar a la pantalla.
+  const ivs = (Array.isArray(breaks) ? breaks : [])
+    .filter(iv => iv && iv.delta !== null && iv.delta !== undefined && iv.delta !== '')
+  if (ivs.length) {
+    const trams = ivs.map(iv => `${iv.inici}→${iv.final} ${signe(iv.delta)}`).join(' · ')
+    return `${signe(increment_base)} · ${trams}`
+  }
+
   const doc = increment_break !== null && increment_break !== undefined && talla_break_label
     ? aDocument(talla_break_label, run) : null
   return doc
     ? `+${increment_base} · ${tBreak} ${doc} +${increment_break}`
     : `+${increment_base}`
+}
+
+/** `+2` / `-1.5` — el signe explícit dels deltes de regla (mai una talla). */
+function signe(v) {
+  const n = Number(v)
+  if (!Number.isFinite(n)) return String(v)
+  return n < 0 ? `${n}` : `+${n}`
 }

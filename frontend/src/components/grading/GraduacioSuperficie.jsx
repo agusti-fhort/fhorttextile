@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import client from '../../api/client'
 import { models } from '../../api/endpoints'
@@ -10,6 +10,8 @@ import { useTraduccioPoms } from '../../utils/traduccioPomFont'
 import { useElements } from '../../utils/vocabulariDominiFont'
 import { aDocument, aMotor, opcionsDocument } from '../../utils/breakConvention'
 import { InfoTraduccio, AMPLADES } from '../EditableTable/EditableTable'
+import { BotoAfegirInterval, FilesIntervals } from './EditorIntervals'
+import { intervalsDe, intervalsIncomplets } from '../../utils/gradingRegime'
 
 // LA GRADUACIÓ ÉS UNA SUPERFÍCIE PRÒPIA (P0.5d · Agus, 06/08, a pantalla).
 //
@@ -104,10 +106,13 @@ const buit = (v) => v === null || v === undefined || v === ''
 // aquí perquè la persona ho vegi a la fila i no en un toast després d'haver premut Gravar.
 function esLinearDegenerada(r) {
   if (r.logica !== 'LINEAR') return false
-  const teBreak = !buit(r.talla_break_label)
-    || (!buit(r.increment_break) && Number(r.increment_break) !== 0)
-  if (teBreak) return false
-  return buit(r.increment_base) || Number(r.increment_base) === 0
+  if (!buit(r.increment_base) && Number(r.increment_base) !== 0) return false
+  // TRAM F — el relleu compta si porta un delta NO-ZERO, vingui del break d'1 tram o d'un
+  // interval. Amb `ib=0 · brk=0` i talla de break informada la regla no gradua res, i abans
+  // passava la porta només per tenir l'etiqueta posada (defecte 4 de la diagnosi de PROD).
+  if (!buit(r.increment_break) && Number(r.increment_break) !== 0) return false
+  if (intervalsDe(r).some(iv => !buit(iv?.delta) && Number(iv.delta) !== 0)) return false
+  return true
 }
 
 /** Text lliure → número o null. Accepta la coma decimal, que és com s'escriu aquí. */
@@ -154,6 +159,11 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
   // lot. Copiar aquí una segona manera de demanar-ho seria el que la casa no vol.
   const traduccioDe = useTraduccioPoms(files.map(r => r.pom_id))
   const sizeRun = useMemo(() => data?.size_run ?? [], [data])
+  // TRAM F — el run que s'ofereix als INTERVALS és el del SISTEMA: és l'espai on el motor els
+  // resol (llei S24b) i on cau el final de tota regla d'1 break llegida com a interval. Si el
+  // payload encara no el porta (consumidor vell), es cau al del model i es diu al picker.
+  const runIntervals = useMemo(
+    () => (data?.run_sistema?.length ? data.run_sistema : sizeRun), [data, sizeRun])
 
   // El valor VIGENT d'un camp: l'edició si n'hi ha (encara que sigui null: esborrar és una
   // decisió), i si no, el que va arribar del servidor.
@@ -169,6 +179,8 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
     increment_base: valor(row, 'increment_base'),
     increment_break: valor(row, 'increment_break'),
     talla_break_label: valor(row, 'talla_break_label'),
+    // TRAM F — els intervals són part de la regla vigent: es validen i es desen amb la resta.
+    breaks: valor(row, 'breaks'),
   }), [valor])
 
   const canvia = useCallback((row, camp, v) => {
@@ -200,6 +212,17 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
     })
     return out
   }, [files, edicions, reglaDe])
+  // TRAM F — les files amb un interval a MITGES. Es compten a part de les degenerades perquè
+  // el motiu és un altre i el missatge també: allà la regla no gradua, aquí encara no està
+  // dita. Les dues barren el Gravar, i les dues ho diuen a la fila.
+  const incompletes = useMemo(() => {
+    const out = new Set()
+    files.forEach(r => {
+      if (!edicions.has(clauRegla(r))) return
+      if (intervalsIncomplets(reglaDe(r))) out.add(r.pom_id)
+    })
+    return out
+  }, [files, edicions, reglaDe])
 
   // 🔴 EL PAYLOAD SURT DE `edicions`, NO DE `files`. Una crida per POM tocat, i dins de cada
   // crida NOMÉS els camps que s'han canviat: `set_pom_regim_view` actualitza per presència de
@@ -208,6 +231,10 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
     if (!reglesTocades.length || gravant) return
     if (degenerades.size) {
       setFeedback({ type: 'err', text: t('graduacio.superficie.err_linear_zero') })
+      return
+    }
+    if (incompletes.size) {
+      setFeedback({ type: 'err', text: t('grading.intervals.incomplet') })
       return
     }
     setGravant(true)
@@ -223,6 +250,10 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
       if ('increment_base' in camps) payload.increment_base = num(camps.increment_base)
       if ('increment_break' in camps) payload.increment_break = num(camps.increment_break)
       if ('talla_break_label' in camps) payload.talla_break_label = camps.talla_break_label || null
+      // TRAM F — la llista SENCERA. La resta de camps van per presència de clau (i el que no
+      // s'envia no es toca), però un interval esborrat només es pot dir enviant la llista tal
+      // com ha quedat: `[]` vol dir «aquesta regla ja no en té cap», i el servidor el desa NULL.
+      if ('breaks' in camps) payload.breaks = camps.breaks || []
       if (!Object.keys(payload).length) continue
       try {
         // SET-2/#12d — L'EIX HI VA. `set_pom_regim_view` resol per `(model, pom, garment)`
@@ -243,7 +274,7 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
     setFeedback({ type: 'ok', text: t('graduacio.superficie.gravat', { count: reglesTocades.length }) })
     carrega()
     onGravat?.()
-  }, [reglesTocades, gravant, degenerades, edicions, modelId, files, t, carrega, onGravat])
+  }, [reglesTocades, gravant, degenerades, incompletes, edicions, modelId, files, t, carrega, onGravat])
 
   // ── Cel·les ────────────────────────────────────────────────────────────────────────────────
   // S45/G2 — `center`, com la cel·la que substitueix mentre s'edita. Amb l'input a `right` i
@@ -270,7 +301,7 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
     // En tocar-la neix la seva (el #12d ho fa amb l'upsert per `(model, pom, garment)`), i
     // llavors ja no és heretada: per això el marcador cau amb `tocat`.
     const heretada = !tocat && row.regla_model?.heretat === true
-    const ko = degenerades.has(row.pom_id)
+    const ko = degenerades.has(row.pom_id) || incompletes.has(row.pom_id)
     const inst = etiquetaInstancia(row.instancia)
     // Mateixa regla que la consulta: la traducció només surt si NO repeteix el nom visible.
     const nomVisible = nomDe(row)
@@ -294,8 +325,8 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
     //     || (row.regla_es_resident && row.regla_origen !== 'MANUAL'))
     const regims = regimsAutorables.includes(row.logica) || !row.logica
       ? regimsAutorables : [...regimsAutorables, row.logica]
-    return (
-      <tr key={row.id} title={heretada ? t('graduacio.superficie.regla_heretada') : undefined}
+    const fila = (
+      <tr title={heretada ? t('graduacio.superficie.regla_heretada') : undefined}
         style={{ background: tocat ? 'var(--fila-activa)' : 'transparent',
           color: heretada ? 'var(--text-soft)' : undefined }}>
         {/* # — el número de fila, com a la consulta (mateix to i cos). */}
@@ -376,16 +407,34 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
             style={{ ...inputStyle(ko), opacity: deltes ? 1 : 0.4 }} />
         </td>
         <td style={tdS}>
-          {/* CONVENCIÓ DE DOCUMENT a la vista, MOTOR a la dada (v. utils/breakConvention). */}
-          <select value={aDocument(regla.talla_break_label, sizeRun) || ''} disabled={!deltes}
-            onChange={e => canvia(row, 'talla_break_label', aMotor(e.target.value, sizeRun))}
-            style={{ ...inputStyle(ko), textAlign: 'left', cursor: deltes ? 'pointer' : 'default',
-                     opacity: deltes ? 1 : 0.4 }}>
-            <option value="">—</option>
-            {opcionsDocument(sizeRun).map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            {/* CONVENCIÓ DE DOCUMENT a la vista, MOTOR a la dada (v. utils/breakConvention). */}
+            <select value={aDocument(regla.talla_break_label, sizeRun) || ''} disabled={!deltes}
+              onChange={e => canvia(row, 'talla_break_label', aMotor(e.target.value, sizeRun))}
+              style={{ ...inputStyle(ko), textAlign: 'left', cursor: deltes ? 'pointer' : 'default',
+                       opacity: deltes ? 1 : 0.4 }}>
+              <option value="">—</option>
+              {opcionsDocument(sizeRun).map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            {/* TRAM F — EL SIGNE [+] DE LA FILA. Mateixa gramàtica que a «Generar regles»: el
+                gest viu a la fila del POM i el que neix és una SUB-LÍNIA, no una columna. */}
+            <BotoAfegirInterval intervals={regla.breaks} run={runIntervals}
+              disabled={!deltes}
+              motiu={deltes ? '' : t('graduacio.superficie.delta_na', { regim: regla.logica })}
+              onCanvi={llista => canvia(row, 'breaks', llista)} />
+          </span>
         </td>
       </tr>
+    )
+    // TRAM F — la fila del POM i les seves sub-línies són UNA unitat de lectura: van dins del
+    // mateix fragment i amb la clau de la fila, perquè cap re-ordenació les pugui separar.
+    return (
+      <Fragment key={row.id}>
+        {fila}
+        <FilesIntervals intervals={regla.breaks} run={runIntervals} clau={`iv-${row.id}`}
+          colSpanEsquerra={5} colSpanDreta={4} readOnly={!deltes}
+          onCanvi={llista => canvia(row, 'breaks', llista)} />
+      </Fragment>
     )
   })
 

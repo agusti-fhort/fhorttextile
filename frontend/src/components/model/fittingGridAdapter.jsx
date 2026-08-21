@@ -400,6 +400,9 @@ export function buildEscalatRows(rows, sizeLabels, baseLabel, preses = {}) {
       nom_en: row.nom_en, nom_local: row.nom_ca,
       logica: row.logica, increment_base: row.increment_base,
       increment_break: row.increment_break, talla_break_label: row.talla_break_label,
+      // TRAM F — els intervals viatgen amb la fila, com la resta de la forma de la regla: la
+      // columna de trencament els ha de poder dir i el compacte els ha de poder compondre.
+      breaks: row.breaks || [],
       // FIX-4 — la BASE del POM viatja amb la fila: és el referent de la guarda de plausibilitat
       // (una cel·la de talla molt lluny de la base sembla un increment, no una mesura).
       base_value_cm: row.base_value_cm ?? null,
@@ -433,7 +436,9 @@ export function escalatRuleLeadCols(t, onRegimChange, readOnly = false, unit = '
     },
     {
       key: 'delta_break', label: t('measuregrid.regla_delta_break'), width: 54,
-      render: (row) => (mostraDelta(row) && row.increment_break != null
+      // TRAM F — amb intervals no hi ha UN Δ de break: n'hi ha un per tram, i es diuen tots a
+      // la columna del costat. Aquí, guió: val més dir menys que dir-ne un de tres.
+      render: (row) => (mostraDelta(row) && !(row.breaks || []).length && row.increment_break != null
         ? <span style={cap}>{formatDelta(row.increment_break, unit)}</span>
         : <span style={buit}>—</span>),
     },
@@ -441,7 +446,23 @@ export function escalatRuleLeadCols(t, onRegimChange, readOnly = false, unit = '
       key: 'talla_break', label: t('measuregrid.regla_talla_break'), width: 56,
       // Etiqueta de talla: DADA de domini (XS, 3XL) — no es tradueix ni porta signe. El que sí
       // que se li fa és la volta de CONVENCIÓ: es pinta la del document, no la desada.
+      //
+      // TRAM F — AMB INTERVALS, AQUESTA COLUMNA CANVIA DE VEU i ho fa a posta. Un relleu de N
+      // trams no cap en dues columnes de 54px, i eixamplar-les es menja carril de talles (el
+      // mateix motiu pel qual la fitxa Q8b es reparteix en bandes). Es diu COMPACTE —`S→L +3`—
+      // i el tooltip porta el relleu sencer. Les etiquetes van en convenció de MOTOR, com al
+      // seu editor: són les que el picker ofereix i les que la BD desa.
       render: (row) => {
+        const ivs = (row.breaks || []).filter(iv => iv && iv.delta !== null && iv.delta !== undefined)
+        if (mostraDelta(row) && ivs.length) {
+          const primer = `${ivs[0].inici}→${ivs[0].final} ${formatDelta(ivs[0].delta, unit)}`
+          return (
+            <span style={{ ...cap, whiteSpace: 'nowrap' }}
+              title={etiquetaRegla(row, sizeRun, t('fitting.grid.break'))}>
+              {primer}{ivs.length > 1 ? ` +${ivs.length - 1}` : ''}
+            </span>
+          )
+        }
         const doc = mostraDelta(row) ? aDocument(row.talla_break_label, sizeRun) : null
         return doc
           ? <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)' }}>{doc}</span>
