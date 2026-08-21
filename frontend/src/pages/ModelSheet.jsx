@@ -595,11 +595,26 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // ⚠️ EL CRITERI NO ÉS LA DURADA. «No hi ha hagut sessió» no vol dir «ha durat poc»: una
   // sessió de dos minuts amb la tasca oberta ensenya el modal igual que una de dues hores
   // (decisió d'Agus). El que el fa callar és que no hi hagi res obert.
+  //
+  // J · R1 (21/08) — I LA SEGONA MEITAT DEL PREDICAT: **SENSE ESCRIPTURA, CAP MODAL.**
+  //
+  // La nota de sobre ja deia que el criteri no pot ser la durada, i tenia raó; el que li faltava
+  // era dir quin ÉS. «Hi ha hagut sessió» no vol dir «hi ha alguna cosa oberta»: vol dir que
+  // s'hi ha TREBALLAT. Entrar a una pantalla, mirar i sortir deixava igualment el modal «Has
+  // acabat?» al davant —una decisió que porta a albarà— sobre una sessió on no s'havia tocat res.
+  //
+  // El senyal no és nou i no se n'inventa cap: `sessio_amb_escriptura` surt de
+  // `TimerEntrada.escriptura_at`, que estampa `batec_escriptura` i només ell —l'únic lloc del
+  // sistema que sap que hi ha hagut feina real i no una pestanya oberta—. Mai `last_heartbeat`,
+  // que té dos emissors i no distingeix «sóc davant la pantalla» de «he escrit».
+  //
+  // I QUI DECIDEIX ÉS EL SERVIDOR. Aquí es demana la tornada i s'obeeix el que respon: el client
+  // és el testimoni menys fiable de si s'ha escrit, i una sessió pot morir sense passar per aquí.
   const exitEdit = useCallback(() => {
     const tid = activeTaskRef.current
     if (tid == null) { netejaEdicio(); return }
     modelTasks.get(tid)
-      .then(res => {
+      .then(async res => {
         const tasca = res.data
         if (tasca?.status !== 'InProgress') {
           // Res obert: cap decisió a prendre i cap transició a demanar.
@@ -607,12 +622,24 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
           netejaEdicio()
           return
         }
+        if (tasca.sessio_amb_escriptura === false) {
+          // Mirar no és treballar: la tasca torna sola i el tram no compta. Si el servidor diu
+          // que no ho ha revertit (ha arribat una escriptura entremig, o el tram és d'un altre),
+          // es cau al modal de sempre — el seu veredicte mana sobre aquesta foto.
+          const r = await modelTasks.sortirSenseEscriptura(tid).catch(() => null)
+          if (r?.data?.revertit) {
+            activeTaskRef.current = null
+            netejaEdicio()
+            reloadTasks()
+            return
+          }
+        }
         setAcabant({ taskId: tid, tasca })
       })
       // Sense resposta no s'inventa un modal: val més sortir net que preguntar sobre un estat
       // que no sabem. El guard de tasca oblidada segueix cobrint la tasca que quedi oberta.
       .catch(() => { activeTaskRef.current = null; netejaEdicio() })
-  }, [netejaEdicio])
+  }, [netejaEdicio, reloadTasks])
   // La transició la fa el modal; aquí només queda deixar-ho tot al seu lloc. `activeTaskRef` es
   // buida perquè el cleanup de desmuntatge no torni a demanar una pausa ja feta (el 400 de la
   // PEÇA 2), i la reposició va al panell de Tasques del model — el Kanban no existeix.

@@ -428,6 +428,11 @@ export const modelTasks = {
   // F2.5 · D-2 — temps DECLARAT per a les tasques Externa-lliure (les que es fan fora de l'eina
   // i que cap batec pot observar). Cos: {minuts} XOR {inici, fi}. El backend rebutja les internes.
   tempsDeclarat: (id, data) => client.post(`/api/v1/model-tasks/${id}/temps-declarat/`, data),
+  // J · R1 — sortir sense haver escrit res: la tasca torna en silenci i el tram queda marcat com
+  // a consulta. Decideix el SERVIDOR (`escriptura_at`, que estampa només `batec_escriptura`);
+  // `{revertit:false}` vol dir «hi ha hagut feina» i qui crida segueix amb el modal de sempre.
+  sortirSenseEscriptura: (id) =>
+    client.post(`/api/v1/model-tasks/${id}/sortir-sense-escriptura/`),
   // T3 · el CRONO declarat. Una sola porta amb quatre accions —engegar · aturar · descartar ·
   // corregir— perquè les quatre parlen del mateix tram i el servidor n'és l'amo: el navegador no
   // en guarda estat, el demana. `engegar` és idempotent (re-enganxar-s'hi després d'un F5).

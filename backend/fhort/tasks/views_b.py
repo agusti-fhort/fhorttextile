@@ -701,6 +701,65 @@ class _CloseGates(HasCapability):
 
 
 @api_view(['POST'])
+@permission_classes([_ExecuteTasks])
+def sortir_sense_escriptura_view(request, pk):
+    """POST /api/v1/model-tasks/<pk>/sortir-sense-escriptura/
+
+    J · R1 — **SENSE ESCRIPTURA, CAP MODAL.** En sortir d'una superfície de treball sense haver
+    escrit res, la tasca torna en silenci: no s'ha fet feina, i no hi ha res a decidir.
+
+    Fins ara sortir sempre preguntava «Has acabat?» —una decisió que porta a albarà— encara que
+    la sessió hagués estat mirar i marxar. La decisió d'Agus escrita a `ModelSheet.jsx` prohibia
+    resoldre-ho per DURADA («no hi ha hagut sessió» no vol dir «ha durat poc»), i tenia raó: el
+    predicat no és quant, és **si s'hi ha escrit**. Aquesta vista és aquell predicat, i la resposta
+    la dona `TimerEntrada.escriptura_at`, que estampa `batec_escriptura` i només ell.
+
+    🔑 LA MÀQUINA D'ESTATS NO ES TOCA. La tornada és **una sola transició LEGAL**
+    (`InProgress → Paused`), la mateixa que el modal ja fa, per la mateixa porta i amb les
+    mateixes regles. L'única diferència és que va MARCADA `auto='consulta_sense_escriptura'`:
+    la llei del log diu que `auto` null és un gest del tècnic i un slug és el sistema, i aquí el
+    tècnic no ha decidit pausar res — ha sortit d'una pantalla on no havia tocat res.
+
+    I el tram que es tanca queda marcat `consulta=True` per `_close_open_timer` (R2), o sigui que
+    aquests minuts no entren ni al temps del model ni al Welford. Les dues meitats de J es tanquen
+    amb el mateix gest, i per força: són la mateixa sessió.
+
+    🚩 «TORNA EXACTAMENT ON ERA» ES COMPLEIX PER A `Paused` I NO PER A `Pending`, i és una
+    limitació que es diu en veu alta en comptes de dissimular-la: `ALLOWED` no té
+    `InProgress → Pending` —una tasca començada no pot tornar a «no començada»— i l'ordre fixa la
+    màquina d'estats com a intacta. Una tasca que era `Pending` en entrar queda `Paused`. Obrir
+    aquella transició és una decisió d'Agus sobre la màquina d'estats, no d'aquest tram.
+
+    Retorna `{revertit, status, motiu}`. `revertit=False` vol dir «hi ha hagut escriptura (o no hi
+    ha tram meu obert)»: qui crida ha de seguir amb el modal de sempre.
+    """
+    profile = getattr(request.user, 'profile', None)
+    if profile is None:
+        return Response({'error': 'Usuari sense perfil.', 'code': 'no_profile'},
+                        status=http_status.HTTP_403_FORBIDDEN)
+    try:
+        task = ModelTask.objects.get(pk=pk)
+    except ModelTask.DoesNotExist:
+        return Response({'error': 'Tasca no trobada.'}, status=http_status.HTTP_404_NOT_FOUND)
+
+    if task.status != 'InProgress':
+        # Ja no hi ha res obert: sortir és sortir. Mateixa llei que la sortida del front.
+        return Response({'revertit': False, 'status': task.status, 'motiu': 'no_en_curs'})
+
+    # EL MEU TRAM I NOMÉS EL MEU. Si el tram obert és d'un altre (relleu a mitges), el seu
+    # rellotge és seu i aquesta sortida no hi pot decidir res — la mateixa llei que el batec.
+    tram = task.timers.filter(tecnic=profile, fi__isnull=True, actiu=True).first()
+    if tram is None:
+        return Response({'revertit': False, 'status': task.status, 'motiu': 'sense_tram_meu'})
+    if tram.escriptura_at is not None:
+        return Response({'revertit': False, 'status': task.status, 'motiu': 'amb_escriptura'})
+
+    transition_task(task, 'Paused', profile, auto='consulta_sense_escriptura')
+    task.refresh_from_db()
+    return Response({'revertit': True, 'status': task.status, 'motiu': 'sense_escriptura'})
+
+
+@api_view(['POST'])
 @permission_classes([_CloseGates])
 def gate_model_view(request, model_id):
     """POST /api/v1/models/<model_id>/gate/

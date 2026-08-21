@@ -58,6 +58,8 @@ class ModelTaskSerializer(serializers.ModelSerializer):
     # el total de la tasca. Sense això la decisió es pren a cegues, i és la que porta a albarà.
     temps_consumit_min = serializers.SerializerMethodField()
     sessio_inici = serializers.SerializerMethodField()
+    # J · R1 — s'hi ha ESCRIT, en el tram obert?
+    sessio_amb_escriptura = serializers.SerializerMethodField()
 
     class Meta:
         model = ModelTask
@@ -70,7 +72,7 @@ class ModelTaskSerializer(serializers.ModelSerializer):
                   'ronda', 'ronda_seq', 'mare', 'motiu',
                   'assignee_nom', 'es_lliurable', 'tipus_extern',
                   'es_vigent', 'albaranada', 'obert_per', 'obert_per_nom',
-                  'temps_consumit_min', 'sessio_inici']
+                  'temps_consumit_min', 'sessio_inici', 'sessio_amb_escriptura']
         # started_at/finished_at els gestiona la transició; estimated_minutes és snapshot → read-only.
         # origen el fixa el backend en crear (prevista per defecte; ad_hoc des de l'arbre global,
         # Sprint 4) → read-only per al client.
@@ -120,6 +122,22 @@ class ModelTaskSerializer(serializers.ModelSerializer):
         sessió; el serializer no li dóna una durada perquè el rellotge corre mentre es llegeix."""
         tram = obj.timers.filter(fi__isnull=True, actiu=True).first()
         return tram.inici.isoformat() if tram else None
+
+    def get_sessio_amb_escriptura(self, obj):
+        """J · R1 — en el tram OBERT, s'hi ha escrit res? `None` = no hi ha tram obert.
+
+        La resposta surt de `TimerEntrada.escriptura_at`, que estampa `batec_escriptura` i només
+        ell: és l'únic lloc del sistema que sap que hi ha hagut feina real i no una pestanya
+        oberta. **Mai de `last_heartbeat`**, que té dos emissors —presència i activitat— i per
+        tant no pot distingir «sóc davant la pantalla» de «he escrit», que és justament la
+        pregunta.
+
+        Qui la consumeix és la SORTIDA: sense escriptura no hi ha res a decidir i el modal
+        «Has acabat?» no ha de sortir. `None` (cap tram) es llegeix igual que avui — la sortida
+        ja plega quan la tasca no és `InProgress`.
+        """
+        tram = self._tram_obert(obj)
+        return None if tram is None else (tram.escriptura_at is not None)
 
     def get_obert_per(self, obj):
         tram = self._tram_obert(obj)

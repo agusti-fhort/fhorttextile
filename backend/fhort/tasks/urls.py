@@ -49,7 +49,8 @@ try:
                                      temps_declarat_view, obrir_ronda_view,
                                      crono_declarat_view,
                                      claim_task_view, assign_model_view, unassign_model_view,
-                                     model_task_log_view, open_model_task_view)
+                                     model_task_log_view, open_model_task_view,
+                                     sortir_sense_escriptura_view)
     from django.urls import path as _path_b
     _sprintb_paths = [
         _path_b('models/<int:model_id>/define-tasks/', define_model_tasks_view),
@@ -58,6 +59,9 @@ try:
         # F1.7 · D-2 — temps DECLARAT per a les tasques Externa-lliure (les que es fan fora de
         # l'eina i que cap batec pot observar).
         _path_b('model-tasks/<int:pk>/temps-declarat/', temps_declarat_view),
+        # J · R1 — sortir d'una superfície SENSE haver escrit res: la tasca torna en silenci i el
+        # tram queda marcat com a consulta (fora del temps del model i del Welford).
+        _path_b('model-tasks/<int:pk>/sortir-sense-escriptura/', sortir_sense_escriptura_view),
         _path_b('models/<int:model_id>/crono/', crono_declarat_view),
         # P4a-back — self-claim entre tècnics (handoff §6). Gated execute_tasks (NO define_tasks).
         _path_b('model-task-items/<int:pk>/claim/', claim_task_view),
