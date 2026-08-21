@@ -5060,6 +5060,8 @@
     "presa_versio_rancia_nota": "Session from v{{presa}} · current grading: v{{vigent}}",
     "decisio_tancada_nota": "Read-only view of what was decided in this session.",
     "step_base_copiada": "STEP rule with no value for this size: the base size value is shown. Values to be entered by hand in scaling.",
-    "step_base_copiada_avis": "{{count}} measurement(s) with a STEP rule and no value: the base size value was copied and must be fixed by hand in Scaling → {{detall}}"
+    "step_base_copiada_avis": "{{count}} measurement(s) with a STEP rule and no value: the base size value was copied and must be fixed by hand in Scaling → {{detall}}",
+    "step_posar_valor": "Set this size’s value in the rule",
+    "step_valor_err": "The value could not be saved."
   }
 }

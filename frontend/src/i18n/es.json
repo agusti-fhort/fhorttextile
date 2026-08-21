@@ -5060,6 +5060,8 @@
     "presa_versio_rancia_nota": "Toma de la v{{presa}} · graduación vigente: v{{vigent}}",
     "decisio_tancada_nota": "Consulta de lo que se decidió en esta toma.",
     "step_base_copiada": "Regla STEP sin valor para esta talla: aparece el valor de la talla base. Valores a poner a mano en el escalado.",
-    "step_base_copiada_avis": "{{count}} medida(s) con regla STEP sin valor: se ha copiado el valor de la talla base y hay que corregirlo a mano en Escalado → {{detall}}"
+    "step_base_copiada_avis": "{{count}} medida(s) con regla STEP sin valor: se ha copiado el valor de la talla base y hay que corregirlo a mano en Escalado → {{detall}}",
+    "step_posar_valor": "Poner el valor de esta talla en la regla",
+    "step_valor_err": "No se ha podido guardar el valor."
   }
 }

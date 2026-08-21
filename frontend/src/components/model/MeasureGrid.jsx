@@ -102,6 +102,78 @@ function NotaDot({ nota }) {
   )
 }
 
+// ── TRAM E · LA CEL·LA PRESTADA, I LA SEVA PORTA ────────────────────────────────────────────
+//
+// Una cel·la que porta el valor de la talla base COPIAT (regla STEP sense valor per a aquella
+// talla) es pinta en vermell i, si qui munta la graella dona una porta (`onDesa`), s'hi pot
+// escriure el valor de veritat.
+//
+// 🔑 EL QUE S'HI ESCRIU ÉS LA REGLA, NO UNA PRESA. La columna del costat («Fit actual») anota
+// `PieceFittingLine.valor_real` i no toca el domini (llei E1/B3); aquesta escriu `valors_step`
+// de la `ModelGradingRule` — el valor sobreviu a les re-propagacions perquè ÉS la regla. Són
+// dues escriptures amb dos significats i per això són dos controls, no un.
+//
+// El gest ha de DIR QUÈ FA (§8c): la cel·la no és un input permanent —seria indistingible de la
+// columna de presa—, sinó una xifra vermella amb un llapis que l'obre.
+function CellaPrestada({ valor, unit, onDesa, t }) {
+  const [obert, setObert] = useState(false)
+  const [txt, setTxt] = useState('')
+  const [desant, setDesant] = useState(false)
+  const [err, setErr] = useState('')
+  if (!onDesa) {
+    return (
+      <span style={{ color: 'var(--err)' }} title={t('escalat.step_base_copiada')}>
+        {fmtMeasure(valor, unit) ?? '—'}
+      </span>
+    )
+  }
+  if (!obert) {
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--err)' }}
+        title={t('escalat.step_base_copiada')}>
+        {fmtMeasure(valor, unit) ?? '—'}
+        <button type="button" aria-label={t('escalat.step_posar_valor')}
+          title={t('escalat.step_posar_valor')}
+          onClick={() => { setTxt(valor == null ? '' : String(valor)); setErr(''); setObert(true) }}
+          style={{ border: 'none', background: 'transparent', color: 'var(--err)',
+                   cursor: 'pointer', padding: 0, lineHeight: 1 }}>
+          <i className="ti ti-pencil" aria-hidden="true" style={{ fontSize: 11 }} />
+        </button>
+      </span>
+    )
+  }
+  const desa = () => {
+    if (desant) return
+    setDesant(true); setErr('')
+    Promise.resolve(onDesa(txt))
+      .then(() => { setObert(false) })
+      .catch(e => setErr(e?.response?.data?.detail || t('escalat.step_valor_err')))
+      .finally(() => setDesant(false))
+  }
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+      <input autoFocus type="text" inputMode="decimal" value={txt} disabled={desant}
+        aria-label={t('escalat.step_posar_valor')}
+        onChange={e => setTxt(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === 'Enter') desa()
+          if (e.key === 'Escape') { setObert(false); setErr('') }
+        }}
+        style={{ width: 58, font: 'inherit', fontSize: 'var(--fs-body)', textAlign: 'center',
+                 border: `1px solid ${err ? 'var(--err)' : 'var(--gold)'}`, borderRadius: 4,
+                 padding: '1px 4px', fontVariantNumeric: 'tabular-nums',
+                 background: 'var(--white)', color: 'var(--text-main)' }} />
+      <button type="button" onClick={desa} disabled={desant}
+        aria-label={t('escalat.step_posar_valor')} title={err || t('escalat.step_posar_valor')}
+        style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0,
+                 color: err ? 'var(--err)' : 'var(--gold)', lineHeight: 1 }}>
+        <i className={err ? 'ti ti-alert-triangle' : 'ti ti-check'} aria-hidden="true"
+          style={{ fontSize: 12 }} />
+      </button>
+    </span>
+  )
+}
+
 // Cel·la activa editable (única amb input + autosave). Vermell si difereix de baseValue; negreta si
 // editada a mà (ancoratge). Buida si no hi ha línia activa per a aquest (pom, grup).
 const stepBtnStyle = {
@@ -142,7 +214,11 @@ function ActiveCell({ active, editable, value, edited, onChange, onCommit, focus
   // al tooltip. Tokens de la llei G8 (`--err`/`--err-bg`), mai hex. El fons hi és perquè el
   // número, per definició, és igual al de la talla base: sense ell, una cel·la «correcta» i una
   // de prestada es veurien igual a la columna.
-  const baseCopiada = !!active.baseCopiada
+  // TRAM E — a la cel·la ACTIVA la marca només val mentre la xifra que s'hi veu ÉS la prestada
+  // (el fantasma). Amb una presa anotada, el número és una mesura de veritat i pintar-lo de
+  // vermell diria una cosa falsa: el vermell d'aquesta columna és el de R1 («la peça arribada
+  // s'aparta»), i no s'hi pot barrejar un segon significat.
+  const baseCopiada = !!active.baseCopiada && !!active.fantasma
   const estilBaseCopiada = baseCopiada
     ? { background: 'var(--err-bg)', color: 'var(--err)' } : null
   const avisBaseCopiada = baseCopiada ? t('escalat.step_base_copiada') : undefined
@@ -740,7 +816,9 @@ export default function MeasureGrid({
                                  fontWeight: canviat ? 600 : undefined,
                                  textDecoration: canviat && hv.veredicte === 'REJECTED'
                                    ? 'line-through' : undefined }}>
-                        {fmtMeasure(v, unit) ?? '—'}
+                        {obj && hv.baseCopiada
+                          ? <CellaPrestada valor={v} unit={unit} onDesa={hv.onDesa} t={t} />
+                          : (fmtMeasure(v, unit) ?? '—')}
                         {obj && <NotaDot nota={hv.nota} />}
                       </td>
                     )

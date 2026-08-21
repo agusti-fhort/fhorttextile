@@ -5060,6 +5060,8 @@
     "presa_versio_rancia_nota": "Presa de la v{{presa}} · graduació vigent: v{{vigent}}",
     "decisio_tancada_nota": "Consulta del que es va decidir en aquesta presa.",
     "step_base_copiada": "Regla STEP sense valor per a aquesta talla: hi ha el valor de la talla base. Valors a posar a mà a l’escalat.",
-    "step_base_copiada_avis": "{{count}} mesura/es amb regla STEP sense valor: s’hi ha posat el valor de la talla base i s’ha de corregir a mà a l’Escalat → {{detall}}"
+    "step_base_copiada_avis": "{{count}} mesura/es amb regla STEP sense valor: s’hi ha posat el valor de la talla base i s’ha de corregir a mà a l’Escalat → {{detall}}",
+    "step_posar_valor": "Posar el valor d’aquesta talla a la regla",
+    "step_valor_err": "No s’ha pogut desar el valor."
   }
 }

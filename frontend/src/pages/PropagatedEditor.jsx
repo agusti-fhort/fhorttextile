@@ -119,9 +119,24 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
   // els useMemo de sota sempre (i el linter ho canta).
   const sizes = useMemo(() => data?.size_run || [], [data])
   const gridGroups = buildEscalatGroups(sizes, base, t)
+  // ── TRAM E · LA PORTA DEL VALOR VERMELL, DES D'AQUESTA PANTALLA ──────────────────────────
+  // La cel·la prestada (regla STEP sense valor per a la talla) s'edita a la columna «Mesura»,
+  // que és on la xifra prestada VIU. El que s'hi escriu és el valor de la REGLA
+  // (`valors_step`), no una presa ni un override: sobreviu a les re-propagacions perquè és la
+  // regla, i per això el gest té porta pròpia i no reaprofita la de la columna del costat.
+  //
+  // El backend hi re-propaga in place, o sigui que en tornar cal rellegir: la fila perd el
+  // vermell i la corba de les talles de més enfora es mou amb ella (és el que vol dir STEP).
+  const desaValorRegla = useCallback((row, talla, valor) => (
+    models.setStepValor(modelId, row.pom_id, {
+      talla, valor, capa: row.capa, instancia: row.instancia, garment: row.garment,
+    }).then(() => load())
+  ), [modelId, load])
+
   const gridRows = useMemo(
-    () => buildEscalatRows(data?.rows || [], sizes, base, presa?.preses || {}),
-    [data, sizes, base, presa])
+    () => buildEscalatRows(data?.rows || [], sizes, base, presa?.preses || {},
+                           { onDesaValorRegla: readOnly ? null : desaValorRegla }),
+    [data, sizes, base, presa, readOnly, desaValorRegla])
 
   // Índex per lineId → {vigent, base} de la fila. El fan servir les dues guardes de sota, i és
   // l'única lectura de l'estat que necessiten (cap dada nova del backend).

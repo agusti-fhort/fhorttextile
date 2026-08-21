@@ -151,6 +151,15 @@ export const models = {
   // aquell també és jubilat (E1/B4, més avall). **Cap dels dos camins existeix ja**, i per tant
   // avui no hi ha cap API per editar el valor d'UNA talla no-base: si algun dia cal, es reobre
   // conscientment i per un gest que digui què fa.
+  // ── TRAM E · LA PORTA DEL VALOR VERMELL (21/08) ─────────────────────────────────────────
+  // La nota de sobre deia que «avui no hi ha cap API per editar el valor d'UNA talla no-base:
+  // si algun dia cal, es reobre conscientment i per un gest que digui què fa». Doncs això:
+  // aquesta porta escriu **`valors_step` de la regla resident**, i per tant el valor SOBREVIU a
+  // les re-propagacions —és la regla—. No és un override (aquells el llenç net de propagar els
+  // esborra, i és el seu disseny) ni una presa (això és `presaEscalat`, i no toca el domini).
+  // Només té sentit sobre una cel·la que ha sortit amb el valor de la talla base prestat.
+  setStepValor: (modelId, pomId, body) =>
+    client.post(`/api/v1/models/${modelId}/pom/${pomId}/step-valor/`, body),
   // Taula base amb estadis (històric per presa + tolerància + base vigent). Read-only.
   baseStages: (modelId) => client.get(`/api/v1/models/${modelId}/base-stages/`),
   // D-31.17 — LA COMPROVACIÓ del model: què falta i què s'ha de mirar abans que la fitxa

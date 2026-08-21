@@ -374,7 +374,12 @@ export function buildEscalatGroups(sizeLabels, baseLabel, t) {
 // `preses` = el mapa `{clau}:{talla} → {teoric, real, desviacio, estat}` que serveix
 // `fitting/model/<id>/presa/`. Buit (sense presa oberta) → la graella es comporta com abans
 // d'E1: teòrica = corba vigent i cap arribada. V. `utils/cellaEscalat`.
-export function buildEscalatRows(rows, sizeLabels, baseLabel, preses = {}) {
+export function buildEscalatRows(rows, sizeLabels, baseLabel, preses = {}, opts = {}) {
+  // TRAM E — `onDesaValorRegla(row, talla, valor)` obre la porta del valor vermell. És OPT-IN:
+  // qui no la passa (qualsevol altre muntatge d'aquesta graella) té la cel·la prestada en
+  // vermell i en LECTURA, exactament com fins ara. Obrir una escriptura al DOMINI des d'una
+  // graella ha de ser una decisió de qui la munta, mai un default.
+  const { onDesaValorRegla = null } = opts
   return (rows || []).map(row => {
     const cells = {}
     const copiades = row.step_base_copiada || []
@@ -384,7 +389,8 @@ export function buildEscalatRows(rows, sizeLabels, baseLabel, preses = {}) {
       cells[s] = cellaEscalat({ lineId, vigent: v, presa: preses[lineId] || null,
         // TRAM E — la marca per CEL·LA, no per fila: una regla STEP pot tenir valors per a unes
         // talles i no per a d'altres, i la que no en té és la que s'ha de posar a mà.
-        baseCopiada: copiades.includes(s) })
+        baseCopiada: copiades.includes(s),
+        onDesaRegla: onDesaValorRegla ? (valor => onDesaValorRegla(row, s, valor)) : null })
     }
     return {
       // Nomenclatura client COHERENT amb Mesures: prevaler nom_fitxa (nom de model editable) sobre

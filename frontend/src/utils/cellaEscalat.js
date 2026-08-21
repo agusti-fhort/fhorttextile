@@ -44,11 +44,24 @@
  *            active: {lineId: string, value: number|string, baseValue: number|null,
  *                     estat: string, desviacio: number|null}}}
  */
-export function cellaEscalat({ lineId, vigent = null, presa = null, baseCopiada = false }) {
+export function cellaEscalat({ lineId, vigent = null, presa = null, baseCopiada = false,
+  onDesaRegla = null }) {
   const teorica = presa && presa.teoric != null ? presa.teoric : vigent
   const real = presa ? (presa.real ?? null) : null
   return {
-    history: { teorica },
+    // TRAM E · LA CEL·LA PRESTADA ÉS LA TEÒRICA, i és aquí que s'edita. Quan la marca hi és,
+    // la columna «Mesura» passa a la forma d'OBJECTE que `MeasureGrid` ja sap llegir
+    // (`{value, nota, canvi, veredicte}` → hi entra `{baseCopiada, onDesa}`): el número es
+    // pinta en vermell i, si qui munta la graella dona una porta, es pot escriure.
+    //
+    // 🔑 EL QUE S'HI ESCRIU NO ÉS UNA PRESA NI UN OVERRIDE: és el valor de la REGLA
+    // (`valors_step`). Per això la porta la passa el cridador i no la fabrica aquesta funció —
+    // qui la munta ha de saber que està obrint una escriptura al DOMINI, no a la sessió.
+    history: {
+      teorica: baseCopiada
+        ? { value: teorica, baseCopiada: true, onDesa: onDesaRegla }
+        : teorica,
+    },
     active: {
       lineId,
       // ── E2b (QA d'Agus, 17/08) · LA CEL·LA NO COMENÇA MAI BUIDA ────────────────────────
