@@ -5056,6 +5056,11 @@
   },
   "escalat": {
     "col_mesura": "Mesura",
+    "subtab_vigent": "Vigent",
+    "col_vigent": "Vigent",
+    "vigent_versio": "v{{num}}",
+    "vigent_versio_nota": "Corba teòrica vigent del model: graduació v{{num}}, del {{data}}.",
+    "vigent_sense": "Sense graduació",
     "sense_presa_oberta": "No hi ha cap presa oberta d'aquest model: obre-la per anotar-hi les mesures de les peces arribades.",
     "sessio_segellada": "La presa està tancada: no s’hi poden anotar mesures.",
     "presa_del": "Presa del {{data}}",

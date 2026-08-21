@@ -512,7 +512,20 @@ function CodiCell({ codi, nomFitxa, pomCode, bmId, isKey, editable, editCodi, on
 
 export default function MeasureGrid({
   rows = [],
-  groups = [],            // [{key, label, accent?, historyCols:[{key,label}], activeLabel, trailCols:[{key,label}]}]
+  groups = [],            // [{key, label, accent?, historyCols:[{key,label}], activeLabel, trailCols:[{key,label}], senseActiva?}]
+  // ── ESCALAT/VIGENT · UN GRUP POT NO TENIR COLUMNA ACTIVA (`senseActiva`) ─────────────────
+  // Fins ara TOT grup n'emetia una: el `+1` era literal a les tres sumes de columnes, al
+  // `<thead>` i al cos. És el que aquesta graella ha estat sempre —una taula d'HISTÒRIA amb una
+  // columna de TREBALL al final—, i per a Mesures, Fitting i la Presa és exactament el que cal.
+  //
+  // La sub-pestanya «Vigent» de l'Escalat no té treball: és la corba teòrica del model, en
+  // consulta. Amb la columna activa hi sortiria una casella buida per talla sota el rètol «Fit
+  // actual», convidant a escriure on no hi ha res a anotar — i pintant, un cop més, una presa
+  // allà on l'usuari demanava el vigent.
+  //
+  // 🔑 ÉS PER GRUP I OPT-IN, no un mode de la graella: qui no el declara pinta EXACTAMENT com
+  // abans, i una taula futura pot barrejar grups amb treball i grups de consulta sense que
+  // aquesta aritmètica hagi de tornar a canviar.
   leadCols = [],          // [{key, label, width, render:(row)=>node}]  sticky després de POM/Nom (consulta: render pot ser text)
   // FIX-4 (DIAGNOSI_MESURES_TEA_205) — MESURA i DELTA no es poden confondre. Amb `leadGroupLabel`
   // la graella guanya una FILA DE CAPÇALERA per damunt: els leadCols queden agrupats sota el seu
@@ -670,8 +683,11 @@ export default function MeasureGrid({
     verticalAlign: 'middle', whiteSpace: 'nowrap',
     ...(esUltimLead(i) && { borderRight: SEP }),
   })
-  const totalGroupCols = groups.reduce(
-    (s, g) => s + (g.historyCols?.length || 0) + 1 + (g.trailCols?.length || 0), 0)
+  // El `+1` de la columna activa només compta si el grup en té (v. `senseActiva`). Punt únic
+  // de l'amplada d'un grup: la capçalera i el cos hi passen tots dos.
+  const ampladaGrup = (g) => (g.historyCols?.length || 0) + (g.senseActiva ? 0 : 1)
+                             + (g.trailCols?.length || 0)
+  const totalGroupCols = groups.reduce((s, g) => s + ampladaGrup(g), 0)
   const identitatHd = (left, w) => stickyHd(left, w)     // POM/Nom: mai del bloc de regla
 
   return (
@@ -726,7 +742,7 @@ export default function MeasureGrid({
                   style={stickyHd(leadLefts[i], c.width, i)}>{c.label}</th>
             ))}
             {groups.map(g => {
-              const span = (g.historyCols?.length || 0) + 1 + (g.trailCols?.length || 0)
+              const span = ampladaGrup(g)
               return (
                 <th key={g.key} colSpan={span} style={{
                   ...thStyle, textAlign: 'center',
@@ -750,7 +766,7 @@ export default function MeasureGrid({
                 borderLeft: start ? '1px solid var(--line)' : '1px solid var(--line-soft)' })
               const activeSub = { ...sub(false), background: 'var(--sel)' }   // NOMÉS la columna activa destaca
               const hs = (g.historyCols || []).map((h, idx) => <th key={`${g.key}-h-${h.key}`} style={sub(idx === 0)}>{h.label}</th>)
-              hs.push(<th key={`${g.key}-active`} style={activeSub}>{g.activeLabel}</th>)
+              if (!g.senseActiva) hs.push(<th key={`${g.key}-active`} style={activeSub}>{g.activeLabel}</th>)
               for (const tcol of (g.trailCols || [])) hs.push(<th key={`${g.key}-t-${tcol.key}`} style={{ ...sub(false), textAlign: 'center' }}>{tcol.label}</th>)
               return hs
             })}
@@ -829,12 +845,14 @@ export default function MeasureGrid({
                     )
                   })
                   const a = cell.active
-                  out.push(
-                    <ActiveCell key={`${g.key}-active`} active={a} editable={editable} unit={unit}
-                      value={a ? (vals[a.lineId] ?? '') : ''} edited={a ? edited.has(a.lineId) : false}
-                      onChange={onChange} onCommit={a ? commitFor(a.lineId) : (() => Promise.resolve())} focusRef={focusRef}
-                      registerInput={registerInput} onNav={onNav} />
-                  )
+                  if (!g.senseActiva) {
+                    out.push(
+                      <ActiveCell key={`${g.key}-active`} active={a} editable={editable} unit={unit}
+                        value={a ? (vals[a.lineId] ?? '') : ''} edited={a ? edited.has(a.lineId) : false}
+                        onChange={onChange} onCommit={a ? commitFor(a.lineId) : (() => Promise.resolve())} focusRef={focusRef}
+                        registerInput={registerInput} onNav={onNav} />
+                    )
+                  }
                   for (const tcol of (g.trailCols || [])) {
                     out.push(<td key={`${g.key}-t-${tcol.key}`} style={{ padding: '5px 8px', borderBottom: '1px solid var(--line-soft)', verticalAlign: 'middle' }}>{cell.trail?.[tcol.key] ?? null}</td>)
                   }

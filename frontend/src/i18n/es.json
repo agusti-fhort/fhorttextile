@@ -5056,6 +5056,11 @@
   },
   "escalat": {
     "col_mesura": "Medida",
+    "subtab_vigent": "Vigente",
+    "col_vigent": "Vigente",
+    "vigent_versio": "v{{num}}",
+    "vigent_versio_nota": "Curva teórica vigente del modelo: graduación v{{num}}, del {{data}}.",
+    "vigent_sense": "Sin graduación",
     "sense_presa_oberta": "No hay ninguna toma abierta de este modelo: ábrela para anotar las medidas de las prendas recibidas.",
     "sessio_segellada": "La toma está cerrada: no se pueden anotar medidas.",
     "presa_del": "Toma del {{data}}",

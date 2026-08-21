@@ -56,8 +56,23 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
   // E2c-bis/C1 — SUB-TAB, no panell plegable. La decisió és una SECCIÓ GERMANA de la presa
   // dins de la mateixa pantalla (NORMA §8b-bis), i el commutador és el mateix component que
   // fa servir el tab Mesures (`ui/SubTabs`), no un de nou.
-  const [vista, setVista] = useState('presa')          // 'presa' | 'decisio'
+  // ── ESCALAT/VIGENT (21/08, ordre d'Agus) · LA CORBA DEL MODEL TÉ VISTA PRÒPIA ───────────
+  // La pestanya prometia «consulta de l'escalat vigent» i obria la PRESA. I la presa no és la
+  // corba: les seves teòriques són un CLON congelat de la `GradingVersion` que hi havia quan es
+  // va obrir (`cellaEscalat`: `teorica = presa.teoric ?? vigent`), o sigui que amb una presa de
+  // la v6 viva la columna «Mesura» ensenyava la v6 mentre el model ja anava per la v9. El teòric
+  // vigent només es veia creant una presa NOVA — un gest que escriu al domini per poder mirar.
+  //
+  // Ara són tres vistes germanes i la primera és la que la pestanya prometia.
+  const [vista, setVista] = useState('vigent')        // 'vigent' | 'presa' | 'decisio'
   const [decisioTaskId, setDecisioTaskId] = useState(null)
+  // 🔑 ...PERÒ NO QUAN S'HI VE A MESURAR. «Mesurar set» (E3b) resol la sessió i la peça des de
+  // `ModelSheet` i tot seguit posa `editing='Escalat'`, que arriba aquí com a `readOnly:false`.
+  // Aterrar-hi al «Vigent» —taula de consulta, sense on anotar— repetiria exactament el defecte
+  // que això arregla, amb els papers canviats: el gest diu «mesurar» i la pantalla obre una
+  // consulta. Consulta → «Vigent»; gest d'escriptura → «Presa».
+  // Sortir del mode edició NO torça la vista: qui hagi anat a parar on sigui s'hi queda.
+  useEffect(() => { if (!readOnly) setVista('presa') }, [readOnly])
 
   // E1/B3 — DUES fonts, i cadascuna diu una cosa que l'altra no sap:
   //   · `taula-mesures` → la CORBA VIGENT del model (teòrica propagada);
@@ -137,6 +152,30 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
     () => buildEscalatRows(data?.rows || [], sizes, base, presa?.preses || {},
                            { onDesaValorRegla: readOnly ? null : desaValorRegla }),
     [data, sizes, base, presa, readOnly, desaValorRegla])
+
+  // ── LES FILES DEL «VIGENT»: LES MATEIXES, SENSE PRESA ────────────────────────────────────
+  // `preses = {}` és tota la diferència, i és la que fa que la columna digui el vigent: sense
+  // presa, `cellaEscalat` cau a `vigent` (que és el que `taula-mesures` serveix des de la
+  // `GradingVersion` vigent). Cap font nova, cap crida nova — la dada JA hi era, sense vista.
+  //
+  // ⚠️ LA PORTA DEL VALOR VERMELL NO HI ENTRA (`onDesaValorRegla: null`). Aquí també hi ha
+  // cel·les prestades (regla STEP sense valor per a la talla) i es pinten igual de vermelles,
+  // però aquesta vista és CONSULTA: el gest d'escriure el valor a la regla viu a la Presa, que
+  // és on el tècnic hi és per treballar. Una escriptura al domini no es cola en una vista de
+  // consulta perquè el component la sabia fer.
+  const gridRowsVigent = useMemo(
+    () => buildEscalatRows(data?.rows || [], sizes, base, {}, {}),
+    [data, sizes, base])
+  const gridGroupsVigent = useMemo(
+    () => buildEscalatGroups(sizes, base, t, { nomesVigent: true }), [sizes, base, t])
+  // LA VERSIÓ DE LA CORBA, del mateix payload que la pinta (`taula-mesures` l'emet des de T4).
+  // No es llegeix de la presa: el «Vigent» ha de saber dir de quina versió parla ENCARA QUE no
+  // hi hagi hagut mai cap presa, que és justament el cas en què la pantalla no deia res.
+  const gvNum = data?.grading_version_number ?? null
+  const gvDia = data?.grading_version_data
+    ? new Date(data.grading_version_data).toLocaleDateString('ca-ES',
+        { day: '2-digit', month: '2-digit' })
+    : null
 
   // Índex per lineId → {vigent, base} de la fila. El fan servir les dues guardes de sota, i és
   // l'única lectura de l'estat que necessiten (cap dada nova del backend).
@@ -301,6 +340,10 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
 
   const unit = useUnit()
   const leadCols = escalatRuleLeadCols(t, onRegimChange, readOnly, unit, sizes)
+  // Les MATEIXES columnes de regla, en lectura: al «Vigent» la regla és el que EXPLICA la corba
+  // (la frase d'intervals de F4-quater al costat dels números que produeix), no una cosa que
+  // s'hi editi. El règim s'edita a la Presa i a Mesures, que és on el tècnic hi va a treballar.
+  const leadColsVigent = escalatRuleLeadCols(t, onRegimChange, true, unit, sizes)
 
   // inline=true: incrustat com a contingut de pestanya (sense overlay fix ni botó tancar).
   const outerStyle = inline
@@ -361,6 +404,8 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
             hagut de ser —«DE QUINA PRESA PARLEM»— i per tant una ETIQUETA, en els tres estats. */}
         <SubTabs
           items={[
+            // PRIMERA i per defecte: és el que la pestanya promet des de sempre.
+            { key: 'vigent', label: 'escalat.subtab_vigent', icon: 'ti-chart-grid-dots' },
             { key: 'presa', label: 'escalat.subtab_presa', icon: 'ti-ruler-measure' },
             // El badge és feina PENDENT, i sobre una acta no en queda cap: pintar-hi «1 per
             // decidir» sobre una presa tancada seria demanar una decisió que ja no es pot prendre.
@@ -368,7 +413,22 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
               badge: esActa ? null : estatPresa.pendents_base },
           ]}
           actiu={vista} onTria={triaVista}
-          dreta={
+          /* EL RACÓ DE LA DRETA DIU DE QUINA COSA PARLEM, i les tres vistes no parlen de la
+             mateixa: al «Vigent», de la VERSIÓ de la corba; a la Presa i a la Decisió, de la
+             presa —i allà no es toca ni un píxel (llei E1: la foto no es re-deriva mai, i el
+             seu banner de versió és part de la foto). */
+          dreta={vista === 'vigent' ? (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6,
+                           fontFamily: 'IBM Plex Mono, monospace',
+                           fontSize: 'var(--fs-caption)', color: 'var(--text-soft)' }}
+                  title={gvNum != null
+                    ? t('escalat.vigent_versio_nota', { num: gvNum, data: gvDia || '—' })
+                    : undefined}>
+              {gvNum != null
+                ? t('escalat.vigent_versio', { num: gvNum })
+                : t('escalat.vigent_sense')}
+            </span>
+          ) : (
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6,
                            fontFamily: 'IBM Plex Mono, monospace',
                            fontSize: 'var(--fs-caption)',
@@ -402,11 +462,11 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
                 </span>
               )}
             </span>
-          } />
+          )} />
         {/* L'avís, escrit. El badge de dalt marca ON és el problema; això diu QUÈ vol dir i què
             se'n pot fer, que en un racó de 60px no hi cap. Va aquí i no en un toast: no és un
             esdeveniment, és un ESTAT de la pantalla i ha de durar el que duri. */}
-        {presaEsRancia && (
+        {presaEsRancia && vista !== 'vigent' && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8,
                         padding: '8px 12px', borderRadius: 6,
                         border: '1px solid var(--warn-state)',
@@ -450,6 +510,37 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
         {/* E2c-bis/C1 — LA TAULA DE PRESA ÉS EL SUB-TAB «Presa». Les dues seccions són
             germanes i se'n veu UNA: tenir-les totes dues alhora era el panell desplegable que
             aquesta peça substitueix, i deixava la decisió a mitja pàgina de distància. */}
+        {/* ── LA VISTA «VIGENT»: LA CORBA DEL MODEL, I RES MÉS ────────────────────────────
+            Mateix `PecesDelModel` + mateix `MeasureGrid` que la Presa —la taula d'una pantalla
+            no ha de canviar de forma segons què s'hi miri—, amb tres diferències i totes tres
+            volgudes: files sense presa (la columna diu el VIGENT), grups `nomesVigent` (sense
+            la columna «Fit actual», que aquí no tindria on anotar) i `editable={false}`.
+
+            No hi ha cap gest: consultar la corba no crea res. És exactament el que faltava —
+            fins avui, veure el teòric vigent obligava a obrir una presa NOVA, o sigui a escriure
+            al domini per poder mirar. */}
+        {vista === 'vigent' && (
+        <PecesDelModel model={modelInfo}>{peca => {
+        const filesVigent = filesDeLaPeca(gridRowsVigent, peca ? (peca.codi || '') : null)
+        return (<>
+        {loading && !data ? (
+          <div style={{ padding: '2rem', color: 'var(--text-muted)' }}>{t('app.loading')}</div>
+        ) : filesVigent.length === 0 ? (
+          <div style={{ padding: '2rem', color: 'var(--text-muted)' }}>{t('model_measurements.propagated_empty')}</div>
+        ) : (
+          <MeasureGrid
+            key={`vigent:${modelId}:${reloadKey}`}
+            editable={false}
+            rows={filesVigent} groups={gridGroupsVigent}
+            leadCols={leadColsVigent}
+            leadGroupLabel={t('measuregrid.grup_regla')}
+            groupsLabel={t('measuregrid.grup_mesures')}
+          />
+        )}
+        </>)
+        }}</PecesDelModel>
+        )}
+
         {vista === 'presa' && (
         <PecesDelModel model={modelInfo}>{peca => {
         const filesDelContenidor = filesDeLaPeca(gridRows, peca ? (peca.codi || '') : null)

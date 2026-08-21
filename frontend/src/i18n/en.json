@@ -5056,6 +5056,11 @@
   },
   "escalat": {
     "col_mesura": "Size",
+    "subtab_vigent": "Current",
+    "col_vigent": "Current",
+    "vigent_versio": "v{{num}}",
+    "vigent_versio_nota": "Model's current theoretical curve: grading v{{num}}, from {{data}}.",
+    "vigent_sense": "No grading",
     "sense_presa_oberta": "There is no open measuring session for this model: open one to record the measurements of the garments received.",
     "sessio_segellada": "The measuring session is closed: no measurements can be recorded.",
     "presa_del": "Session of {{data}}",
