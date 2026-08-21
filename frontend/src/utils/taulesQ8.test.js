@@ -9,7 +9,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { diferencia, filesFitting, filesGrading, filesNotes, filesSizeSet, filesSizeSetConsolidat, resumBreakQ8 } from './taulesQ8.js'
+import { diferencia, filesFitting, filesGrading, filesNotes, filesSizeSet, filesSizeSetConsolidat, fraseBreakQ8 } from './taulesQ8.js'
 
 const MODEL = { base_size_label: 'S', size_run_model: 'XS·S·M' }
 
@@ -129,30 +129,61 @@ test('GRADING: la BASE surt de `base_value_cm` i la resta de `graded` (criteri d
   assert.equal(f.delta, 2)
 })
 
-test('Q8b · el resum del relleu: 1 break parla en DOCUMENT, els intervals en MOTOR', () => {
+// ── F4-QUATER · LA FRASE DEL RELLEU A LA FITXA ───────────────────────────────────────────────
+//
+// Aquest test substitueix el de `resumBreakQ8` («1 break parla en DOCUMENT, els intervals en
+// MOTOR»), i el canvi que fixa és PRECISAMENT el de l'sprint: **ja no hi ha dues gramàtiques.**
+// El break llegat es llegeix com l'interval que el motor ja calcula i es diu en convenció de
+// MOTOR, igual que els explícits. La volta ±1 ha mort d'aquesta superfície.
+//
+// 🚨 I FIXA LA TRADUCCIÓ DE NOMS DE CAMP, que és el mode de fallada silenciós d'aquesta peça:
+// les files de `filesGrading` porten `regla`/`delta`/`delta_break`/`talla_break`, no els noms de
+// la fila de regla. Si algú desfés el mapatge de `fraseBreakQ8`, la fitxa sortiria sense cap
+// relleu i el build seguiria verd — aquestes asserts es posarien vermelles primer.
+test('Q8b · la frase del relleu: llegat i intervals, TOTS en convenció de MOTOR', () => {
   const RUN = ['XS', 'S', 'M', 'L', 'XL']
-  // El cas del banc 1383: ib=2 · brk=3 · break M desat (convenció de motor) → el full del
-  // client el nomena S, que és l'última talla del tram petit.
-  const unBreak = resumBreakQ8(
-    { delta_break: 3, talla_break: 'M', breaks: [] }, RUN)
-  assert.deepEqual(unBreak, { delta: 3, etiqueta: 'S', mes: 0 })
-  // El cas del 1384 (TRAM F): les etiquetes de l'interval NO es tradueixen.
-  const ambInterval = resumBreakQ8(
-    { delta_break: null, talla_break: null, breaks: [{ inici: 'S', final: 'L', delta: 3 }] }, RUN)
-  assert.deepEqual(ambInterval, { delta: 3, etiqueta: 'S→L', mes: 0 })
-  // Amb intervals manen ells, encara que la fila arrossegui un break vell.
-  const tots_dos = resumBreakQ8(
-    { delta_break: 9, talla_break: 'M', breaks: [{ inici: 'S', final: 'L', delta: 3 }] }, RUN)
-  assert.equal(tots_dos.delta, 3)
-  // Tres trams: es diu el primer i quants en queden (l'A4 no dona per a més).
-  const tres = resumBreakQ8({ breaks: [
-    { inici: 'XS', final: 'XS', delta: 2 },
-    { inici: 'M', final: 'L', delta: 3 },
-    { inici: 'XL', final: 'XL', delta: 4 },
-  ] }, RUN)
-  assert.deepEqual(tres, { delta: 2, etiqueta: 'XS→XS', mes: 2 })
-  // Sense res a dir, res: `null` i que qui pinti hi posi el guió.
-  assert.deepEqual(resumBreakQ8({ breaks: [] }, RUN), { delta: null, etiqueta: null, mes: 0 })
+  const cm = (v) => Number(v).toFixed(1)
+  // El cas del banc 1383: ib=2 · brk=3 · break M desat. El motor gradua `M..XL` amb +3 i la
+  // frase ho diu tal qual — abans aquí s'hi pintava `S` (l'última del tram petit).
+  assert.equal(
+    fraseBreakQ8({ regla: 'LINEAR', delta: 2, delta_break: 3, talla_break: 'M', breaks: [] }, RUN, cm),
+    'M→XL +3.0')
+  // El cas del 1384 (TRAM F): un interval explícit, igual de literal.
+  assert.equal(
+    fraseBreakQ8({ regla: 'LINEAR', delta: 2, breaks: [{ inici: 'S', final: 'L', delta: 3 }] }, RUN, cm),
+    'S→L +3.0')
+  // Amb les dues formes manen els intervals, com al motor.
+  assert.equal(
+    fraseBreakQ8({ regla: 'LINEAR', delta: 2, delta_break: 9, talla_break: 'M',
+      breaks: [{ inici: 'S', final: 'L', delta: 3 }] }, RUN, cm),
+    'S→L +3.0')
+  // Tres trams: es lletreja el primer i es compten els altres (l'A4 no dona per a més).
+  assert.equal(
+    fraseBreakQ8({ regla: 'LINEAR', delta: 1, breaks: [
+      { inici: 'XS', final: 'XS', delta: 2 },
+      { inici: 'M', final: 'L', delta: 3 },
+      { inici: 'XL', final: 'XL', delta: 4 },
+    ] }, RUN, cm),
+    'XS→XS +2.0 +2')
+  // El Δ negatiu porta el menys TIPOGRÀFIC, com la resta de la fitxa.
+  assert.equal(
+    fraseBreakQ8({ regla: 'LINEAR', delta: 2, breaks: [{ inici: 'S', final: 'L', delta: -1.5 }] }, RUN, cm),
+    'S→L −1.5')
+})
+
+test('Q8b · REGLA DEL SILENCI a la fitxa: el que no mana no s\'imprimeix', () => {
+  const RUN = ['XS', 'S', 'M', 'L', 'XL']
+  const cm = (v) => Number(v).toFixed(1)
+  // Sense relleu, res.
+  assert.equal(fraseBreakQ8({ regla: 'LINEAR', delta: 2, breaks: [] }, RUN, cm), '')
+  // Un FIXED amb break residual (les VUIT files del banc 1383) no diu res: no gradua.
+  assert.equal(
+    fraseBreakQ8({ regla: 'FIXED', delta: 0, delta_break: 0, talla_break: 'M', breaks: [] }, RUN, cm),
+    '')
+  // Un llegat que repeteix el Δ general no és un trencament.
+  assert.equal(
+    fraseBreakQ8({ regla: 'LINEAR', delta: 2, delta_break: 2, talla_break: 'M', breaks: [] }, RUN, cm),
+    '')
 })
 
 test('TRAM F: els INTERVALS surten crus i sempre com a llista (mai null)', () => {

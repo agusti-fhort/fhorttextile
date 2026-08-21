@@ -23,7 +23,7 @@
 // Les files que en surten porten `garment`, o sigui que `agrupaPerGarment`/`grupsDelFull` les
 // saben repartir per peça sense cap adaptador pel mig.
 
-import { aDocument } from './breakConvention.js'
+import { fraseBreaks } from './gradingRegime.js'
 import { identitatMesura } from './identitatMesura.js'
 import { construeixTaulaPresaPerTalla } from './taulaPresaPerTalla.js'
 
@@ -190,29 +190,53 @@ export function filesNotes(grid) {
 }
 
 /**
- * Q8b · EL RESUM DEL RELLEU D'UNA FILA — quina de les DUES formes parla, i com es diu.
+ * Q8b · LA FRASE DEL RELLEU D'UNA FILA, per a la columna «Breaks» de la fitxa.
  *
- * Torna `{delta, etiqueta, mes}`: el Δ del trencament, l'etiqueta que s'ha de pintar a la
- * columna «B. Size», i quants trams queden per dir (0 si no en queda cap).
+ * 🚨 F4-QUATER — AIXÒ ERA `resumBreakQ8` I TORNAVA `{delta, etiqueta, mes}` PER A DUES COLUMNES
+ * (`Break` + `B.Size`). Les dues eren les meitats d'un sol trencament i, com a la consulta i a
+ * l'Escalat, deixaven de saber dir el que la regla diu tan bon punt hi havia més d'un tram. I
+ * eren, a més, la TERCERA transcripció a mà del mateix concepte: aquesta se n'inventava una
+ * gramàtica pròpia (etiqueta i Δ a cel·les separades), l'Escalat una altra i la consulta una
+ * tercera. Ara les tres criden `fraseBreaks` i la fitxa no decideix res pel seu compte.
  *
- * 🔑 LES DUES FORMES NO ES PRESENTEN IGUAL, i és a posta:
- *   · **break d'1 tram** → l'etiqueta es tradueix a convenció de DOCUMENT (`aDocument`), que és
- *     com l'escriu el full del client;
- *   · **intervals (TRAM F)** → en convenció de MOTOR i SENSE volta, perquè `inici` i `final`
- *     són les etiquetes que la pantalla ofereix i que la BD desa. Traduir-ne l'inici i no el
- *     final (o els dos, que voldria dir sortir del run) donaria una etiqueta que no casa amb res.
+ * 🔑 EL BESSÓ ÉS DECLARAT, NO TRANSCRIT: aquesta funció no reimplementa res, només posa el
+ * vestit de la fitxa (la unitat i el pressupost de mil·límetres) sobre el formatador comú. Era
+ * exactament la lliçó que l'ordre demanava no tornar a pagar.
  *
- * Amb més d'un interval només hi cap el primer + un `+N`: l'amplada de la taula està repartida
- * en bandes per no passar l'A4 i cada mil·límetre és una talla que deixa de cabre. La corba
- * sencera hi és igualment, xifra a xifra, a les columnes de talla de la mateixa fila.
+ * ⚠️ EL `max: 1` ÉS EL PRESSUPOST DE PAPER. L'amplada d'aquesta taula es reparteix en bandes per
+ * no passar l'A4 (**mai A3: la fitxa s'imprimeix en A4**) i cada mil·límetre que es prengui la
+ * columna del relleu és una TALLA que deixa de cabre. Es lletreja el primer tram i es compta la
+ * resta; la corba sencera hi és igualment, xifra a xifra, a les columnes de talla de la mateixa
+ * fila — que al paper és on de debò es llegeix.
+ *
+ * ⚠️ I EL RUN HI ÉS OBLIGATORI: sense ell el relleu LLEGAT no es pot derivar i `fraseBreaks`
+ * calla (com el motor). És el mateix run que la taula fa servir per a les columnes de talla.
+ *
+ * 🚨 **I ELS NOMS DELS CAMPS ES TRADUEIXEN A MÀ, MAI PER ANALOGIA.** Una fila de `filesGrading`
+ * NO és una fila de regla: aquest constructor rebateja `logica`→`regla`, `increment_base`→
+ * `delta`, `increment_break`→`delta_break` i `talla_break_label`→`talla_break` (només `breaks`
+ * conserva el nom). Passar la fila crua a `fraseBreaks` compilaria, passaria el build i
+ * **buidaria de relleu tota la fitxa en silenci** —cap `increment_break`, cap interval llegat—,
+ * que és exactament el mode de fallada d'H-bis: dos constructors germans de fonts diferents no
+ * comparteixen camps perquè s'assemblin. La correspondència es declara aquí, a la vista.
+ *
+ * @param {object} fila     una fila de `filesGrading`
+ * @param {string[]} talles el run del model, en ordre
+ * @param {(v:any)=>string} xifra  el formatador de mesura de la fitxa (unitat inclosa)
+ * @returns {string} `M→XL +3.0` · `M→XL +3.0 +2` · `''` quan la regla no trenca enlloc
  */
-export function resumBreakQ8(fila, talles) {
-  const ivs = (fila?.breaks || []).filter(
-    iv => iv && iv.delta !== null && iv.delta !== undefined && iv.inici && iv.final)
-  if (ivs.length) {
-    return { delta: ivs[0].delta, etiqueta: `${ivs[0].inici}→${ivs[0].final}`, mes: ivs.length - 1 }
+export function fraseBreakQ8(fila, talles, xifra) {
+  const regla = {
+    logica: fila?.regla || 'LINEAR',
+    increment_base: fila?.delta,
+    increment_break: fila?.delta_break,
+    talla_break_label: fila?.talla_break,
+    breaks: fila?.breaks,
   }
-  return { delta: fila?.delta_break ?? null, etiqueta: aDocument(fila?.talla_break, talles), mes: 0 }
+  return fraseBreaks(regla, talles, {
+    delta: v => (Number(v) < 0 ? `−${xifra(Math.abs(v))}` : `+${xifra(Math.abs(v))}`),
+    max: 1,
+  })
 }
 
 /**
