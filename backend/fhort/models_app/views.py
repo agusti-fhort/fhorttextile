@@ -3451,16 +3451,25 @@ def escalat_ajustar_talla_view(request, model_id):
                 # col·lapsava el pas i el break queia on no toca — d'aquí que reescriure el
                 # valor vigent d'una cel·la moqués la base (DIAGNOSI_MESURES_TEA_205, B1).
                 nova_base = valor
+                avisos_regla = []
                 if talla != base_size:
                     try:
                         _run_model, run_sistema, _pos, _bidx = escala_del_model(model)
                     except ValueError as e:
                         return Response({'error': str(e)}, status=400)
                     nova_base = propaga_ancoratges(
-                        rule, talla, valor, size_run,
+                        rule, talla, valor, size_run, warnings=avisos_regla,
                         run_sistema=run_sistema, base_label=base_size).get(base_size)
                 if nova_base is None:
-                    return Response({'error': "No s'ha pogut derivar la base des de la talla ancorada."}, status=400)
+                    # FIX-A/PAS-3 — EL MOTIU VIATJA. Des que la regla incompleta deixa de caure
+                    # al camp llegat, `propaga_ancoratges` pot tornar tot None, i el missatge
+                    # genèric d'aquí feia buscar el defecte a la talla ancorada quan el que
+                    # falla és la REGLA. `warnings` en porta la frase exacta.
+                    return Response(
+                        {'error': (avisos_regla[0] if avisos_regla
+                                   else "No s'ha pogut derivar la base des de la talla ancorada."),
+                         'code': 'regla_sense_delta' if avisos_regla else 'base_no_derivable'},
+                        status=400)
                 _write_base(model, pom, round(float(nova_base), 2), auth_user,
                             f'Escalat · ajust talla {talla} (propaga per regla)',
                             capa=capa, instancia=instancia, garment=garment)

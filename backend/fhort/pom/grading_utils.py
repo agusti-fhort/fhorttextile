@@ -989,6 +989,23 @@ def deltes_a_absoluts(valors, base_label, run_ordenat):
 # vigent d'una cel·la sigui un no-op.
 # ─────────────────────────────────────────────────────────────────────────────
 
+class ReglaSenseDeltaError(ValueError):
+    """FIX-A/PAS-3 — una regla LINEAR/canònica sense `increment_base` NO té corba.
+
+    Fins al 21/08 aquest cas queia al camp LLEGAT `increment` (v. `increment_de_l_aresta`), i
+    això volia dir graduar amb el delta del JOC ANTIC: el camp el poblava la materialització i
+    cap superfície d'edició no el tocava mai, de manera que es fossilitzava. Una regla editada
+    a mà que es quedés sense `increment_base` —cosa que la pantalla de Graduació permet quan hi
+    ha break— propagava amb el número de fa mesos, amb 200 OK i sense cap rastre.
+
+    LA LLEI ARA ÉS LA D2, LA MATEIXA DE SEMPRE: una regla incompleta **no gradua, no emet**.
+    Mai un delta fantasma, mai un FIXED fabricat. L'excepció existeix perquè aquesta funció és
+    PURA i retorna un float: «absent» no s'hi pot dir amb un valor de retorn sense que el
+    cridador el confongui amb un delta de zero — que és, precisament, una corba plana inventada.
+    Qui la caça és `propaga_ancoratges`, que sí que sap dir «aquesta talla no té valor».
+    """
+
+
 def _break_idx_de(rule, run):
     """Posició de la talla de break dins `run`, o None si la regla no en té (o no hi és).
 
@@ -1011,12 +1028,20 @@ def increment_de_l_aresta(rule, run, base_idx, i, j):
     BASE — l'origen de la regla — dins d'aquest mateix run.
 
     Règim canònic (`increment_base` poblat) → llei de l'extrem exterior (v. capçalera).
-    Legacy LINEAR pur (`increment_base` és None) → `increment` uniforme, sense break.
+
+    🚨 FIX-A/PAS-3 — `increment_base` a NULL ALÇA, i abans queia al camp llegat.
+    Aquí hi havia `return float(rule.increment)`, i era **un dels dos** nodes que llegien el
+    llegat (l'altre és la branca LINEAR de `_apply_rule`). Els dos s'han retirat AL MATEIX
+    COMMIT i no es poden separar: aquest node el travessa `propaga_ancoratges` —la PRESA i la
+    derivació de base—, i l'altre el motor de propagació. Retirar-ne un de sol hauria fet dir
+    coses diferents a Escalat i a la presa sobre la MATEIXA regla, en silenci.
+    V. `ReglaSenseDeltaError` i `ops/qa/banc_paritat_1383.py` (bloc C, que ho vigila).
     """
     ib_raw = getattr(rule, 'increment_base', None)
-    if ib_raw is None:                          # LINEAR pur legacy: pas uniforme
-        inc_raw = getattr(rule, 'increment', None)
-        return float(inc_raw) if inc_raw is not None else 0.0
+    if ib_raw is None:
+        raise ReglaSenseDeltaError(
+            f"Regla del POM {getattr(rule, 'pom_id', '?')} sense `increment_base`: no té "
+            "corba. Cap valor derivat (llei D2 de cel·la absent).")
 
     ib = float(ib_raw)
     brk_raw = getattr(rule, 'increment_break', None)
@@ -1089,17 +1114,28 @@ def propaga_ancoratges(rule, anchor_label, anchor_val, size_run, warnings=None, 
 
     anchor_val = float(anchor_val)
 
-    if (getattr(rule, 'increment_base', None) is None
-            and getattr(rule, 'increment', None) is None and warnings is not None):
-        warnings.append(
-            f"Regla sense delta definit (pom={getattr(rule, 'pom_id', None)}): "
-            f"propagació plana (delta 0) des de l'ancoratge {anchor_label}.")
-
+    # 🚨 FIX-A/PAS-3 — SENSE DELTA NO HI HA CORBA, I ARA ES DIU.
+    #
+    # Aquí hi havia un avís que només es donava quan `increment_base` **i** `increment` eren
+    # tots dos None, i que anunciava una «propagació plana (delta 0)». Amb el llegat viu, una
+    # regla amb `increment_base` a NULL i `increment` poblat no arribava mai a aquest avís:
+    # propagava, i ho feia amb el delta del joc antic. Ara `increment_de_l_aresta` alça, i el
+    # que en surt és el que la llei D2 mana des del primer dia: **cap valor**, per a cap talla.
+    #
+    # Es retorna el mateix diccionari de sempre amb tot a None —no s'hi propaga l'excepció—
+    # perquè els tres cridadors ja saben tractar un `None` per talla (`fitting/views.py` el
+    # salta, `models_app/views.py` el converteix en 400) i cap d'ells ha de créixer un `try`
+    # per una regla que és responsabilitat de qui l'ha desat, no seva.
     out = {}
-    for label in run:
-        t_idx = _idx(label)
-        out[label] = None if t_idx is None else anchor_val + desnivell_entre_talles(
-            rule, sistema, base_idx, anchor_idx, t_idx)
+    try:
+        for label in run:
+            t_idx = _idx(label)
+            out[label] = None if t_idx is None else anchor_val + desnivell_entre_talles(
+                rule, sistema, base_idx, anchor_idx, t_idx)
+    except ReglaSenseDeltaError as e:
+        if warnings is not None:
+            warnings.append(str(e))
+        return {lab: None for lab in run}
     return out
 
 

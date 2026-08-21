@@ -230,6 +230,11 @@ def generate_graded_specs(size_fitting_id: int) -> int:
     created = 0
     warnings: list[str] = []
     sense_regla: set[int] = set()   # D2: POMs amb base i sense regla → no emeten cap cel·la
+    # FIX-A/PAS-3 — POMs amb regla INCOMPLETA (LINEAR sense `increment_base`, STEP sense
+    # `valors_step`): en tenen, de regla, però no gradua. Fins ara el senyal vivia NOMÉS a
+    # `warnings`, i per això la fila desapareixia sense que el tècnic sabés per què (§E.1 de la
+    # diagnosi de PROD). Ara compten com el que són: cobertura que falta, i es diu.
+    regla_incompleta: set[int] = set()
     for (pom_id, capa, instancia, garment), base_val in base_measurements.items():
         # C3/B2 — el `pom_id` s'EXTREU de la clau. La regla NO travessa capa ni instància:
         # el mateix POM té el mateix increment a totes les capes i a totes les instàncies
@@ -304,7 +309,10 @@ def generate_graded_specs(size_fitting_id: int) -> int:
                 )
 
             if graded_val is None:
-                # Hard STEP validation failed for this cell: leave it uncomputed.
+                # Regla incompleta (STEP sense valors · LINEAR sense delta base): cel·la
+                # ABSENT, mai un valor fabricat. El motiu ja és a `warnings`; aquí se'n reté
+                # el POM perquè el recompte de cobertura el pugui dir en veu alta.
+                regla_incompleta.add(pom_id)
                 continue
 
             graded_val = round(graded_val, 2)
@@ -338,6 +346,16 @@ def generate_graded_specs(size_fitting_id: int) -> int:
                 f"{len(sense_regla)} mesures base té regla de grading. Revisa el Grading "
                 f"Rule Set assignat (pot estar buit o no correspondre a aquest model)."
             )
+        if regla_incompleta:
+            # FIX-A/PAS-3 — l'ERROR CLAR que el brief demana. Abans, un model on TOTES les
+            # regles fossin incompletes petava amb el missatge genèric de sota, que fa mirar
+            # el joc de regles quan el problema és a les regles mateixes.
+            raise ValueError(
+                f"Propagació avortada per al model {model.codi_intern}: les "
+                f"{len(regla_incompleta)} regles del model estan INCOMPLETES (una regla LINEAR "
+                "necessita el seu Δ base; una de STEP, els seus valors per talla). "
+                "Torna a desar-les des de Graduació. Detall: " + " | ".join(warnings[:5])
+            )
         raise ValueError(
             f"Propagació avortada per al model {model.codi_intern}: no s'ha pogut "
             f"calcular cap cel·la de grading."
@@ -352,6 +370,16 @@ def generate_graded_specs(size_fitting_id: int) -> int:
             f"{sorted(sense_regla)}"
         )
 
+    # FIX-A/PAS-3 — la germana de dalt, i és la que faltava. «Té regla però no gradua» i «no té
+    # regla» acaben totes dues en cel·la absent, però es reparen de maneres DIFERENTS: l'una
+    # mirant el joc assignat, l'altra editant la regla. Dir-les igual era enviar el tècnic al
+    # lloc equivocat; no dir-ne una era pitjor.
+    if regla_incompleta:
+        logger.warning(
+            f"Grading SF {size_fitting_id}: {len(regla_incompleta)} POM(s) amb regla "
+            f"INCOMPLETA → cap cel·la emesa (llei D2). POMs: {sorted(regla_incompleta)}"
+        )
+
     # Mark SF
     SizeFitting.objects.filter(pk=size_fitting_id).update(
         estat='TallesGenerades'
@@ -359,7 +387,7 @@ def generate_graded_specs(size_fitting_id: int) -> int:
 
     if warnings:
         logger.warning(
-            f"Grading SF {size_fitting_id}: {len(warnings)} avís(os) STEP — "
+            f"Grading SF {size_fitting_id}: {len(warnings)} avís(os) de regla incompleta — "
             "cel·les no calculades: " + " | ".join(warnings)
         )
     logger.info(f"Grading generated for SF {size_fitting_id}: {created} specs")
@@ -1157,11 +1185,15 @@ def _apply_rule(rule, base_val: float, steps: int, size_idx: int, base_idx: int,
     invertia el SIGNE de les talles petites (model 166) i un run amb forat col·lapsava la
     distància. Cap fórmula d'aquesta funció ha canviat — només el referent que rep.
 
-    Real Django fields: rule.logica (was grading_type), rule.increment (DecimalField),
-    rule.valors_step (JSONField).
+    Real Django fields: rule.logica (was grading_type), rule.increment_base /
+    rule.increment_break / rule.talla_break_label (forma canònica), rule.valors_step (JSONField).
 
     Contracts:
-      - LINEAR: scalar `rule.increment`, applied uniformly per step.
+      - LINEAR: `rule.increment_base` (+ break opcional), per aresta. **`rule.increment` NO
+        s'hi llegeix des del FIX-A/PAS-3 (21/08)**: era el camp llegat, cap superfície
+        d'edició no l'actualitzava mai, i llegir-l'hi volia dir graduar amb el delta del joc
+        antic. Sense `increment_base` la cel·la queda ABSENT (llei D2), com el STEP sense
+        valors i com la regla que no existeix.
       - STEP: `rule.valors_step` = {dest_label: delta}. Each delta is the increment
         between that label and its neighbour one step closer to the base; values
         accumulate outward from the base (added going up, subtracted going down).
@@ -1175,7 +1207,6 @@ def _apply_rule(rule, base_val: float, steps: int, size_idx: int, base_idx: int,
       - FIXED / ZERO / (default): unchanged.
     """
     grading_type = rule.logica
-    increment = float(rule.increment) if rule.increment else 0.0
 
     # Peça A — forma CANÒNICA: si increment_base està poblat, el motor gradua des d'aquí
     # (unifica import STEP, import LINEAR-amb-break i ISO above_xl). El llindar es resol per
@@ -1195,7 +1226,27 @@ def _apply_rule(rule, base_val: float, steps: int, size_idx: int, base_idx: int,
             rule, size_run, base_idx, base_idx, size_idx), grading_type)
 
     if grading_type == 'LINEAR':
-        return base_val + (steps * increment), 'LINEAR'
+        # 🚨 FIX-A/PAS-3 — AQUÍ HI HAVIA `return base_val + (steps * increment)`.
+        #
+        # `increment` és el camp LLEGAT: el poblava la materialització des del joc i CAP
+        # superfície d'edició no el tocava mai (ni `set_pom_regim_view`, ni `gravar_pom_view`,
+        # ni el payload de `taula-mesures`), o sigui que es fossilitzava amb el valor del joc del
+        # dia que la regla va néixer. Aquesta branca, doncs, no era un «fallback raonable»: era
+        # **graduar amb la regla vella**, amb 200 OK i sense rastre. N'hi havia prou de buidar el
+        # camp «Δ base» a la pantalla de Graduació —cosa que la validació permet si la regla té
+        # break— per caure-hi.
+        #
+        # Ara mana la llei D2, que és la mateixa que ja regia la regla absent i el STEP sense
+        # valors: **una regla incompleta no gradua i no emet**. Mai un delta fantasma; mai un
+        # FIXED fabricat (que és el que va deixar el model 163 amb 225 specs a delta 0 i 200 OK).
+        #
+        # El germà d'aquesta línia viu a `grading_utils.increment_de_l_aresta` i s'ha retirat AL
+        # MATEIX COMMIT: separar-los hauria fet divergir Escalat de la presa en silenci.
+        pom_codi = getattr(getattr(rule, 'pom', None), 'codi_client', None) or rule.pom_id
+        _add_warning(warnings,
+            f"Regla LINEAR del POM {pom_codi}: sense delta base (`increment_base`); "
+            "cap cel·la calculada. Torna a desar la regla amb el seu Δ base.")
+        return None, 'LINEAR'
 
     elif grading_type == 'STEP':
         pom_codi = getattr(getattr(rule, 'pom', None), 'codi_client', None) or rule.pom_id
