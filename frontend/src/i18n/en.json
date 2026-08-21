@@ -3623,7 +3623,18 @@
       "no_category": "No family",
       "name_local_info": "Local name: {{nom}}",
       "howto_unlinked": "This POM is not linked to any global catalogue POM, and that is where “how to measure” lives.",
-      "howto_uninformed": "Linked to the global catalogue, but it has not been filled in there yet."
+      "howto_uninformed": "Linked to the global catalogue, but it has not been filled in there yet.",
+      "create_new": "New POM",
+      "create_hint": "Created in the tenant catalogue, active and not bound to any garment or customer. Assign it afterwards to put it on a garment.",
+      "create_code": "Code",
+      "create_name": "Name",
+      "create_category": "Category",
+      "create_category_none": "No category",
+      "create_need_fields": "Code and name are required.",
+      "create_submit": "Create POM",
+      "create_saving": "Creating…",
+      "create_cancel": "Cancel",
+      "create_error": "Could not create the POM."
     }
   },
   "size_map_screen_config": "Configuration",

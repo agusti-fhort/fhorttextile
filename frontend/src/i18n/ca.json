@@ -3623,7 +3623,18 @@
       "no_category": "Sense família",
       "name_local_info": "Nom local: {{nom}}",
       "howto_unlinked": "Aquest POM no està lligat a cap POM del catàleg global, i el «com es mesura» viu allà.",
-      "howto_uninformed": "Lligat al catàleg global, però allà encara no s’ha informat com es mesura."
+      "howto_uninformed": "Lligat al catàleg global, però allà encara no s’ha informat com es mesura.",
+      "create_new": "Nou POM",
+      "create_hint": "Neix al catàleg del tenant, actiu i sense lligar a cap peça ni a cap client. Per posar-lo en una peça, assigna’l després.",
+      "create_code": "Nomenclatura",
+      "create_name": "Nom",
+      "create_category": "Categoria",
+      "create_category_none": "Sense categoria",
+      "create_need_fields": "Cal la nomenclatura i el nom.",
+      "create_submit": "Crear POM",
+      "create_saving": "Creant…",
+      "create_cancel": "Cancel·lar",
+      "create_error": "No s’ha pogut crear el POM."
     }
   },
   "size_map_screen_config": "Configuració",

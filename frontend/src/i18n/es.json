@@ -3623,7 +3623,18 @@
       "no_category": "Sin familia",
       "name_local_info": "Nombre local: {{nom}}",
       "howto_unlinked": "Este POM no está vinculado a ningún POM del catálogo global, y ahí es donde vive el «cómo se mide».",
-      "howto_uninformed": "Vinculado al catálogo global, pero allí todavía no se ha informado cómo se mide."
+      "howto_uninformed": "Vinculado al catálogo global, pero allí todavía no se ha informado cómo se mide.",
+      "create_new": "Nuevo POM",
+      "create_hint": "Nace en el catálogo del tenant, activo y sin vincular a ninguna prenda ni a ningún cliente. Para ponerlo en una prenda, asígnalo después.",
+      "create_code": "Nomenclatura",
+      "create_name": "Nombre",
+      "create_category": "Categoría",
+      "create_category_none": "Sin categoría",
+      "create_need_fields": "Faltan la nomenclatura y el nombre.",
+      "create_submit": "Crear POM",
+      "create_saving": "Creando…",
+      "create_cancel": "Cancelar",
+      "create_error": "No se ha podido crear el POM."
     }
   },
   "size_map_screen_config": "Configuración",

@@ -734,6 +734,21 @@ def create_tenant_pom_view(request):
       codi_client, nom_client, categoria_id,
       descripcio (optional), notes (optional)
     }
+
+    ── S45/D · AQUESTA ÉS LA PORTA DEL CATÀLEG PELAT ────────────────────────────────────
+    Fins ara existia i **no la cridava ningú** (`endpoints.js:254`, `poms.crearTenant`, zero
+    cridadors). El POMBrowser —645 POMs, cercador, assignar, treure, KEY, reordenar— no tenia
+    cap botó de crear, i l'única alta de POM del producte era la del MODEL
+    (`create_model_pom_view`, via `EditableTable`), que exigeix `modelId`.
+
+    LES DUES PORTES NO FAN EL MATEIX, I ÉS DELIBERAT:
+      · `pom-propi/<model>` neix amb `CustomerPOMAlias` (existeix PER A UN CLIENT), amb
+        `pendent_revisio=True` i `origen_import='model:<codi>'`: l'ha creat un tècnic amb un
+        model al davant i el catàleg encara no l'ha beneït.
+      · AQUESTA neix SOLA al catàleg del tenant: sense àlies, sense GTI, sense sembra, sense
+        `pom_global`. Vincular-la a un ítem és el flux ASSIGN que el POMBrowser ja té, i
+        promoure-la a canònica és feina de backoffice. Un POM del catàleg no és un POM
+        «pendent»: és el que hi ha, i per això NO neix `pendent_revisio`.
     """
     code = request.data.get('codi_client', '').strip()
     name = request.data.get('nom_client', '').strip()
@@ -745,7 +760,14 @@ def create_tenant_pom_view(request):
     try:
         from fhort.pom.models import POMMaster
 
-        if POMMaster.objects.filter(codi_client=code).exists():
+        # 🚨 S45/D — LA COMPROVACIÓ ANAVA EN MINÚSCULES I MAJÚSCULES, I LA CONSTRAINT NO.
+        # El predicat era `filter(codi_client=code)` (exacte) i la unicitat de la BD és
+        # CASE-INSENSITIVE (`uniq_pommaster_codi_client_ci`, `pom/models.py:421`). Amb «CF»
+        # al catàleg, crear «cf» passava aquest `if`, petava contra la constraint, queia a
+        # l'`except Exception` de sota i sortia per la finestra com un **500 amb el text cru
+        # del driver**. El guard ha de mirar el que mira la BD o no és un guard: és un 500
+        # amb passos previs.
+        if POMMaster.objects.filter(codi_client__iexact=code).exists():
             return Response({'error': f'Ja existeix un POM amb codi {code}'}, status=400)
 
         pom = POMMaster.objects.create(
@@ -753,6 +775,11 @@ def create_tenant_pom_view(request):
             nom_client=name,
             categoria_id=categoria_id,
             notes=request.data.get('notes', ''),
+            # Sense `pom_global`: catàleg de TENANT. El pont amb els 290 `POMGlobal` de
+            # `public` és una decisió de la casa, no un efecte secundari d'aquest formulari.
+            # La traça diu d'on ve, com a la resta d'altes de catàleg (l'import hi posa el
+            # token de sessió; el model, `model:<codi>`).
+            origen_import='cataleg',
             actiu=True,
         )
 
