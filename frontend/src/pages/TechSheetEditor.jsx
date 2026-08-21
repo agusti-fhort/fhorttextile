@@ -32,7 +32,7 @@ import { useUnit, fmtMeasure } from './fittingShared'
 import { comptaPecesInserides, esPecaInserible } from '../utils/pecaInsercio'
 import { potTancar, treuAncoratgeFantasma } from '../utils/tracatPloma'
 import { reparteixCotes, superficieDeCotes } from '../utils/cotesAuto'
-import { nomsDePom } from '../utils/nomenclaturaPom'
+import { nomenclaturaDePom, nomsDePom } from '../utils/nomenclaturaPom'
 import { sufixIdentitat } from '../utils/capaInstancia'
 import { useDiccionariMesures } from '../utils/diccionariMesuresFont'
 // F4 — el `format` per pàgina: la regla d'escriptura i la de lectura, en un sol lloc.
@@ -43,7 +43,7 @@ import { grupsDelFull } from '../utils/grupsDelFull'
 import { aDocument } from '../utils/breakConvention'
 import { nomDeLaPeca } from '../utils/pecaDefinicio'
 import { etiquetaCapa, etiquetaInstancia } from '../utils/capaInstancia'
-import { filesFitting, filesGrading, filesNotes, filesSizeSet, filesSizeSetConsolidat } from '../utils/taulesQ8'
+import { filesBase, filesFitting, filesGrading, filesNotes, filesSizeSet, filesSizeSetConsolidat } from '../utils/taulesQ8'
 
 const PaperFlatEditor = lazy(() => import('./PaperFlatEditor'))
 
@@ -5304,6 +5304,103 @@ export default function TechSheetEditor() {
     return { text: Number(v) > 0 ? `+${n}` : `−${n}`, centrat: true }
   }
 
+  // La TOLERÀNCIA d'una mesura, en una sola cel·la. Arriba del backend ja RESOLTA (la de la
+  // mesura mana, la del catàleg és el pla B, el 0.6 de la casa és l'últim recurs: `_tol_vigent`
+  // a `pom/wizard_views.py`), o sigui que aquí no hi ha cap cascada a refer — només a pintar.
+  //
+  // SIMÈTRICA → `± n`, i és el cas normal: escriure «+0.6 / −0.6» és ocupar el doble d'ample per
+  // dir el mateix. ASIMÈTRICA → les dues bandes, cadascuna amb el seu signe i amb el menys
+  // TIPOGRÀFIC (la convenció de `cellaDif` i de `cellaIncrement`: al paper, un guionet de teclat
+  // i un menys no es distingeixen, i el signe d'una tolerància s'ha de poder llegir).
+  // Sense cap de les dues bandes, buit: una tolerància que no existeix no és un zero.
+  const cellaTol = (minus, plus) => {
+    if (minus == null && plus == null) return { text: '', centrat: true }
+    const m = minus == null ? null : Number(minus)
+    const p = plus == null ? null : Number(plus)
+    if (m != null && p != null && m === p) return { text: `± ${xifra(p)}`, centrat: true }
+    const bandes = []
+    if (p != null) bandes.push(`+${xifra(p)}`)
+    if (m != null) bandes.push(`−${xifra(m)}`)
+    return { text: bandes.join(' / '), centrat: true }
+  }
+
+  // ── Q8e · TAULA DE MESURES DE TALLA BASE, PER PEÇA ──────────────────────────
+  //
+  // 🔑 LA TAULA QUE JA VA EXISTIR, TORNADA A NÉIXER SOBRE L'EIX DE LA PRENDA. La versió antiga
+  // (`insertTableBaseMeasures`, morta a `d15e198b`) cablava `garmentId: GARMENT_MARE` amb un
+  // comentari que ho admetia, i **aquell és exactament el motiu pel qual es va retirar**: era la
+  // mateixa taula sense l'eix de la peça. El que torna no és el codi d'aleshores, és la seva
+  // llei portada a la família Q8 —grups apilats per peça, capçaleres en anglès fix, fila de
+  // títol amb data, sòl de 8pt i paginació sense tallar files—.
+  //
+  // 🔑 «L'ÚLTIM FIT VÀLID» NO ÉS CAP CONSULTA A PART, i per això aquí no hi ha cap crida nova:
+  // la llei del domini —*l'última mesura escrita és la veritat, temporal i no d'origen*— ja està
+  // MATERIALITZADA a `BaseMeasurement.base_value_cm`, que `consolidate_base_from_fitting` escriu
+  // en tancar el fitting i en propagar. Llegir la base ÉS llegir l'últim fit vàlid.
+  //
+  // FONT ÚNICA I JA CARREGADA: `pomRows` és el `results` de `base-measurements/` que l'editor
+  // baixa al muntatge (`:3618`). No s'hi torna: dues lectures de la mateixa vora són dues
+  // veritats per a la mateixa cel·la el dia que una arribi abans que l'altra.
+  //
+  // 🚨 EL CAS BUIT NO ES PODA. Hi entren TOTES les mesures vives, inclosos els POM materialitzats
+  // sense xifra: *la cel·la buida en una fitxa impresa és on el tècnic anota a mà; podar les
+  // files en silenci seria decidir per ell què no li importa* (llei de la versió retirada, que
+  // es conserva sencera). La porta `baseMeasuresOk` ja garanteix que almenys una porti xifra.
+  //
+  // SENSE PARTICIÓ PER TALLES: aquesta taula té CINC columnes fixes i no creix amb el run, o
+  // sigui que `trossosDeTalles` no hi té res a repartir. El que sí que l'aplica és el sostre
+  // vertical, que és de `inserirGrupPaginat` i el comparteix amb les germanes.
+  const insertTaulaBase = (garment) => {
+    if (!locked) return
+    const files = filesBase(pomRows)
+    if (!files.length) { flash(t('tech_sheet.flash_empty_table')); return }
+    // La talla surt del MODEL (`base_size_label`), la mateixa que el run declara: és la que
+    // encapçala la columna de xifres, perquè la columna que porta la xifra és qui declara de
+    // quina talla parla (llei T0, 31/07). Sense talla declarada, el rètol pelat.
+    const base = (model?.base_size_label || '').trim()
+    const grups = nomesLaPeca(grupsQ8(files), garment)
+    if (!grups.length) { flash(t('tech_sheet.flash_empty_table')); return }
+    const wPom = ampladaPomQ8(files)
+    const entrades = grups.map(g => ({
+      taula: {
+        id: uid(), type: 'table', layer: 'free', kind: 'q8_base',
+        garmentId: g.garment, titol: g.titol || '', unitat: unitatDeclarada,
+        // T4 — LA DATA D'AQUESTA TAULA ÉS LA DE L'ESCRIPTURA MÉS RECENT DEL GRUP, i no una
+        // data de document: el que la taula documenta és un estat consolidat que s'ha anat
+        // escrivint mesura a mesura (l'últim fitting tancat, l'última propagació, l'última
+        // correcció a mà). La més recent és la que diu de quan és el que hi ha imprès.
+        data: dataDoc(g.files.reduce((max, f) => (
+          f.updated_at && (!max || f.updated_at > max) ? f.updated_at : max), null)),
+        nomTaula: tEn('tech_sheet.q8_taula_base'),
+        columns: [
+          { key: 'layer', label: tEn('tech_sheet.q8_col_layer'), width: 16 },
+          { key: 'pom', label: tEn('tech_sheet.q8_col_pom'), width: wPom },
+          // LA NOMENCLATURA NO PORTA TÍTOL (decisió d'Agus, 31/07, que la versió retirada ja
+          // aplicava): el que hi ha sota és com el CLIENT anomena la mesura, i etiquetar-ho
+          // «Nomenclatura» era posar nom a una columna que s'explica sola.
+          { key: 'nom', label: '', width: 22 },
+          // La columna de la base va MARCADA (`base: true`): el builder hi pinta la franja
+          // grisa, la mateixa que la taula d'escalat. Aquí no hi ha cap altra columna de
+          // xifres amb qui confondre-la, i justament per això la franja diu què s'hi mira.
+          { key: 'base', label: base || tEn('tech_sheet.q8_col_base'), width: 20, base: true },
+          { key: 'tol', label: tEn('tech_sheet.q8_col_tol'), width: 24 },
+        ],
+        rows: g.files.map(f => [
+          capaQ8(f), cellaPom(f), nomenclaturaDePom(f),
+          xifra(f.base), cellaTol(f.tol_minus, f.tol_plus),
+        ]),
+        style: { fontSize: 9, capcaleraFina: true, zebra: true },
+        snapshot: {
+          model_id: model.id, talla_base: base || null, garment: g.garment,
+          snapshot_at: new Date().toISOString(),
+        },
+      },
+    }))
+    const n = inserirGrupPaginat(entrades)
+    if (n) flash(t('tech_sheet.q8_flash_inserted', { count: n }))
+    setTablePicker(null)
+  }
+
   // LA GRAELLA DE L'ÚLTIMA SESSIÓ TANCADA, en un sol lloc: la demanen les TRES taules que en
   // beuen (fitting, size set i notes) i han de veure exactament el mateix payload. Dues còpies
   // d'aquesta cadena de dues peticions serien dues maneres de triar el `PieceFitting`, i el dia
@@ -5642,6 +5739,8 @@ export default function TechSheetEditor() {
     if (variant === 't2') { insertTableT2(); return }
     // Q8 — res a triar: la sessió és L'ÚLTIMA TANCADA, no una de la llista. Oferir-ne un
     // selector convidaria a compondre la fitxa amb un fitting que ja s'ha superat.
+    // Q8e — la base no demana res: la seva font ja és a `pomRows` des del muntatge.
+    if (variant === 'q8_base') { insertTaulaBase(garment); return }
     if (variant === 'q8_fitting') { insertTaulaFitting(garment); return }
     if (variant === 'q8_grading') { insertTaulaGrading(garment); return }
     if (variant === 'q8_size_set') { insertTaulaSizeSet(garment); return }
@@ -5866,12 +5965,14 @@ export default function TechSheetEditor() {
   // text lliure de l'import i pot partir una sola peça en zones («cos», «caputxa»); `garment`
   // és la prenda del model. Mateixa font (pomRows), cap crida nova, i cap ordre alterat.
   //
-  // ⚠️ DATAT 2026-08-10: avui això dona SEMPRE una sola branca (la mare) per dues raons
-  // independents —la comporta CHECK de T2 no deixa entrar cap altre valor a la columna, i el
-  // payload de `base-measurements/` encara NO serveix l'eix (ho farà quan existeixi
-  // `ModelGarment`, que és qui resol `garment.X or model.X` en un sol punt; T9 no ho anticipa).
-  // Re-verificar amb: `grep -rn "class ModelGarment" backend/`. El dia que la vora el porti,
-  // aquestes dues línies ja tenen l'arbre engegat sense tocar res més.
+  // ⚠️ LA NOTA DATADA DEL 10/08 DEIA QUE AIXÒ DONA SEMPRE UNA SOLA BRANCA «perquè el payload de
+  // `base-measurements/` encara NO serveix l'eix», I DES DE SET-2/F1 ÉS FALS: el payload el serveix
+  // (`pom/wizard_views.py:674`, `'garment': bm.garment`) i `ModelGarment` existeix
+  // (`models_app/models.py:1711`) — que és exactament la re-verificació que aquella nota
+  // demanava. Es corregeix aquí i no s'hi deixa: una nota datada i falsa sobre una FONT és el
+  // que fa néixer el brief equivocat de la sessió següent (li va passar a la taula Q8e).
+  // El nombre de branques el mana ara la DADA: amb totes les mesures a la mare en surt una, i
+  // amb una peça 02 materialitzada en surten dues, sense tocar res més.
   const grupsPom = agrupaPerGarment(pomRows)
   const arbrePom = calArbrePerGarment(grupsPom)
   // C5 — `pecesDelModel` (les prendes deduïdes de les files de POM) se n'ha anat amb la casella
@@ -5913,6 +6014,14 @@ export default function TechSheetEditor() {
   // TANCADA (una taula de fitting sense fitting no és incompleta, no existeix); escalat i size
   // set només volen que el model tingui mesures, perquè la seva font és la corba consolidada.
   const Q8_TAULES = [
+    // LA BASE VA PRIMERA perquè és el SUBSTRAT: les altres tres la pressuposen —el fitting hi
+    // compara, l'escalat hi arrenca la corba i el size set n'és la projecció—. Qui compon la
+    // fitxa la posa a sobre i les altres a sota, i l'ordre del panell hi ha de convidar.
+    // La seva porta és `baseMeasuresOk`, la mateixa que l'escalat i el size set i pel mateix
+    // motiu: no demana graduació (és justament la taula que no en porta), només que el model
+    // tingui almenys una mesura de talla base AMB xifra.
+    { k: 'q8_base', icon: 'ti-ruler', label: t('tech_sheet.q8_taula_base'),
+      ok: baseMeasuresOk, motiu: t('tech_sheet.lib_table_no_base_values') },
     { k: 'q8_fitting', icon: 'ti-ruler-2', label: t('tech_sheet.q8_taula_fitting'),
       ok: !!sessioTancada, motiu: t('tech_sheet.lib_table_no_closed_session') },
     { k: 'q8_grading', icon: 'ti-chart-grid-dots', label: t('tech_sheet.q8_taula_grading'),

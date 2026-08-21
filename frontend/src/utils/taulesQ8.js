@@ -1,4 +1,4 @@
-// Q8/B4 — LES FILES DE LES TRES TAULES DE LA FITXA: fitting · grading · size set.
+// Q8/B4 — LES FILES DE LES TAULES DE LA FITXA: base · fitting · grading · size set.
 //
 // Això és el CONSTRUCTOR DE DADES i prou —el mateix repartiment de feina que `taulaPresaPerTalla`
 // declara al seu capçal—. Aquí no hi ha cap `type: 'table'`, cap amplada en mm, cap idioma de
@@ -15,6 +15,10 @@
 //                   (`logica`/`increment_base`/`increment_break`/`talla_break_label`), els valors
 //                   per talla (`graded` + `base_value_cm`) i l'eix de la prenda (`garment`).
 //                   `graded-table/` NO serveix `garment` i faria caure totes les files a la mare.
+//   Q8e base     → `GET /models/<id>/base-measurements/`, que és el payload que l'editor JA té
+//                   carregat (`pomRows`) i que porta la base consolidada, la tolerància vigent i
+//                   l'eix de la prenda. ⚠️ La frase de dues línies més amunt és de `graded-table/`
+//                   i NOMÉS d'ell: `base-measurements/` sí que serveix `garment` (des de SET-2/F1).
 //
 // Les files que en surten porten `garment`, o sigui que `agrupaPerGarment`/`grupsDelFull` les
 // saben repartir per peça sense cap adaptador pel mig.
@@ -216,5 +220,72 @@ export function filesGrading(rows, talles, base) {
     valors: Object.fromEntries((talles || []).map(s => [
       s, s === base ? (r.base_value_cm ?? null) : (r.graded?.[s] ?? null),
     ])),
+  }))
+}
+
+/**
+ * Q8e · LA TAULA DE MESURES DE TALLA BASE — la base sola, sense graduació.
+ *
+ * 🔑 QUÈ ÉS «L'ÚLTIM FIT VÀLID», i per què NO és una consulta a part. La llei del domini és que
+ * *l'última mesura escrita és la veritat* —temporal, no d'origen—, i està MATERIALITZADA a
+ * `BaseMeasurement.base_value_cm`: `consolidate_base_from_fitting` (`fitting/services.py:669`)
+ * hi escriu la darrera línia VÀLIDA en tancar el fitting (`close_piece_fitting`) i en propagar
+ * (`models_app/views.py:3090`, amb `origen='FITTED'`). Un model sense cap fitting tancat porta
+ * la base que la talla base va confirmar. Per tant **la taula només ha de llegir la base**: anar
+ * a buscar «l'últim fit» a un històric seria una segona veritat per a la mateixa cel·la, i el dia
+ * que les dues no coincidissin no hi hauria manera de dir quina menteix.
+ *
+ * FONT ÚNICA: `GET /models/<id>/base-measurements/` (`pom/wizard_views.py:572`), que és el
+ * MATEIX payload que l'editor ja té carregat a `pomRows` des del muntatge. Cap crida nova.
+ *
+ * ⚠️ LA DIAGNOSI DEIA QUE AQUESTA FONT NO SERVIA NI L'EIX NI LA TOLERÀNCIA, I SÓN DUES COSES
+ * FALSES, cadascuna per un motiu diferent —i totes dues comprovades al COS de la vista, no al
+ * seu voltant—:
+ *   · `garment` hi és des de SET-2/F1 (`wizard_views.py:674`). La frase «no serveix garment» era
+ *     de `graded-table/` (v. el capçal d'aquest fitxer) i es va traslladar d'endpoint.
+ *   · `tol_minus`/`tol_plus` hi són i **ja arriben RESOLTS** (`:697-698`, `_tol_vigent`): la de la
+ *     mesura mana, la del catàleg és el pla B i el 0.6 de la casa és l'últim recurs. Qui va dir
+ *     que no hi eren mirava `BaseMeasurementSerializer` (`models_app/serializers.py:432`), que és
+ *     el ViewSet del router —un ALTRE endpoint— i que a més els diu `tolerancia_minus/plus`.
+ *     Cap serializer no s'ha hagut de tocar.
+ *
+ * FILES: TOTES les mesures vives, **inclosos els POM sense xifra**. És la llei de la versió
+ * retirada i es conserva sencera: *la cel·la buida en una fitxa impresa és on el tècnic anota a
+ * mà; podar les files en silenci seria decidir per ell què no li importa.*
+ *
+ * @param {Array} bms  `results` de `base-measurements/` (l'estat `pomRows` de l'editor)
+ */
+export function filesBase(bms) {
+  return (bms || []).map(bm => ({
+    identitat: identitatMesura(bm),
+    pom_id: bm.pom_id,
+    capa: bm.capa || '', instancia: bm.instancia || '', garment: bm.garment || '',
+    // ELS DOS NOMS LLARGS, amb les mateixes claus que `filesGrading` emet, perquè `nomsDePom`
+    // resolgui el bateig del model igual a totes dues taules (regla d'or 31/07).
+    //
+    // 🚨 I `nom_client` AMB ELLS, que `filesGrading` no arrossega i aquí NO és opcional. Un POM
+    // tenant-only —sense `pom_global`— no té ni `nom_en` ni `nom_ca`: el catàleg d'un client
+    // importat el bateja NOMÉS a `POMMaster.nom_client`, i és l'últim graó de la cadena de
+    // `nomsDePom`. Sense passar-lo, `canonic` sortia CADENA BUIDA i la columna POM naixia muda
+    // per a un model sencer —mesurat al banc 1383, on les 21 files són exactament aquest cas—.
+    // Que la taula d'escalat no el necessiti no vol dir que no calgui: aquella beu de
+    // `taula-mesures`, que resol els noms d'una altra manera.
+    nom_en: bm.nom_en || '', nom_local: bm.nom_ca || '', nom_client: bm.nom_client || '',
+    nom_canonic_model: bm.nom_canonic_model || '', nom_traduit_model: bm.nom_traduit_model || '',
+    // I LA NOMENCLATURA CURTA, que aquesta taula sí que pinta en columna pròpia: es passen els
+    // camps CRUS que `nomenclaturaDePom` sap encadenar (nom_fitxa → àlies del client → codi
+    // canònic → codi de la casa), mai una cadena ja resolta aquí. El resolutor és d'aquell mòdul.
+    nom_fitxa: bm.nom_fitxa || null,
+    client_alias: bm.client_alias || null,
+    pom_code_global: bm.pom_code_global || '',
+    codi_client: bm.codi_client || '',
+    pom_abbreviation: bm.pom_abbreviation || '',
+    is_key: !!bm.pom_is_key,
+    base: bm.base_value_cm ?? null,
+    tol_minus: bm.tol_minus ?? null,
+    tol_plus: bm.tol_plus ?? null,
+    // La data d'escriptura de CADA fila: la de la taula és la més recent del grup, que és
+    // exactament el que la llei temporal declara com a veritat vigent. La tria la fa la pàgina.
+    updated_at: bm.updated_at || null,
   }))
 }
