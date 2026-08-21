@@ -81,7 +81,8 @@ def grading_rules_match(model_rules, canonical_rules):
     4 dimensions:
       1. mateix conjunt de pom_id (estricte)
       2. logica (literal)
-      3. **la FORMA CANÒNICA**: increment_base + increment_break + talla_break_label
+      3. **la FORMA CANÒNICA**: increment_base + increment_break + talla_break_label +
+         `breaks` (els intervals del TRAM F)
       4. valors_step (via _step_equal de mòdul)
 
     🚨 FIX-A/PAS-4 — LA DIMENSIÓ 3 ERA `increment`, I ERA UNA MENTIDA LATENT.
@@ -132,6 +133,12 @@ def grading_rules_match(model_rules, canonical_rules):
         if _norm(mr.talla_break_label) != _norm(cr.talla_break_label):
             divs.append({'pom_codi': _codi(mr),
                          'detall': f'talla break {mr.talla_break_label} ≠ {cr.talla_break_label}'})
+            continue
+        # TRAM F — els INTERVALS entren a la dimensió 3 per FORMA (mateixos trams, mateixos
+        # deltes). Sense això, dues regles amb el mateix Δ base i relleus diferents es
+        # declararien iguals — la mateixa mentida latent que el PAS 4 va treure de sobre.
+        if not _breaks_equal(getattr(mr, 'breaks', None), getattr(cr, 'breaks', None)):
+            divs.append({'pom_codi': _codi(mr), 'detall': 'els intervals de break difereixen'})
             continue
         # (4) valors_step
         if not _step_equal(mr.valors_step, cr.valors_step):
@@ -778,6 +785,7 @@ def rule_to_spec(r):
         'logica': r.logica, 'increment': r.increment, 'valors_step': r.valors_step,
         'increment_base': r.increment_base, 'increment_break': r.increment_break,
         'talla_break_label': r.talla_break_label, 'talla_break_pos': r.talla_break_pos,
+        'breaks': getattr(r, 'breaks', None),      # TRAM F — la forma sencera, o no és la forma
     }
 
 
@@ -792,14 +800,32 @@ def _num_eq(a, b, tol=0.001):
         return False
 
 
+def _breaks_equal(a, b):
+    """Igualtat d'INTERVALS (TRAM F) per FORMA: mateixa llista, mateix ordre, etiquetes
+    normalitzades i deltes amb la tolerància dels deltes. Buit i `None` són el mateix estat
+    («aquesta regla no en porta»), com a `_step_equal` amb `valors_step`."""
+    la, lb = list(a or []), list(b or [])
+    if len(la) != len(lb):
+        return False
+    if not all(isinstance(x, dict) for x in la + lb):
+        return la == lb          # forma no llegible: no s'hi filosofa, es compara tal qual
+    clau = lambda d: (_norm(d.get('inici')), _norm(d.get('final')))   # noqa: E731
+    for x, y in zip(sorted(la, key=clau), sorted(lb, key=clau)):
+        if clau(x) != clau(y) or not _num_eq(x.get('delta'), y.get('delta')):
+            return False
+    return True
+
+
 def spec_forms_match(a, b):
     """Igualtat de la FORMA APLICABLE (la que aplica el motor: increment_base + increment_break
-    + talla_break_label). NO compara `increment` legacy (un contenidor curat el porta a 0 i
-    condueix per increment_base) ni la talla base (invariant al grading, com grading_rules_match).
-    Aquesta és la comparació-veritat per al CONFLICTE per-regla contenidor-vs-fitxa."""
+    + talla_break_label + els INTERVALS del TRAM F). NO compara `increment` legacy (un contenidor
+    curat el porta a 0 i condueix per increment_base) ni la talla base (invariant al grading, com
+    grading_rules_match). Aquesta és la comparació-veritat per al CONFLICTE per-regla
+    contenidor-vs-fitxa."""
     return (_num_eq(a.get('increment_base'), b.get('increment_base'))
             and _num_eq(a.get('increment_break'), b.get('increment_break'))
-            and _norm(a.get('talla_break_label')) == _norm(b.get('talla_break_label')))
+            and _norm(a.get('talla_break_label')) == _norm(b.get('talla_break_label'))
+            and _breaks_equal(a.get('breaks'), b.get('breaks')))
 
 
 def classifica_fitxa_vs_contenidor(specs, container):

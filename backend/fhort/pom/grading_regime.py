@@ -155,20 +155,143 @@ def delta_de_posicio(idx, intervals, general):
     return general
 
 
+def valida_breaks(breaks, logica=None, run=None, increment_base=None):
+    """Valida els intervals d'AUTORIA. Retorna `(normalitzats, error)`.
+
+    `normalitzats`: la llista tal com s'ha de DESAR —ordenada, deltes a float i etiquetes amb
+    l'ortografia del run— o `None` si la regla no en porta cap (i llavors el camp es desa NULL:
+    una llista buida i «no en té» han de ser la mateixa cosa a la BD).
+    `error`: `{'codi', 'detall'}` o `None`.
+
+    Les regles, totes decidides al brief del tram F:
+      · només sota LINEAR (sota FIXED/ZERO no hi ha relleu; sota STEP el relleu és `valors_step`)
+      · com a molt `MAX_BREAKS`
+      · cal delta GENERAL (`increment_base`): sense corba de fons un interval no és un
+        trencament de res, i el motor no emetria cap cel·la (llei D2)
+      · etiquetes del run del SISTEMA de la regla, `inici` ≤ `final` en ordre de sistema
+      · sense solapament
+      · **delta ≠ delta adjacent**: un interval que repeteix el delta del seu veí (el general, o
+        l'interval enganxat) no trenca res — o és soroll o és el mateix tram dit en dos trossos.
+
+    ⚠️ SENSE RUN NO ES VALIDEN LES ETIQUETES (i es diu, no es dissimula): hi ha jocs de catàleg
+    sense `size_system`, i el motor mateix hi resol el break per etiqueta contra el run que
+    tingui. La forma, el recompte i el règim SÍ que es validen igualment.
+    """
+    if breaks in (None, '', [], ()):
+        return None, None
+    if not isinstance(breaks, (list, tuple)):
+        return None, {'codi': CODI_BREAKS_FORMA,
+                      'detall': "Els intervals han de venir com a llista "
+                                "[{inici, final, delta}]."}
+    items = list(breaks)
+    if not items:
+        return None, None
+    if (logica or '').strip().upper() != 'LINEAR':
+        return None, {'codi': CODI_BREAKS_NOMES_LINEAR,
+                      'detall': ("Els intervals de graduació només tenen sentit sota LINEAR. "
+                                 "Sota STEP el creixement viu als valors per talla; sota "
+                                 "FIXED/ZERO la mesura no creix.")}
+    if len(items) > MAX_BREAKS:
+        return None, {'codi': CODI_BREAKS_MAX,
+                      'detall': f"Com a màxim {MAX_BREAKS} intervals per regla."}
+    general = _f(increment_base)
+    if general is None:
+        return None, {'codi': CODI_BREAKS_SENSE_GENERAL,
+                      'detall': ("Una regla amb intervals necessita el seu Δ base: és el delta "
+                                 "que mana fora dels intervals.")}
+
+    etiquetes = [str(x).strip() for x in (run or [])]
+    pos = _posicions(etiquetes)
+    nets = []
+    for it in items:
+        if not isinstance(it, dict) or 'inici' not in it or 'final' not in it:
+            return None, {'codi': CODI_BREAKS_FORMA,
+                          'detall': "Cada interval vol talla d'inici, talla final i Δ."}
+        delta = _f(it.get('delta'))
+        if delta is None:
+            return None, {'codi': CODI_BREAKS_FORMA,
+                          'detall': "El Δ d'un interval ha de ser un número."}
+        ini_raw, fi_raw = it.get('inici'), it.get('final')
+        if _norm_label(ini_raw) == '' or _norm_label(fi_raw) == '':
+            return None, {'codi': CODI_BREAKS_FORMA,
+                          'detall': "Cada interval vol talla d'inici i talla final."}
+        if etiquetes:
+            i_ini, i_fi = pos.get(_norm_label(ini_raw)), pos.get(_norm_label(fi_raw))
+            if i_ini is None or i_fi is None:
+                forana = ini_raw if i_ini is None else fi_raw
+                return None, {'codi': CODI_BREAKS_TALLA_FORANA,
+                              'detall': (f"La talla «{forana}» no és al sistema de talles "
+                                         f"d'aquesta regla ({' · '.join(etiquetes)}).")}
+            if i_fi < i_ini:
+                return None, {'codi': CODI_BREAKS_ORDRE,
+                              'detall': (f"L'interval «{ini_raw} → {fi_raw}» va del revés: la "
+                                         "talla d'inici ha d'anar abans que la final.")}
+            nets.append({'inici': etiquetes[i_ini], 'final': etiquetes[i_fi], 'delta': delta,
+                         '_i': i_ini, '_f': i_fi})
+        else:
+            nets.append({'inici': str(ini_raw).strip(), 'final': str(fi_raw).strip(),
+                         'delta': delta, '_i': None, '_f': None})
+
+    if etiquetes:
+        nets.sort(key=lambda d: d['_i'])
+        for anterior, seguent in zip(nets, nets[1:]):
+            if seguent['_i'] <= anterior['_f']:
+                return None, {'codi': CODI_BREAKS_SOLAPAMENT,
+                              'detall': (f"Els intervals «{anterior['inici']} → "
+                                         f"{anterior['final']}» i «{seguent['inici']} → "
+                                         f"{seguent['final']}» es trepitgen.")}
+        # Coherència: un interval que diu el mateix que el seu veí no trenca res.
+        idx = [(d['_i'], d['_f'], d['delta']) for d in nets]
+        for d in nets:
+            veins = [p for p in (d['_i'] - 1, d['_f'] + 1) if 0 <= p < len(etiquetes)]
+            for p in veins:
+                if abs(delta_de_posicio(p, idx, general) - d['delta']) < 0.0001:
+                    return None, {
+                        'codi': CODI_BREAKS_DELTA_REDUNDANT,
+                        'detall': (f"L'interval «{d['inici']} → {d['final']}» té el mateix Δ "
+                                   f"({d['delta']}) que el tram del costat: no trenca res. "
+                                   "Canvia'n el Δ o esborra l'interval.")}
+
+    return [{'inici': d['inici'], 'final': d['final'], 'delta': d['delta']} for d in nets], None
+
+
 def es_linear_degenerada(logica, increment_base=None, increment=None,
-                         increment_break=None, talla_break_label=None) -> bool:
-    """True si la regla és LINEAR però matemàticament FIXED (delta 0, cap break)."""
+                         increment_break=None, talla_break_label=None, breaks=None) -> bool:
+    """True si la regla és LINEAR però matemàticament FIXED: CAP delta en joc és diferent de 0.
+
+    🚨 TRAM F — EL DEUTE «LINEAR+0 AMB BREAK» (defecte 4 de la diagnosi de PROD §A.5).
+    Aquí hi havia `if te_break(...): return False` a seques: n'hi havia prou d'informar una talla
+    de break perquè una regla amb els DOS deltes a zero passés la porta i es presentés com a
+    LINEAR. Al model 1215 de PROD n'hi ha CINC així (`G1`, `SLT`, `EK2`, `E5`, `U`:
+    `ib=0 · brk=0 · break M`) i produeixen exactament el que la llei A3 volia tancar: una taula
+    PLANA que es diu graduada. El break no és una excepció a la llei, és una segona manera
+    d'informar el relleu — i un relleu de zero no és relleu.
+
+    El que NO canvia: amb break i un delta no-zero (el cas normal `ib=0 · brk=1.5`, un sostre a
+    l'inrevés) la regla segueix sent LINEAR de ple dret. `te_break` es conserva perquè diu una
+    altra cosa —«hi ha trencament informat»— i té lector propi a la UI.
+
+    ⚠️ Aquesta funció NO toca cap fila existent: és una porta d'AUTORIA. Les 9 regles d'aquesta
+    forma que viuen al banc 1383 es queden com són (dades vives, precedent del ruleset 115) i el
+    banc les segueix graduant igual. El que canvia és que no se'n pot escriure cap de nova.
+    """
     if (logica or '').strip().upper() != 'LINEAR':
         return False
-    if te_break(increment_break, talla_break_label):
+    if delta_base_efectiu(increment_base, increment) != 0.0:
         return False
-    return delta_base_efectiu(increment_base, increment) == 0.0
+    brk = _f(increment_break)
+    if brk not in (None, 0.0):
+        return False
+    for it in (breaks or []):
+        if isinstance(it, dict) and (_f(it.get('delta')) or 0.0) != 0.0:
+            return False
+    return True
 
 
 def normalitza_logica(logica, increment_base=None, increment=None,
-                      increment_break=None, talla_break_label=None) -> str:
+                      increment_break=None, talla_break_label=None, breaks=None) -> str:
     """Règim que s'ha de DESAR. LINEAR degenerada → 'FIXED'; la resta, sense tocar."""
     if es_linear_degenerada(logica, increment_base, increment,
-                            increment_break, talla_break_label):
+                            increment_break, talla_break_label, breaks):
         return 'FIXED'
     return logica

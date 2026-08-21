@@ -626,6 +626,7 @@ def base_measurements_view(request, model_id):
                 'increment_base': r.increment_base,
                 'increment_break': r.increment_break,
                 'talla_break_label': r.talla_break_label or '',
+                'breaks': r.breaks or [],           # TRAM F — el relleu sencer
                 'origen': r.origen,
             }
             for r in ModelGradingRule.objects.filter(model_id=model_id, actiu=True)

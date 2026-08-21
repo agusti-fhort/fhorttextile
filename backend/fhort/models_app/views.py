@@ -15,7 +15,7 @@ import django_filters
 from fhort.accounts.capabilities import HasCapability, EXECUTE_TASKS, CONFIGURE
 from fhort.pom.services import SealedGradingVersionError, _te_regles
 from fhort.pom.grading_regime import (
-    CODI_LINEAR_ZERO, MISSATGE_LINEAR_ZERO, es_linear_degenerada,
+    CODI_LINEAR_ZERO, MISSATGE_LINEAR_ZERO, es_linear_degenerada, valida_breaks,
 )
 # F1.3 — el batec d'escriptura: escriure sobre un model és el senyal de «hi estic
 # treballant» (D-2). El decorador bat NOMÉS en 2xx i mai llança.
@@ -2088,6 +2088,14 @@ def measurements_table_view(request, model_id):
     def _flt(v):
         return float(v) if v is not None else None
 
+    # TRAM F — la geometria del motor, per servir el run del SISTEMA (v. la resposta):
+    # és l'espai on el motor resol el relleu i el que el picker d'intervals ha d'oferir.
+    try:
+        from fhort.pom.services import escala_del_model as _escala
+        _run_model_e, _run_sist_e, _pos_e, _base_idx_e = _escala(model)
+    except (ValueError, AttributeError):
+        _run_model_e, _run_sist_e, _pos_e, _base_idx_e = [], [], None, None
+
     # C3 — nomenclatura del CLIENT del model, mateix resolutor que la resta de superfícies.
     from fhort.pom.identitat import clau_mesura
     from fhort.pom.nomenclatura import alies_per_pom, camps_de
@@ -2142,6 +2150,10 @@ def measurements_table_view(request, model_id):
             'increment_base': _flt(getattr(rule, 'increment_base', None)) if rule else None,
             'increment_break': _flt(getattr(rule, 'increment_break', None)) if rule else None,
             'talla_break_label': getattr(rule, 'talla_break_label', None) if rule else None,
+            # TRAM F — els intervals. Aquest payload és el punt d'entrada de 5 de les 7
+            # superfícies visuals de la regla: si el relleu no hi surt, la pantalla que l'edita
+            # no el pot ni ensenyar ni tornar a desar sencer.
+            'breaks': (getattr(rule, 'breaks', None) or []) if rule else [],
             # P0.5d — D'ON VE LA REGLA, perquè la superfície de Graduació ho ha de poder dir.
             #
             # CALEN ELS DOS CAMPS, i el primer cop només en vaig posar un. `origen` sol MENTIA
@@ -2210,6 +2222,13 @@ def measurements_table_view(request, model_id):
         'base_size': base_size,
         'size_run': size_run,               # kept so as not to break consumers
         'size_run_complet': size_run,
+        # TRAM F — EL RUN DEL SISTEMA, i tanca una frontera que amb un sol break ja coixejava.
+        # El motor resol el relleu contra el run del SISTEMA (llei S24b) però la pantalla només
+        # sabia oferir el run del MODEL: un interval que acabi a una talla que el sistema té i
+        # el model no fabrica —que és la forma canònica de tota regla d'1 break llegida com a
+        # interval— no era ni triable ni re-desable sense perdre'l. Amb el run del sistema al
+        # payload, el picker pot oferir exactament el que el motor sap llegir.
+        'run_sistema': _run_sist_e,
         'sizes_amb_dades': sizes_with_data,
         'deltes': deltas,
         'rows': rows,
@@ -2520,6 +2539,15 @@ def gravar_pom_view(request, model_id):
                                             _abast_de_poda(request.data))
 
             valid_logiques = {code for code, _ in GradingRule.LOGICA_CHOICES}
+            from fhort.pom.services import escala_del_model
+            # TRAM F — el run del SISTEMA es llegeix UN cop per a totes les files: és el referent
+            # dels intervals (llei S24b) i demanar-lo per fila serien N consultes per res. Un
+            # model sense geometria completa el deixa buit, i llavors la validació d'intervals
+            # comprova forma i recompte però no pot comprovar etiquetes (v. `valida_breaks`).
+            try:
+                _sr_g, run_sistema_gravar, _p_g, _bi_g = escala_del_model(model)
+            except (ValueError, AttributeError):
+                run_sistema_gravar = []
             for r in rules:
                 pom_id = r.get('pom_id')
                 if not pom_id:
@@ -2542,6 +2570,7 @@ def gravar_pom_view(request, model_id):
                         increment_break=(src.increment_break if src else None),
                         talla_break_label=(src.talla_break_label if src else None),
                         talla_break_pos=(src.talla_break_pos if src else None),
+                        breaks=(src.breaks if src else None),      # TRAM F — el relleu sencer
                         # M3 — mateix criteri que `set_pom_regim_view` (vegeu-hi la nota): la
                         # fila que neix del fallback del catàleg ve d'aquell joc; la que neix
                         # de zero, de ningú. Una fila que ja existia no es re-etiqueta.
@@ -2557,11 +2586,23 @@ def gravar_pom_view(request, model_id):
                     label = (r.get('talla_break_label') or '').strip() or None
                     rule.talla_break_label = label
                     rule.talla_break_pos = _break_pos(label)
+                # TRAM F — els intervals, amb la MATEIXA validació que la porta germana i contra
+                # el mateix run (el del SISTEMA). Un error aquí s'acumula com la resta: aquesta
+                # porta desa moltes files i ha de dir totes les que no van.
+                if 'breaks' in r:
+                    nets, err_breaks = valida_breaks(
+                        r.get('breaks'), logica=rule.logica, run=run_sistema_gravar,
+                        increment_base=rule.increment_base)
+                    if err_breaks:
+                        errors.append(f"POM {pom_id}: {err_breaks['detall']}")
+                        continue
+                    rule.breaks = nets
                 # A3 (2026-07-22) — MATEIX guard que set_pom_regim_view. Aquest camí
                 # (gravar_pom, la taula de gènesi) escrivia LINEAR+0 sense cap comprovació:
                 # era el forat per on la llei encara es podia trencar.
                 if es_linear_degenerada(rule.logica, rule.increment_base, rule.increment,
-                                        rule.increment_break, rule.talla_break_label):
+                                        rule.increment_break, rule.talla_break_label,
+                                        rule.breaks):
                     errors.append(f'POM {pom_id}: {MISSATGE_LINEAR_ZERO}')
                     continue
                 rule.origen = 'MANUAL'
@@ -5138,6 +5179,9 @@ def set_pom_regim_view(request, model_id, pom_id):
       - increment_base: float|null   (delta base, p.ex. 4)
       - increment_break: float|null  (delta a partir del trencament, p.ex. 2.5)
       - talla_break_label: str|null  (talla d'inici del break; del run del model)
+      - breaks: [{inici, final, delta}]|null  (TRAM F — intervals; etiquetes del run del
+        SISTEMA en convenció de MOTOR, extrems inclusius, màx. `MAX_BREAKS`. Llista buida o
+        null = la regla no en porta, i el camp es desa NULL.)
     Si la resident no existeix: es materialitza des del fallback del catàleg; si tampoc n'hi ha,
     es crea de nou (autoria manual de la regla des de zero). Innocu sobre el grading persistent
     (no toca GradedSpec/GradingVersion; només el proper generate_graded_specs).
@@ -5148,6 +5192,7 @@ def set_pom_regim_view(request, model_id, pom_id):
     """
     from fhort.models_app.models import ModelGradingRule
     from fhort.pom.models import GradingRule
+    from fhort.pom.services import escala_del_model
 
     data = request.data
     has = lambda k: k in data   # noqa: E731 — actualització selectiva per presència de camp
@@ -5199,6 +5244,10 @@ def set_pom_regim_view(request, model_id, pom_id):
                 increment_break=(src.increment_break if src else None),
                 talla_break_label=(src.talla_break_label if src else None),
                 talla_break_pos=(src.talla_break_pos if src else None),
+                # TRAM F — els intervals viatgen amb la resta de la forma: una resident que neix
+                # del joc ha de néixer amb el relleu SENCER del joc, no amb la meitat. És el
+                # mateix defecte que el clon de perfil arrossegava fins al fix A.
+                breaks=(src.breaks if src else None),
                 # M3 — el criteri d'aquest upsert, i el sap ell mateix: si la fila NEIX del
                 # fallback del catàleg (`src`), ve d'aquell joc, per molt que el `MANUAL` de
                 # sota li digui el contrari —és exactament la mentida que M3 desfà. Si neix
@@ -5224,6 +5273,27 @@ def set_pom_regim_view(request, model_id, pom_id):
                 run = [s.strip() for s in model.size_run_model.replace(';', '·').split('·') if s.strip()]
                 if tbl in run:
                     rule.talla_break_pos = run.index(tbl)
+        # TRAM F — ELS INTERVALS. Es validen contra el run del SISTEMA (no el del model): és
+        # l'espai on el motor resol el relleu (llei S24b), i un interval que acabi a una talla
+        # que el sistema té i el model no fabrica segueix sent llegible — que és exactament la
+        # forma de tota regla d'1 break llegida com a interval.
+        #
+        # Només quan el client els ENVIA (`has`), com la resta de camps: sota STEP el relleu es
+        # conserva LATENT, igual que `increment_base` i `valors_step` (PG-4b-3a). El motor no
+        # el llegeix mentre el règim sigui STEP, i torna a manar si algú refà la regla LINEAR.
+        if has('breaks'):
+            try:
+                _sr, run_sistema, _p, _bi = escala_del_model(model)
+            except (ValueError, AttributeError):
+                run_sistema = []
+            nets, err_breaks = valida_breaks(
+                data.get('breaks'), logica=rule.logica, run=run_sistema,
+                increment_base=rule.increment_base)
+            if err_breaks:
+                return Response({'detail': err_breaks['detall'], 'codi': err_breaks['codi']},
+                                status=400)
+            rule.breaks = nets
+
         # El pas a STEP CONSERVA els valors vigents (DIAGNOSI_GRADING_POP, 30/07). Una regla
         # STEP viu dels seus `valors_step`; passar-hi amb el calaix buit deixava `_apply_rule`
         # retornant None per a cada cel·la i el `continue` de services.py:277 no reescrivia res
@@ -5239,7 +5309,7 @@ def set_pom_regim_view(request, model_id, pom_id):
         # A3 (2026-07-22): la condició viu ara a pom.grading_regime (punt únic del backend),
         # perquè aquest camí i el de `gravar_pom` no divergeixin.
         if es_linear_degenerada(rule.logica, rule.increment_base, rule.increment,
-                                rule.increment_break, rule.talla_break_label):
+                                rule.increment_break, rule.talla_break_label, rule.breaks):
             return Response({
                 'detail': MISSATGE_LINEAR_ZERO,
                 'codi': CODI_LINEAR_ZERO,
@@ -5261,4 +5331,7 @@ def set_pom_regim_view(request, model_id, pom_id):
         'increment_base': float(rule.increment_base) if rule.increment_base is not None else None,
         'increment_break': float(rule.increment_break) if rule.increment_break is not None else None,
         'talla_break_label': rule.talla_break_label,
+        # TRAM F — la resposta diu el relleu SENCER: la pantalla desa per presència de clau i ha
+        # de poder confirmar què ha quedat desat sense tornar a demanar la taula.
+        'breaks': rule.breaks or [],
     })

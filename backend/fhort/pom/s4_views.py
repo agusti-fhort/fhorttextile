@@ -112,8 +112,10 @@ def update_grading_rule_with_history_view(request, rule_set_id, pom_codi):
 
         # A3 — el MATEIX guard que les altres portes d'autoria. Ara que aquesta mou la graduació
         # de debò, també pot fabricar la LINEAR+0 que A3 va tancar a la resta.
+        # TRAM F — el guard jutja la regla SENCERA, intervals inclosos: aquesta porta pot
+        # canviar `logica` i deixar uns intervals penjats sota un règim que no els llegeix.
         if es_linear_degenerada(rule.logica, rule.increment_base, rule.increment,
-                                rule.increment_break, rule.talla_break_label):
+                                rule.increment_break, rule.talla_break_label, rule.breaks):
             return Response({'error': MISSATGE_LINEAR_ZERO, 'code': CODI_LINEAR_ZERO}, status=400)
 
         rule.save(update_fields=['increment', 'increment_base', 'logica'])

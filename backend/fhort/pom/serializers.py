@@ -4,6 +4,7 @@ from rest_framework import serializers, status
 from rest_framework.exceptions import APIException
 
 from .size_labels import _tipus_de_les_etiquetes
+from .grading_regime import valida_breaks
 
 from .models import (
     ConstructionType,
@@ -301,6 +302,7 @@ class GradingRuleSerializer(serializers.ModelSerializer):
             'talla_base', 'talla_base_etiqueta',
             'logica', 'increment', 'valors_step', 'actiu',
             'increment_base', 'increment_break', 'talla_break_label', 'talla_break_pos',  # Peça A (vista)
+            'breaks',   # TRAM F — els intervals. Camp de FILA: viatja sol, com `valors_step`.
         )
         # FIX-A/PAS-3 — `increment` és el camp LLEGAT i ja no el llegeix ningú del motor. Es
         # queda en LECTURA (hi ha eines i exports que encara el miren i treure'l seria trencar-los
@@ -320,7 +322,32 @@ class GradingRuleSerializer(serializers.ModelSerializer):
                 "`increment` és el camp llegat i ja no gradua res. El delta d'una regla LINEAR "
                 "és `increment_base` (i `increment_break` + `talla_break_label` si té "
                 "trencament).")})
-        return super().validate(attrs)
+        attrs = super().validate(attrs)
+
+        # TRAM F — LA QUARTA PORTA. Aquesta és l'única d'escriptura del catàleg que toca la
+        # forma de la regla (les dues PATCH de `s2_views`/`s4_views` només mouen delta i règim),
+        # i per tant és aquí que els intervals s'han de validar amb el MATEIX punt únic que les
+        # residents. El run surt del `size_system` del joc; un joc sense sistema deixa la
+        # validació d'etiquetes en suspens i es diu al docstring de `valida_breaks`, no aquí.
+        # ⚠️ NOMÉS QUAN ALGÚ ELS ESCRIU, i això no és un detall: els intervals es conserven
+        # LATENTS sota STEP, igual que `increment_base` i `valors_step` (PG-4b-3a, el pas
+        # STEP↔LINEAR no-destructiu). Validar-los a cada PATCH voldria dir que canviar el règim
+        # a STEP d'una regla que en porta es rebutjaria amb 400 i obligaria a esborrar el relleu
+        # per tornar-hi — que és exactament el que la casa va decidir no fer amb els valors.
+        if 'breaks' in getattr(self, 'initial_data', {}):
+            from fhort.pom.grading_utils import run_sistema_de
+            rs = attrs.get('rule_set') or getattr(self.instance, 'rule_set', None)
+            run = run_sistema_de(getattr(rs, 'size_system', None)) if rs else []
+            nets, err = valida_breaks(
+                attrs.get('breaks'),
+                logica=attrs.get('logica', getattr(self.instance, 'logica', None)),
+                run=run,
+                increment_base=attrs.get('increment_base',
+                                         getattr(self.instance, 'increment_base', None)))
+            if err:
+                raise serializers.ValidationError({'breaks': err['detall'], 'codi': err['codi']})
+            attrs['breaks'] = nets
+        return attrs
 
 
 class GradingRuleSetSerializer(serializers.ModelSerializer):

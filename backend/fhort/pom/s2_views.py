@@ -271,6 +271,11 @@ def clone_sizing_profile_view(request, pk):
                     increment_break=rule.increment_break,
                     talla_break_label=rule.talla_break_label,
                     talla_break_pos=rule.talla_break_pos,
+                    # TRAM F — I ELS INTERVALS. El fix A va trobar aquesta còpia amb sis camps
+                    # de deu i el clon graduant PLA on l'original tenia relleu; un camp de forma
+                    # nou que no s'afegís aquí tornaria a obrir exactament aquell forat. Per
+                    # això s'enumeren un a un: perquè el camp nou s'hi hagi de fer veure.
+                    breaks=rule.breaks,
                     actiu=rule.actiu,
                 )
                 rules_creades += 1
@@ -378,8 +383,10 @@ def update_grading_rule_view(request, rule_set_id, pom_codi):
         # A3 — el MATEIX guard que `set_pom_regim_view` i `gravar_pom_view`. Ara que aquesta
         # porta mou la graduació de debò, també pot fabricar la mentida que A3 va tancar: una
         # LINEAR amb delta 0 i sense trencament que es presenta com a graduada i no gradua.
+        # TRAM F — el guard jutja la regla SENCERA, intervals inclosos: aquesta porta pot
+        # canviar `logica` i deixar uns intervals penjats sota un règim que no els llegeix.
         if es_linear_degenerada(rule.logica, rule.increment_base, rule.increment,
-                                rule.increment_break, rule.talla_break_label):
+                                rule.increment_break, rule.talla_break_label, rule.breaks):
             return Response({'error': MISSATGE_LINEAR_ZERO, 'code': CODI_LINEAR_ZERO},
                             status=400)
         rule.save(update_fields=['increment', 'increment_base', 'logica'])
