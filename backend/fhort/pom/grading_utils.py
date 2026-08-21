@@ -77,12 +77,23 @@ def grading_rules_match(model_rules, canonical_rules):
     4 dimensions:
       1. mateix conjunt de pom_id (estricte)
       2. logica (literal)
-      3. increment (float(x or 0), tol 0.001)
+      3. **la FORMA CANÒNICA**: increment_base + increment_break + talla_break_label
       4. valors_step (via _step_equal de mòdul)
 
-    NO compara increment_base/break directament (els canònics es deriven de logica+increment+
-    valors_step). Retorna (match: bool, divergencies: list[dict]) amb el primer eix divergent
-    per pom, {'pom_codi', 'detall'}, per construir l'advertència.
+    🚨 FIX-A/PAS-4 — LA DIMENSIÓ 3 ERA `increment`, I ERA UNA MENTIDA LATENT.
+    L'acta deia «NO compara increment_base/break directament (els canònics es deriven de
+    logica+increment+valors_step)», i això va deixar de ser cert el dia que les superfícies
+    d'edició van començar a escriure `increment_base` **sense** tocar `increment`: dues regles
+    amb el mateix llegat i breaks diferents es declaraven IGUALS. Al corpus de staging del 21/08
+    hi havia 14 files on els dos camps divergien —totes editades a mà—, o sigui que el cas no
+    era hipotètic.
+
+    Que això no hagi fet mal encara és perquè la funció **no té cap cridador viu** (només se la
+    cita en comentaris). Es corregeix igualment: una funció de comparació que menteix és pitjor
+    morta que viva, perquè el dia que algú la cridi ho farà confiant en el seu docstring.
+
+    Retorna (match: bool, divergencies: list[dict]) amb el primer eix divergent per pom,
+    {'pom_codi', 'detall'}, per construir l'advertència.
     """
     m_by = {r.pom_id: r for r in model_rules}
     c_by = {r.pom_id: r for r in canonical_rules}
@@ -105,9 +116,18 @@ def grading_rules_match(model_rules, canonical_rules):
         if (mr.logica or '') != (cr.logica or ''):
             divs.append({'pom_codi': _codi(mr), 'detall': f'lògica {mr.logica} ≠ {cr.logica}'})
             continue
-        # (3) increment
-        if abs(float(mr.increment or 0) - float(cr.increment or 0)) >= 0.001:
-            divs.append({'pom_codi': _codi(mr), 'detall': f'increment {mr.increment} ≠ {cr.increment}'})
+        # (3) la FORMA CANÒNICA — el que el motor aplica de debò (v. l'acta del docstring).
+        if not _num_eq(mr.increment_base, cr.increment_base):
+            divs.append({'pom_codi': _codi(mr),
+                         'detall': f'Δ base {mr.increment_base} ≠ {cr.increment_base}'})
+            continue
+        if not _num_eq(mr.increment_break, cr.increment_break):
+            divs.append({'pom_codi': _codi(mr),
+                         'detall': f'Δ break {mr.increment_break} ≠ {cr.increment_break}'})
+            continue
+        if _norm(mr.talla_break_label) != _norm(cr.talla_break_label):
+            divs.append({'pom_codi': _codi(mr),
+                         'detall': f'talla break {mr.talla_break_label} ≠ {cr.talla_break_label}'})
             continue
         # (4) valors_step
         if not _step_equal(mr.valors_step, cr.valors_step):

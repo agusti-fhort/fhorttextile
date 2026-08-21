@@ -274,8 +274,18 @@ def grading_rules_with_units_view(request, rule_set_id):
             'pom_nom_cat': _pom_name_ca(r.pom) if r.pom_id else '',
             'categoria_nom': r.pom.categoria.nom_ca or r.pom.categoria.nom_en if (r.pom_id and r.pom.categoria_id) else '',
             'logica': r.logica,
-            'increment_cm': float(r.increment),
-            'increment_display': convert_value(float(r.increment), 'CM', tenant_unit),
+            # FIX-A/PAS-4 — el delta que MANA, no el llegat. Aquest llistat deia
+            # `r.increment` i, per tant, podia ensenyar un número que ni el motor llegia ni
+            # cap pantalla d'edició tocava. `None` quan la regla no en té: `float(None)` hauria
+            # petat amb 500, i un 0 hauria semblat una regla que no gradua (que és una altra
+            # cosa: la que no gradua és FIXED).
+            'increment_cm': (float(r.increment_base) if r.increment_base is not None else None),
+            'increment_display': (convert_value(float(r.increment_base), 'CM', tenant_unit)
+                                  if r.increment_base is not None else None),
+            # El relleu també viatja: un joc amb break servit amb una sola xifra és mig joc.
+            'increment_break_cm': (float(r.increment_break)
+                                   if r.increment_break is not None else None),
+            'talla_break_label': r.talla_break_label,     # convenció de MOTOR
             'unitat': tenant_unit,
             'is_key': r.pom.is_key_measure if r.pom_id else False,
         } for r in rules]

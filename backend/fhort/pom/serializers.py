@@ -302,7 +302,25 @@ class GradingRuleSerializer(serializers.ModelSerializer):
             'logica', 'increment', 'valors_step', 'actiu',
             'increment_base', 'increment_break', 'talla_break_label', 'talla_break_pos',  # Peça A (vista)
         )
-        read_only_fields = ('rule_set',)
+        # FIX-A/PAS-3 — `increment` és el camp LLEGAT i ja no el llegeix ningú del motor. Es
+        # queda en LECTURA (hi ha eines i exports que encara el miren i treure'l seria trencar-los
+        # sense avisar) però deixa de ser ESCRIVIBLE: aquesta era l'última porta per on es podia
+        # desar un delta que semblava manar i no manava.
+        read_only_fields = ('rule_set', 'increment')
+
+    def validate(self, attrs):
+        """Un PATCH amb `increment` no s'ignora en silenci: es diu on ha d'anar.
+
+        DRF descarta els camps read-only sense piular, i aquí això seria el mateix defecte que
+        el fix acaba de tancar —desar amb 200 OK i que no passi res—, només que un pis més
+        amunt. Val més un 400 que digui el nom del camp bo.
+        """
+        if 'increment' in getattr(self, 'initial_data', {}):
+            raise serializers.ValidationError({'increment': (
+                "`increment` és el camp llegat i ja no gradua res. El delta d'una regla LINEAR "
+                "és `increment_base` (i `increment_break` + `talla_break_label` si té "
+                "trencament).")})
+        return super().validate(attrs)
 
 
 class GradingRuleSetSerializer(serializers.ModelSerializer):
