@@ -67,7 +67,7 @@ Els sis del mockup, tal qual, i amb captura de cadascun
 | ③ | dos intervals → dos xips + `[+]` | `f4bis_3_dos_intervals.png` |
 | ④ | xip en edició → dos selectors + Δ + ✓/✕ | `f4bis_4_edicio_inline.png` |
 | ⑤ | al màxim → tres xips + «màx. 3», sense `[+]` | `f4bis_5_maxim.png` |
-| ⑥ | FIXED → columna inerta | `f4bis_6_fixed.png` |
+| ⑥ | FIXED → columna **buida del tot** (⚠️ esmena de §8.2: el mockup hi deixava un `[+]` apagat) | `f4bis_6_fixed.png` |
 | — | la taula sencera (Graduació) | `f4bis_0_taula_sencera.png` |
 | — | la MATEIXA columna a «Generar regles» | `f4bis_7_generar_regles.png` |
 
@@ -147,7 +147,7 @@ havia tocat sis files havia d'endevinar quina.
 
 ## 4 · QA
 
-### 4.1 · La pantalla — `ops/qa/qa_f4bis_columna_breaks.py` · **27/27** ✅
+### 4.1 · La pantalla — `ops/qa/qa_f4bis_columna_breaks.py` · **27/27** ✅ *(30/30 amb l'addenda, §8.3)*
 
 Sense JWT (l'agent no en pot emetre; els dos del disc són de juliol i del 6 d'agost). Reusa el
 patró de `qa_mount_modelsheet.py`: serveix el **bundle REAL de `frontend/dist`** —el mateix que
@@ -169,7 +169,7 @@ webfont Tabler (que ve d'un CDN, `index.html:8`) no ha carregat — i llavors no
 Corregit al component, no al test. *(El fum també hi va caure: el catch-all de `page.route`
 servia `index.html` a la petició del CDN i deixava el bundle sense cap glif.)*
 
-### 4.2 · El payload, per les portes reals — `ops/qa/qa_f4bis_staging.py` · **18/18** ✅
+### 4.2 · El payload, per les portes reals — `ops/qa/qa_f4bis_staging.py` · **18/18** ✅ *(30/30 amb l'addenda, §8.3)*
 
 Sobre el model de prova **1384** (`QA-TRAMF-0001`). **El banc 1383 no s'hi toca.**
 
@@ -192,12 +192,12 @@ en silenci, i sense que cap build ho pogués veure.
 
 | Control | Resultat |
 |---|---|
-| `node --test` · `gradingRegime.test.js` | **15/15** (9 casos nous: el llegat, l'ordre, les talles lliures, el sostre) |
+| `node --test` · `gradingRegime.test.js` | **15/15** (9 casos nous: el llegat, l'ordre, les talles lliures, el sostre) — **21/21** amb l'addenda |
 | `node --test` · tots els bancs de `src/utils` i `src/components` | verds |
 | `npx eslint src` | **0 errors** (270 warnings preexistents) |
 | `npm run build` | net |
 | `manage.py check` | net |
-| `banc_paritat_1383.py` | ✅ A=105 · B=525 · C=4 · els dos hashos idèntics |
+| `banc_paritat_1383.py` | ✅ A=105 · B=525 · C=4 · els dos hashos idèntics *(⚠️ el segell de residents es mou més tard, per una escriptura que no és d'aquesta sessió: §8.4)* |
 
 ---
 
