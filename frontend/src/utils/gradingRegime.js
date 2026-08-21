@@ -17,6 +17,8 @@
 // delta li canviaria la tria sota els dits. Les files ja desades hi arriben ja
 // convertides per la migració de dades, així que el forat és teòric.
 
+import { etiquetesDelRun } from './breakConvention.js'
+
 /**
  * Delta base efectiu d'una regla. Des del FIX-A/PAS-3: NOMÉS `increment_base`.
  *
@@ -104,4 +106,142 @@ export function intervalsIncomplets(rule) {
 /** true si la regla es presenta com a FIXED tot i estar desada com a LINEAR. */
 export function isDegenerateLinear(rule) {
   return rule?.logica === 'LINEAR' && effectiveRegime(rule) === 'FIXED'
+}
+
+// ── F4-BIS · LA COLUMNA «BREAKS» ─────────────────────────────────────────────────────────────
+//
+// La columna d'intervals SUBSTITUEIX «Δ break» + «Talla break» a les dues superfícies
+// d'autoria. Per fer-ho ha de saber dir DUES coses que fins ara vivien només al backend:
+//
+//   ① QUINS INTERVALS DIU UNA REGLA, sigui quina sigui la forma en què estan desats
+//      (`intervalsVisibles`) — mirall de `grading_utils.intervals_de`.
+//   ② QUINES TALLES SÓN LLIURES per a l'interval que s'està editant (`iniciTriables` /
+//      `finalTriables`) — el que fa que el SOLAPAMENT sigui impossible de teclejar.
+//
+// 🔑 ① NO ÉS UNA CONVERSIÓ NI UNA MIGRACIÓ: és LLEGIR. El motor ja llegeix un break d'1 tram
+// com l'interval `[talla_break_label .. última talla del run]` des del tram F, i està provat
+// cel·la a cel·la contra el banc 1383. Pintar-lo com a xip és dir a la pantalla el que el motor
+// ja fa; l'etiqueta NO es desplaça (convenció de MOTOR tal qual) i la BD no es toca fins que un
+// gest humà edita aquell xip. És per això que les 21 regles d'1 break del banc canvien de
+// DIBUIX i no de VALOR.
+//
+// 🚨 ② ÉS LA PORTA DE DEBÒ, I LA DEL SERVIDOR ÉS LA XARXA. `valida_breaks` rebutja el
+// solapament amb 400 `BREAKS_SOLAPAMENT`; aquí el solapament no es pot ni construir, perquè els
+// selectors només ofereixen talles que cap altre interval cobreix i el final només va endavant
+// des de l'inici fins al primer tram ocupat. Les dues capes hi són a posta: la de dalt és
+// perquè la persona no hagi de descobrir la regla xocant-hi, i la de baix perquè una pantalla
+// no és mai l'única guarda d'una dada.
+
+const normEt = (v) => String(v ?? '').trim().toUpperCase()
+
+/** Posició d'una etiqueta dins el run, comparant com ho fa el motor (`_norm`: trim + upper).
+ *  El normalitzador del run és el d'`etiquetesDelRun` i s'IMPORTA: dues còpies de «què és una
+ *  etiqueta d'un run» és exactament el que ja va passar amb les amplades d'`EditableTable`. */
+function posDe(etiqueta, run) {
+  if (etiqueta === null || etiqueta === undefined || String(etiqueta).trim() === '') return -1
+  return etiquetesDelRun(run).map(normEt).indexOf(normEt(etiqueta))
+}
+
+/**
+ * MIRALL de `grading_utils.intervals_de`: el relleu d'una regla com a llista d'intervals,
+ * vingui de la forma nova (`breaks`) o de la vella (`talla_break_label` + `increment_break`).
+ * Amb les dues formes informades mana `breaks`, que és la que algú ha escrit expressament.
+ *
+ * Els derivats de la forma vella porten `llegat: true` — no per pintar-los diferent (es
+ * llegeixen igual: són el mateix interval), sinó perquè qui els EDITI sàpiga que ha d'escriure
+ * la forma nova i retirar la vella. Sense aquesta marca, editar-ne un deixaria la regla amb les
+ * dues formes i la vella penjada dient una cosa que ja no mana.
+ *
+ * Sense run no hi ha derivació possible (com `aDocument`): es torna llista buida i la columna
+ * dirà que no pot oferir res, que és millor que inventar-se una talla final.
+ */
+export function intervalsVisibles(rule, run) {
+  const propis = intervalsDe(rule)
+  if (propis.length) return propis.map(iv => ({ ...iv, llegat: false }))
+  const brk = rule?.increment_break
+  if (brk === null || brk === undefined || brk === '') return []
+  const et = etiquetesDelRun(run)
+  const i = posDe(rule?.talla_break_label, et)
+  if (i < 0) return []            // etiqueta forana o sense run: cap trencament (com el motor)
+  return [{ inici: et[i], final: et[et.length - 1], delta: Number(brk), llegat: true }]
+}
+
+/**
+ * true si el relleu que es VEU surt només de la forma vella. Qui escriu sobre aquesta regla ha
+ * d'enviar `breaks` I buidar `increment_break`/`talla_break_label`: una regla no pot quedar amb
+ * dues formes on una és la que mana i l'altra un fòssil que altres pantalles encara llegeixen.
+ */
+export function relleuLlegat(rule, run) {
+  return intervalsVisibles(rule, run).some(iv => iv.llegat)
+}
+
+/** Les posicions del run cobertes per algun interval, tret del d'índex `excepte`. */
+function ocupades(intervals, run, excepte = -1) {
+  const et = etiquetesDelRun(run)
+  const fora = new Set()
+  ;(intervals || []).forEach((iv, k) => {
+    if (k === excepte) return
+    const i = posDe(iv?.inici, et)
+    const f = posDe(iv?.final, et)
+    if (i < 0 || f < 0) return
+    for (let p = Math.min(i, f); p <= Math.max(i, f); p += 1) fora.add(p)
+  })
+  return fora
+}
+
+/** Les talles que pot prendre l'INICI de l'interval `k`: totes les que ningú més cobreix. */
+export function iniciTriables(intervals, run, k) {
+  const et = etiquetesDelRun(run)
+  const fora = ocupades(intervals, run, k)
+  return et.filter((_, p) => !fora.has(p))
+}
+
+/**
+ * Les talles que pot prendre el FINAL de l'interval `k` donat el seu `inici`: des de l'inici cap
+ * ENDAVANT i mentre el tram segueixi lliure. Dues coses alhora, i les dues per construcció:
+ * `final ≥ inici` (mai a l'inrevés → cap `BREAKS_ORDRE`) i cap talla d'un altre interval pel mig
+ * (→ cap `BREAKS_SOLAPAMENT`).
+ */
+export function finalTriables(intervals, run, k, inici) {
+  const et = etiquetesDelRun(run)
+  const i = posDe(inici, et)
+  if (i < 0) return []
+  const fora = ocupades(intervals, run, k)
+  const out = []
+  for (let p = i; p < et.length && !fora.has(p); p += 1) out.push(et[p])
+  return out
+}
+
+/**
+ * Els intervals ORDENATS per posició d'inici — mirall del `nets.sort(key=lambda d: d['_i'])`
+ * de `valida_breaks`. El servidor els desa ordenats sempre, o sigui que una llista en un altre
+ * ordre és un estat que només existeix ENTRE el gest i el desat: pintar-la així faria que la
+ * pantalla mostrés una cosa i la BD en guardés una altra. Els que no cauen al run van al final
+ * i conserven l'ordre relatiu (no es poden situar, i inventar-los una posició seria pitjor).
+ */
+export function ordenaIntervals(intervals, run) {
+  const et = etiquetesDelRun(run)
+  return [...(intervals || [])].sort((a, b) => {
+    const pa = posDe(a?.inici, et), pb = posDe(b?.inici, et)
+    return (pa < 0 ? Number.MAX_SAFE_INTEGER : pa) - (pb < 0 ? Number.MAX_SAFE_INTEGER : pb)
+  })
+}
+
+/**
+ * L'interval que neix quan es prem [+]: el PRIMER tram lliure, cobrint-lo fins allà on arriba.
+ * `null` si no queda cap talla lliure — i llavors el [+] no s'ha d'oferir: un control que obre
+ * un editor sense cap opció és una porta a una paret.
+ *
+ * Neix SENSE Δ a posta: el gest és «afegeix-me'n un», no «ja ho tinc decidit», i el Δ és
+ * justament la decisió. Mentre no es confirma, l'interval viu a l'esborrany de la columna i no
+ * entra a la regla — o sigui que no pot bloquejar el Gravar de la fila.
+ */
+export function intervalNou(intervals, run) {
+  const et = etiquetesDelRun(run)
+  const fora = ocupades(intervals, run, -1)
+  const i = et.findIndex((_, p) => !fora.has(p))
+  if (i < 0) return null
+  let f = i
+  while (f + 1 < et.length && !fora.has(f + 1)) f += 1
+  return { inici: et[i], final: et[f], delta: null }
 }
