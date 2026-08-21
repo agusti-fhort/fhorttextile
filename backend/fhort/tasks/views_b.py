@@ -22,7 +22,7 @@ from .serializers_b import (TaskTypeSerializer, ModelTaskSerializer,
                             GarmentTypeItemSerializer, TaskTimeEstimateSerializer,
                             CustomerSerializer)
 from .services_c import (transition_task, traspassa_tram, TransitionError,
-                         rectification_count, te_paret_albara)
+                         rectification_count, te_paret_albara, AUTO_CONSULTA)
 from .services_d import (advance_phase_gate, advance_phases_chain, regress_phase,
                          model_ready_for_gate, GateError)
 from .services_e import (request_production, set_production_status,
@@ -724,11 +724,11 @@ def sortir_sense_escriptura_view(request, pk):
     aquests minuts no entren ni al temps del model ni al Welford. Les dues meitats de J es tanquen
     amb el mateix gest, i per força: són la mateixa sessió.
 
-    🚩 «TORNA EXACTAMENT ON ERA» ES COMPLEIX PER A `Paused` I NO PER A `Pending`, i és una
-    limitació que es diu en veu alta en comptes de dissimular-la: `ALLOWED` no té
-    `InProgress → Pending` —una tasca començada no pot tornar a «no començada»— i l'ordre fixa la
-    màquina d'estats com a intacta. Una tasca que era `Pending` en entrar queda `Paused`. Obrir
-    aquella transició és una decisió d'Agus sobre la màquina d'estats, no d'aquest tram.
+    ✅ J-bis — «TORNA EXACTAMENT ON ERA» JA ES COMPLEIX TAMBÉ PER A `Pending` (decisió d'Agus).
+    `ALLOWED` té ara `InProgress → Pending` com a **única entrada guardada**: existeix per a
+    aquest camí i el guard de `transition_task` exigeix marca `auto=AUTO_CONSULTA` **i** tram
+    sense escriptura, o sigui que cap gest humà hi pot passar. L'estat d'entrada surt del LOG
+    (`TaskTransition`), no d'una memòria del client, i per tant val per a totes les portes.
 
     Retorna `{revertit, status, motiu}`. `revertit=False` vol dir «hi ha hagut escriptura (o no hi
     ha tram meu obert)»: qui crida ha de seguir amb el modal de sempre.
@@ -754,9 +754,28 @@ def sortir_sense_escriptura_view(request, pk):
     if tram.escriptura_at is not None:
         return Response({'revertit': False, 'status': task.status, 'motiu': 'amb_escriptura'})
 
-    transition_task(task, 'Paused', profile, auto='consulta_sense_escriptura')
+    # ── J-bis · A QUIN ESTAT ES TORNA, i d'on se sap ─────────────────────────────────────────
+    #
+    # A L'ESTAT D'ENTRADA, i el sap **el LOG**: l'última transició cap a `InProgress` d'aquesta
+    # tasca porta el `from_status` amb què hi vam entrar. No cal cap camp nou ni cap memòria al
+    # client, i funciona per a TOTES les portes d'entrada —el menú, la URL amb `?task_id=`, el
+    # Pla de treball—, que és justament el que un estat recordat al front no aconseguiria.
+    #
+    # `TaskTransition` és append-only i aquesta lectura és la seva: el registre ja és la font de
+    # veritat de per on ha passat una tasca, i preguntar-li-ho és més barat i més cert que
+    # desar-ho una segona vegada.
+    #
+    # Sense cap transició registrada (dades velles, o una tasca posada `InProgress` per una via
+    # que no hi va escriure) es cau a `Paused`, que és el comportament d'abans d'aquesta peça:
+    # no saber d'on venies no pot impedir que surtis.
+    entrada = (task.transitions.filter(to_status='InProgress')
+               .order_by('-id').values_list('from_status', flat=True).first())
+    desti = 'Pending' if entrada == 'Pending' else 'Paused'
+
+    transition_task(task, desti, profile, auto=AUTO_CONSULTA)
     task.refresh_from_db()
-    return Response({'revertit': True, 'status': task.status, 'motiu': 'sense_escriptura'})
+    return Response({'revertit': True, 'status': task.status, 'motiu': 'sense_escriptura',
+                     'estat_entrada': entrada})
 
 
 @api_view(['POST'])

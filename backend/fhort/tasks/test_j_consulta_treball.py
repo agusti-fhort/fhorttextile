@@ -21,7 +21,8 @@ from rest_framework.test import APIClient
 
 from fhort.pom.models import GarmentType
 from fhort.tasks.models import (Customer, GarmentTypeItem, ModelTask, TaskType, TimerEntrada)
-from fhort.tasks.services_c import _close_open_timer, _open_timer, transition_task
+from fhort.tasks.services_c import (AUTO_CONSULTA, TransitionError, _close_open_timer,
+                                    _open_timer, transition_task)
 from fhort.tasks.services_i import TRAMS_SANS, tram_compta
 
 
@@ -266,3 +267,79 @@ class TestEntrarNoEnduNiReobre(BaseJ):
         r = self.obrir()
         self.assertEqual(r.status_code, 409)
         self.assertEqual(r.data['code'], 'tasca_albaranada')
+
+
+class TestTornadaExactaAPending(BaseJ):
+    """J-bis · PEÇA 1 — `InProgress → Pending` existeix, i **només pel camí de consulta**.
+
+    🔒 L'INVARIANT D'AQUESTA CLASSE ÉS QUE SER A `ALLOWED` NO ÉS SER PERMESA. La transició hi és
+    perquè el camí de tornada d'una consulta la necessita; el guard demana les dues condicions
+    alhora —marca `auto` i tram sense escriptura— i cap gest humà en porta cap de les dues.
+    """
+
+    def test_una_PENDING_consultada_torna_a_PENDING(self):
+        task = self.tasca(status='Pending', assignee=self.p1)
+        transition_task(task, 'InProgress', self.p1)
+        task.refresh_from_db()
+        self.assertIsNotNone(task.started_at, "l'entrada l'ha posat")
+        r = self.api(self.u1).post(f'/api/v1/model-tasks/{task.pk}/sortir-sense-escriptura/')
+        self.assertIs(r.data['revertit'], True, r.data)
+        self.assertEqual(r.data['estat_entrada'], 'Pending')
+        task.refresh_from_db()
+        self.assertEqual(task.status, 'Pending', 'exactament on era')
+        self.assertIsNone(task.started_at,
+                          'i «exactament» inclou el started_at: una Pending no s\'ha començat mai')
+
+    def test_una_PAUSED_consultada_segueix_tornant_a_PAUSED(self):
+        """La peça 1 no canvia el cas que J ja resolia."""
+        task = self.tasca(status='Paused', assignee=self.p1)
+        transition_task(task, 'InProgress', self.p1)
+        r = self.api(self.u1).post(f'/api/v1/model-tasks/{task.pk}/sortir-sense-escriptura/')
+        self.assertEqual(r.data['estat_entrada'], 'Paused')
+        task.refresh_from_db()
+        self.assertEqual(task.status, 'Paused')
+
+    # ── L'ALTRE SENTIT: el guard ─────────────────────────────────────────────
+    def test_un_transition_task_HUMA_segueix_REBUTJAT(self):
+        """Sense marca `auto`, `InProgress → Pending` és exactament tan il·legal com abans."""
+        task = self.tasca(status='Pending', assignee=self.p1)
+        transition_task(task, 'InProgress', self.p1)
+        with self.assertRaises(TransitionError):
+            transition_task(task, 'Pending', self.p1)
+        task.refresh_from_db()
+        self.assertEqual(task.status, 'InProgress', 'i no s\'ha mogut')
+
+    def test_amb_una_marca_auto_QUALSEVOL_tambe_es_rebutja(self):
+        """La clau és AQUESTA marca, no «portar-ne una»: un guard que passés amb qualsevol slug
+        deixaria que `guard_30min` o `exclusio_inprogress` hi caiguessin per accident."""
+        task = self.tasca(status='Pending', assignee=self.p1)
+        transition_task(task, 'InProgress', self.p1)
+        with self.assertRaises(TransitionError):
+            transition_task(task, 'Pending', self.p1, auto='guard_30min')
+        task.refresh_from_db()
+        self.assertEqual(task.status, 'InProgress')
+
+    def test_amb_la_marca_pero_AMB_ESCRIPTURA_es_rebutja(self):
+        """La marca sola seria una paraula: qualsevol cridador podria escriure-la. El que no es
+        pot fingir des de fora és `escriptura_at`, que només estampa `batec_escriptura`."""
+        task = self.tasca(status='Pending', assignee=self.p1)
+        transition_task(task, 'InProgress', self.p1)
+        TimerEntrada.objects.filter(model_task=task, fi__isnull=True).update(
+            escriptura_at=timezone.now())
+        with self.assertRaises(TransitionError):
+            transition_task(task, 'Pending', self.p1, auto=AUTO_CONSULTA)
+        task.refresh_from_db()
+        self.assertEqual(task.status, 'InProgress', 'qui ha treballat no torna a Pending')
+
+    def test_la_resta_de_la_maquina_no_es_mou(self):
+        """Cap altra transició s'ha obert de rebot."""
+        # UNA sola tasca, reposicionada a mà: `uniq_prevista_model_tasktype` no en deixa dues
+        # `prevista` del mateix (model, task_type), i aquí el que es prova és la TAULA, no la fila.
+        task = self.tasca(status='Pending', assignee=self.p1)
+        for frm, to in (('Pending', 'Paused'), ('Pending', 'Done'), ('Paused', 'Done'),
+                        ('Paused', 'Pending'), ('Done', 'Paused'), ('Done', 'Pending')):
+            ModelTask.objects.filter(pk=task.pk).update(status=frm)
+            task.refresh_from_db()
+            with self.assertRaises(TransitionError, msg=f'{frm} → {to}'):
+                transition_task(task, to, self.p1, auto=AUTO_CONSULTA)
+
