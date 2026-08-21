@@ -46,6 +46,16 @@ CODI_BREAKS_DELTA_REDUNDANT = 'BREAKS_DELTA_REDUNDANT'
 CODI_BREAKS_SENSE_GENERAL = 'BREAKS_SENSE_GENERAL'
 
 
+#: TRAM E · LA PORTA DEL VALOR VERMELL (2026-08-21, decisió d'Agus). Codis de rebuig d'editar
+#: una cel·la que ha sortit amb el valor de la talla base prestat. La porta escriu `valors_step`
+#: de la regla RESIDENT —mai un override—: v. `valida_valor_step`.
+CODI_STEP_NO_ES_STEP = 'STEP_NO_ES_STEP'
+CODI_STEP_TALLA_BASE = 'STEP_TALLA_BASE'
+CODI_STEP_TALLA_FORANA = 'STEP_TALLA_FORANA'
+CODI_STEP_VALOR = 'STEP_VALOR'
+CODI_STEP_CAMI_INCOMPLET = 'STEP_CAMI_INCOMPLET'
+
+
 def _f(v):
     """Decimal/str/None → float (None i '' compten com a absents)."""
     if v is None or v == '':
@@ -253,6 +263,47 @@ def valida_breaks(breaks, logica=None, run=None, increment_base=None):
                                    "Canvia'n el Δ o esborra l'interval.")}
 
     return [{'inici': d['inici'], 'final': d['final'], 'delta': d['delta']} for d in nets], None
+
+
+def valida_valor_step(logica, talla, valor, base_label, run):
+    """Valida l'edició del valor d'UNA talla d'una regla STEP. Retorna `(valor, error)`.
+
+    Punt únic de la porta, com `valida_breaks` ho és de la dels intervals. El que decideix:
+
+      · **només sota STEP.** Sota LINEAR el valor d'una talla no s'escriu: es deriva del Δ, i
+        voler-lo escriure vol dir canviar la regla o posar-hi un override (que és una altra
+        porta i una altra semàntica).
+      · **la talla BASE no.** El seu valor viu a `BaseMeasurement` i s'edita com a mesura base
+        — la mateixa llei que ja tenia la porta d'override.
+      · **la talla ha de ser del run** que el motor recorre.
+      · **el valor ha de ser un número.** El 0 hi és legítim (una mesura pot no créixer en un
+        tram); el que no hi és és el buit disfressat.
+
+    ⚠️ NO valida el CAMÍ (que els deltes de les talles que hi ha entre la base i aquesta hi
+    siguin): això és geometria del motor i el decideix `grading_utils.step_delta_acumulat`, que
+    és qui sap dir quina etiqueta falta. La porta l'ha de consultar i rebutjar amb
+    `CODI_STEP_CAMI_INCOMPLET` — v. l'acta de la vista.
+    """
+    if (logica or '').strip().upper() != 'STEP':
+        return None, {'codi': CODI_STEP_NO_ES_STEP,
+                      'detall': ("Aquest valor només s'edita quan la regla és STEP. Amb una "
+                                 "regla LINEAR el valor d'una talla surt del Δ: canvia la "
+                                 "regla des de Graduació.")}
+    et = _norm_label(talla)
+    if et == '':
+        return None, {'codi': CODI_STEP_TALLA_FORANA, 'detall': "Falta la talla."}
+    if et == _norm_label(base_label):
+        return None, {'codi': CODI_STEP_TALLA_BASE,
+                      'detall': ("La talla base s'edita com a mesura base, no com a valor de "
+                                 "la regla.")}
+    etiquetes = [str(x).strip() for x in (run or [])]
+    if not etiquetes or et not in [_norm_label(x) for x in etiquetes]:
+        return None, {'codi': CODI_STEP_TALLA_FORANA,
+                      'detall': f"La talla «{talla}» no és al run d'aquest model."}
+    v = _f(valor)
+    if v is None:
+        return None, {'codi': CODI_STEP_VALOR, 'detall': "El valor ha de ser un número."}
+    return v, None
 
 
 def es_linear_degenerada(logica, increment_base=None, increment=None,

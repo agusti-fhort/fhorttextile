@@ -36,6 +36,7 @@ from .views import (
     upload_file_view,
     measurements_chat_view,
     set_pom_regim_view,
+    set_step_valor_view,
     desactivar_pom_view,
     acte_canonic_base_set_view,
     promoure_a_item_view,
@@ -261,6 +262,9 @@ urlpatterns = (
         # abans que la fitxa surti cap al fabricant. Cap escriptura per aquesta porta.
         path('models/<int:model_id>/comprovacio/', comprovacio_view),
         path('models/<int:model_id>/pom/<int:pom_id>/regim/', set_pom_regim_view),
+        # TRAM E — LA PORTA DEL VALOR VERMELL: escriu `valors_step` de la regla resident (mai un
+        # override, que el llenç net de propagar esborra per disseny). V. l'acta de la vista.
+        path('models/<int:model_id>/pom/<int:pom_id>/step-valor/', set_step_valor_view),
         # C1 — poda SOFT d'un POM del model des de la graella (mai DELETE dur).
         path('models/<int:model_id>/pom/<int:pom_id>/desactivar/', desactivar_pom_view),
         # P0+P2+P3 — l'acte de PROMOCIÓ model→item (gate CONFIGURE propi, dry-run per defecte).

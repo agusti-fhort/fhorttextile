@@ -5204,6 +5204,146 @@ def _sembra_step_des_dels_specs(model, pom_id):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 @bat_escriptura(SUP_ESCALAT)
+def set_step_valor_view(request, model_id, pom_id):
+    """TRAM E · LA PORTA DEL VALOR VERMELL (decisió d'Agus, 2026-08-21).
+
+    `POST /api/v1/models/<model_id>/pom/<pom_id>/step-valor/`
+    Body: `{talla, valor, capa?, instancia?, garment?}`
+
+    Una cel·la que ha sortit amb el valor de la talla base PRESTAT (regla STEP sense valor per a
+    aquella talla) s'edita AQUÍ, i el que s'escriu és **`valors_step` de la `ModelGradingRule`**.
+
+    ── PER QUÈ LA REGLA I NO UN OVERRIDE ──────────────────────────────────────────────────────
+    Les dues formes existien i el cens les va contrastar (acta d'E+F §2). La que decideix:
+    **propagar amb `new_version=True` esborra TOTS els `ModelGradingOverride` del model** —el
+    «llenç net», que és llei— o sigui que el tècnic hauria escrit vint xifres a mà i el primer
+    «Propagar» conscient se les hauria endut sense dir res. Escrivint la REGLA, el valor
+    sobreviu a totes les re-propagacions perquè **és** la regla: la cel·la surt del vermell per
+    la raó correcta, no perquè algú l'hagi tapada.
+
+    L'override no es jubila: es queda per al seu ús propi —la decisió puntual per talla que el
+    llenç net ha d'esborrar per disseny—. Són dues intencions diferents i ara tenen dues portes.
+
+    ── LA CADENA DE DELTES, QUE ÉS EL QUE FA AQUESTA PORTA DELICADA ───────────────────────────
+    `valors_step` no desa valors: desa **deltes entre veïns**, acumulats cap enfora des de la
+    base. Per tant escriure «la M mesura 101.5» vol dir escriure `delta[M] = 101.5 − valor(veí
+    cap a la base)`, i el veí ha de tenir valor CALCULABLE. Si el camí fins aquí té forats, el
+    valor demanat no es pot expressar i la porta **rebutja dient quina talla s'ha d'omplir
+    primer** (`STEP_CAMI_INCOMPLET`): omplir-los amb un 0 seria fabricar la corba plana que la
+    llei D2 prohibeix, i fer-ho en silenci seria pitjor.
+
+    Efecte lateral volgut i inherent al règim STEP: com que els deltes són relatius, corregir
+    una talla desplaça les de MÉS ENFORA que ja tinguin delta. És el que vol dir STEP.
+
+    Re-propaga IN PLACE sobre la versió vigent (com feia la porta d'override): sense això la
+    marca cauria —es deriva de la REGLA— però la xifra seguiria sent la prestada fins a la
+    propagació següent, i la pantalla diria dues coses alhora.
+    """
+    from fhort.models_app.models import ModelGradingRule
+    from fhort.pom.grading_regime import (CODI_STEP_CAMI_INCOMPLET, valida_valor_step)
+    from fhort.pom.grading_utils import step_delta_acumulat
+    from fhort.pom.services import escala_del_model, generate_graded_specs
+    from fhort.fitting.services import _resolve_working_size_fitting
+
+    data = request.data or {}
+    model = Model.objects.filter(pk=model_id).first()
+    if model is None:
+        return Response({'detail': 'Model no trobat.'}, status=404)
+
+    # Els eixos, pel punt únic de la casa: la regla només travessa `garment` (D4), però la
+    # MESURA BASE d'on surt la corba sí que és de (capa, instància, garment).
+    capa, instancia, garment = _identitat_de_mesura(data)
+
+    rule = ModelGradingRule.objects.filter(
+        model=model, pom_id=pom_id, garment=garment).first()
+    if rule is None:
+        return Response({'detail': "Aquest POM no té regla al model: informa-la des de Graduació.",
+                         'codi': 'STEP_SENSE_REGLA'}, status=400)
+
+    try:
+        size_run, run_sistema, _pos, base_idx = escala_del_model(model)
+    except (ValueError, AttributeError) as e:
+        return Response({'detail': f'Geometria de talles incompleta: {e}'}, status=400)
+
+    talla = (data.get('talla') or '').strip()
+    valor, err = valida_valor_step(rule.logica, talla, data.get('valor'),
+                                   model.base_size_label, size_run)
+    if err:
+        return Response({'detail': err['detall'], 'codi': err['codi']}, status=400)
+
+    base_bm = BaseMeasurement.objects.filter(
+        model=model, pom_id=pom_id, capa=capa, instancia=instancia, garment=garment,
+        is_active=True, base_value_cm__isnull=False).first()
+    if base_bm is None:
+        return Response({'detail': "Aquesta mesura no té valor de talla base: la corba no té d'on sortir.",
+                         'codi': 'STEP_SENSE_BASE'}, status=400)
+    base_val = float(base_bm.base_value_cm)
+
+    # Posició EN ESPAI DE SISTEMA (llei S24b) i el veí cap a la base.
+    idx = _pos(talla)
+    if idx == base_idx:
+        return Response({'detail': "La talla base s'edita com a mesura base.",
+                         'codi': 'STEP_TALLA_BASE'}, status=400)
+    idx_vei = idx - 1 if idx > base_idx else idx + 1
+    total_vei, falta = step_delta_acumulat(rule, run_sistema, base_idx, idx_vei)
+    if falta is not None:
+        return Response({
+            'detail': (f"Abans d'aquesta talla cal el valor de la {falta}: els valors d'una "
+                       "regla STEP són passos entre talles veïnes i es completen des de la "
+                       "talla base cap enfora."),
+            'codi': CODI_STEP_CAMI_INCOMPLET,
+            'talla_que_falta': falta,
+        }, status=400)
+    valor_vei = base_val + (total_vei or 0.0)
+
+    # El delta és el PAS entre el veí i aquesta talla, sempre comptat cap enfora (és la
+    # convenció de `valors_step`, i la que `step_delta_acumulat` desfà: pujant se suma, baixant
+    # es resta).
+    delta = round(valor - valor_vei if idx > base_idx else valor_vei - valor, 2)
+
+    with transaction.atomic():
+        # L'etiqueta es desa amb l'ORTOGRAFIA DEL RUN, com fa `valida_breaks`: el motor compara
+        # normalitzat, però la dada que es desa ha de ser llegible i estable.
+        etiqueta = next((x for x in run_sistema if x.strip().upper() == talla.upper()), talla)
+        vs = dict(rule.valors_step or {})
+        vs[etiqueta] = delta
+        rule.valors_step = vs
+        rule.origen = 'MANUAL'
+        rule.save(update_fields=['valors_step', 'origen', 'updated_at'])
+
+        sf = _resolve_working_size_fitting(model)
+        if sf is not None:
+            try:
+                generate_graded_specs(sf.id)
+            except SealedGradingVersionError as e:
+                transaction.set_rollback(True)
+                return Response(e.payload, status=409)
+            except ValueError as e:
+                transaction.set_rollback(True)
+                return Response({'detail': str(e)}, status=400)
+
+    # Les talles que ENCARA porten el valor prestat, amb el mateix predicat del motor: la
+    # pantalla ha de poder treure el vermell d'aquesta i deixar-lo a les que segueixen.
+    pendents = []
+    for etiqueta_run in size_run:
+        try:
+            i_run = _pos(etiqueta_run)
+        except (ValueError, KeyError):
+            continue
+        if step_delta_acumulat(rule, run_sistema, base_idx, i_run)[1] is not None:
+            pendents.append(etiqueta_run)
+
+    return Response({
+        'model': model.id, 'pom': int(pom_id), 'garment': garment,
+        'talla': etiqueta, 'delta': delta, 'valor': round(valor, 2),
+        'valors_step': rule.valors_step,
+        'step_base_copiada': pendents,
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@bat_escriptura(SUP_ESCALAT)
 def set_pom_regim_view(request, model_id, pom_id):
     """PG-4b-3a / P3 — UPSERT de la REGLA resident (ModelGradingRule) per (model, pom).
 

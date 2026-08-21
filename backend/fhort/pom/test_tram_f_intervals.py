@@ -489,3 +489,146 @@ class ElsIntervalsViatgenTest(TenantTestCase):
         self.assertIn('interval', divs[0]['detall'])
         self.assertFalse(spec_forms_match(rule_to_spec(altra), rule_to_spec(self.regla)))
         self.assertTrue(spec_forms_match(rule_to_spec(self.regla), rule_to_spec(self.regla)))
+
+
+class PortaDelValorVermellTest(TenantTestCase):
+    """TRAM E · LA PORTA DEL VALOR VERMELL — escriu la REGLA, mai un override.
+
+    El cens d'E+F va contrastar les dues formes i el fet que decideix és aquest: **propagar amb
+    `new_version=True` esborra tots els `ModelGradingOverride` del model** (el «llenç net», que
+    és llei). Amb un override, el tècnic hauria escrit vint xifres a mà i el primer «Propagar»
+    conscient se les hauria endut sense dir res. Escrivint `valors_step`, el valor **és** la
+    regla i sobreviu a totes les re-propagacions.
+
+    El que aquestes proves fixen, i que és el difícil del règim STEP: `valors_step` no desa
+    valors sinó **passos entre veïns**. Per això la porta no pot escriure una talla si el camí
+    fins a ella té forats — i quan no pot, ho DIU nomenant la talla que falta, en comptes
+    d'omplir-la amb un zero (que seria la corba plana fabricada que la llei D2 prohibeix).
+    """
+
+    RUN = ['XS', 'S', 'M', 'L', 'XL']
+    BASE = 'S'
+    BASE_VAL = 100.0
+
+    @classmethod
+    def setup_tenant(cls, tenant):
+        tenant.nom = 'Test Tenant'
+        tenant.tipologia = 'MARCA'
+        tenant.codi_tenant = 'TST'
+        tenant.vat_number = 'X0000000X'
+        tenant.tipus_client = 'STANDARD'
+        tenant.gratis_fins = datetime.date(2030, 1, 1)
+        return tenant
+
+    def setUp(self):
+        from fhort.accounts.models import UserProfile
+        from fhort.fitting.models import SizeFitting
+        from fhort.models_app.models import BaseMeasurement, Model, ModelGradingRule
+        from fhort.pom.models import POMMaster, SizeDefinition, SizeSystem
+
+        self.user = get_user_model().objects.create(username='porta_step')
+        UserProfile.objects.get_or_create(
+            user=self.user, defaults={'nom_complet': 'Porta STEP', 'rol_nom': 'admin'})
+        self.ss = SizeSystem.objects.create(codi='SS_PS', nom='SS PS', base_unit='ALPHA')
+        for i, et in enumerate(SISTEMA):
+            SizeDefinition.objects.create(size_system=self.ss, etiqueta=et, ordre=i)
+        self.pom = POMMaster.objects.create(codi_client='A', nom_client='Chest')
+        self.model = Model.objects.create(
+            codi_intern='TST-PORTA-STEP', codi_tenant='TST', any=2026, sequencial=7,
+            size_system=self.ss, size_run_model='·'.join(self.RUN), base_size_label=self.BASE)
+        BaseMeasurement.objects.create(
+            model=self.model, pom=self.pom, base_value_cm=self.BASE_VAL, is_active=True, ordre=0)
+        self.regla = ModelGradingRule.objects.create(
+            model=self.model, pom=self.pom, logica='STEP', valors_step=None, actiu=True,
+            increment=0, origen='CANONICAL')
+        self.sf = SizeFitting.objects.filter(model=self.model).order_by('numero').first()
+
+    def _posa(self, talla, valor):
+        from fhort.models_app.views import set_step_valor_view
+        r = APIRequestFactory().post('/x/', {'talla': talla, 'valor': valor}, format='json')
+        force_authenticate(r, user=self.user)
+        return set_step_valor_view(r, self.model.id, self.pom.id)
+
+    def _taula(self):
+        from fhort.fitting.models import GradedSpec
+        from fhort.fitting.services import vigent_grading_version
+        gv = vigent_grading_version(self.sf)
+        return {s.size_label: float(s.graded_value_cm)
+                for s in GradedSpec.objects.filter(grading_version=gv, pom=self.pom)}
+
+    def _vermells(self):
+        from fhort.models_app.views import measurements_table_view
+        r = APIRequestFactory().get('/x/')
+        force_authenticate(r, user=self.user)
+        fila = next(f for f in measurements_table_view(r, self.model.id).data['rows']
+                    if f['pom_id'] == self.pom.id)
+        return fila['step_base_copiada']
+
+    def test_EL_CICLE_SENCER_posar_valor_treu_el_vermell_i_RESISTEIX_la_re_propagacio(self):
+        from fhort.pom.services import generate_graded_specs
+        generate_graded_specs(self.sf.id)
+        self.assertEqual(self._taula(), {s: self.BASE_VAL for s in self.RUN},
+                         'de sortida, totes prestades')
+        self.assertEqual(sorted(self._vermells()), ['L', 'M', 'XL', 'XS'])
+
+        resp = self._posa('M', 103)
+        self.assertEqual(resp.status_code, 200, getattr(resp, 'data', None))
+        self.assertEqual(resp.data['delta'], 3.0)
+        self.assertEqual(self._taula()['M'], 103.0, 'la porta re-propaga in place')
+        self.assertNotIn('M', self._vermells(), 'i la M surt del vermell')
+
+        # 🔑 EL QUE L'OVERRIDE NO HAURIA SOBREVISCUT: una propagació conscient (llenç net).
+        from fhort.pom.services import bump_grading_version_and_generate
+        from fhort.models_app.models import ModelGradingOverride
+        ModelGradingOverride.objects.filter(model=self.model).delete()
+        bump_grading_version_and_generate(self.sf.id, base_changed=False)
+        self.assertEqual(self._taula()['M'], 103.0,
+                         'EL VALOR HA DE SOBREVIURE: és la regla, no un ajust per cel·la')
+        self.assertNotIn('M', self._vermells())
+
+    def test_el_cami_incomplet_es_REBUTJA_dient_quina_talla_falta(self):
+        """Escriure la L sense la M no es pot expressar: un delta és un pas entre veïns."""
+        from fhort.pom.services import generate_graded_specs
+        generate_graded_specs(self.sf.id)
+        resp = self._posa('L', 106)
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.data['codi'], 'STEP_CAMI_INCOMPLET')
+        self.assertEqual(resp.data['talla_que_falta'], 'M')
+        self.assertIsNone(self.regla.__class__.objects.get(pk=self.regla.pk).valors_step,
+                          'un rebuig no escriu res')
+
+    def test_la_cadena_es_completa_de_la_base_cap_enfora_amunt_i_avall(self):
+        from fhort.pom.services import generate_graded_specs
+        generate_graded_specs(self.sf.id)
+        self.assertEqual(self._posa('M', 103).status_code, 200)
+        self.assertEqual(self._posa('L', 106).status_code, 200)
+        self.assertEqual(self._posa('XS', 98).status_code, 200)
+        self.assertEqual(self._taula(),
+                         {'XS': 98.0, 'S': 100.0, 'M': 103.0, 'L': 106.0, 'XL': 100.0})
+        self.assertEqual(self._vermells(), ['XL'], 'només queda la que ningú ha dit')
+        # Avall el delta és el PAS cap enfora, no la resta amb signe.
+        self.regla.refresh_from_db()
+        self.assertEqual(self.regla.valors_step['XS'], 2.0)
+
+    def test_la_talla_BASE_no_entra_per_aquesta_porta(self):
+        resp = self._posa(self.BASE, 99)
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.data['codi'], 'STEP_TALLA_BASE')
+
+    def test_sota_LINEAR_la_porta_es_tanca(self):
+        self.regla.logica = 'LINEAR'
+        self.regla.increment_base = 2
+        self.regla.save(update_fields=['logica', 'increment_base'])
+        resp = self._posa('M', 103)
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.data['codi'], 'STEP_NO_ES_STEP')
+
+    def test_una_talla_que_no_es_del_run(self):
+        resp = self._posa('42', 103)
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.data['codi'], 'STEP_TALLA_FORANA')
+
+    def test_el_valor_ha_de_ser_un_numero(self):
+        resp = self._posa('M', 'gairebé 103')
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.data['codi'], 'STEP_VALOR')
