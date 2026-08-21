@@ -16,6 +16,18 @@ A partir d'ara, **escriure és el senyal**. Cada escriptura d'usuari sobre un mo
   · tasca `Done`             → **no-op**: reobrir és un acte humà, no l'efecte d'un PATCH
   · sense tasca              → no-op silenciós
 
+## J · I AQUEST MÒDUL ÉS TAMBÉ LA FONT ÚNICA DE «S'HI HA ESCRIT»
+
+El tram J necessitava saber, en sortir d'una pantalla, si la sessió havia estat **treball o només
+consulta**. La resposta ja la sabia aquest mòdul i ningú més: cada crida d'aquí és, literalment,
+un punt on hi ha hagut escriptura de debò. Per això el batec estampa ara **`escriptura_at`** al
+tram obert, al mateix `update()` que `last_heartbeat` i mai a part.
+
+**No és un tercer batec.** `last_heartbeat` té dos emissors —el guard (presència) i l'escriptura
+(activitat)— i **un sol camp**, o sigui que no pot distingir «sóc davant la pantalla» de «he
+escrit»; era exactament la pregunta de J. El camp nou no duplica el senyal: en separa la meitat
+que faltava, i s'escriu des d'aquí i només des d'aquí.
+
 ## El que NO fa, i és deliberat
 
 **No crea tasques.** Obre-si-cal vol dir «si la tasca EXISTEIX». La gènesi d'una tasca segueix
@@ -131,9 +143,14 @@ def batec_escriptura(model, code, profile):
             # activitat fos aquest primer desat quedaria fora del criteri de forat de
             # `reconcile_consumption` (que ara mira precisament el batec), i el runtime i el
             # reconcile discreparien sobre el mateix fet.
+            # J — I LA MARCA D'ESCRIPTURA AMB ELL, al MATEIX `update()`. No és un segon batec:
+            # és la meitat de la pregunta que `last_heartbeat` no pot respondre, perquè aquell
+            # camp té dos emissors (presència i activitat) i un sol significat. Els dos camps
+            # s'escriuen sempre junts i des d'aquí, que és l'únic lloc que sap que hi ha hagut
+            # feina real.
             TimerEntrada.objects.filter(
                 model_task=task, tecnic=profile, fi__isnull=True, actiu=True
-            ).update(last_heartbeat=timezone.now())
+            ).update(last_heartbeat=timezone.now(), escriptura_at=timezone.now())
             _meritar_si_cal(task)
             return {'batec': True, 'accio': 'oberta', 'task_id': task.pk}
 
@@ -141,7 +158,7 @@ def batec_escriptura(model, code, profile):
         # d'un altre (handoff a mitges), no se li toca: el seu rellotge és seu.
         n = (TimerEntrada.objects
              .filter(model_task=task, tecnic=profile, fi__isnull=True, actiu=True)
-             .update(last_heartbeat=timezone.now()))
+             .update(last_heartbeat=timezone.now(), escriptura_at=timezone.now()))
         _meritar_si_cal(task)
         return {'batec': bool(n), 'accio': 'renovat' if n else 'sense_tram', 'task_id': task.pk}
     except Exception:

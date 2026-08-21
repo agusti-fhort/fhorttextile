@@ -26,8 +26,14 @@ def _open_timer(task, profile, origen=TimerEntrada.ORIGEN_MESURAT):
     # T3 — `origen` viatja des de la porta: un tram DECLARAT neix declarat, no es converteix
     # després. El default deixa tots els camins d'abans exactament com estaven.
     _close_open_timer(task)
+    # J — NEIX DECLARANT-SE JUTJABLE (`consulta=False`). No és el veredicte: és la marca que diu
+    # que aquest tram ha nascut sota el règim nou i que, per tant, al tancament se li POT
+    # preguntar si s'hi ha escrit. Els trams que ja eren oberts el dia del desplegament tenen
+    # `None` i no se'ls pregunta mai: van néixer sense la marca d'escriptura i condemnar-los per
+    # no tenir-la seria inventar-se que no s'hi va treballar.
     return TimerEntrada.objects.create(model_task=task, tecnic=profile,
-                                       inici=timezone.now(), actiu=True, origen=origen)
+                                       inici=timezone.now(), actiu=True, origen=origen,
+                                       consulta=False)
 
 
 def _close_open_timer(task):
@@ -38,7 +44,21 @@ def _close_open_timer(task):
         t.fi = now
         t.minuts = max(0, int((now - t.inici).total_seconds() // 60))
         t.actiu = False
-        t.save(update_fields=['fi', 'minuts', 'actiu'])
+        camps = ['fi', 'minuts', 'actiu']
+        # J · EL VEREDICTE, I ES DÓNA AQUÍ PERQUÈ ÉS QUAN JA ES POT DONAR. Durant el tram la
+        # pregunta encara no té resposta —qui no ha escrit ENCARA pot escriure—; al tancament sí.
+        #
+        # Només es jutja el que és jutjable (`consulta is False`, o sigui nascut sota el règim
+        # nou). `None` es queda `None`: és l'històric i els trams que el desplegament va enxampar
+        # oberts, i han de comptar exactament com sempre.
+        #
+        # ⚠️ EL CRITERI NO ÉS LA DURADA, i no pot ser-ho: «no hi ha hagut sessió» no vol dir «ha
+        # durat poc» (decisió d'Agus, `ModelSheet.jsx`). Un tram de dues hores mirant sense tocar
+        # res és una consulta, i un de dos minuts amb una mesura escrita és feina.
+        if t.consulta is False and t.escriptura_at is None:
+            t.consulta = True
+            camps.append('consulta')
+        t.save(update_fields=camps)
 
 
 def te_paret_albara(task):

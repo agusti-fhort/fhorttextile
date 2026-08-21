@@ -21,13 +21,39 @@ MAX_MINUTS_TRAM = 24 * 60
 # min no és una jornada llarga que calgui podar a 24 h: és una fuita, i no sabem quant s'hi va
 # treballar de debò. Retallar-lo inventaria 1.440 minuts de feina que ningú no ha fet; excloure'l
 # només diu "d'aquest tram no en tenim dada". Una sola llei, cap divergència.
-TRAMS_SANS = Q(fi__isnull=False, minuts__lte=MAX_MINUTS_TRAM)
+# J · I UN TRAM DE CONSULTA TAMPOC NO COMPTA — mirar no és treballar.
+#
+# 🔒 EL LLINDAR DE PLAUSIBILITAT NO ES TOCA I NO SE'N FABRICA UN DE PARAL·LEL. `MAX_MINUTS_TRAM`
+# segueix sent l'única constant de plausibilitat del sistema, i el descart de J **no n'és una
+# segona**: no és un llindar, és una MARCA. La pregunta que fa no és «quant ha durat?» sinó
+# «s'hi ha escrit?», que és una altra dimensió — i havia de ser-ho, perquè decidir-ho per durada
+# contradiria la decisió d'Agus escrita a `ModelSheet.jsx` («no hi ha hagut sessió» no vol dir
+# «ha durat poc»: una sessió de dos minuts amb la tasca oberta val igual que una de dues hores).
+#
+# Mateix criteri que el llindar, i per això entra a la MATEIXA expressió: **EXCLUSIÓ, no retall**.
+# D'un tram de consulta no en tenim zero minuts de feina: en tenim minuts que no són feina.
+#
+# `~Q(consulta=True)` i no `Q(consulta=False)`, i la diferència és tot l'històric: `None` vol dir
+# «no jutjat» —les files d'abans del camp i les que el desplegament va enxampar obertes— i ha de
+# seguir comptant exactament com sempre. Amb `Q(consulta=False)` la clàusula hauria buidat el
+# Welford, l'albarà i el consum de cop, en silenci i sense migració.
+#
+# Un sol punt, i per això n'hi ha prou amb aquesta línia: d'aquí pengen `record_actual_time`
+# (Welford), `_real_minutes`, `minuts_per_model_task`, l'albarà (`commerce/services.py`), el
+# registre de consum i tots els agregadors visibles.
+TRAMS_SANS = Q(fi__isnull=False, minuts__lte=MAX_MINUTS_TRAM) & ~Q(consulta=True)
 
 
 def tram_compta(timer):
     """Versió Python de `TRAMS_SANS`, per als bucles sobre timers ja prefetchats (albarà,
-    registre de consum). Ha de dir SEMPRE el mateix que el filtre ORM."""
-    return timer.fi is not None and (timer.minuts or 0) <= MAX_MINUTS_TRAM
+    registre de consum). Ha de dir SEMPRE el mateix que el filtre ORM.
+
+    ⚠️ BESSONS DECLARATS I CAP GATE ELS COMPARA: qui toqui l'un ha de tocar l'altre. La clàusula
+    de consulta de J hi entra alhora, i pel mateix motiu pel qual el llindar hi és.
+    """
+    return (timer.fi is not None
+            and (timer.minuts or 0) <= MAX_MINUTS_TRAM
+            and timer.consulta is not True)
 
 
 def minuts_per_model_task(timer_qs):
