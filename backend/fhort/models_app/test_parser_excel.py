@@ -508,7 +508,13 @@ class ElCamiIAContinuaSentElFallbackTest(SimpleTestCase):
         aquesta via retornava `header: {}` i `base_size = sizes[0]` fins i tot quan funcionava.
         """
         revisio.return_value = {'corrections': [], 'warnings': []}
-        match_rows.side_effect = lambda files, customer: (
+        # ⚠️ L'ARITAT DEL MOCK HA DE SEGUIR LA DE LA FUNCIÓ REAL. `_match_rows` va guanyar el
+        # tercer paràmetre `model` al commit `4db5158d` (16/08, T8-ter, «el conflicte mira la
+        # peça de la fila») i aquest doble es va quedar amb dos: `_extraccio_via_excel` el crida
+        # amb tres i el mock petava amb TypeError. Cinc dies vermell, i el vermell no era del
+        # parser sinó d'aquí. `model=None` amb default perquè el doble segueixi valent tant si
+        # el cridador el passa com si no.
+        match_rows.side_effect = lambda files, customer, model=None: (
             [{'codi_fitxa': f['codi_fitxa'], 'values': f['values'], 'pom_master_id': None}
              for f in files],
             {'n_nomatch': 0, 'n_low': 0, 'n_many_to_one': 0},
@@ -536,7 +542,13 @@ class ElCamiIAContinuaSentElFallbackTest(SimpleTestCase):
         silenci, que és exactament el forat que F5 tanca.
         """
         revisio.return_value = {'corrections': [], 'warnings': []}
-        match_rows.side_effect = lambda files, customer: (
+        # ⚠️ L'ARITAT DEL MOCK HA DE SEGUIR LA DE LA FUNCIÓ REAL. `_match_rows` va guanyar el
+        # tercer paràmetre `model` al commit `4db5158d` (16/08, T8-ter, «el conflicte mira la
+        # peça de la fila») i aquest doble es va quedar amb dos: `_extraccio_via_excel` el crida
+        # amb tres i el mock petava amb TypeError. Cinc dies vermell, i el vermell no era del
+        # parser sinó d'aquí. `model=None` amb default perquè el doble segueixi valent tant si
+        # el cridador el passa com si no.
+        match_rows.side_effect = lambda files, customer, model=None: (
             [{'codi_fitxa': f['codi_fitxa'], 'values': f['values'], 'pom_master_id': None}
              for f in files],
             {'n_nomatch': 0, 'n_low': 0, 'n_many_to_one': 0},
