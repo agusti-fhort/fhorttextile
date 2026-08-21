@@ -502,10 +502,52 @@ def create_piece_fitting(session_id: int, model_id: int, *, created_by_id: int |
 
     version = _active_grading_version(sf)
     if version is None:
-        raise ValueError(
-            f"El model {model.codi_intern} no té cap GradingVersion activa. "
-            "Cal generar les talles primer."
+        # ── S45/B — MESURAR PRENDA NO EXIGEIX PROPAGAT (regla d'Agus, Patró C) ──────────
+        # El guard que hi havia aquí («cal generar les talles primer») era el guard de
+        # PROPAGAR dit a la porta de MESURAR, i tancava el cas que el domini sí que
+        # admet: un PROTOTIP que ha arribat a la sala sense graduació definida. La
+        # modista el té a les mans i no el pot anotar enlloc.
+        #
+        # EL GUARD ES PARTEIX PER CAMÍ, no per endpoint (llei S43):
+        #   · PROPAGAR segueix exigint graduació — `generate_grading_view` refusa amb 400
+        #     si `not _te_regles(model)` (`models_app/views.py:3014-3016`). CAP CANVI.
+        #   · MESURAR PRENDA no l'exigeix: aquí.
+        #
+        # 🔑 I NO CAL DECIDIR RES DEL DOMINI, perquè la resposta JA ESTÀ CONSTRUÏDA:
+        # `reconcilia_linies` (:640-660) ja sap néixer sense spec —«el teòric d'una
+        # mesura nova: l'spec de la versió activa si n'hi ha i, si no, la base del model
+        # a la talla base»— i es crida tres línies més avall. Sense propagació la peça
+        # neix, doncs, amb les línies de la TALLA BASE tretes de `BaseMeasurement`, que
+        # és exactament el que es pot prendre d'un proto: hi ha una peça física, i és
+        # d'una talla. Les altres talles no hi són perquè encara no existeixen.
+        #
+        # PER QUÈ ES MATERIALITZA LA VERSIÓ I NO ES FA NUL·LABLE EL FK: `PieceFitting.
+        # grading_version` és NOT NULL (`fitting/models.py:395`) i penja d'ell mig
+        # circuit (`consolidate_base_from_fitting:685`, `close_piece_fitting:765`). El
+        # contenidor buit els deixa a tots vius sense migració i sense tocar-ne cap. És
+        # el MATEIX camí lliure que aquesta funció ja fa amb el SizeFitting vint línies
+        # amunt: materialitzar en l'acte en lloc de bloquejar.
+        #
+        # ⚠️ LA VERSIÓ NEIX BUIDA I HO DIU: cap `GradedSpec`. `te_taula` i `te_propagacio`
+        # segueixen sent FALSOS (`grading_status_view:3858`) — obrir una presa NO és
+        # propagar, i cap pantalla ha de dir que ho sigui. El segell ho respecta:
+        # `seal_model_grading` no segella una versió sense specs (v. allà).
+        from django.db.models import Max
+        from fhort.fitting.models import GradingVersion
+        version = GradingVersion.objects.create(
+            size_fitting=sf,
+            version_number=(GradingVersion.objects.filter(size_fitting=sf).aggregate(
+                m=Max('version_number'))['m'] or 0) + 1,
+            is_active=True,
+            creat_per_id=created_by_id,
+            nom='Presa sense propagació',
+            notes=('Versió materialitzada en obrir una presa sobre un model sense '
+                   'graduació propagada (S45/B). Neix BUIDA: les línies surten de la '
+                   'talla base del model.'),
         )
+        logger.info(
+            'create_piece_fitting: model %s sense GradingVersion activa → v%s buida '
+            '(camí lliure de presa)', model.pk, version.version_number)
 
     pf = PieceFitting.objects.create(
         session=session,
@@ -957,6 +999,24 @@ def seal_model_grading(model, *, user_profile_id=None, now=None):
         return None
     version = _active_grading_version(sf)
     if version is None:
+        return None
+    # S45/B — UNA VERSIÓ BUIDA NO ES SEGELLA. Des que «mesurar prenda» no exigeix propagat
+    # (`create_piece_fitting`), obrir una presa sobre un proto materialitza una
+    # GradingVersion SENSE cap `GradedSpec`. Segellar-la seria signar el no-res, i el dany
+    # no és cosmètic: `bump_grading_version_and_generate` refusa amb el guard D-1 si
+    # l'activa està aprovada (`pom/services.py:1091-1095`), o sigui que un segell sobre el
+    # buit BLOQUEJARIA la primera propagació de debò d'aquell model i obligaria a una
+    # reobertura explícita per superar una versió que no promet res.
+    #
+    # El predicat és el FET, no la procedència: «hi ha alguna cosa propagada?». Retorna
+    # None, que és el senyal que el cridador ja sap llegir (`tasks/services_d.py:61` el
+    # posa tal qual a `sealed_version`): avançar de fase segueix funcionant, i el que no
+    # passa és el segell.
+    from fhort.fitting.models import GradedSpec
+    if not GradedSpec.objects.filter(grading_version=version, is_active=True).exists():
+        logger.info(
+            'seal_model_grading: model %s · v%s no té cap GradedSpec activa — no es segella',
+            model.pk, version.version_number)
         return None
     return seal_grading_version(version, user_profile_id=user_profile_id, now=now).pk
 
