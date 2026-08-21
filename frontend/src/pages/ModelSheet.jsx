@@ -31,7 +31,7 @@ import BadgeLliurable from '../components/model/BadgeLliurable'
 import { CARA_CAP, caraDeError, caraObrirTasca } from '../utils/caraObrirTasca'
 import { CODE_PER_TAB, saltDeSuperficie, minutsDeSessio } from '../utils/sessioActiva'
 import { SECCIONS_MODEL, ETIQUETA_SECCIO, pindolesDeModel } from '../utils/modelSeccions'
-import { motiuPasPresa } from '../utils/motiuPasPresa'
+import { motiuPasMesurarSet, motiuPasPresa } from '../utils/motiuPasPresa'
 import { estatDeLaPresa } from '../utils/estatPresa'
 import { UPLOAD_ACCEPT } from '../utils/uploads'
 import RegistreActivitatTab from '../components/model/RegistreActivitatTab'
@@ -820,9 +820,10 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // dos endpoints per a la mateixa pregunta acabarien donant dues respostes.
   const [estatPas, setEstatPas] = useState(null)
   useEffect(() => {
-    // E3b — I TAMBÉ A ESCALAT. «Mesurar set» té la MATEIXA dependència que el ③ («create-piece»
-    // exigeix versió activa amb specs) i per tant li toca el MATEIX motiu escrit, no un 400 cru
-    // a la cara després de prémer. Un endpoint més no: el mateix, en un tab més.
+    // E3b — I TAMBÉ A ESCALAT. «Mesurar set» també vol el motiu escrit i no un 400 cru a la
+    // cara després de prémer. Un endpoint més no: el mateix, en un tab més.
+    // S45/B — el que ja NO comparteix amb el ③ és el PREDICAT (v. `motiuSet`, avall): E3b deia
+    // «la MATEIXA dependència», i des que la prenda no exigeix propagat són dues.
     if ((activeTab !== 'Mesures' && activeTab !== 'Escalat') || !id) return undefined
     let viu = true
     models.gradingStatus(parseInt(id))
@@ -835,7 +836,13 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // S42/F2 — PER QUÈ el pas ③ està apagat, deduït de l'estat i no codificat al JSX. `null` =
   // res l'atura (inclòs «encara no ha contestat»), i és el mateix predicat que bloquejava el
   // botó abans: un sol lloc per a la condició i per al motiu, que no poden divergir.
+  //
+  // S45/B — I SÓN DOS PREDICATS, no un: «Mesurar prenda» (③) i «Mesurar set» (Escalat) ja no
+  // demanen el mateix. La prenda només vol que hi hagi alguna cosa a prendre (`te_mesures`);
+  // el set vol la taula PROPAGADA, perquè el seu full ÉS la corba propagada. El perquè de
+  // cada un viu a `utils/motiuPasPresa`, amb banc.
   const motiuPresa = motiuPasPresa(estatPas)
+  const motiuSet = motiuPasMesurarSet(estatPas)
   // E3b — L'ESTAT DE LA PRESA, per pintar «Mesurar set» honestament: amb una presa VIVA el botó
   // hi torna a entrar (FET, §6: «la feina hi és»), i sense —cap o tancada— és la feina d'ara.
   // Mateixa font que l'Escalat (`fitting/model/<id>/presa/`): no se n'estrena cap.
@@ -1282,21 +1289,24 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
                     tasca és `size_check`, i `obreDeDebo` ja el porta a `editing='Mesures'`, que
                     és exactament la presa. Si el model ve amb `?fitting_session=`, la sessió ja
                     resolta mana i la presa s'hi lliga sola (font `fitting`). */}
-                {/* El gate el mana el backend (`create-piece` exigeix versió activa amb specs).
-                    Aquí NO es reimplementa: es DEMANA a `grading-status` i es diu abans, en
-                    comptes de deixar prémer i contestar amb un error. El motiu va escrit. */}
+                {/* El gate el mana el backend. Aquí NO es reimplementa: es DEMANA a
+                    `grading-status` i es diu abans, en comptes de deixar prémer i contestar
+                    amb un error. El motiu va escrit. */}
                 {/* B4 — I QUAN JA S'HA MESURAT, LA PORTA HO DIU. El Dashboard deia «Mesurar
                     prenda: Feta» i aquesta porta es pintava normal: no és que discrepessin, és
                     que el stepper no tenia cap fet per a aquest pas. Ara `te_presa` el porta —hi
                     ha algun fitting amb contingut—, i l'ordre de precedència és: BLOQUEJAT (no
-                    hi ha taula) → FET (s'hi ha mesurat) → disponible. */}
+                    hi ha res a prendre) → FET (s'hi ha mesurat) → disponible. */}
                 {/* S42/F2 — EL RÈTOL DIU EL PAS QUE FALTA, i el diu perquè el DEDUEIX.
                     Era una constant («Cal gravar el POM») i al 1379 acusava un pas que ja
-                    lluïa el ✓ del costat: els POM hi eren i el que faltava era propagar. El
-                    predicat de `disabled` NO canvia —segueix sent `te_taula`, el mateix que
-                    exigeix `create-piece`—; el que canvia és que ara n'hi ha UN de sol, i és
-                    el motiu mateix: `motiuPasPresa(...) != null` ÉS `!te_taula` amb l'estat
-                    resolt. La llei viu a `utils/motiuPasPresa` amb banc, no aquí dins. */}
+                    lluïa el ✓ del costat: els POM hi eren i el que faltava era propagar.
+                    S45/B — I ARA EL PREDICAT ÉS UN ALTRE: aquesta porta ja no espera el
+                    propagat. Un PROTOTIP pot no tenir graduació definida i s'ha de poder
+                    mesurar igual; l'únic que la presa necessita és que hi hagi alguna cosa a
+                    prendre (`te_mesures`). Segueix havent-hi UN sol lloc per a la condició i
+                    per al motiu —`motiuPasPresa`, amb banc—, i el backend hi va al pas:
+                    `create_piece_fitting` materialitza la versió buida i les línies surten de
+                    la talla base. El botó no és més estricte que la porta que obre. */}
                 <button type="button"
                   disabled={openingTask || motiuPresa != null}
                   title={motiuPresa ? t(motiuPresa) : undefined}
@@ -1397,22 +1407,29 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
                   {t('model_sheet.back_to_consult')}
                 </button>
               )}
+              {/* S45/B — AQUÍ EL PREDICAT ÉS `motiuSet`, NO `motiuPresa`. E3b els havia
+                  agermanat («la MATEIXA dependència que el ③») i era cert mentre les dues
+                  portes esperaven la taula. Ja no: el ③ s'obre amb mesures i prou, i aquesta
+                  segueix exigint la taula PROPAGADA perquè el full del set ÉS la corba
+                  propagada —sense `GradedSpec` només existeix la talla base i `desa_presa_
+                  escalat` alçaria `PresaSenseLiniaError`. Compartir el predicat, ara, seria
+                  obrir una graella on no es pot anotar res. */}
               {(editing !== 'Escalat' || !presaVivaSet) && (
                 <button type="button"
-                  disabled={openingTask || motiuPresa != null}
-                  title={motiuPresa ? t(motiuPresa) : undefined}
+                  disabled={openingTask || motiuSet != null}
+                  title={motiuSet ? t(motiuSet) : undefined}
                   onClick={() => enterEdit('Escalat', 'grading', null, { obrePresa: true })}
-                  style={btnPas(motiuPresa ? 'blocat' : (presaVivaSet ? 'fet' : 'ara'),
+                  style={btnPas(motiuSet ? 'blocat' : (presaVivaSet ? 'fet' : 'ara'),
                                 openingTask)}>
-                  <i className={`ti ti-${motiuPresa == null && presaVivaSet
+                  <i className={`ti ti-${motiuSet == null && presaVivaSet
                     ? 'check' : 'ruler-measure'}`} style={{ fontSize: 14 }} />
                   {t('model_sheet.measure_set')}
                 </button>
               )}
-              {motiuPresa && (
+              {motiuSet && (
                 <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
                                alignSelf: 'center' }}>
-                  {t(motiuPresa)}
+                  {t(motiuSet)}
                 </span>
               )}
             </div>
