@@ -294,3 +294,91 @@ export function intervalNou(intervals, run) {
   while (f + 1 < et.length && !fora.has(f + 1)) f += 1
   return { inici: et[i], final: et[f], delta: null }
 }
+
+// ── F4-QUATER · LA FRASE D'UN RELLEU ─────────────────────────────────────────────────────────
+//
+// **PUNT ÚNIC DE PRESENTACIÓ DELS BREAKS A TOTA LA CASA** (ordre d'Agus, 21/08). Fins avui cada
+// superfície de LECTURA es pintava el seu relleu a mà i cap dues no deien el mateix de la
+// mateixa regla: la consulta tenia dues columnes (`Δ break` + `Talla break`), l'Escalat les
+// mateixes dues però amb una tercera veu a dins quan hi havia intervals, i la fitxa Q8b encara
+// unes altres dues (`Break` + `B.Size`). Tres transcripcions del mateix concepte, i la lliçó ja
+// era coneguda de les amplades d'`EditableTable`: **el que es copia, divergeix.**
+//
+// Ara totes llegeixen d'aquí. Una superfície nova que hagi de dir un relleu crida `fraseBreaks`
+// i no decideix res pel seu compte.
+//
+// 🔑 LA FRASE ÉS D'INTERVAL, SEMPRE: `M→XL +3`, i els múltiples separats per ` · `. No hi ha
+// «el» break ni «la» talla de break — n'hi ha un per tram, i dir-ne un de tres és pitjor que no
+// dir-ne cap. Amb rang explícit inclusiu la frase és autoexplicativa.
+//
+// 🚨 **I PER AIXÒ L'OFF-BY-ONE DE DOCUMENT MOR AQUÍ.** Les etiquetes van en **convenció de
+// MOTOR tal qual**: `inici` i `final` són les que la BD desa i les que el picker ofereix. La
+// volta d'`aDocument` tenia sentit quan es pintava UNA talla sola —el full del client anomena
+// el punt per l'última talla del tram petit i s'havia de poder creuar—, però un RANG amb els
+// dos extrems dits no és ambigu i traduir-ne l'inici sense el final (o els dos, que voldria dir
+// sortir del run per dalt) donaria una etiqueta que no casa ni amb la BD ni amb la pantalla.
+// `breakConvention.aDocument` queda viu NOMÉS on encara es pinti una talla sola.
+//
+// 🚨 **LA REGLA DEL SILENCI ÉS LA D'`intervalsVisibles`, I NO SE'N FA UNA DE PRÒPIA.** FIXED/
+// STEP → cap interval; el llegat `+0` o idèntic al general → cap interval. Aquesta funció torna
+// `''` i qui crida pinta el seu propi buit (`—` a les taules, res a les etiquetes compactes).
+// Que el silenci visqui en UN sol node és el que fa que les tres captures d'Agus callin alhora.
+
+/** `+2` / `-1.5` — el signe explícit d'un delta de regla (mai una talla). */
+export function signeDelta(v) {
+  const n = Number(v)
+  if (!Number.isFinite(n)) return String(v)
+  return n < 0 ? `${n}` : `+${n}`
+}
+
+/**
+ * LA FRASE D'UN RELLEU: `M→XL +3` · `S→M +3 · L→XL +4`. `''` quan la regla no diu res.
+ *
+ * @param {object} rule   la fila de regla (forma nova `breaks` o vella `increment_break`)
+ * @param {Array}  run    el run de talles (etiquetes o `{etiqueta}`) — sense ell no hi ha
+ *                        derivació del llegat possible i el relleu vell es calla
+ * @param {object} opts
+ * @param {(v:any)=>string} opts.delta  formatador del Δ (per dur la unitat on n'hi ha)
+ * @param {number} opts.max   sostre de trams a lletrejar; la resta es diu `+N`. `0` = tots.
+ *
+ * ⚠️ **`max` NO ÉS UNA OPINIÓ, ÉS UN PRESSUPOST D'AMPLADA.** Només l'han de passar les
+ * superfícies on el carril és finit i cada mil·límetre que es prengui el relleu és una TALLA
+ * que deixa de cabre (l'Escalat i la fitxa Q8b). Qui el passi ha de portar la frase sencera al
+ * `title`/tooltip: una dada retallada sense on anar-la a veure és una dada perduda.
+ */
+export function fraseBreaks(rule, run, { delta = signeDelta, max = 0 } = {}) {
+  // ⚠️ UN INTERVAL A MITGES NO ES LLETREJA, i el sedàs és AQUÍ i no a `intervalsVisibles`: la
+  // columna d'AUTORIA l'ha de veure (és el xip que la persona està escrivint, i amagar-l'hi
+  // seria fer-li desaparèixer sota els dits el que acaba de teclejar), però una superfície de
+  // LECTURA no en pot dir res —«S→L +0» seria inventar-se un Δ que ningú no ha escrit—. A la BD
+  // no n'hi pot haver cap: `valida_breaks` els rebutja amb 400 `BREAKS_FORMA`.
+  const ivs = intervalsVisibles(rule, run)
+    .map(iv => ({ ...iv, _d: deltaInterval(iv) }))
+    .filter(iv => iv._d !== null)
+  if (!ivs.length) return ''
+  const trams = ivs.map(iv => `${iv.inici}→${iv.final} ${delta(iv._d)}`)
+  if (max > 0 && trams.length > max) {
+    return `${trams.slice(0, max).join(' · ')} +${trams.length - max}`
+  }
+  return trams.join(' · ')
+}
+
+/**
+ * L'ETIQUETA COMPACTA D'UNA REGLA — el delta general i el seu relleu: `+2 · M→XL +3`.
+ * Torna `''` quan no hi ha res a dir.
+ *
+ * 🚨 VIVIA A `breakConvention.js` I HA VINGUT AQUÍ, i no és un trasllat de conveniència: des que
+ * la frase és d'interval, aquesta etiqueta necessita `intervalsVisibles` —que és qui sap llegir
+ * les dues formes i qui porta la regla del silenci— i `breakConvention` no el pot importar sense
+ * fer un cicle (aquest mòdul ja li pren `etiquetesDelRun`). El repartiment que en queda és net i
+ * és el de l'ordre: **aquí el RELLEU, allà la VOLTA DE CONVENCIÓ** d'una talla sola.
+ *
+ * Abans deia el llegat en convenció de document (`+2 · trencament XS +3`) i per això demanava el
+ * rètol traduït «trencament»; ara no li cal cap paraula, perquè el rang es diu sol.
+ */
+export function etiquetaRegla(rule, run, opts = {}) {
+  const ib = rule?.increment_base
+  if (ib === null || ib === undefined) return ''
+  const frase = fraseBreaks(rule, run, opts)
+  return frase ? `${signeDelta(ib)} · ${frase}` : `${signeDelta(ib)}`
+}

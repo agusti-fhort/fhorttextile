@@ -69,37 +69,14 @@ export function opcionsDocument(run) {
   return et.slice(0, Math.max(0, et.length - 1))
 }
 
-/**
- * L'etiqueta compacta d'una regla per a mesures i repàs: `+1 · trencament XS +3`.
- * Torna `''` quan no hi ha res a dir. `tBreak` és el rètol ja traduït («trencament»).
- * Sense run traduïble el break s'OMET i queda el delta base: val més dir menys que dir-ho mal.
- */
-export function etiquetaRegla({ increment_base, increment_break, talla_break_label, breaks },
-  run, tBreak) {
-  if (increment_base === null || increment_base === undefined) return ''
-
-  // TRAM F — ELS INTERVALS PRIMER, i es diuen amb la seva pròpia gramàtica: `+2 · S→L +3`.
-  // Van en convenció de MOTOR i SENSE volta (v. `EditorIntervals.jsx`): les etiquetes d'un
-  // interval són les que la BD desa i les que el picker ofereix, i traduir-ne l'inici però no
-  // el final —o els dos, que voldria dir moure el final una talla amunt i sortir del run—
-  // diria una cosa que no es pot tornar a triar a la pantalla.
-  const ivs = (Array.isArray(breaks) ? breaks : [])
-    .filter(iv => iv && iv.delta !== null && iv.delta !== undefined && iv.delta !== '')
-  if (ivs.length) {
-    const trams = ivs.map(iv => `${iv.inici}→${iv.final} ${signe(iv.delta)}`).join(' · ')
-    return `${signe(increment_base)} · ${trams}`
-  }
-
-  const doc = increment_break !== null && increment_break !== undefined && talla_break_label
-    ? aDocument(talla_break_label, run) : null
-  return doc
-    ? `+${increment_base} · ${tBreak} ${doc} +${increment_break}`
-    : `+${increment_base}`
-}
-
-/** `+2` / `-1.5` — el signe explícit dels deltes de regla (mai una talla). */
-function signe(v) {
-  const n = Number(v)
-  if (!Number.isFinite(n)) return String(v)
-  return n < 0 ? `${n}` : `+${n}`
-}
+// 🚨 F4-QUATER — `etiquetaRegla` SE N'HA ANAT A `utils/gradingRegime.js`, i amb ella l'últim
+// lector de `aDocument` que pintava un RELLEU. Des que la frase d'un break és d'INTERVAL
+// (`M→XL +3`, v. `fraseBreaks`), les etiquetes van en convenció de MOTOR tal qual: un rang amb
+// els dos extrems dits no és ambigu i no vol cap volta.
+//
+// 🔑 EL QUE QUEDA VIU EN AQUEST FITXER I PER QUÈ. `aDocument`/`aMotor`/`opcionsDocument` són la
+// volta d'UNA TALLA SOLA, i encara hi ha exactament un lloc on una talla sola es tria a mà: el
+// `<select>` del break llegat a `CheckMeasureEditor` (l'autoria que el tram següent ha de
+// jubilar, deute ②). El dia que aquell selector passi a intervals, aquest mòdul es queda sense
+// cap lector de producte i és **candidat a retirar-lo sencer** — anotat, NO fet en aquest
+// sprint: retirar-lo avui deixaria l'editor del check sense com desar el que ja té a la BD.

@@ -10,8 +10,9 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import {
-  MAX_BREAKS, effectiveRegime, finalTriables, iniciTriables, intervalNou, intervalsDe,
-  intervalsVisibles, isDegenerateLinear, ordenaIntervals, relleuLlegat, relleuResidual, teRelleu,
+  MAX_BREAKS, effectiveRegime, etiquetaRegla, finalTriables, fraseBreaks, iniciTriables,
+  intervalNou, intervalsDe, intervalsVisibles, isDegenerateLinear, ordenaIntervals, relleuLlegat,
+  relleuResidual, teRelleu,
 } from './gradingRegime.js'
 
 test('el sostre és el mateix que el del backend', () => {
@@ -221,4 +222,113 @@ test('relleuResidual: què s\'ha de netejar en desar, i què no', () => {
   assert.equal(relleuResidual({ logica: 'LINEAR', ...relleu }), false)
   // Un FIXED net no té res a netejar.
   assert.equal(relleuResidual({ logica: 'FIXED', increment_base: 0 }), false)
+})
+
+// ── F4-QUATER · LA FRASE D'UN RELLEU, PUNT ÚNIC DE PRESENTACIÓ ────────────────────────────────
+//
+// Aquest bloc és el banc del que abans vivia repartit en TRES transcripcions a mà (la consulta,
+// l'Escalat i la fitxa Q8b). Fixa les dues coses que el fan una sola llei:
+//
+//   ① LA GRAMÀTICA: `M→XL +3`, múltiples amb ` · `, i el `+N` NOMÉS quan qui crida ha declarat
+//      un pressupost d'amplada (`max`).
+//   ② LA CONVENCIÓ: **de MOTOR tal qual, també per al llegat.** És l'esmena de l'sprint i el
+//      test que la guarda: un break llegat a `S` sobre `[XS,S,M,L,XL]` es diu `S→XL`, NO `XS→XL`
+//      (que seria la volta de document) ni `M→XL` (que seria desplaçar la dada). El dia que algú
+//      torni a colar `aDocument` per aquí, aquesta línia es posa vermella.
+
+const RUN_F4Q = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL']
+
+test('F4Q · la frase d\'un interval és el rang i el seu Δ, en convenció de MOTOR', () => {
+  assert.equal(
+    fraseBreaks({ logica: 'LINEAR', increment_base: 2, breaks: [{ inici: 'M', final: 'XL', delta: 3 }] }, RUN_F4Q),
+    'M→XL +3')
+})
+
+test('F4Q · els múltiples es diuen tots, separats per ` · `', () => {
+  const r = {
+    logica: 'LINEAR',
+    increment_base: 1,
+    breaks: [{ inici: 'XS', final: 'S', delta: 2 }, { inici: 'L', final: '3XL', delta: -1.5 }],
+  }
+  assert.equal(fraseBreaks(r, RUN_F4Q), 'XS→S +2 · L→3XL -1.5')
+})
+
+test('F4Q · el break LLEGAT es llegeix com l\'interval que el motor ja calcula, SENSE volta', () => {
+  // La BD desa `S` (primera talla del tram gran) i el motor gradua `S..3XL` amb +3. La frase ho
+  // diu tal qual: ni `XS` (convenció de document) ni cap desplaçament.
+  assert.equal(
+    fraseBreaks({ logica: 'LINEAR', increment_base: 2, increment_break: 3, talla_break_label: 'S' }, RUN_F4Q),
+    'S→3XL +3')
+})
+
+test('F4Q · REGLA DEL SILENCI: FIXED, llegat redundant i talla forana no diuen res', () => {
+  // ① sota un règim que no gradua, cap relleu
+  assert.equal(
+    fraseBreaks({ logica: 'FIXED', increment_base: 0, increment_break: 0, talla_break_label: 'M' }, RUN_F4Q),
+    '')
+  // ② un tram que repeteix el Δ que ja mana no és un trencament
+  assert.equal(
+    fraseBreaks({ logica: 'LINEAR', increment_base: 2, increment_break: 2, talla_break_label: 'S' }, RUN_F4Q),
+    '')
+  // sense run (o amb etiqueta forana) no hi ha derivació possible: es calla, com el motor
+  assert.equal(
+    fraseBreaks({ logica: 'LINEAR', increment_base: 2, increment_break: 3, talla_break_label: 'S' }, []),
+    '')
+  assert.equal(
+    fraseBreaks({ logica: 'LINEAR', increment_base: 2, increment_break: 3, talla_break_label: 'XXXL' }, RUN_F4Q),
+    '')
+})
+
+test('F4Q · els intervals explícits manen sobre el llegat, com al motor', () => {
+  assert.equal(
+    fraseBreaks({
+      logica: 'LINEAR', increment_base: 2, increment_break: 9, talla_break_label: 'M',
+      breaks: [{ inici: 'S', final: 'L', delta: 3 }],
+    }, RUN_F4Q),
+    'S→L +3')
+})
+
+test('F4Q · un interval sense Δ no es lletreja a LECTURA (però el xip d\'autoria el veu)', () => {
+  const r = { logica: 'LINEAR', increment_base: 2, breaks: [{ inici: 'S', final: 'L', delta: null }] }
+  assert.equal(fraseBreaks(r, RUN_F4Q), '')
+  // …i `intervalsVisibles`, que és qui alimenta la columna d'autoria, SÍ que l'hi torna.
+  assert.equal(intervalsVisibles(r, RUN_F4Q).length, 1)
+})
+
+test('F4Q · `max` és un pressupost d\'amplada: lletreja els primers i compta la resta', () => {
+  const r = {
+    logica: 'LINEAR',
+    increment_base: 1,
+    breaks: [
+      { inici: 'XS', final: 'S', delta: 2 },
+      { inici: 'M', final: 'L', delta: 3 },
+      { inici: 'XL', final: '3XL', delta: 4 },
+    ],
+  }
+  assert.equal(fraseBreaks(r, RUN_F4Q, { max: 1 }), 'XS→S +2 +2')
+  assert.equal(fraseBreaks(r, RUN_F4Q, { max: 3 }), 'XS→S +2 · M→L +3 · XL→3XL +4')
+  // sense `max`, tots — i és el que han de fer les superfícies amb carril de sobres
+  assert.equal(fraseBreaks(r, RUN_F4Q), 'XS→S +2 · M→L +3 · XL→3XL +4')
+})
+
+test('F4Q · el formatador de Δ és injectable (la unitat viatja amb qui pinta)', () => {
+  assert.equal(
+    fraseBreaks({ logica: 'LINEAR', increment_base: 2, breaks: [{ inici: 'M', final: 'XL', delta: 3 }] },
+      RUN_F4Q, { delta: v => `+${Number(v).toFixed(1)}cm` }),
+    'M→XL +3.0cm')
+})
+
+test('F4Q · l\'etiqueta compacta = Δ general · frase, i calla quan no hi ha relleu', () => {
+  assert.equal(
+    etiquetaRegla({ logica: 'LINEAR', increment_base: 2, increment_break: 3, talla_break_label: 'S' }, RUN_F4Q),
+    '+2 · S→3XL +3')
+  assert.equal(
+    etiquetaRegla({ logica: 'LINEAR', increment_base: 1, increment_break: null, talla_break_label: null }, RUN_F4Q),
+    '+1')
+  // sense Δ general no hi ha etiqueta: és la regla que no diu res, no un `+0`
+  assert.equal(
+    etiquetaRegla({ logica: 'LINEAR', increment_base: null, increment_break: 3, talla_break_label: 'S' }, RUN_F4Q),
+    '')
+  // un Δ general negatiu porta el seu signe, no un `+-2` (el forat del `+${ib}` d'abans)
+  assert.equal(etiquetaRegla({ logica: 'LINEAR', increment_base: -2 }, RUN_F4Q), '-2')
 })

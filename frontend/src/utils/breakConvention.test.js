@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { aDocument, aMotor, etiquetaRegla, etiquetesDelRun, opcionsDocument } from './breakConvention.js'
+import { aDocument, aMotor, etiquetesDelRun, opcionsDocument } from './breakConvention.js'
 
 const RUN = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL']
 
@@ -49,54 +49,6 @@ test('les opcions ofertes exclouen l\'última talla (no és representable)', () 
   assert.deepEqual(opcionsDocument([]), [])
 })
 
-test('l\'etiqueta compacta parla en convenció de document', () => {
-  assert.equal(
-    etiquetaRegla({ increment_base: 2, increment_break: 3, talla_break_label: 'S' }, RUN, 'trencament'),
-    '+2 · trencament XS +3')
-  assert.equal(
-    etiquetaRegla({ increment_base: 1, increment_break: null, talla_break_label: null }, RUN, 'trencament'),
-    '+1')
-})
-
-test('sense run traduïble, l\'etiqueta OMET el break en comptes de dir-lo malament', () => {
-  assert.equal(
-    etiquetaRegla({ increment_base: 2, increment_break: 3, talla_break_label: 'S' }, [], 'trencament'),
-    '+2')
-  assert.equal(
-    etiquetaRegla({ increment_base: null, increment_break: 3, talla_break_label: 'S' }, RUN, 'trencament'),
-    '')
-})
-
-// ── TRAM F · L'ETIQUETA COMPACTA DELS INTERVALS ──────────────────────────────────────────────
-// Els intervals es diuen en convenció de MOTOR i SENSE volta (esmena del 21/08): les etiquetes
-// són les que la BD desa i les que el picker ofereix. Aquest test fixa la diferència amb la
-// línia de sobre —break d'1 tram, convenció de document— perquè les dues conviuen a la mateixa
-// taula i confondre-les seria desplaçar una talla sencera.
-test('amb intervals, el compacte els diu en convenció de MOTOR', () => {
-  assert.equal(
-    etiquetaRegla({ increment_base: 2, breaks: [{ inici: 'S', final: 'L', delta: 3 }] },
-      RUN, 'trencament'),
-    '+2 · S→L +3')
-  assert.equal(
-    etiquetaRegla({
-      increment_base: 1,
-      breaks: [{ inici: 'XS', final: 'S', delta: 2 }, { inici: 'L', final: '3XL', delta: -1 }],
-    }, RUN, 'trencament'),
-    '+1 · XS→S +2 · L→3XL -1')
-})
-
-test('els intervals manen sobre el break d\'1 tram, com al motor', () => {
-  assert.equal(
-    etiquetaRegla({
-      increment_base: 2, increment_break: 9, talla_break_label: 'M',
-      breaks: [{ inici: 'S', final: 'L', delta: 3 }],
-    }, RUN, 'trencament'),
-    '+2 · S→L +3')
-})
-
-test('un interval sense Δ encara no diu res i no es pinta', () => {
-  assert.equal(
-    etiquetaRegla({ increment_base: 2, breaks: [{ inici: 'S', final: 'L', delta: null }] },
-      RUN, 'trencament'),
-    '+2')
-})
+// 🚨 F4-QUATER — ELS TESTS DE `etiquetaRegla` SE N'HAN ANAT amb la funció, a
+// `gradingRegime.test.js`. El que aquest banc guarda és NOMÉS la volta ±1 d'una talla sola, que
+// és l'única peça d'aquest fitxer que queda amb lector de producte.
