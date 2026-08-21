@@ -3,25 +3,30 @@
 **Data:** 2026-08-21 · **Entorn:** staging `/var/www/ftt-staging`, branca `dev`, tenant `fhort`
 **Font:** `docs/ordres/MODEL_837_EXPORT.json` (foto READ-ONLY de PROD, model pk PROD=1215, `TRV-SS27-0001`)
 **Command:** `backend/fhort/models_app/management/commands/sembra_model_837.py`
-**Estat:** ⛔ **ATURAT AL DRY-RUN.** Res escrit a la BD ni al disc. Calen 3 decisions d'Agus.
+**Estat:** ✅ **SEMBRAT** amb OK d'Agus (21/08). Model **pk staging = 1383** (PROD 1215).
+Verificació independent OK · idempotència OK · `/api/schema/` = 200. **Cap push.**
 
 ```bash
 cd /var/www/ftt-staging/backend
 venv/bin/python manage.py sembra_model_837            # dry-run (per defecte)
+venv/bin/python manage.py sembra_model_837 --apply \
+    --crea-entorn-absent --accepta-discrepancies-pom --accepta-ruleset-divergent
 ```
+
+> Una 2a execució diu `IDEMPOTÈNCIA: … ja existeix (pk=1383). 0 creacions.` — comprovat
+> dues vegades, amb els recomptes intactes després.
 
 ---
 
-## 1. Veredicte: 3 bloquejos
+## 1. Els 3 bloquejos i com es van resoldre
 
-L'`--apply` està bloquejat per tres motius. Cap és un error del command: són tres decisions
-que no li toca prendre a la sembra.
+El dry-run va aturar-se amb tres decisions obertes. Totes tres resoltes per Agus el 21/08:
 
-| # | Bloqueig | Naturalesa | Desbloqueig |
-|---|---|---|---|
-| 1 | `Customer TRV` i `UserProfile fhort` **no existeixen a staging** | falta entorn | crear-los (decisió d'Agus) |
-| 2 | 30 dels 142 POMMaster resolen per codi però **el contingut divergeix** | LLEI S44 | `--accepta-discrepancies-pom` |
-| 3 | El hash del joc `BRW-CATALEG-v3` **no coincideix** amb el de la foto | ancoratge | `--accepta-ruleset-divergent` |
+| # | Bloqueig | Resolució |
+|---|---|---|
+| 1 | `Customer TRV` i `UserProfile fhort` **no existien a staging** | **CREATS** per la sembra (`--crea-entorn-absent`). Mai remapats a un actor existent: l'actoria és evidència forense. V. §3 |
+| 2 | 30 dels 142 POMMaster resolen per codi però **el contingut divergeix** | **Resolució 1:1 acceptada**, catàleg de staging INTACTE. El deute queda anotat a §9 |
+| 3 | El hash del joc `BRW-CATALEG-v3` **no coincideix** | **Joc de staging REUTILITZAT** (grading idèntic fila a fila, verificat). V. §5 |
 
 ---
 
@@ -49,24 +54,36 @@ L'entorn resol per clau natural sense crear res:
 
 ---
 
-## 3. Bloqueig 1 — entorn absent
+## 3. Entorn creat per la sembra
 
-- **`Customer` codi `TRV`** (TROVELS): no hi és. És el customer del **model**; el del joc de
-  regles és `BRW` i aquest sí que hi és. Sense ell el model no té propietari.
-- **`UserProfile` amb username `fhort`**: no hi és. A PROD és el `pk=1`; a staging el `pk=1`
-  és `a.devant@fhort.cat` — **el mateix pk, un altre actor**. Aquest usuari és qui va crear
-  la `FittingSession` #123 (l'oberta), el `PieceFitting` #16 i n'és l'assistent.
+Dues files **no existien a staging i les ha creat la sembra**. Queden marcades aquí perquè
+NO són part de la foto de PROD: són el mínim perquè el banc es pugui aguantar dret.
 
-La sembra no els crea (regla 3 de l'ordre). Opcions per a Agus:
+| Creat | pk staging | Detall |
+|---|---|---|
+| `Customer TRV` | **11** | codi/nom/`active` de la foto (`TROVELS`). El del joc de regles és `BRW` i ja hi era |
+| `auth_user fhort` | **23** | al schema del tenant, `set_unusable_password()` — aquest compte **no pot entrar** |
+| `UserProfile fhort` | **24** | `rol_nom='technician'` (el `DEFAULT_ROLE` que hi posa el signal) |
 
-1. Crear `Customer TRV` i un `UserProfile` amb username `fhort` a staging, i re-córrer el dry-run.
-2. Decidir un actor de staging que substitueixi `fhort` (p.ex. `a.devant@fhort.cat`) — llavors cal
-   una opció de mapatge explícita al command, perquè **la substitució silenciosa d'un actor és
-   exactament el que la regla 4 prohibeix**.
+**Per què creats i no remapats.** A PROD `fhort` és el `pk=1`; a staging el `pk=1` és
+`a.devant@fhort.cat` — **mateix pk, actor diferent**. `fhort` és qui va obrir la
+`FittingSession` #123 i signar el `PieceFitting` #16: remapar-lo hauria falsejat l'evidència.
 
----
+**El rol no se l'inventa la sembra.** La foto no porta el rol de l'actor, així que es queda el
+que hi deixa `create_user_profile`. Si el banc necessita que `fhort` tingui permisos concrets,
+és un canvi a fer a mà i a consciència.
 
-## 4. Bloqueig 2 — 30 POM amb contingut divergent (LLEI S44)
+> ⚠️ **`create_user_profile` (post_save de `User`) ja crea el UserProfile dins d'un tenant.**
+> El primer `--apply` va petar aquí (`duplicate key … accounts_userprofile_user_id_key`) i
+> l'atomic va fer rollback net. És **el mateix patró que `sync_size_fitting`**: la sembra
+> ADOPTA el que el signal ja ha creat. Dos casos, la mateixa llei.
+>
+> Detall de multi-tenant que va aparèixer investigant-ho: `auth_user` existeix a `public` **i**
+> a cada tenant. `public.auth_user` té 2 files (login central: `fhort`, `a.devant@fhort.cat`)
+> i `fhort.auth_user` en té 5, que són les que veu l'ORM sota `search_path = fhort, public`.
+> Els `UserProfile` del tenant apunten a les del tenant.
+
+## 4. Els 142 POMMaster: resolució 1:1 (LLEI S44)
 
 Cap POMMaster és absent ni ambigu: **els 142 resolen 1:1 per `codi_client`**. El que divergeix és
 el contingut. Tres classes, molt diferents en gravetat:
@@ -86,7 +103,7 @@ d'un altre vocabulari (`CAT-UB`, `Skirt / Dress`) i no un codi de categoria.
 
 ---
 
-## 5. Bloqueig 3 — hash del joc de regles
+## 5. El joc de regles: reutilitzat
 
 ```
 foto     142 regles · hash 4f1dfa46…7395
@@ -104,6 +121,18 @@ staging [null,         "S",  "LINEAR", 0.70, 0.70, 1.00, "S", …]
 O sigui: `logica`, `increment`, `increment_base`, `increment_break`, `talla_break_*` i
 `talla_base` coincideixen a les 142. Reutilitzar el joc de staging no canvia ni un valor
 d'escalat; només deixa 4 regles sense ancoratge global.
+
+**Decisió: es reutilitza el joc `pk=219` de staging.** El model 1383 hi apunta per
+`grading_rule_set`, i les 142 `ModelGradingRule` en van derivar amb `derivat_de_rule_set=219`.
+
+**Hash de referència del banc** (fórmula d'aquest command, sobre les 142 regles de staging):
+
+```
+096990db404b778a2140fffd8327c54294849b73d42ec67b3265247f9840989f
+```
+
+Si aquest hash canvia, el joc sota el banc s'ha mogut i els resultats de qualsevol prova feta
+abans deixen de ser comparables.
 
 > ⚠️ El hash **declarat** a la foto (`af881bb8…ef01`) no és reproduïble des d'aquí: la fórmula
 > exacta de PROD no viatja amb el JSON. La comparació de dalt és foto↔staging amb la **mateixa**
@@ -127,8 +156,13 @@ a les 18:17:22 — **l'ordre relatiu es conserva**, que és el que importa per a
 | v1–v5 | 57.0 (−2.0) | 59.0 | 62.0 (+3.0) | 65.0 (+6.0) | 68.0 (+9.0) |
 | **v6 (vigent)** | 58.5 (−0.5) | 59.0 | 59.5 (+0.5) | 60.0 (+1.0) | 60.5 (+1.5) |
 
-Dues coses per mirar al banc: **cap de les 6 versions aplica el `2.00`** de la regla, i a
-v1–v5 el pas per sota de la base és **−2.0, no −3.0** (asimetria que el pas de 3.0 no explica).
+**L'asimetria −2.0 / +3.0 de v1–v5 NO és cap anomalia.** És la semàntica del break: amb `S`
+com a talla base, s'aplica **base 2 per sota** i **break 3 per sobre**. El comportament és
+l'esperat i no s'ha de «corregir» — qui trobi aquests números al banc, que no els persegueixi.
+
+**La mina és una altra: el `2.00` orfe.** Cap de les 6 versions l'aplica. És el llegat
+`increment` **fossilitzat** (§A de la diagnosi): un valor que segueix a la fila i que ja no
+mana res del que es genera. El banc el conserva viu precisament per poder-lo estudiar.
 
 **La resta:**
 - 6 GradingVersions, la **v6 vigent**; v1 sense nom i sense `creat_per`, v2–v6 «Propagació conscient».
@@ -163,12 +197,74 @@ el document sencer (451–1624 bytes cadascun).
 
 ---
 
-## 8. Què falta per tancar
+## 8. Resultat de l'`--apply`
 
-1. **Decisió d'Agus** sobre els 3 bloquejos (§3, §4, §5).
-2. `--apply` amb les banderes que corresponguin.
-3. Verificació independent post-apply: recomptes per ORM · regla `D` amb 2.00/0.50/0.50 ·
-   v6 vigent amb pas 0.5 i v1–v5 amb 3.0 · `/api/schema/` = 200 · model visible a l'app (login manual).
-4. 2a execució del command → **0 creacions** (idempotència per `codi_intern`).
+Corregut el 21/08 dins d'una sola transacció (l'entorn creat i la transcripció cauen amb el
+mateix rollback). **Model pk=1383.**
 
-**Cap push.** El command és un sol commit a `dev`, en local.
+**Verificació independent** — per ORM, sense passar pel command (`scratchpad/verif.py`):
+
+- Els **13 recomptes** quadren: 21 · 142 · 21 · 1 · 6 · **615** · 2 · 2 · 200 · 3 · 8 · 8 · 0.
+- **Regla `D`**: `increment=2.00` · `increment_base=0.50` · `increment_break=0.50`, break `M` pos 2 — **la incoherència és viva**.
+- **v1–v5 pas 3.0 al `D`** (XS=57.0 S=59.0 M=62.0 L=65.0 XL=68.0); **v6 vigent, pas 0.5** (XS=58.5 … XL=60.5). Una sola versió activa i és la v6.
+- `SizeFitting` `TallesGenerades` · `base_tancada=False` · codi `TRV-SS27-0001-SF1`.
+- `PieceFitting` pk=52 → **v2** (sessió Anullada, 95 línies) · pk=53 → v6 (sessió Oberta, 105 línies).
+- Joc `BRW-CATALEG-v3` (customer **BRW**) sobre model del customer **TRV**.
+- Les **21 mesures base**: cap difereix de la foto.
+- **Ordre relatiu conservat**: regla `D` editada 18:14:09 < v6 generada 18:17:22 → el bug A és reproduïble.
+- Els **8 `.ftt`** existeixen al disc sota `MEDIA_ROOT`.
+
+**Idempotència:** 2a i 3a passada → `0 creacions`, recomptes intactes, 1 sol `Customer TRV`.
+
+**API:** `/api/schema/` = **200** (860 KB) per `https` amb `Host: staging.fhorttextile.tech`.
+`/api/v1/models/?search=TRV-SS27-0001` = 401 sense credencials, que és el correcte.
+🚩 **Queda la comprovació visual a l'app amb el login manual d'Agus.**
+
+---
+
+## 9. Deute de catàleg (anotat, NO tocat)
+
+El catàleg de POMs de staging **no s'ha modificat**. Aquests desajustos contra la foto de PROD
+queden aquí documentats; el banc funciona igualment perquè cap toca els valors d'escalat.
+
+### 9a. Els 4 sense ancoratge global — l'únic deute amb significat
+
+| POM | nom | `pom_global` a la foto | a staging |
+|---|---|---|---|
+| `S` | Front armhole along seam | `LOSPOM-548` | **NULL** |
+| `S2` | Back armhole along seam | `LOSPOM-549` | **NULL** |
+| `BR` | Fly width | `LOSPOM-487` | **NULL** |
+| `U4` | Flounce height | `LOSPOM-578` | **NULL** |
+
+`S` i `S2` són **dos dels 21 POM mesurats** del model. Aquests 4 són també l'única causa de la
+divergència de hash de §5. Efecte al banc: qualsevol prova que depengui de la traducció de
+domini o de la federació veurà aquests 4 POM desancorats. Per a l'escalat, cap efecte.
+
+### 9b. Soroll cosmètic — 26 POM més
+
+- **`categoria`**: NULL a la foto, categoritzada a staging (`E`, `F`, `B`, `S`…). El catàleg de
+  staging està **més al dia** que la foto de PROD en aquest camp.
+- **`nom_client`**: MAJÚSCULES a la foto vs Title case a staging (`FLY WIDTH` ↔ `Fly width`).
+- Dos que no són pura capitalització i val la pena mirar algun dia: **`E2`** (`11cm` ↔ `11 cm`)
+  i **`I`** / **`GD`**, on la categoria de la foto porta un valor d'un altre vocabulari
+  (`CAT-UB`, `Skirt / Dress`) en comptes d'un codi de categoria.
+
+### 9c. No transcrit
+
+`ModelTask.work_order` (comanda PROD #69, `commerce.WorkOrder`): no viatja a la foto i el camp
+és nullable. Les 3 tasques del banc no tenen comanda associada.
+
+---
+
+## 10. Com reproduir el banc des de zero
+
+```bash
+cd /var/www/ftt-staging/backend
+venv/bin/python manage.py sembra_model_837 --apply \
+    --crea-entorn-absent --accepta-discrepancies-pom --accepta-ruleset-divergent
+```
+
+Les tres banderes són **decisions preses el 21/08**, documentades a §1. Sense elles el command
+s'atura i les torna a preguntar — que és el que ha de fer si algú el corre en un altre entorn.
+
+**Cap push.** Commits a `dev`, en local.

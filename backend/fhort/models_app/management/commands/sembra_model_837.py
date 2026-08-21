@@ -89,6 +89,10 @@ class Command(BaseCommand):
         p.add_argument('--accepta-ruleset-divergent', action='store_true',
                        help="Reutilitza BRW-CATALEG-v3 de staging encara que el hash "
                             "canònic no coincideixi amb el de la foto.")
+        p.add_argument('--crea-entorn-absent', action='store_true',
+                       help="Crea el Customer i els actors de la foto que no existeixin a "
+                            "staging. Els actors es creen NOUS (mai es remapen a un usuari "
+                            "existent): l'actoria de la foto és evidència forense.")
         p.add_argument('--report', default='', help="Camí del report .md a escriure.")
 
     def handle(self, *a, **o):
@@ -97,6 +101,7 @@ class Command(BaseCommand):
         self.o = o
         self.linies = []
         self.aturades = []
+        self.creats_per_la_sembra = []
         with schema_context(o['schema']):
             return self._run()
 
@@ -137,10 +142,20 @@ class Command(BaseCommand):
             self._escriu_report()
             return
 
-        entorn = self._resol_entorn()
-        poms = self._resol_poms()
-        self._verifica_ruleset()
-        self._pla()
+        # L'entorn que es CREA (customer, actors) ha de caure amb el mateix rollback que la
+        # transcripció: si una guarda de recompte peta, no poden quedar-hi actors orfes d'un
+        # model que no existeix. Per això l'atomic exterior embolcalla les dues fases —
+        # l'`@transaction.atomic` de `_sembra` hi entra com a savepoint anidat.
+        with transaction.atomic():
+            entorn = self._resol_entorn()
+            poms = self._resol_poms()
+            self._verifica_ruleset()
+            self._pla()
+
+            if self.o['apply']:
+                self._sembra(entorn, poms)
+                self._escriu_report()
+                return
 
         if not self.o['apply']:
             self.titol('VEREDICTE')
@@ -156,16 +171,13 @@ class Command(BaseCommand):
             self._escriu_report()
             return
 
-        self._sembra(entorn, poms)
-        self._escriu_report()
-
     # ── 1. entorn per clau natural ───────────────────────────────────────────
     def _resol_entorn(self):
         from fhort.pom.models import GradingRuleSet, GarmentType, GarmentGroup, SizeSystem
         from fhort.tasks.models import GarmentTypeItem, Customer, TaskType
         from fhort.accounts.models import UserProfile
 
-        self.titol('ENTORN (clau natural; res es crea)')
+        self.titol('ENTORN (per clau natural; només es crea amb --crea-entorn-absent)')
         e, m, absents = self.D['entorn'], self.D['model'], []
 
         def resol(etiqueta, qs, clau, obligatori=True):
@@ -193,7 +205,9 @@ class Command(BaseCommand):
             self.D['grading_rule_set_snapshot']['codi_sistema'])
         # El customer del MODEL (TRV) — no el del joc de regles (BRW).
         ent['customer'] = resol('Customer', Customer.objects.filter(
-            codi=e['customer']['codi']), e['customer']['codi'])
+            codi=e['customer']['codi']), e['customer']['codi'], obligatori=False)
+        if ent['customer'] is None:
+            ent['customer'] = self._crea_customer(e['customer'], absents)
 
         # Els actors: la clau natural d'un UserProfile és user.username. Un pk que
         # coincideixi entre PROD i staging NO és el mateix actor.
@@ -206,7 +220,7 @@ class Command(BaseCommand):
             else:
                 self.diu(self.style.ERROR("  ABSENT    %-22s %-24s → cap username així"
                                           % ('UserProfile', uname)))
-                absents.append('UserProfile (%s)' % uname)
+                ent['users'][uname] = self._crea_actor(uname, absents)
 
         ent['task_types'] = {}
         for t in self.D['model_tasks']:
@@ -245,6 +259,69 @@ class Command(BaseCommand):
                 "La sembra NO crea entorn (regla 3 de l'ordre): cal decisió d'Agus."))
             self.atura("entorn incomplet: %s" % ', '.join(absents))
         return ent
+
+    def _crea_customer(self, foto, absents):
+        """El Customer del model, amb les dades de la foto. Només amb --crea-entorn-absent."""
+        from fhort.tasks.models import Customer
+        if not self.o['crea_entorn_absent']:
+            absents.append('Customer (%s)' % foto['codi'])
+            return None
+        if not self.o['apply']:
+            self.diu(self.style.WARNING("  CREARÀ    %-22s %-24s → Customer nou (codi/nom/active "
+                                        "de la foto)" % ('Customer', foto['codi'])))
+            self.creats_per_la_sembra.append('Customer %s (%s)' % (foto['codi'], foto['nom']))
+            return None
+        c = Customer.objects.create(codi=foto['codi'], nom=foto['nom'],
+                                    active=foto['active'], is_self=foto['is_self'],
+                                    codi_global=foto['codi_global'])
+        self.diu(self.style.SUCCESS("  CREAT     %-22s %-24s → pk=%s"
+                                    % ('Customer', foto['codi'], c.pk)))
+        self.creats_per_la_sembra.append('Customer %s (%s) → pk=%s' % (foto['codi'], foto['nom'], c.pk))
+        return c
+
+    def _crea_actor(self, uname, absents):
+        """Un actor de la foto que no existeix a staging.
+
+        Es crea NOU, mai es remapa a un usuari existent: qui va obrir una sessió o signar un
+        PieceFitting és evidència forense del banc, i un remapatge silenciós la falsejaria
+        (a PROD `fhort` és el pk=1 i a staging el pk=1 és un altre actor — el pk no és
+        identitat). Contrasenya inutilitzable: aquests comptes no han de poder entrar.
+        """
+        from django.contrib.auth import get_user_model
+        from fhort.accounts.capabilities import DEFAULT_ROLE
+        from fhort.accounts.models import UserProfile
+        if not self.o['crea_entorn_absent']:
+            absents.append('UserProfile (%s)' % uname)
+            return None
+        if not self.o['apply']:
+            self.diu(self.style.WARNING("  CREARÀ    %-22s %-24s → auth_user + UserProfile nous, "
+                                        "password inutilitzable" % ('UserProfile', uname)))
+            self.creats_per_la_sembra.append('UserProfile %s (actor de la foto)' % uname)
+            return None
+        User = get_user_model()
+        u = User.objects.filter(username=uname).first()
+        if u is None:
+            u = User(username=uname, is_active=True)
+            u.set_unusable_password()
+            u.save()
+        # `accounts/signals.py::create_user_profile` (post_save de User) JA ha creat el
+        # UserProfile dins del tenant. Mateix patró que `sync_size_fitting`: s'adopta, no se'n
+        # crea un segon —fer-ho peta contra `accounts_userprofile_user_id_key`.
+        up = UserProfile.objects.filter(user=u).first()
+        adoptat = up is not None
+        if up is None:
+            up = UserProfile.objects.create(user=u, nom_complet=uname, rol_nom=DEFAULT_ROLE)
+        # El rol NO se l'inventa la sembra: la foto no el porta, i el que hi deixa el signal
+        # (DEFAULT_ROLE) és una dada declarada, no una suposició. Aquest compte no ha
+        # d'entrar enlloc — només ha de poder ser el destí d'una FK d'autoria.
+        self.diu(self.style.SUCCESS(
+            "  CREAT     %-22s %-24s → auth_user pk=%s · UserProfile pk=%s (%s, rol=%r)"
+            % ('UserProfile', uname, u.pk, up.pk,
+               'adoptat del signal' if adoptat else 'creat', up.rol_nom)))
+        self.creats_per_la_sembra.append(
+            'UserProfile %s → auth_user pk=%s (schema del tenant), UserProfile pk=%s, '
+            'rol=%r, password inutilitzable' % (uname, u.pk, up.pk, up.rol_nom))
+        return up
 
     def _usernames_referenciats(self):
         out = {self.D['model'].get('_created_by'), self.D['model'].get('_responsable'),
@@ -339,6 +416,21 @@ class Command(BaseCommand):
                 "explícit:  --accepta-discrepancies-pom"))
             self.atura("%d POM amb contingut divergent" % len(no_resolts))
         return mapa
+
+    def _actor(self, uname, M, camp):
+        """L'actor `uname` en la forma que demana `M.camp`.
+
+        Els camps d'autoria no apunten tots al mateix model: `SizeFitting.creat_per` o
+        `ModelTask.assignee` volen un UserProfile, però `BaseMeasurement.created_by`,
+        `MeasurementChangeLog.created_by` i `Model.design_freeze_by` volen el User. Es llegeix
+        del camp mateix en comptes de recordar-ho: així la sembra no es trenca en silenci si
+        una FK canvia de banda.
+        """
+        up = self._users.get(uname)
+        if up is None:
+            return None
+        remot = M._meta.get_field(camp).remote_field.model
+        return up.user if remot.__name__ == 'User' else up
 
     @staticmethod
     def _specs(gv):
@@ -474,7 +566,7 @@ class Command(BaseCommand):
 
         self.titol('APPLY')
         m = self.D['model']
-        u = ent['users']
+        u = self._users = ent['users']
         mapa_pk = {}
 
         # ── Model. `codi_intern` va explícit: així `generate_model_code` (pre_save)
@@ -508,7 +600,7 @@ class Command(BaseCommand):
             size_system=ent['size_system'], grading_rule_set=ent['grading_rule_set'],
             created_by=u.get(m['_created_by']),
             responsable=u.get(m['_responsable']),
-            design_freeze_by=u.get(m['_design_freeze_by']),
+            design_freeze_by=self._actor(m['_design_freeze_by'], Model, 'design_freeze_by'),
         )
         model.save()   # ← dispara sync_size_fitting: el SF surt d'aquí
         mapa_pk['Model'] = {m['id']: model.pk}
@@ -546,7 +638,8 @@ class Command(BaseCommand):
             seccio=b['seccio'], nom_canonic_model=b['nom_canonic_model'],
             nom_traduit_model=b['nom_traduit_model'], capa=b['capa'],
             instancia=b['instancia'], garment=b['garment'],
-            created_by=u.get(b['_created_by'])) for b in self.D['base_measurements']]
+            created_by=self._actor(b['_created_by'], BaseMeasurement, 'created_by'))
+            for b in self.D['base_measurements']]
         bms = BaseMeasurement.objects.bulk_create(bms)
         bm_pk = {b['id']: o.pk for b, o in zip(self.D['base_measurements'], bms)}
         mapa_pk['BaseMeasurement'] = bm_pk
@@ -569,7 +662,8 @@ class Command(BaseCommand):
             motiu=l['motiu'], context=l['context'], fitting_ref_id=None,
             fora_de_tolerancia=l['fora_de_tolerancia'], capa=l['capa'],
             instancia=l['instancia'], garment=l['garment'],
-            created_by=u.get(l['_created_by'])) for l in self.D['measurement_change_log']]
+            created_by=self._actor(l['_created_by'], MeasurementChangeLog, 'created_by'))
+            for l in self.D['measurement_change_log']]
         mcls = MeasurementChangeLog.objects.bulk_create(mcls)
         for l, o in zip(self.D['measurement_change_log'], mcls):
             MeasurementChangeLog.objects.filter(pk=o.pk).update(created_at=l['created_at'])
