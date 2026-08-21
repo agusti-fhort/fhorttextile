@@ -32,10 +32,21 @@ import {
 // guarda d'una dada— i quan parla, parla AQUÍ MATEIX (prop `error`), com fa la porta de
 // `valors_step` a la columna «Mesura» de l'Escalat.
 //
-// 🔑 L'ESBORRANY NO ÉS LA REGLA. Mentre s'edita un xip, el que es toca viu a l'estat d'aquest
-// component; només el ✓ el fa entrar a la llista de la regla. Per això un interval a mitges no
-// pot bloquejar el «Gravar» de la fila: no hi arriba mai. (`intervalsIncomplets` es queda com a
-// xarxa per a llistes que vinguin d'un altre camí.)
+// 🚨 L'ESBORRANY NO ÉS LA REGLA — I PER AIXÒ S'HA DE DIR EN VEU ALTA (21/08, reproduït al
+// navegador amb l'evidència d'Agus). Mentre s'edita un xip, el que es toca viu a l'estat
+// d'aquest component i només el ✓ el fa entrar a la llista. Això, sol, produïa dos danys que
+// són el MATEIX defecte vist per les dues cares:
+//
+//   · **el missatge que menteix a l'ull.** Treure el xip llegat d'una regla amb Δ general 0 la
+//     deixa sense relleu DESAT; obrir-ne un de nou i escriure-hi «+2» no l'hi torna a posar. El
+//     guard de degenerada mirava la regla i deia «no gradua res» mentre a la pantalla hi havia
+//     un xip amb un +2 escrit. La persona jutja el que VEU; el guard jutjava el que hi ha DESAT.
+//   · **la pèrdua silenciosa.** Prémer «Gravar» amb un xip obert i complet el llençava sense
+//     dir res: el POST sortia amb la llista d'abans i el xip desapareixia de la pantalla.
+//
+// Per això la columna AVISA cap amunt (`onEsborrany`) que té un xip pendent, i el «Gravar» de
+// les dues superfícies el barra NOMENANT LA FILA. Ni s'escriu el que ningú ha confirmat —el ✓
+// segueix sent el gest— ni es perd el que la persona té a mig escriure.
 
 const FS_XIP = 11
 
@@ -108,21 +119,28 @@ function signe(v) {
  * @param onCanvi  `(llista) => void` — la llista SENCERA d'intervals tal com queda
  * @param readOnly columna inerta (FIXED/STEP/ZERO: no hi ha relleu a dir)
  * @param motiu    per què està inerta, per al `title` del control apagat (§8c)
- * @param error    `{codi, detall}` del servidor per a AQUESTA fila, si n'hi ha
+ * @param error       `{codi, detall}` del servidor per a AQUESTA fila, si n'hi ha
+ * @param onEsborrany `({complet}|null) => void` — hi ha un xip obert? El pare ho ha de saber
+ *                    per no gravar-lo en silenci ni acusar la fila de no tenir relleu
  */
-export default function ColumnaBreaks({ rule, run, onCanvi, readOnly = false, motiu = '',
-  error = null }) {
+export default function ColumnaBreaks({ rule, run, onCanvi, onEsborrany, readOnly = false,
+  motiu = '', error = null }) {
   const { t } = useTranslation()
   // `editant`: índex del xip obert, o `llista.length` per a un de NOU. `-1` = cap.
   const [editant, setEditant] = useState(-1)
   const [esborrany, setEsborrany] = useState(null)
   const [sobre, setSobre] = useState(-1)
 
+  /** Avisa el pare de si aquesta columna té un xip pendent. Es crida des dels GESTOS i no des
+   *  d'un efecte: un `setState` dins d'un efecte encadena renders (i el lint ho canta). */
+  const avisa = (esb) => onEsborrany?.(esb
+    ? { complet: !!esb.inici && !!esb.final && esb.delta !== null } : null)
+
   const llista = intervalsVisibles(rule, run)
   const ple = llista.length >= MAX_BREAKS
   const senseRun = !Array.isArray(run) || run.length < 2
 
-  const tanca = () => { setEditant(-1); setEsborrany(null) }
+  const tanca = () => { setEditant(-1); setEsborrany(null); avisa(null) }
 
   /** Confirma l'esborrany: entra a la llista (substituint o afegint) i es tanca. */
   const confirma = () => {
@@ -145,16 +163,23 @@ export default function ColumnaBreaks({ rule, run, onCanvi, readOnly = false, mo
 
   const obre = (i) => {
     const iv = llista[i]
-    setEsborrany({ inici: iv.inici, final: iv.final, delta: iv.delta })
-    setEditant(i)
+    const esb = { inici: iv.inici, final: iv.final, delta: iv.delta }
+    setEsborrany(esb); setEditant(i); avisa(esb)
   }
 
   const afegeix = () => {
     const nou = intervalNou(llista, run)
     if (!nou) return
-    setEsborrany(nou)
-    setEditant(llista.length)
+    setEsborrany(nou); setEditant(llista.length); avisa(nou)
   }
+
+  /** Canvi dins del xip obert. Va per aquí i no per `setEsborrany` directe perquè cada tecla ha
+   *  de poder canviar el veredicte que el pare té («pendent i incomplet» → «pendent i complet»). */
+  const toca = (patch) => setEsborrany(prev => {
+    const seg = { ...prev, ...patch }
+    avisa(seg)
+    return seg
+  })
 
   // Les talles que l'esborrany pot triar. `editant` fa d'«excepte»: un xip que s'edita no es
   // tapa a si mateix, i un de nou (índex fora de la llista) no en tapa cap.
@@ -172,7 +197,7 @@ export default function ColumnaBreaks({ rule, run, onCanvi, readOnly = false, mo
       <div style={capsa}>
         {llista.map((iv, i) => (
           editant === i && esborrany ? (
-            <EditorXip key={`ed-${i}`} {...{ esborrany, setEsborrany, opcionsInici, opcionsFinal,
+            <EditorXip key={`ed-${i}`} {...{ esborrany, toca, opcionsInici, opcionsFinal,
               potConfirmar, confirma, tanca, t }} />
           ) : (
             /* 🔑 DOS BOTONS GERMANS DINS D'UN `span`, MAI un botó dins d'un botó: és HTML
@@ -203,7 +228,7 @@ export default function ColumnaBreaks({ rule, run, onCanvi, readOnly = false, mo
 
         {/* L'esborrany d'un interval NOU va al final: encara no és a la llista. */}
         {editant >= llista.length && esborrany && (
-          <EditorXip {...{ esborrany, setEsborrany, opcionsInici, opcionsFinal, potConfirmar,
+          <EditorXip {...{ esborrany, toca, opcionsInici, opcionsFinal, potConfirmar,
             confirma, tanca, t }} />
         )}
 
@@ -249,7 +274,7 @@ export default function ColumnaBreaks({ rule, run, onCanvi, readOnly = false, mo
 }
 
 /** El xip OBERT: dos selectors de talla + Δ + confirmar/cancel·lar. */
-function EditorXip({ esborrany, setEsborrany, opcionsInici, opcionsFinal, potConfirmar,
+function EditorXip({ esborrany, toca, opcionsInici, opcionsFinal, potConfirmar,
   confirma, tanca, t }) {
   return (
     <span style={xipEdicio}
@@ -264,7 +289,7 @@ function EditorXip({ esborrany, setEsborrany, opcionsInici, opcionsFinal, potCon
           const inici = e.target.value
           // El final SEGUEIX l'inici quan es queda enrere o fora del tram lliure: així mai hi ha
           // un estat intermedi del revés, que és el que `BREAKS_ORDRE` castiga.
-          setEsborrany(prev => ({ ...prev, inici, final: inici }))
+          toca({ inici, final: inici })
         }}>
         {opcionsInici.map(s => <option key={s} value={s}>{s}</option>)}
       </select>
@@ -272,14 +297,14 @@ function EditorXip({ esborrany, setEsborrany, opcionsInici, opcionsFinal, potCon
       <select value={esborrany.final || ''} style={selTalla}
         aria-label={t('grading.intervals.talla_final')}
         title={t('grading.intervals.talla_final_help')}
-        onChange={e => setEsborrany(prev => ({ ...prev, final: e.target.value }))}>
+        onChange={e => toca({ final: e.target.value })}>
         {opcionsFinal.map(s => <option key={s} value={s}>{s}</option>)}
       </select>
       <input type="text" inputMode="decimal" size={4} autoFocus
         value={esborrany.delta === null || esborrany.delta === undefined ? '' : esborrany.delta}
         aria-label={t('grading.intervals.delta')} placeholder="Δ"
         title={t('grading.intervals.delta_help')}
-        onChange={e => setEsborrany(prev => ({ ...prev, delta: num(e.target.value) }))}
+        onChange={e => toca({ delta: num(e.target.value) })}
         style={inputDelta} />
       <button type="button" onClick={confirma} disabled={!potConfirmar}
         title={t('grading.intervals.confirmar')} aria-label={t('grading.intervals.confirmar')}

@@ -3923,7 +3923,8 @@
       "confirmar": "Confirm the interval",
       "cancellar": "Cancel",
       "sense_lliures": "No free size left: intervals already cover the whole run",
-      "llegat_help": "This break is stored in the single-range form; editing it will save it as an interval."
+      "llegat_help": "This break is stored in the single-range form; editing it will save it as an interval.",
+      "esborrany_obert": "An interval is still open: confirm it with ✓ or cancel it with ✕ before saving."
     }
   },
   "export_button": {

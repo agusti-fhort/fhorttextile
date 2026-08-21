@@ -147,6 +147,11 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
   // missatge només a la barra de baix, qui havia tocat sis files havia d'endevinar quina. El
   // patró és el de la porta de `valors_step`, que retorna l'error al mateix control.
   const [errBreaks, setErrBreaks] = useState(new Map())
+  // 🚨 ELS XIPS A MIG ESCRIURE, PER FILA. `Map<clauRegla, {complet}>`. La columna avisa quan en
+  // té un d'obert, i «Gravar» el barra: sense això, un xip complet però sense ✓ es perdia en
+  // silenci, i un de començat sobre una regla sense relleu desat feia saltar el guard de
+  // degenerada amb un missatge que a l'ull era fals (el xip amb el seu Δ era a la pantalla).
+  const [esborranys, setEsborranys] = useState(new Map())
 
   const carrega = useCallback(() => {
     if (!modelId) return
@@ -262,6 +267,17 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
   // clau, o sigui que el que no s'envia no es toca.
   const grava = useCallback(async () => {
     if (!reglesTocades.length || gravant) return
+    // 🔑 PRIMER DE TOT: un xip obert. Va abans que els altres dos guards a posta — és el que
+    // la persona pot resoldre amb un clic, i és el que explica per què la regla que veu escrita
+    // a pantalla encara no consta enlloc. Dir-li «no gradua res» amb un +2 davant dels ulls era
+    // tècnicament cert i pràcticament una mentida.
+    if (esborranys.size) {
+      const noms = files.filter(r => esborranys.has(clauRegla(r)))
+        .map(r => r.pom_code).filter((v, i, a) => a.indexOf(v) === i)
+      setFeedback({ type: 'err',
+        text: `${t('grading.intervals.esborrany_obert')} (${noms.join(', ')})` })
+      return
+    }
     if (degenerades.size) {
       // 🔑 EL MISSATGE DIU QUINES FILES. Un lot pot portar sis regles i el text genèric obligava
       // a endevinar quina el barrava — i quan el que s'acabava d'editar era una ALTRA fila, la
@@ -334,7 +350,8 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
     setFeedback({ type: 'ok', text: t('graduacio.superficie.gravat', { count: reglesTocades.length }) })
     carrega()
     onGravat?.()
-  }, [reglesTocades, gravant, degenerades, incompletes, edicions, modelId, files, t, carrega, onGravat])
+  }, [reglesTocades, gravant, degenerades, incompletes, esborranys, edicions, modelId, files, t,
+      carrega, onGravat])
 
   // ── Cel·les ────────────────────────────────────────────────────────────────────────────────
   // S45/G2 — `center`, com la cel·la que substitueix mentre s'edita. Amb l'input a `right` i
@@ -462,6 +479,14 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
             al costat. */}
         <td style={tdS}>
           <ColumnaBreaks rule={regla} run={runIntervals} readOnly={!deltes}
+            onEsborrany={estat => setEsborranys(prev => {
+              const clau = clauRegla(row)
+              if (!estat) {
+                if (!prev.has(clau)) return prev
+                const next = new Map(prev); next.delete(clau); return next
+              }
+              return new Map(prev).set(clau, estat)
+            })}
             motiu={deltes ? '' : t('graduacio.superficie.delta_na', { regim: regla.logica })}
             error={errBreaks.get(clauRegla(row)) || null}
             onCanvi={llista => escriuBreaks(row, regla, llista)} />

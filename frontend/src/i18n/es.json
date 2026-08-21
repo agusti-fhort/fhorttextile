@@ -3923,7 +3923,8 @@
       "confirmar": "Confirmar el intervalo",
       "cancellar": "Cancelar",
       "sense_lliures": "No queda ninguna talla libre: todo el run ya lo cubre un intervalo",
-      "llegat_help": "Este break está guardado con la forma de un solo tramo; editarlo lo guardará como intervalo."
+      "llegat_help": "Este break está guardado con la forma de un solo tramo; editarlo lo guardará como intervalo.",
+      "esborrany_obert": "Hay un intervalo a medio escribir: confírmalo con ✓ o cancélalo con ✕ antes de grabar."
     }
   },
   "export_button": {

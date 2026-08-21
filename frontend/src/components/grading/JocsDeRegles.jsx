@@ -452,6 +452,9 @@ function Joc({ joc, run, runs, vocabularis, regimsAutorables, accions, onTanca, 
   // part del toast d'`onError` perquè un `BREAKS_*` és de LA REGLA que el va provocar: amb el
   // missatge només al toast, qui havia tocat sis files havia d'endevinar quina.
   const [errBreaks, setErrBreaks] = useState(new Map())
+  // 🚨 ELS XIPS A MIG ESCRIURE, PER REGLA (mateix criteri que «Graduació del model»): un xip
+  // obert no és a la regla, i gravar-lo en silenci el perdria.
+  const [esborranys, setEsborranys] = useState(new Map())
   // ⚠️ ESTAT INICIAL, NO SINCRONITZAT. El component es remunta amb `key={joc.id}` en canviar de
   // joc, i a partir d'aquí la còpia local mana: una recàrrega de la LLISTA (que passa cada cop
   // que es desa) no ha de poder trepitjar el que s'està editant en aquesta pantalla.
@@ -532,6 +535,13 @@ function Joc({ joc, run, runs, vocabularis, regimsAutorables, accions, onTanca, 
 
   const gravaRegles = async () => {
     if (!edicions.size) return
+    // 🔑 PRIMER DE TOT: un xip obert. El que la persona pot resoldre amb un clic va abans que
+    // cap altre guard — i és el que explica per què el que veu escrit a pantalla no consta.
+    if (esborranys.size) {
+      const noms = regles.filter(r => esborranys.has(r.id)).map(r => r.pom_codi)
+      onError(`${t('grading.intervals.esborrany_obert')} (${noms.join(', ')})`)
+      return
+    }
     // TRAM F — un interval a mitges (sense talla o sense Δ) el rebutjaria el backend amb 400.
     // Es diu ABANS, i amb el nom de la fila, que és el que la persona busca.
     const aMitges = regles.filter(r => intervalsIncomplets({ ...r, ...(edicions.get(r.id) || {}) }))
@@ -872,6 +882,13 @@ function Joc({ joc, run, runs, vocabularis, regimsAutorables, accions, onTanca, 
                             readOnly={logica !== 'LINEAR'}
                             motiu={logica === 'LINEAR' ? '' : t('grading.intervals.nomes_linear')}
                             error={errBreaks.get(r.id) || null}
+                            onEsborrany={estat => setEsborranys(prev => {
+                              if (!estat) {
+                                if (!prev.has(r.id)) return prev
+                                const next = new Map(prev); next.delete(r.id); return next
+                              }
+                              return new Map(prev).set(r.id, estat)
+                            })}
                             onCanvi={llista => escriuBreaks(r.id, reglaViva, llista)} />
                         </td>
                         <td style={cx.td}>

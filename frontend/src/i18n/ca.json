@@ -3923,7 +3923,8 @@
       "confirmar": "Confirmar l’interval",
       "cancellar": "Cancel·lar",
       "sense_lliures": "No queda cap talla lliure: tot el run ja el cobreix un interval",
-      "llegat_help": "Aquest trencament està desat amb la forma d’un sol tram; editar-lo el desarà com a interval."
+      "llegat_help": "Aquest trencament està desat amb la forma d’un sol tram; editar-lo el desarà com a interval.",
+      "esborrany_obert": "Hi ha un interval a mig escriure: confirma’l amb ✓ o cancel·la’l amb ✕ abans de gravar."
     }
   },
   "export_button": {
