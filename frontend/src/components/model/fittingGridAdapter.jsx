@@ -12,7 +12,7 @@ import { useTranslation } from 'react-i18next'
 import { useEnumeracio } from '../../utils/vocabulariDominiFont'
 
 import { pieceFittingLines } from '../../api/endpoints'
-import { effectiveRegime, etiquetaRegla, fraseBreaks } from '../../utils/gradingRegime'
+import { effectiveRegime, etiquetaRegla, liniesBreaks } from '../../utils/gradingRegime'
 import { formatDelta } from '../../utils/format'
 import { clauDeFila } from '../../utils/identitatMesura'
 import { cellaEscalat } from '../../utils/cellaEscalat'
@@ -461,34 +461,35 @@ export function escalatRuleLeadCols(t, onRegimChange, readOnly = false, unit = '
         ? <span style={cap}>{formatDelta(row.increment_base, unit)}</span>
         : <span style={buit}>—</span>),
     },
-    // ── F4-QUATER · UNA SOLA COLUMNA «BREAKS» ────────────────────────────────────────────────
+    // ── F4-QUATER · UNA SOLA COLUMNA «BREAKS», I UN TRAM PER LÍNIA ───────────────────────────
     //
     // 🚨 AQUÍ HI HAVIA `Δ break` (54px) + `Talla break` (56px), DUES MEITATS D'UN SOL
     // TRENCAMENT, i des del tram F la parella ja no sabia dir el que la regla diu: amb intervals
     // la columna del Δ es buidava i la de la TALLA canviava de veu per encabir-hi `S→L +3`. Una
     // columna que a vegades diu una talla i a vegades una frase sencera no és una columna.
     //
-    // Ara n'hi ha una que diu la frase, i és la MATEIXA `fraseBreaks` que pinta la consulta i la
-    // fitxa. Els 110px són els 54+56 de les dues velles: **aquesta fusió no pren ni un píxel al
-    // carril de talles**, que és el que el pressupost d'aquesta graella no perdona.
-    //
-    // ⚠️ EL `max: 1` ÉS EL PRESSUPOST D'AMPLADA, I PER AIXÒ VA AMB EL `title`. Amb tres trams la
-    // frase sencera no cap en 110px i eixamplar-la es menjaria una talla; es lletreja el primer,
-    // es compta la resta (`+N`) i el relleu SENCER viu al tooltip. Una dada retallada sense on
-    // anar-la a veure seria una dada perduda — i la corba hi és igualment, xifra a xifra, a les
-    // columnes de talla de la mateixa fila.
+    // 🚨 I LA PRIMERA VERSIÓ D'AQUESTA COLUMNA TAMPOC HO ERA. Concatenava amb sostre i
+    // comptador (`M→L +2,0 +1`): un COMPTADOR amb la gramàtica d'un Δ, indistingible del
+    // creixement d'un tram — v. `liniesBreaks`. Ara els trams van APILATS i no cal cap sostre:
+    // cada línia és més curta que la frase sencera i **la columna no reclama ni un píxel més**
+    // dels 110 (= 54+56) que ja tenien les dues velles. El que creix és l'alçada de la fila, que
+    // és espai que aquesta graella sí que té.
     {
       key: 'breaks', label: t('grading.intervals.col'), width: 110,
       title: t('grading.intervals.col_help_lectura'),
       render: (row) => {
         // Sota un règim que no gradua no hi ha relleu a dir: és la mateixa porta que el Δ
-        // general, i `fraseBreaks` ja hi calla pel seu compte (regla del silenci).
-        const frase = mostraDelta(row)
-          ? fraseBreaks(row, sizeRun, { delta: v => formatDelta(v, unit), max: 1 })
-          : ''
-        return frase
-          ? <span style={{ ...cap, whiteSpace: 'nowrap' }} title={etiquetaRegla(row, sizeRun)}>{frase}</span>
-          : <span style={buit}>—</span>
+        // general, i `liniesBreaks` ja hi calla pel seu compte (regla del silenci).
+        const linies = mostraDelta(row)
+          ? liniesBreaks(row, sizeRun, { delta: v => formatDelta(v, unit) })
+          : []
+        if (!linies.length) return <span style={buit}>—</span>
+        return (
+          <span style={{ ...cap, display: 'inline-flex', flexDirection: 'column',
+                         gap: 1, whiteSpace: 'nowrap', lineHeight: 1.3 }}>
+            {linies.map(l => <span key={l}>{l}</span>)}
+          </span>
+        )
       },
     },
   ]

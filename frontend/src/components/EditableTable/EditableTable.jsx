@@ -22,7 +22,7 @@ import AvisDiccionari from '../ui/AvisDiccionari'
 import { boto, botoTer } from '../ui/buttons'
 import BateigInput from '../model/BateigInput'
 import { baseMeasurements, poms } from '../../api/endpoints'
-import { fraseBreaks } from '../../utils/gradingRegime'
+import { liniesBreaks } from '../../utils/gradingRegime'
 import { esBruta } from '../../utils/taulaBruta'
 import { construeixPayload } from '../../utils/payloadMesures'
 
@@ -76,25 +76,33 @@ const COLS_GRADING = [
   { clau: 'regim', i18n: 'fitting.grid.regime', ample: AMPLADES.regim, valor: r => r.logica || null },
   { clau: 'delta', i18n: 'editable_table.col.delta', ample: AMPLADES.delta,
     valor: r => (r.increment_base == null ? null : r.increment_base) },
-  // ── F4-QUATER · UNA SOLA COLUMNA «BREAKS» ──────────────────────────────────────────────────
+  // ── F4-QUATER · UNA SOLA COLUMNA «BREAKS», I UN TRAM PER LÍNIA ─────────────────────────────
   //
   // 🚨 AQUÍ HI HAVIA DUES COLUMNES (`Δ break` + `Talla break`) I EREN DUES MEITATS D'UN SOL
   // TRENCAMENT. Funcionaven mentre una regla només en podia tenir un; des del tram F en pot
   // tenir tres, i llavors ni la parella sabia dir-los ni hi havia manera honesta de triar quin
-  // dels tres era «el» break. La consulta se n'inventava un apany —el primer interval encabit a
-  // la columna de la TALLA i un `+N` al costat, amb la columna del Δ en blanc— i l'Escalat i la
-  // fitxa se n'inventaven un altre de diferent. Tres dibuixos de la mateixa dada.
+  // dels tres era «el» break.
   //
-  // Ara n'hi ha UNA que diu la frase sencera (`fraseBreaks`), i és la mateixa funció que pinta
-  // l'Escalat i la fitxa. Aquesta superfície NO passa `max`: no s'hi edita res, la taula va a
-  // amplada de contingut dins d'un `overflowX:auto` i els tres trams hi caben lletrejats. El
-  // pressupost d'amplada és de les superfícies amb carril de talles, no d'aquesta.
+  // 🔑 I ELS TRAMS VAN APILATS, NO CONCATENATS (ordre d'Agus, 21/08). La primera versió d'aquesta
+  // columna els posava en una línia amb un sostre i un comptador (`M→L +2,0 +1`) i allò
+  // **imprimia un comptador amb la gramàtica d'un Δ** — v. `liniesBreaks`, que explica la nit
+  // que va costar. Apilats no cal cap sostre: cada línia és curta, es llegeixen d'una ullada i
+  // la fila creix el que ha de créixer.
   //
   // 🔑 I AMB LA COLUMNA SE'N VA L'OFF-BY-ONE: `aDocument` ja no es crida des d'aquí. Un rang
   // amb els dos extrems dits (`M→XL`) no necessita que ningú el tradueixi.
   { clau: 'breaks', i18n: 'grading.intervals.col', ample: AMPLADES.breaks,
     ajuda: 'grading.intervals.col_help_lectura',
-    valor: (r, sizeRun) => fraseBreaks(r, sizeRun) || null },
+    valor: (r, sizeRun) => {
+      const linies = liniesBreaks(r, sizeRun)
+      if (!linies.length) return null
+      return (
+        <span style={{ display: 'inline-flex', flexDirection: 'column', gap: 1,
+                       whiteSpace: 'nowrap', lineHeight: 1.35 }}>
+          {linies.map(l => <span key={l}>{l}</span>)}
+        </span>
+      )
+    } },
 ]
 
 const FS_HEAD = '9.5px'   // capçaleres, versaletes

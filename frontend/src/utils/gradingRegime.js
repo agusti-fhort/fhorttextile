@@ -332,35 +332,56 @@ export function signeDelta(v) {
 }
 
 /**
- * LA FRASE D'UN RELLEU: `M→XL +3` · `S→M +3 · L→XL +4`. `''` quan la regla no diu res.
+ * EL RELLEU D'UNA REGLA, **UNA LÍNIA PER INTERVAL**: `['M→L +2', 'XL +3']`.
+ * Llista buida quan la regla no diu res (regla del silenci).
  *
- * @param {object} rule   la fila de regla (forma nova `breaks` o vella `increment_break`)
- * @param {Array}  run    el run de talles (etiquetes o `{etiqueta}`) — sense ell no hi ha
- *                        derivació del llegat possible i el relleu vell es calla
- * @param {object} opts
- * @param {(v:any)=>string} opts.delta  formatador del Δ (per dur la unitat on n'hi ha)
- * @param {number} opts.max   sostre de trams a lletrejar; la resta es diu `+N`. `0` = tots.
+ * 🚨 **AIXÒ ERA UNA SOLA CADENA AMB UN SOSTRE (`max`) I UN COMPTADOR, I ERA UN DEFECTE GREU.**
+ * La forma vella lletrejava el primer tram i afegia `+N` amb els que quedaven —`M→L +2,0 +1`—,
+ * o sigui que **imprimia un COMPTADOR amb la gramàtica exacta d'un Δ**. Dues conseqüències, i
+ * la segona és pitjor que la primera:
  *
- * ⚠️ **`max` NO ÉS UNA OPINIÓ, ÉS UN PRESSUPOST D'AMPLADA.** Només l'han de passar les
- * superfícies on el carril és finit i cada mil·límetre que es prengui el relleu és una TALLA
- * que deixa de cabre (l'Escalat i la fitxa Q8b). Qui el passi ha de portar la frase sencera al
- * `title`/tooltip: una dada retallada sense on anar-la a veure és una dada perduda.
+ *   ① IL·LEGIBLE. Ningú no pot saber que aquell `+1` no és el creixement d'un tram.
+ *   ② **FABRICAVA INCOHERÈNCIES QUE NO EXISTIEN.** Amb la regla F del banc 1383, `[M→L +2,
+ *      XL→XL +3]` i `[M→L +2, XL→XL +1]` es pintaven **EXACTAMENT IGUAL** (`M→L +2,0 +1`): el
+ *      comptador val 1 en tots dos casos. Una fitxa congelada amb la regla vella (corba XL
+ *      117,5 = +3) es llegia, doncs, com «la regla nova (+1) amb la corba vella» — un informe
+ *      de bug de motor que va costar una nit i on no hi havia cap bug. La truncació no perdia
+ *      el rang del segon tram: **el substituïa per un número que se li assemblava.**
+ *
+ * Per això aquí no hi ha `max`, ni sostre, ni marca de sobrant: **si una regla diu tres coses,
+ * se'n diuen tres.** Un relleu són com a màxim `MAX_BREAKS` trams i cap superfície no s'estalvia
+ * res retallant-los; el que costava mil·límetres era concatenar-los en una sola línia, i apilats
+ * cadascun n'ocupa menys que la frase sencera.
+ *
+ * 🔑 **UN RANG D'UNA TALLA VA SENSE FLETXA A LECTURA** (ordre d'Agus, 21/08): `XL +3`, no
+ * `XL→XL +3`. Una fletxa que va d'una talla a ella mateixa és soroll — el mateix criteri que la
+ * regla del silenci. ⚠️ **A l'AUTORIA la fletxa hi és sempre** (`EditorIntervals`), i és a
+ * posta: allà el xip és un control amb dos selectors, i que un dels dos desaparegui segons el
+ * valor de l'altre faria ballar la superfície sota els dits de qui l'edita.
  */
-export function fraseBreaks(rule, run, { delta = signeDelta, max = 0 } = {}) {
+export function liniesBreaks(rule, run, { delta = signeDelta } = {}) {
   // ⚠️ UN INTERVAL A MITGES NO ES LLETREJA, i el sedàs és AQUÍ i no a `intervalsVisibles`: la
   // columna d'AUTORIA l'ha de veure (és el xip que la persona està escrivint, i amagar-l'hi
   // seria fer-li desaparèixer sota els dits el que acaba de teclejar), però una superfície de
   // LECTURA no en pot dir res —«S→L +0» seria inventar-se un Δ que ningú no ha escrit—. A la BD
   // no n'hi pot haver cap: `valida_breaks` els rebutja amb 400 `BREAKS_FORMA`.
-  const ivs = intervalsVisibles(rule, run)
+  return intervalsVisibles(rule, run)
     .map(iv => ({ ...iv, _d: deltaInterval(iv) }))
     .filter(iv => iv._d !== null)
-  if (!ivs.length) return ''
-  const trams = ivs.map(iv => `${iv.inici}→${iv.final} ${delta(iv._d)}`)
-  if (max > 0 && trams.length > max) {
-    return `${trams.slice(0, max).join(' · ')} +${trams.length - max}`
-  }
-  return trams.join(' · ')
+    .map(iv => (String(iv.inici) === String(iv.final)
+      ? `${iv.inici} ${delta(iv._d)}`
+      : `${iv.inici}→${iv.final} ${delta(iv._d)}`))
+}
+
+/**
+ * El mateix relleu EN UNA SOLA LÍNIA, amb els trams separats per ` · `. `''` si no diu res.
+ *
+ * Per als llocs on una cel·la apilada no hi cap perquè no ÉS una cel·la: l'etiqueta compacta
+ * de regla sota el desplegable de règim, i els `title`/tooltip. Les COLUMNES no la fan servir
+ * —elles apilen (`liniesBreaks`)—, i és la diferència que aquest sprint estableix.
+ */
+export function fraseBreaks(rule, run, opts = {}) {
+  return liniesBreaks(rule, run, opts).join(' · ')
 }
 
 /**

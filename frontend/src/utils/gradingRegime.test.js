@@ -11,8 +11,8 @@ import { test } from 'node:test'
 
 import {
   MAX_BREAKS, effectiveRegime, etiquetaRegla, finalTriables, fraseBreaks, iniciTriables,
-  intervalNou, intervalsDe, intervalsVisibles, isDegenerateLinear, ordenaIntervals, relleuLlegat,
-  relleuResidual, teRelleu,
+  intervalNou, intervalsDe, intervalsVisibles, isDegenerateLinear, liniesBreaks, ordenaIntervals,
+  relleuLlegat, relleuResidual, teRelleu,
 } from './gradingRegime.js'
 
 test('el sostre és el mateix que el del backend', () => {
@@ -295,7 +295,30 @@ test('F4Q · un interval sense Δ no es lletreja a LECTURA (però el xip d\'auto
   assert.equal(intervalsVisibles(r, RUN_F4Q).length, 1)
 })
 
-test('F4Q · `max` és un pressupost d\'amplada: lletreja els primers i compta la resta', () => {
+// ── 🚨 EL COMPTADOR QUE ES DISFRESSAVA DE Δ ─────────────────────────────────────────────────
+//
+// Aquest test és la LÀPIDA d'un defecte de presentació que va costar una nit i un informe de
+// bug de motor que no existia. `fraseBreaks` tenia un sostre (`max`) i, quan el passava,
+// afegia `+N` amb els trams que quedaven — un COMPTADOR amb la gramàtica exacta d'un Δ.
+//
+// La conseqüència no era «costa de llegir»: era que **dues regles DIFERENTS es pintaven IGUAL**.
+// Amb la F del banc 1383, `[M→L +2, XL→XL +3]` i `[M→L +2, XL→XL +1]` donaven totes dues
+// `M→L +2 +1`, perquè el comptador val 1 en tots dos casos. Una fitxa congelada amb la regla
+// vella es llegia com «la regla nova amb la corba vella».
+//
+// El test fixa les dues meitats de la reparació: que les dues regles ara es DISTINGEIXEN, i que
+// tres trams es diuen tots tres.
+test('🚨 F4Q · dues regles que abans es pintaven IGUAL ara es distingeixen', () => {
+  const F = (d2) => ({
+    logica: 'LINEAR', increment_base: 0,
+    breaks: [{ inici: 'M', final: 'L', delta: 2 }, { inici: 'XL', final: 'XL', delta: d2 }],
+  })
+  assert.deepEqual(liniesBreaks(F(3), RUN_F4Q), ['M→L +2', 'XL +3'])
+  assert.deepEqual(liniesBreaks(F(1), RUN_F4Q), ['M→L +2', 'XL +1'])
+  assert.notDeepEqual(liniesBreaks(F(3), RUN_F4Q), liniesBreaks(F(1), RUN_F4Q))
+})
+
+test('F4Q · no hi ha sostre: si la regla diu tres trams, se\'n diuen tres', () => {
   const r = {
     logica: 'LINEAR',
     increment_base: 1,
@@ -305,10 +328,28 @@ test('F4Q · `max` és un pressupost d\'amplada: lletreja els primers i compta l
       { inici: 'XL', final: '3XL', delta: 4 },
     ],
   }
-  assert.equal(fraseBreaks(r, RUN_F4Q, { max: 1 }), 'XS→S +2 +2')
-  assert.equal(fraseBreaks(r, RUN_F4Q, { max: 3 }), 'XS→S +2 · M→L +3 · XL→3XL +4')
-  // sense `max`, tots — i és el que han de fer les superfícies amb carril de sobres
-  assert.equal(fraseBreaks(r, RUN_F4Q), 'XS→S +2 · M→L +3 · XL→3XL +4')
+  assert.deepEqual(liniesBreaks(r, RUN_F4Q), ['XS→S +2', 'M→L +3', 'XL→3XL +4'])
+  // …i cap línia porta un `+N` de sobrant: el que hi ha després del rang és SEMPRE un Δ.
+  assert.ok(liniesBreaks(r, RUN_F4Q).every(l => /^[^ ]+ [+-][\d.,]+$/.test(l)))
+})
+
+test('F4Q · un rang d\'UNA talla va sense fletxa a LECTURA', () => {
+  assert.deepEqual(
+    liniesBreaks({ logica: 'LINEAR', increment_base: 1,
+      breaks: [{ inici: 'XL', final: 'XL', delta: 2 }] }, RUN_F4Q),
+    ['XL +2'])
+  // …i amb dos extrems diferents, la fletxa hi és.
+  assert.deepEqual(
+    liniesBreaks({ logica: 'LINEAR', increment_base: 1,
+      breaks: [{ inici: 'M', final: 'XL', delta: 2 }] }, RUN_F4Q),
+    ['M→XL +2'])
+})
+
+test('F4Q · `fraseBreaks` és la MATEIXA llista en una línia (per a etiquetes i tooltips)', () => {
+  const r = { logica: 'LINEAR', increment_base: 0,
+    breaks: [{ inici: 'M', final: 'L', delta: 2 }, { inici: 'XL', final: 'XL', delta: 1 }] }
+  assert.equal(fraseBreaks(r, RUN_F4Q), 'M→L +2 · XL +1')
+  assert.equal(fraseBreaks(r, RUN_F4Q), liniesBreaks(r, RUN_F4Q).join(' · '))
 })
 
 test('F4Q · el formatador de Δ és injectable (la unitat viatja amb qui pinta)', () => {

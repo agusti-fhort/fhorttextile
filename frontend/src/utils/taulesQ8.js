@@ -23,7 +23,7 @@
 // Les files que en surten porten `garment`, o sigui que `agrupaPerGarment`/`grupsDelFull` les
 // saben repartir per peça sense cap adaptador pel mig.
 
-import { fraseBreaks } from './gradingRegime.js'
+import { liniesBreaks } from './gradingRegime.js'
 import { identitatMesura } from './identitatMesura.js'
 import { construeixTaulaPresaPerTalla } from './taulaPresaPerTalla.js'
 
@@ -190,7 +190,7 @@ export function filesNotes(grid) {
 }
 
 /**
- * Q8b · LA FRASE DEL RELLEU D'UNA FILA, per a la columna «Breaks» de la fitxa.
+ * Q8b · EL RELLEU D'UNA FILA, UNA LÍNIA PER TRAM, per a la columna «Breaks» de la fitxa.
  *
  * 🚨 F4-QUATER — AIXÒ ERA `resumBreakQ8` I TORNAVA `{delta, etiqueta, mes}` PER A DUES COLUMNES
  * (`Break` + `B.Size`). Les dues eren les meitats d'un sol trencament i, com a la consulta i a
@@ -203,11 +203,11 @@ export function filesNotes(grid) {
  * vestit de la fitxa (la unitat i el pressupost de mil·límetres) sobre el formatador comú. Era
  * exactament la lliçó que l'ordre demanava no tornar a pagar.
  *
- * ⚠️ EL `max: 1` ÉS EL PRESSUPOST DE PAPER. L'amplada d'aquesta taula es reparteix en bandes per
- * no passar l'A4 (**mai A3: la fitxa s'imprimeix en A4**) i cada mil·límetre que es prengui la
- * columna del relleu és una TALLA que deixa de cabre. Es lletreja el primer tram i es compta la
- * resta; la corba sencera hi és igualment, xifra a xifra, a les columnes de talla de la mateixa
- * fila — que al paper és on de debò es llegeix.
+ * 🚨 **JA NO HI HA SOSTRE NI COMPTADOR.** Això tornava `max: 1` —el primer tram lletrejat i un
+ * `+N` amb els que quedaven— i era el defecte que va fer llegir una fitxa CONGELADA com si fos
+ * incoherent: v. `gradingRegime.liniesBreaks`. Apilats no costa mil·límetres d'AMPLADA (cada
+ * línia és més curta que la frase sencera, i l'amplada la mana la línia més llarga); el que
+ * creix és l'ALÇADA de la fila, i això la fitxa ja ho sap fer fila a fila (C2).
  *
  * ⚠️ I EL RUN HI ÉS OBLIGATORI: sense ell el relleu LLEGAT no es pot derivar i `fraseBreaks`
  * calla (com el motor). És el mateix run que la taula fa servir per a les columnes de talla.
@@ -223,9 +223,9 @@ export function filesNotes(grid) {
  * @param {object} fila     una fila de `filesGrading`
  * @param {string[]} talles el run del model, en ordre
  * @param {(v:any)=>string} xifra  el formatador de mesura de la fitxa (unitat inclosa)
- * @returns {string} `M→XL +3.0` · `M→XL +3.0 +2` · `''` quan la regla no trenca enlloc
+ * @returns {string[]} `['M→L +2.0', 'XL +1.0']` — llista buida quan la regla no trenca enlloc
  */
-export function fraseBreakQ8(fila, talles, xifra) {
+export function liniesBreakQ8(fila, talles, xifra) {
   const regla = {
     logica: fila?.regla || 'LINEAR',
     increment_base: fila?.delta,
@@ -233,9 +233,8 @@ export function fraseBreakQ8(fila, talles, xifra) {
     talla_break_label: fila?.talla_break,
     breaks: fila?.breaks,
   }
-  return fraseBreaks(regla, talles, {
+  return liniesBreaks(regla, talles, {
     delta: v => (Number(v) < 0 ? `−${xifra(Math.abs(v))}` : `+${xifra(Math.abs(v))}`),
-    max: 1,
   })
 }
 

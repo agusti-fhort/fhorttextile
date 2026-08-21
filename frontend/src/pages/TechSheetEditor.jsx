@@ -44,7 +44,7 @@ import { grupsDelFull } from '../utils/grupsDelFull'
 // formatador comú (`gradingRegime.fraseBreaks`), i és el mateix que pinten la consulta i l'Escalat.
 import { nomDeLaPeca } from '../utils/pecaDefinicio'
 import { etiquetaCapa, etiquetaInstancia } from '../utils/capaInstancia'
-import { filesBase, filesFitting, filesGrading, filesNotes, filesSizeSet, filesSizeSetConsolidat, fraseBreakQ8 } from '../utils/taulesQ8'
+import { filesBase, filesFitting, filesGrading, filesNotes, filesSizeSet, filesSizeSetConsolidat, liniesBreakQ8 } from '../utils/taulesQ8'
 import { identitatMesura } from '../utils/identitatMesura'
 
 const PaperFlatEditor = lazy(() => import('./PaperFlatEditor'))
@@ -923,9 +923,15 @@ function buildTableCellPrimitives(obj) {
   // passar). Si no hi cap, parteix en línies i la fila creix. La font és monoespaiada, així
   // que comptar caràcters n'és una mesura exacta, no una estimació.
   const charW = fontPx * 0.6
+  // F4-QUATER — ELS SALTS DE LÍNIA EXPLÍCITS COMPTEN. La columna «Breaks» apila un tram per
+  // línia amb `\n` de debò (Konva els respecta a les dues bandes); si aquí es comptessin els
+  // caràcters de la cadena SENCERA, una cel·la de tres trams sortiria com una línia i mitja i
+  // la fila es pintaria massa baixa —el text s'escaparia per sota, que és el mateix mode de
+  // fallada que la R4 va tancar a la capçalera—. Es compta cada línia per separat i se sumen.
   const liniesQueOcupa = (text, i, ampleChar = charW) => {
     const cabenPerLinia = Math.max(1, Math.floor((cw[i] - 2 * T_PAD) / ampleChar))
-    return Math.max(1, Math.ceil(String(text ?? '').length / cabenPerLinia))
+    return String(text ?? '').split('\n')
+      .reduce((n, l) => n + Math.max(1, Math.ceil(l.length / cabenPerLinia)), 0) || 1
   }
   // ── Q8-bis/C1 · LA CAPÇALERA FINA DEL FULL DE FITTING ─────────────────────────────────────
   // La fila negra invertida se'n va. L'espec de coherència de la família documental és el full
@@ -5369,12 +5375,20 @@ export default function TechSheetEditor() {
   // canvia — l'espai es recupera igualment, però qui el cobra depèn del corpus.
   //
   // ⚠️ ELS 26mm SÓN UN PRESSUPOST MESURAT, no un número rodó: a 9pt monoespaiat la cel·la en
-  // cap 11 caràcters, i la frase típica («M→XL +3.0», 9) hi entra d'una línia. La llarga de
-  // debò («2XL→3XL +3.0», 12) parteix en dues i la fila creix — que és el que ha de passar:
-  // `wrap` hi és perquè al paper que va al fabricant res no es talli en silenci (R4/Q8).
+  // cap 11 caràcters, i una línia de tram típica («M→XL +3.0», 9) hi entra sencera. L'amplada
+  // la mana la línia MÉS LLARGA, no la suma: per això apilar no costa mil·límetres.
+  //
+  // 🚨 I APILAR ÉS EL QUE MATA EL COMPTADOR. Aquesta cel·la deia `M→L +2,0 +1` —un tram i el
+  // NOMBRE dels que faltaven, amb la gramàtica exacta d'un Δ—, i és el que va fer llegir una
+  // fitxa congelada com si imprimís «regla nova amb corba vella». V. `liniesBreaks`.
   const cellaBreaks = (f, talles) => {
-    const frase = fraseBreakQ8(f, talles, xifra)
-    return frase ? { text: frase, centrat: true, wrap: true } : { text: '—', centrat: true }
+    const linies = liniesBreakQ8(f, talles, xifra)
+    if (!linies.length) return { text: '—', centrat: true }
+    // Els salts de línia són REALS (`\n`): Konva els respecta a les dues bandes —llenç viu i
+    // export— i `liniesQueOcupa` els compta, o sigui que la fila creix el que toca. `wrap` hi
+    // va perquè una línia que no hi cabés partís per paraula en lloc de perdre el final en
+    // silenci, que al paper que va al fabricant és la llei de sempre (R4/Q8).
+    return { text: linies.join('\n'), centrat: true, wrap: true }
   }
 
   // ── Q8e · TAULA DE MESURES DE TALLA BASE, PER PEÇA ──────────────────────────
