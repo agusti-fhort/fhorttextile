@@ -3247,7 +3247,7 @@
     "q8_taula_notes": "Notes del fitting",
     "q8_col_layer": "Layer",
     "q8_col_pom": "POM",
-    "q8_col_tol": "Tol ±",
+    "q8_col_name": "Name",
     "q8_col_base": "Base",
     "q8_col_actual": "Real",
     "q8_col_diff": "Diff",

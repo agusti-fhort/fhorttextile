@@ -211,6 +211,15 @@ export function filesGrading(rows, talles, base) {
     codi: r.pom_code || r.abbreviation || '',
     nom_en: r.nom_en || '', nom_local: r.nom_ca || '',
     nom_fitxa: r.nom_fitxa || null,
+    // H-bis/4 — ELS CAMPS CRUS DE LA NOMENCLATURA, per al cas en què la fila no tingui
+    // resident al model (v. `residentQ8` a la pàgina, que és qui mana). `taula-mesures` els
+    // bateja amb noms propis —`client_code` és l'ÀLIES del client i `pom_code` és el codi de
+    // la casa—: la traducció es fa aquí, que és la frontera del payload, i mai al resolutor.
+    // La lliçó d'H segueix vigent: aquestes claus s'han comprovat al payload d'AQUEST endpoint,
+    // no copiades del constructor germà.
+    client_alias: r.client_code || null,
+    codi_client: r.pom_code || '',
+    pom_abbreviation: r.abbreviation || '',
     nom_canonic_model: r.nom_canonic_model || '', nom_traduit_model: r.nom_traduit_model || '',
     is_key: !!r.is_key,
     regla: r.logica || '',
@@ -282,8 +291,11 @@ export function filesBase(bms) {
     pom_abbreviation: bm.pom_abbreviation || '',
     is_key: !!bm.pom_is_key,
     base: bm.base_value_cm ?? null,
-    tol_minus: bm.tol_minus ?? null,
-    tol_plus: bm.tol_plus ?? null,
+    // 🚨 H-bis/1 — LA TOLERÀNCIA NO HI ÉS, i no és un oblit: Agus va REVOCAR la columna el
+    // 21/08 sobre la captura del 1383, i amb la columna se'n va la dada. `base-measurements/`
+    // la serveix ja resolta (`tol_minus`/`tol_plus`, `_tol_vigent`) i qui la vulgui la té a un
+    // camp de distància; el que no ha de quedar és un camp que ningú no pinta fent de promesa
+    // que la taula la porta.
     // La data d'escriptura de CADA fila: la de la taula és la més recent del grup, que és
     // exactament el que la llei temporal declara com a veritat vigent. La tria la fa la pàgina.
     updated_at: bm.updated_at || null,
