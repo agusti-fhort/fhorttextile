@@ -5032,6 +5032,10 @@
     "presa_tancada_del": "Presa del {{data}} · tancada",
     "presa_cap": "Cap presa oberta",
     "presa_tancada_nota": "Aquesta presa està tancada: es consulta, no s'hi escriu. Prem «Mesurar set» per obrir-ne una de nova.",
+    "presa_versio": "v{{num}}",
+    "presa_versio_nota": "Aquesta presa va néixer de la graduació v{{num}}, que és la vigent.",
+    "presa_versio_rancia": "Aquesta presa va néixer de la graduació v{{presa}} i la vigent del model és la v{{vigent}}: les mesures teòriques que hi compares són d'una corba anterior. Per comparar contra la corba d'ara, obre una presa nova amb «Mesurar set».",
+    "presa_versio_rancia_nota": "Presa de la v{{presa}} · graduació vigent: v{{vigent}}",
     "decisio_tancada_nota": "Consulta del que es va decidir en aquesta presa."
   }
 }

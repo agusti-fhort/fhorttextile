@@ -5032,6 +5032,10 @@
     "presa_tancada_del": "Toma del {{data}} · cerrada",
     "presa_cap": "Ninguna toma abierta",
     "presa_tancada_nota": "Esta toma está cerrada: se consulta, no se escribe. Pulsa «Medir set» para abrir una nueva.",
+    "presa_versio": "v{{num}}",
+    "presa_versio_nota": "Esta toma nació de la graduación v{{num}}, que es la vigente.",
+    "presa_versio_rancia": "Esta toma nació de la graduación v{{presa}} y la vigente del modelo es la v{{vigent}}: las medidas teóricas con las que comparas son de una curva anterior. Para comparar con la curva de ahora, abre una toma nueva con «Medir set».",
+    "presa_versio_rancia_nota": "Toma de la v{{presa}} · graduación vigente: v{{vigent}}",
     "decisio_tancada_nota": "Consulta de lo que se decidió en esta toma."
   }
 }

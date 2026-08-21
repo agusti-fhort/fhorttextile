@@ -47,7 +47,7 @@ from fhort.tasks.services_batec import SUP_PRESA, batec_de_request
 
 from . import services
 from .esdeveniments import linia_te_contingut
-from .models import PieceFittingLine
+from .models import GradingVersion, PieceFittingLine
 
 
 def _cella(linia):
@@ -143,11 +143,32 @@ class EscalatPresaView(APIView):
                 else:
                     pendents_base += 1
 
+        # FIX-A/PAS-5 — DE QUINA GRADUACIÓ VE AQUESTA PRESA.
+        #
+        # `PieceFitting.grading_version` és FK directa (`fitting/models.py:395`) i és la versió
+        # que li va sembrar les teòriques quan es va crear (`create_piece_fitting` clona cada
+        # `GradedSpec` en una `PieceFittingLine`). Propagar crea una versió NOVA i deixa la presa
+        # penjant de la vella: al banc 1383 hi ha les dues alhora —el PieceFitting #52 penja de
+        # la v2 i el #53 de la v6—, o sigui que la pantalla podia ensenyar una presa i una regla
+        # que parlen de dues corbes diferents sense dir-ho enlloc.
+        #
+        # Viatgen TOTES DUES i la comparació es fa al front: el servidor no ha de decidir si això
+        # és un problema —depèn del que la persona estigui fent—, només ha de dir la veritat.
+        # `select_related` no cal: `pf` ja arriba amb la versió resolta pels serveis que el
+        # troben, i una consulta més aquí seria un N+1 d'un sol element.
+        gv_presa = pf.grading_version
+        gv_vigent = (GradingVersion.objects
+                     .filter(size_fitting=gv_presa.size_fitting, is_active=True)
+                     .order_by('-version_number').first())
+
         s = pf.session
         return Response({
             'presa_oberta': oberta,
             'presa_tancada': not oberta,
             'piece_fitting_id': pf.id,
+            'grading_version': {'id': gv_presa.pk, 'num': gv_presa.version_number},
+            'grading_version_vigent': (
+                {'id': gv_vigent.pk, 'num': gv_vigent.version_number} if gv_vigent else None),
             # QUI, QUAN I EN QUIN ESTAT: el flux és pausable i asíncron entre el taller i el
             # despatx, i qui reprèn ha de saber de quina presa parla sense obrir cap altra
             # pantalla. `session.data` és el DIA de la presa, no el de l'última tecla.

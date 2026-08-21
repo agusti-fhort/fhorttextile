@@ -5032,6 +5032,10 @@
     "presa_tancada_del": "Session of {{data}} · closed",
     "presa_cap": "No open measuring session",
     "presa_tancada_nota": "This measuring session is closed: it can be read, not edited. Press “Size set” to open a new one.",
+    "presa_versio": "v{{num}}",
+    "presa_versio_nota": "This session was born from grading v{{num}}, which is the current one.",
+    "presa_versio_rancia": "This session was born from grading v{{presa}} and the model's current one is v{{vigent}}: the theoretical measurements you are comparing against come from an earlier curve. To compare against today's curve, open a new session with «Measure set».",
+    "presa_versio_rancia_nota": "Session from v{{presa}} · current grading: v{{vigent}}",
     "decisio_tancada_nota": "Read-only view of what was decided in this session."
   }
 }

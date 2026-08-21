@@ -99,6 +99,21 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
   const potEscriure = !readOnly && estatPresa.escrivible
   const esActa = estatPresa.estat === TANCADA
 
+  // FIX-A/PAS-5 — DE QUINA GRADUACIÓ PARLA AQUESTA PRESA.
+  //
+  // Les teòriques d'una presa són un CLON dels `GradedSpec` de la versió que hi havia quan es va
+  // crear (`create_piece_fitting`). Propagar en crea una de NOVA i la presa es queda penjant de
+  // la vella: al banc 1383 hi conviuen les dues —una peça a la v2 i una altra a la v6—, i fins
+  // avui la pantalla les pintava idèntiques. Qui mirava la graella comparava mesures reals
+  // contra una corba que ja no era la del model, sense res que ho digués.
+  //
+  // El servidor porta LES DUES versions i la comparació es fa aquí (`escalat_presa_views`): si
+  // és un problema o no depèn del que la persona estigui fent, i això no ho pot decidir un
+  // endpoint.
+  const gvPresa = presa?.grading_version || null
+  const gvVigent = presa?.grading_version_vigent || null
+  const presaEsRancia = !!(gvPresa && gvVigent && gvPresa.id !== gvVigent.id)
+
   const base = (data?.base_size || '').trim()
   // Identitat estable: `data?.size_run || []` fabricava un array nou a cada render i feia recalcular
   // els useMemo de sota sempre (i el linter ho canta).
@@ -339,7 +354,8 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
           ]}
           actiu={vista} onTria={triaVista}
           dreta={
-            <span style={{ fontFamily: 'IBM Plex Mono, monospace',
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6,
+                           fontFamily: 'IBM Plex Mono, monospace',
                            fontSize: 'var(--fs-caption)',
                            color: esActa ? 'var(--text-muted)' : 'var(--text-soft)' }}
                   title={esActa ? t('escalat.presa_tancada_nota') : undefined}>
@@ -347,8 +363,45 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
                 ? t('escalat.presa_cap')
                 : t(esActa ? 'escalat.presa_tancada_del' : 'escalat.presa_del',
                     { data: diaDeLaPresa || '—' })}
+              {/* FIX-A/PAS-5 — LA VERSIÓ, I L'AVÍS QUAN NO ÉS LA VIGENT.
+                  La versió es diu SEMPRE que se sap: saber de quina corba parla la presa és part
+                  de saber de quina presa parles, i amagar-la mentre tot va bé vol dir que el dia
+                  que aparegui ningú no en sabrà el significat. El que apareix només quan cal és
+                  l'AVÍS —fons i tinta d'alerta—, perquè és el que demana una decisió.
+                  Tokens de la casa (llei G8): mai cap hex. */}
+              {gvPresa && (
+                <span
+                  style={presaEsRancia
+                    ? { padding: '1px 6px', borderRadius: 4,
+                        background: 'var(--warn-state-bg)', color: 'var(--warn-ink)',
+                        border: '1px solid var(--warn-state)', fontWeight: 600 }
+                    : { color: 'var(--text-muted)' }}
+                  title={presaEsRancia
+                    ? t('escalat.presa_versio_rancia_nota',
+                        { presa: gvPresa.num, vigent: gvVigent.num })
+                    : t('escalat.presa_versio_nota', { num: gvPresa.num })}>
+                  {presaEsRancia && <i className="ti ti-alert-triangle" aria-hidden="true"
+                                       style={{ fontSize: 12, marginRight: 3,
+                                                verticalAlign: '-1px' }} />}
+                  {t('escalat.presa_versio', { num: gvPresa.num })}
+                </span>
+              )}
             </span>
           } />
+        {/* L'avís, escrit. El badge de dalt marca ON és el problema; això diu QUÈ vol dir i què
+            se'n pot fer, que en un racó de 60px no hi cap. Va aquí i no en un toast: no és un
+            esdeveniment, és un ESTAT de la pantalla i ha de durar el que duri. */}
+        {presaEsRancia && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8,
+                        padding: '8px 12px', borderRadius: 6,
+                        border: '1px solid var(--warn-state)',
+                        background: 'var(--warn-state-bg)', color: 'var(--warn-ink)',
+                        fontSize: 'var(--fs-body)' }}>
+            <IconAlertTriangle size={18} stroke={1.5} style={{ flexShrink: 0 }} />
+            <span>{t('escalat.presa_versio_rancia', { presa: gvPresa.num,
+                                                      vigent: gvVigent.num })}</span>
+          </div>
+        )}
         {/* FIX-4 — la pregunta de plausibilitat. MAI un bloqueig dur: hi ha peces petites
             legítimes, i una validació que impedeix desar només ensenya a esquivar-la. Es
             pregunta, i el «sí» desa amb normalitat. */}
