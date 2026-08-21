@@ -40,6 +40,7 @@ no quadraria:
 IDEMPOTÈNCIA: la clau és `codi_intern`. Si el model ja existeix, el command no
 crea res i ho diu (2a passada = 0 creacions).
 """
+import hashlib
 import json
 import os
 from collections import OrderedDict
@@ -802,10 +803,33 @@ class Command(BaseCommand):
             fx_pk[f['id']] = o.pk
             doc = f.get('_ftt_document')
             if doc and f.get('fitxer'):
-                dest = os.path.join(settings.MEDIA_ROOT, f['fitxer'])
+                # 🚨 AQUÍ HI HAVIA DOS DEFECTES ALHORA, i tots dos donaven un ✅ FALS (J-bis/3).
+                #
+                # 1. EL FORMAT. Un `.ftt` no és el document en JSON: és un ZIP amb `manifest.json`
+                #    + `document.json` (`services_ftt.pack`). Un `json.dump` cru produeix un
+                #    fitxer que `load_document` no pot desempaquetar mai — l'editor l'obria BUIT.
+                # 2. EL CAMÍ. `MEDIA_ROOT + name` NO és on Django llegeix: el default storage és
+                #    `TenantFileSystemStorage`, que hi posa l'esquema pel mig
+                #    (`media/fhort/model_fitxers/…`). Els vuit fitxers van anar a
+                #    `media/model_fitxers/…`, un nivell massa amunt, i el comptador els va donar
+                #    per escrits perquè l'`open()` havia funcionat.
+                #
+                # Es fa igual que el desat de veritat: `pack` per al blob i **el camp del model**
+                # per al camí, que és l'únic que sap del tenant. I es desa `mida_bytes`/`checksum`
+                # dels bytes REALS: el `checksum` de la foto és el sha del ZIP de PROD i **no és
+                # reproduïble** —`zipfile` hi estampa l'hora de cada entrada, v. l'avís
+                # d'`empremta_logica`—, o sigui que copiar-lo seria desar una empremta que no
+                # correspon a cap fitxer d'aquest disc. La mida sí que casa, i és la comparació
+                # que val: 451/468/594/1571/1591/1623/1626/1624, clavades.
+                from fhort.models_app import services_ftt
+                blob = services_ftt.pack(doc)
+                dest = o.fitxer.path
                 os.makedirs(os.path.dirname(dest), mode=0o2775, exist_ok=True)
-                with open(dest, 'w') as fh:
-                    json.dump(doc, fh, ensure_ascii=False)
+                with open(dest, 'wb') as fh:
+                    fh.write(blob)
+                ModelFitxer.objects.filter(pk=o.pk).update(
+                    mida_bytes=len(blob),
+                    checksum=hashlib.sha256(blob).hexdigest())
                 escrits += 1
         mapa_pk['ModelFitxer'] = fx_pk
         self._guarda(ModelFitxer.objects.filter(model=model).count(), 'ModelFitxer')

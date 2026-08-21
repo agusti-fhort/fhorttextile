@@ -193,7 +193,8 @@ d'entrar per `post_save`, això ho canta en comptes de duplicar 21 files en sile
 
 **El que NO es transcriu:** `ModelTask.work_order` (comanda PROD #69 — `commerce.WorkOrder`, no
 viatja a la foto; el camp és nullable). Els 8 `.ftt` sí que es recreen al disc: la foto en porta
-el document sencer (451–1624 bytes cadascun).
+el document sencer (451–1624 bytes cadascun). ⚠️ **Fins al 21/08 es recreaven MALAMENT** — v.
+§8-bis.
 
 ---
 
@@ -212,7 +213,69 @@ mateix rollback). **Model pk=1383.**
 - Joc `BRW-CATALEG-v3` (customer **BRW**) sobre model del customer **TRV**.
 - Les **21 mesures base**: cap difereix de la foto.
 - **Ordre relatiu conservat**: regla `D` editada 18:14:09 < v6 generada 18:17:22 → el bug A és reproduïble.
-- Els **8 `.ftt`** existeixen al disc sota `MEDIA_ROOT`.
+- ~~Els **8 `.ftt`** existeixen al disc sota `MEDIA_ROOT`.~~ 🚨 **CORREGIT EL 21/08 (J-bis/3).**
+  Aquella línia era **literalment certa i pràcticament falsa**, que és la pitjor combinació: els
+  vuit fitxers hi eren sota `MEDIA_ROOT`, però **no on Django els llegeix**, i a més **en un
+  format que no s'obre**. V. §8-bis.
+
+## 8-bis. 🚨 EL ✅ FALS DELS 8 `.ftt` — diagnòstic i reparació (21/08, J-bis/3)
+
+> **Un ✅ fals és pitjor que un forat**, i aquest ho era per partida doble: va sobreviure a la
+> verificació independent per ORM (que mira la BD, no el disc) i a dues sessions posteriors.
+> H el va anotar d'UN fitxer (873) i H-bis de tots vuit; cap dels dos va poder dir per què.
+
+### Què va verificar de veritat la sembra
+
+**Que un `open()` no havia petat, i res més.** El comptador `escrits` s'incrementava després
+d'escriure, i escriure va funcionar: els vuit fitxers hi eren. El que ningú no va comprovar és si
+eren **llegibles** i si eren **al lloc on es llegeixen** — i no ho eren per **dos motius
+independents**, que és el que ho feia difícil de veure (arreglar-ne un de sol no hauria servit).
+
+| # | Defecte | Què passava | Per què no cantava |
+|---|---|---|---|
+| **1** | **FORMAT** | `json.dump(doc)` cru. Un `.ftt` és un **ZIP** amb `manifest.json` + `document.json` (`services_ftt.pack`) | `load_document` no el pot desempaquetar → **l'editor l'obre BUIT**, sense error |
+| **2** | **CAMÍ** | `os.path.join(MEDIA_ROOT, name)`. El default storage és `TenantFileSystemStorage` i hi posa l'esquema pel mig | els fitxers van a `media/model_fitxers/…` i Django llegeix `media/fhort/model_fitxers/…` |
+
+La prova del format és la MIDA: la foto diu 451 B per al primer i el que hi havia al disc en feia
+**94** (el JSON cru). Amb el ZIP ben fet en fa **451**, clavats.
+
+**No era «bytes mai exportats».** `MODEL_837_EXPORT.json` porta `_ftt_document` per als vuit,
+sencer i fidel. **I per tant no calia cap `scp` de PROD**: el contingut ja era al repo.
+
+### La reparació
+
+Els vuit s'han **reempaquetat amb `services_ftt.pack`** i escrits per `ModelFitxer.fitxer.path`
+(que és el que sap del tenant). Mides resultants **idèntiques a la foto**, una per una:
+
+```
+451 · 468 · 594 · 1571 · 1591 · 1623 · 1626 · 1624
+```
+
+🔑 **El `checksum` NO casa, i és CORRECTE que no casi.** Aquell camp és el sha del **blob ZIP**, i
+`zipfile.writestr` hi estampa la data-hora de cada entrada: **dos empaquetats del mateix contingut
+donen bytes diferents sempre** (mesurat al repo: 604/604 checksums distints a staging, 3.603/3.606
+a PROD — v. l'avís d'`empremta_logica`). El `checksum` de la foto és el del ZIP de PROD i no és
+reproduïble per ningú. S'ha desat el dels bytes REALS d'aquest disc: copiar el de la foto hauria
+estat desar una empremta que no correspon a cap fitxer existent. **El que es compara és la mida i
+l'empremta LÒGICA**, i totes dues casen.
+
+**Verificat per `load_document`**, els vuit: obren, porten manifest i porten contingut —
+
+| id | pàgines | objectes | taules |
+|---|---|---|---|
+| 866 · 867 | 1 | 0 | — |
+| 868 | 1 | 1 | — |
+| 869–873 | 1 | 2 | `q8_grading` |
+
+que és una **cadena d'edició real** i no vuit còpies: el document creix.
+
+### El command, arreglat
+
+`sembra_model_837.py` ja no pot repetir-ho: empaqueta amb `pack`, escriu per `o.fitxer.path` i
+desa `mida_bytes`/`checksum` dels bytes reals. Qui el torni a córrer sobre un entorn net obtindrà
+fitxers que s'obren.
+
+---
 
 **Idempotència:** 2a i 3a passada → `0 creacions`, recomptes intactes, 1 sol `Customer TRV`.
 
