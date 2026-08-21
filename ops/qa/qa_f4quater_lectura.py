@@ -84,8 +84,16 @@ ROWS = [
     # ⑥ REGLA DEL SILENCI ② — el llegat que repeteix el Δ general no trenca res.
     fila(6, 'E5', 'Sleeve opening', 12, 'LINEAR', ib=2, brk=2, lbl='M'),
     # ⑦ Δ NEGATIU: el signe és la meitat de la xifra.
-    fila(7, 'F', 'Front length', 110.5, 'LINEAR', ib=1, breaks=[
+    fila(7, 'B', 'Back length', 62, 'LINEAR', ib=1, breaks=[
         {'inici': 'L', 'final': 'XL', 'delta': -1.5}]),
+    # ⑧ 🚨 LA F DEL BANC 1383, AMB ELS SEUS DOS INTERVALS REALS (pk=13396, llegits de la BD).
+    #    És el cas exacte de les captures d'Agus de les 22:16: Δ general 0, `M→L +2` i `XL→XL +1`.
+    #    Amb la forma vella —sostre + comptador— aquesta fila es pintava `M→L +2,0 +1` i era
+    #    INDISTINGIBLE de la mateixa regla amb el segon tram a +3. Aquí es fixa que ara es
+    #    diuen les dues coses, cadascuna a la seva línia, i que la segona porta EL SEU Δ.
+    fila(8, 'F', 'Front length', 110.5, 'LINEAR', ib=0, breaks=[
+        {'inici': 'M', 'final': 'L', 'delta': 2},
+        {'inici': 'XL', 'final': 'XL', 'delta': 1}]),
 ]
 
 _MODEL = {
@@ -245,6 +253,16 @@ def main():
         def txt(codi):
             return cel(codi).inner_text().replace('\n', ' ').strip()
 
+        # Les LÍNIES d'una cel·la de «Breaks», que és el que aquest tram estableix: un tram per
+        # línia. Es llegeixen dels `<span>` fills (consulta i Escalat apilen igual) i, si no
+        # n'hi ha, del text partit per salts — així la prova val encara que el vestit canviï.
+        def linies(codi):
+            c = cel(codi)
+            fills = c.locator('span > span')
+            if fills.count():
+                return [x.strip() for x in fills.all_inner_texts() if x.strip()]
+            return [x.strip() for x in c.inner_text().split('\n') if x.strip()]
+
         # 🚨 LA PROVA QUE MÉS IMPORTA: el llegat es diu en convenció de MOTOR.
         t2 = txt('A')
         prova('② el break llegat diu «M→XL +3»',
@@ -252,17 +270,28 @@ def main():
         prova('🚨 ② l\'inici NO s\'ha desplaçat a S (la volta de document ha mort)',
               not re.match(r'^S\s*→', t2), t2)
 
-        t3 = txt('D')
-        prova('③ dos intervals, separats per « · »', t3.count('→') == 2 and '·' in t3, t3)
+        prova('③ dos intervals → DUES línies, mai una frase amb « · »',
+              len(linies('D')) == 2 and '·' not in txt('D'), linies('D'))
 
         t4 = txt('I')
-        prova('④ tres intervals: la consulta els LLETREJA tots (carril de sobres)',
-              t4.count('→') == 3, t4)
+        prova('④ tres intervals: la consulta els diu TOTS TRES', len(linies('I')) == 3, t4)
+        prova('④ …i cap línia porta un comptador: el que segueix el rang és sempre un Δ',
+              all(re.fullmatch(r'\S+ [+\-−][\d.,]+', l) for l in linies('I')), linies('I'))
 
         prova('⑤ REGLA DEL SILENCI · FIXED amb residu llegat → «—»', txt('G1') == '—', txt('G1'))
         prova('⑥ REGLA DEL SILENCI · llegat = Δ general → «—»', txt('E5') == '—', txt('E5'))
         prova('① sense relleu → «—»', txt('EK') == '—', txt('EK'))
-        prova('⑦ el Δ negatiu porta el seu signe', '-1.5' in txt('F') or '−1.5' in txt('F'), txt('F'))
+        prova('⑦ el Δ negatiu porta el seu signe',
+              any('-1.5' in l or '−1.5' in l for l in linies('B')), linies('B'))
+
+        # ── 🚨 ⑧ LA F D'AGUS: UN TRAM PER LÍNIA, I EL SEGON AMB EL SEU RANG ────────────────
+        lf = linies('F')
+        prova('🚨 ⑧ la F diu DUES línies, no una frase concatenada', len(lf) == 2, lf)
+        prova('🚨 ⑧ el 1r tram porta el seu rang i el seu Δ', lf and lf[0] == 'M→L +2', lf)
+        prova('🚨 ⑧ el 2n tram porta EL SEU RANG (no un comptador «+1» solt)',
+              len(lf) > 1 and lf[1] == 'XL +1', lf)
+        prova('🚨 ⑧ el rang d\'una talla sola va SENSE fletxa a lectura',
+              len(lf) > 1 and '→' not in lf[1], lf)
 
         page.screenshot(path=OUT / 'f4quater_1_mesures_consulta.png', full_page=False)
 
@@ -287,14 +316,16 @@ def main():
         prova('② el break llegat diu «M→XL +3»', '→' in t2 and 'M' in t2 and 'XL' in t2, t2)
         prova('🚨 ② l\'inici NO s\'ha desplaçat a S', not re.match(r'^S\s*→', t2), t2)
 
-        # El pressupost d'amplada: un tram lletrejat i la resta comptada, amb el relleu sencer
-        # al `title`. Divergeix de la consulta A POSTA i el test ho fixa.
-        t4 = txt('I')
-        prova('④ tres intervals: l\'Escalat en diu UN i compta la resta («+2»)',
-              t4.count('→') == 1 and t4.rstrip().endswith('+2'), t4)
-        spans = cel('I').locator('span')
-        title = spans.first.get_attribute('title') if spans.count() else ''
-        prova('④ …i el relleu SENCER viu al tooltip', title.count('→') == 3, title)
+        # 🚨 CAP SOSTRE, TAMPOC AQUÍ. Abans l'Escalat en deia UN i comptava la resta (`+2`), i
+        # aquell `+2` era un comptador amb la gramàtica d'un Δ. Apilats hi caben tots tres
+        # sense reclamar ni un píxel: l'amplada la mana la línia més llarga, no la suma.
+        prova('④ tres intervals: l\'Escalat també els diu TOTS TRES', len(linies('I')) == 3,
+              linies('I'))
+        prova('④ …i cap línia porta un comptador', 
+              all(re.fullmatch(r'\S+ [+\-−][\d.,]+', l) for l in linies('I')), linies('I'))
+        lf = linies('F')
+        prova('🚨 ⑧ la F d\'Agus, també apilada i amb el rang del 2n tram',
+              len(lf) == 2 and '→' in lf[0] and '→' not in lf[1] and lf[1].endswith('1,0'), lf)
 
         prova('⑤ REGLA DEL SILENCI · FIXED amb residu llegat → «—»', txt('G1') == '—', txt('G1'))
         prova('⑥ REGLA DEL SILENCI · llegat = Δ general → «—»', txt('E5') == '—', txt('E5'))

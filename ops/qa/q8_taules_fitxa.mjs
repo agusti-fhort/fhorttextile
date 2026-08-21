@@ -19,7 +19,7 @@ import { readFileSync } from 'node:fs'
 
 import { grupsDelFull } from '../../frontend/src/utils/grupsDelFull.js'
 import { ampladaPerTextos, repartimentEnPagines, trossosDeTalles } from '../../frontend/src/utils/repartimentTaules.js'
-import { filesFitting, filesGrading, filesNotes, filesSizeSet, filesSizeSetConsolidat, fraseBreakQ8 } from '../../frontend/src/utils/taulesQ8.js'
+import { filesFitting, filesGrading, filesNotes, filesSizeSet, filesSizeSetConsolidat, liniesBreakQ8 } from '../../frontend/src/utils/taulesQ8.js'
 
 const dades = JSON.parse(readFileSync(new URL('./_out/q8_payloads.json', import.meta.url), 'utf8'))
 const { grid, peces } = dades
@@ -122,27 +122,28 @@ prova('F4-QUATER · el break LLEGAT arriba a la columna de la fitxa (i en conven
   const f = _q8bRelleu({ increment_break: 3, talla_break_label: 'S' })
   assert.equal(f.delta_break, 3, 'el constructor el rebateja a `delta_break`')
   assert.equal(f.talla_break, 'S', '…i a `talla_break`, CRU')
-  assert.equal(fraseBreakQ8(f, talles, _cm), 'S→M +3.0',
-    'si això surt buit, la traducció de noms de camp de `fraseBreakQ8` s\'ha trencat')
+  assert.deepEqual(liniesBreakQ8(f, talles, _cm), ['S→M +3.0'],
+    'si això surt buit, la traducció de noms de camp de `liniesBreakQ8` s\'ha trencat')
 })
 
-prova('F4-QUATER · els INTERVALS explícits també hi arriben, i el 2n es compta', () => {
+prova('F4-QUATER · els INTERVALS explícits hi arriben TOTS, un per línia', () => {
   const f = _q8bRelleu({ breaks: [
     { inici: 'XS', final: 'XS', delta: 3 },
     { inici: 'S', final: 'M', delta: 4 }] })
-  assert.equal(fraseBreakQ8(f, talles, _cm), 'XS→XS +3.0 +1',
-    'el pressupost de paper: un tram lletrejat i la resta comptada')
+  // 🚨 CAP COMPTADOR: dos trams, dues línies, i el d'una talla sola SENSE fletxa.
+  assert.deepEqual(liniesBreakQ8(f, talles, _cm), ['XS +3.0', 'S→M +4.0'],
+    'un `+N` de sobrant aquí és el defecte que va fer llegir una fitxa congelada com a incoherent')
 })
 
 prova('F4-QUATER · REGLA DEL SILENCI: la fitxa no imprimeix el que no mana', () => {
-  assert.equal(fraseBreakQ8(_q8bRelleu({}), talles, _cm), '', 'sense relleu, res')
-  assert.equal(
-    fraseBreakQ8(_q8bRelleu({ logica: 'FIXED', increment_base: 0, increment_break: 0,
+  assert.deepEqual(liniesBreakQ8(_q8bRelleu({}), talles, _cm), [], 'sense relleu, res')
+  assert.deepEqual(
+    liniesBreakQ8(_q8bRelleu({ logica: 'FIXED', increment_base: 0, increment_break: 0,
       talla_break_label: 'S' }), talles, _cm),
-    '', 'un FIXED amb residu llegat no gradua i no diu res')
-  assert.equal(
-    fraseBreakQ8(_q8bRelleu({ increment_break: 2, talla_break_label: 'S' }), talles, _cm),
-    '', 'un llegat que repeteix el Δ general (2) no és un trencament')
+    [], 'un FIXED amb residu llegat no gradua i no diu res')
+  assert.deepEqual(
+    liniesBreakQ8(_q8bRelleu({ increment_break: 2, talla_break_label: 'S' }), talles, _cm),
+    [], 'un llegat que repeteix el Δ general (2) no és un trencament')
 })
 
 prova('l\'escalat també es reparteix en 2 grups', () => {
