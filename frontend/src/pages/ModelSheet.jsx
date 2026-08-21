@@ -443,7 +443,7 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // `('Escalat','grading')` també l'usa `autoEdit` en muntar la ruta `/models/:id/escalat`, i
   // fer-hi néixer una sessió + peça + N línies convertiria un ENLLAÇ en una escriptura de domini.
   // Crear és del gest; entrar-hi, de la ruta.
-  const obreDeDebo = useCallback((tab, code, opts = {}) => {
+  const obreDeDebo = useCallback((tab, code, opts = {}, gestos = {}) => {
     setOpeningTask(true)
     // D'ON VENIM, abans d'obrir res: el tab on l'usuari és ARA. Les quatre portes del tab Mesures
     // hi passen totes, i també les entrades per URL (`?mode=entry`, `?task_id=`), que arriben
@@ -469,7 +469,9 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
         // abans, amb una sessió oberta que ningú no veuria. `resolvePieceFitting` és la funció
         // que la font de fitting ja fa servir —amb el seu 409 `piece_exists`—, no una segona.
         if (volPresa) await resolvePieceFitting({ id: parseInt(id) }, sessio)
-        return models.openTask(parseInt(id), code, sessio?.id ?? null)
+        // J · R3 — `gestos` és `{}` a l'entrada normal, i llavors `open-task` es comporta
+        // exactament com sempre. Només porta res quan la persona ha respost el diàleg.
+        return models.openTask(parseInt(id), code, sessio?.id ?? null, gestos)
       })
       .then(res => {
         if (!res) return
@@ -503,13 +505,15 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // navegava sense `task_id`, l'editor autodesava cada 2 s i el temps d'editar la fitxa no
   // existia enlloc. Ara obre sessió sobre la tasca vigent `tech_sheet` i propaga el `task_id` a
   // la URL, que és el que fa que l'editor demani el lock i pausi en sortir.
-  const obreFitxa = useCallback((fitxerId) => {
+  const obreFitxa = useCallback((fitxerId, gestos = {}) => {
     const anar = tid => navigate(`/models/${id}/ftt/${fitxerId}?task_id=${tid}`)
     const vigent = tascaVigentDe('tech_sheet')
-    const cara = caraObrirTasca(vigent, jo)
+    // J · R3 — amb el gest ja fet, la cara no es torna a calcular: qui ha respost el diàleg no
+    // l'ha de tornar a veure. Sense gest, la porta és la de sempre.
+    const cara = Object.keys(gestos).length ? CARA_CAP : caraObrirTasca(vigent, jo)
     if (cara !== CARA_CAP) { setDialeg({ cara, tab: 'Fitxa tècnica', code: 'tech_sheet', tasca: vigent, fitxerId }); return }
     setOpeningTask(true)
-    models.openTask(parseInt(id), 'tech_sheet')
+    models.openTask(parseInt(id), 'tech_sheet', null, gestos)
       .then(res => anar(res.data.task_id))
       .catch(e => {
         const c = caraDeError(e)
@@ -1032,11 +1036,17 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
     // (el menú «Definició POM»), i deixar-hi el paràmetre faria que l'F5 el tornés a ficar a
     // editar just després d'haver dit que no hi volia entrar.
     if (accio === 'consultar') { netejaEdicio(); setActiveTab(d.tab); return }
-    if (accio === 'treballar') {
-      if (d.fitxerId) { obreFitxa(d.fitxerId); return }   // la fitxa té la seva pròpia navegació
+    // J · R3 — EL GEST VIATJA FINS A LA PORTA. «Treballar-hi jo» sobre una tasca d'un altre és
+    // el HANDOFF (`PLA_DE_TREBALL §6`: la reassignació és condició obligada per entrar-hi), i
+    // «Reobrir» sobre una feta és la RECTIFICACIÓ. Cap de les dues és l'efecte d'entrar: totes
+    // dues són el que la persona acaba de dir que vol, i per això `open-task` les exigeix
+    // explícites i respon 409 a qui no les porti.
+    if (accio === 'treballar' || accio === 'reobrir') {
+      const gestos = accio === 'reobrir' ? { reobrir: true } : { handoff: true }
+      if (d.fitxerId) { obreFitxa(d.fitxerId, gestos); return }   // la fitxa té la seva navegació
       // E3b — les OPCIONS del gest viatgen amb el diàleg: qui prem «Mesurar set» i es troba un
       // conflicte ha d'acabar obrint la presa quan digui que sí, no una edició sense presa.
-      obreDeDebo(d.tab, d.code, d.opts || {}); return
+      obreDeDebo(d.tab, d.code, d.opts || {}, gestos); return
     }
     // `ronda` i `correccio` van per la MATEIXA porta: una correcció és una volta d'una sola
     // tasca. El backend hi posa el motiu i la genealogia (mare) sense que la UI ho hagi de saber.

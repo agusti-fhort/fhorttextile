@@ -92,8 +92,12 @@ export const models = {
   defineTasks: (id, data) => client.post(`/api/v1/models/${id}/define-tasks/`, data),   // {task_type_ids:[...]}
   // Porta-menú: obre una tasca concreta del model (crea-si-falta + auto-assign + En curs). {code}
   // Sprint Y — fittingSessionId opcional: lliga la tasca a la sessió (FK) i obre la sessió Programada.
-  openTask: (id, code, fittingSessionId = null) =>
-    client.post(`/api/v1/models/${id}/open-task/`, { code, ...(fittingSessionId ? { fitting_session_id: fittingSessionId } : {}) })
+  // J · R3 — `gestos` porta el que l'entrada SOLA no pot decidir: `{reobrir:true}` per tornar a
+  // obrir una tasca Feta i `{handoff:true}` per endur-se la d'un altre. Sense ells el backend
+  // respon 409 amb codi i el modal ofereix consultar — entrar a mirar no pot reobrir ni prendre
+  // res. Opcional i additiu: cap cridador existent canvia.
+  openTask: (id, code, fittingSessionId = null, gestos = {}) =>
+    client.post(`/api/v1/models/${id}/open-task/`, { code, ...gestos, ...(fittingSessionId ? { fitting_session_id: fittingSessionId } : {}) })
       .then(planChanged),   // C4 — l'auto-start pot reancorar el pla → invalida Board+Gantt
   // Acte lleuger de gènesi POM: base+nomenclatura+regles i tanca la tasca pom. No propaga.
   gravarPom: (id, data) => client.post(`/api/v1/models/${id}/gravar-pom/`, data),

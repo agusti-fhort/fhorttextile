@@ -22,7 +22,7 @@ from .serializers_b import (TaskTypeSerializer, ModelTaskSerializer,
                             GarmentTypeItemSerializer, TaskTimeEstimateSerializer,
                             CustomerSerializer)
 from .services_c import (transition_task, traspassa_tram, TransitionError,
-                         rectification_count)
+                         rectification_count, te_paret_albara)
 from .services_d import (advance_phase_gate, advance_phases_chain, regress_phase,
                          model_ready_for_gate, GateError)
 from .services_e import (request_production, set_production_status,
@@ -582,6 +582,41 @@ def open_model_task_view(request, model_id):
                                         status='Pending', origen='prevista',
                                         estimated_minutes=est)
         created = True
+    # ── J · R3 · ENTRAR NO ENDÚ NI REOBRE ────────────────────────────────────────────────────
+    #
+    # Aquesta porta feia DUES coses per la mera entrada, totes dues en silenci i totes dues
+    # irreversibles al log:
+    #   · una tasca `Done` es REOBRIA (`ALLOWED` permet `Done → InProgress` perquè la
+    #     rectificació existeix com a acte), amb tram nou i rellotge reiniciat;
+    #   · una tasca `InProgress` d'un ALTRE tècnic es feia SEVA (`traspassa_tram` + `assignee`).
+    #     Això no és pausar-la: és PRENDRE-LA. «Pausada conserva la mà» parla de l'estat, i aquí
+    #     el que canviava de mans era la feina.
+    #
+    # Cap de les dues és dolenta: totes dues són gestos LEGÍTIMS i es conserven senceres. El que
+    # no poden ser és **l'efecte secundari de mirar**. Ara cada una exigeix que qui entra ho digui
+    # (`reobrir` / `handoff`), que és el que `PLA_DE_TREBALL §6` ja demanava per al relleu —*el
+    # sistema em pregunta si la reassigno, i la reassignació és condició obligada per entrar-hi*—
+    # i el que la capçalera de `services_batec` ja aplicava a l'escriptura: *reobrir és un acte
+    # humà, no l'efecte d'un PATCH*. Aquí és: **ni l'efecte d'una mirada**.
+    #
+    # 🔑 LA MÀQUINA D'ESTATS NO ES TOCA. `transition_task` i `traspassa_tram` fan exactament el
+    # mateix que ahir; J governa QUAN es criden, no què fan. Sense el gest, la resposta és un 409
+    # amb codi —no un 403— perquè no és una manca de permís: és una decisió que ningú no ha pres
+    # encara, i el client ha de poder oferir-la (consultar o fer el gest).
+    #
+    # L'ORDRE DE PRECEDÈNCIA és el mateix que `caraObrirTasca` ja aplica al front i que
+    # `batec_escriptura` ja aplica a l'escriptura: **l'albarà mana sobre tota la resta**. Una
+    # tasca albaranada ha de dir que ho està, i no «ja està feta»: són dues converses diferents
+    # i la segona amaga la primera.
+    gestos = request.data or {}
+    if task.status == 'Done' and not gestos.get('reobrir'):
+        if te_paret_albara(task):
+            return Response({'error': 'No es pot reobrir una tasca ja albaranada (albarà emès).',
+                             'code': 'tasca_albaranada'}, status=http_status.HTTP_409_CONFLICT)
+        return Response({'error': 'Aquesta tasca ja està feta: reobrir-la és un gest conscient.',
+                         'code': 'tasca_feta', 'task_id': task.id, 'status': task.status},
+                        status=http_status.HTTP_409_CONFLICT)
+
     # 2. En curs (reusa transition_task) o claim si ja és En curs d'un altre.
     started = False   # C4d — True només si aquesta crida fa l'INICI real (Pending→InProgress)
     if task.status != 'InProgress':
@@ -595,6 +630,17 @@ def open_model_task_view(request, model_id):
             if getattr(e, 'code', None):
                 cos['code'] = e.code
             return Response(cos, status=http_status.HTTP_409_CONFLICT)
+    elif task.assignee_id != profile.id and not gestos.get('handoff'):
+        # J · R3 — EL RELLEU EXIGEIX EL GEST, i el 409 porta QUI la té perquè el client pugui
+        # preguntar-ho amb nom i cognoms en comptes d'un «algú altre hi treballa».
+        obert = (task.timers.filter(fi__isnull=True, actiu=True)
+                 .select_related('tecnic').order_by('-inici').first())
+        return Response({'error': "Aquesta tasca la té un altre tècnic: endur-se-la és un gest conscient.",
+                         'code': 'tasca_dun_altre', 'task_id': task.id, 'status': task.status,
+                         'obert_per': obert.tecnic_id if obert else task.assignee_id,
+                         'obert_per_nom': (obert.tecnic.nom_complet if obert
+                                           else getattr(task.assignee, 'nom_complet', None))},
+                        status=http_status.HTTP_409_CONFLICT)
     elif task.assignee_id != profile.id:
         # F1.5 · D-7 — HANDOFF CONSCIENT. Abans això reassignava i prou: el tram de l'anterior
         # quedava OBERT i seguia imputant-li temps a ell mentre el nou hi treballava sense
