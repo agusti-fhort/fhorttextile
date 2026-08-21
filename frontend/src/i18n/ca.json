@@ -5058,6 +5058,8 @@
     "presa_versio_nota": "Aquesta presa va néixer de la graduació v{{num}}, que és la vigent.",
     "presa_versio_rancia": "Aquesta presa va néixer de la graduació v{{presa}} i la vigent del model és la v{{vigent}}: les mesures teòriques que hi compares són d'una corba anterior. Per comparar contra la corba d'ara, obre una presa nova amb «Mesurar set».",
     "presa_versio_rancia_nota": "Presa de la v{{presa}} · graduació vigent: v{{vigent}}",
-    "decisio_tancada_nota": "Consulta del que es va decidir en aquesta presa."
+    "decisio_tancada_nota": "Consulta del que es va decidir en aquesta presa.",
+    "step_base_copiada": "Regla STEP sense valor per a aquesta talla: hi ha el valor de la talla base. Valors a posar a mà a l’escalat.",
+    "step_base_copiada_avis": "{{count}} mesura/es amb regla STEP sense valor: s’hi ha posat el valor de la talla base i s’ha de corregir a mà a l’Escalat → {{detall}}"
   }
 }

@@ -5058,6 +5058,8 @@
     "presa_versio_nota": "Esta toma nació de la graduación v{{num}}, que es la vigente.",
     "presa_versio_rancia": "Esta toma nació de la graduación v{{presa}} y la vigente del modelo es la v{{vigent}}: las medidas teóricas con las que comparas son de una curva anterior. Para comparar con la curva de ahora, abre una toma nueva con «Medir set».",
     "presa_versio_rancia_nota": "Toma de la v{{presa}} · graduación vigente: v{{vigent}}",
-    "decisio_tancada_nota": "Consulta de lo que se decidió en esta toma."
+    "decisio_tancada_nota": "Consulta de lo que se decidió en esta toma.",
+    "step_base_copiada": "Regla STEP sin valor para esta talla: aparece el valor de la talla base. Valores a poner a mano en el escalado.",
+    "step_base_copiada_avis": "{{count}} medida(s) con regla STEP sin valor: se ha copiado el valor de la talla base y hay que corregirlo a mano en Escalado → {{detall}}"
   }
 }

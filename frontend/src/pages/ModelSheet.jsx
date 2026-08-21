@@ -1035,7 +1035,22 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
     const body = { new_version: true }
     if (allowReopen) body.allow_reopen_sealed = true
     models.generarGrading(parseInt(id), body)
-      .then(() => { setPropStatus(null); setPropStep(0); setActiveTab('Escalat') })   // porta a Escalat (inline)
+      .then(res => {
+        setPropStatus(null); setPropStep(0); setActiveTab('Escalat')   // porta a Escalat (inline)
+        // ── TRAM E · LA LLISTA DE TREBALL MANUAL, NO UNA ABSÈNCIA SILENCIOSA ────────────
+        // Les regles STEP sense valor ja no fan desaparèixer la fila: el motor hi copia el
+        // valor de la talla base i la cel·la surt en vermell a l'Escalat. Però una marca que
+        // s'ha d'anar a buscar no és un avís — el tècnic acaba de prémer «Propagar» i és ARA
+        // que ha de saber què li queda per posar a mà, i a quines talles.
+        const pendents = res?.data?.step_base_copiada || []
+        if (pendents.length) {
+          const detall = pendents
+            .map(p => `${p.pom_codi}: ${(p.talles || []).join(' · ')}`)
+            .join(' | ')
+          setFeedback({ type: 'err',
+            text: t('escalat.step_base_copiada_avis', { count: pendents.length, detall }) })
+        }
+      })
       .catch(() => setFeedback({ type: 'err', text: t('grading_propagate.err') }))
       .finally(() => setPropagating(false))
   }

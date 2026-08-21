@@ -44,7 +44,7 @@
  *            active: {lineId: string, value: number|string, baseValue: number|null,
  *                     estat: string, desviacio: number|null}}}
  */
-export function cellaEscalat({ lineId, vigent = null, presa = null }) {
+export function cellaEscalat({ lineId, vigent = null, presa = null, baseCopiada = false }) {
   const teorica = presa && presa.teoric != null ? presa.teoric : vigent
   const real = presa ? (presa.real ?? null) : null
   return {
@@ -64,6 +64,16 @@ export function cellaEscalat({ lineId, vigent = null, presa = null }) {
       // tota la peça — el vermell de R1 no l'agafa (coincideix amb `baseValue` per
       // construcció), el desat no la dispara sola, i `presa_at` només neix amb el gest.
       fantasma: real == null && teorica != null,
+      // ── TRAM E · «AQUÍ HI HA EL VALOR DE LA TALLA BASE, PRESTAT» ───────────────────────
+      // La regla és STEP i no té valor per a aquesta talla: el motor hi ha copiat el valor de
+      // la base perquè la fila no desaparegui (decisió d'Agus, 21/08), i la cel·la ho ha de
+      // DIR. No és el mateix vermell que el de R1 —aquell diu «la peça arribada s'aparta del
+      // que esperàvem»— i per això viatja com a marca pròpia i no com una desviació: aquí no
+      // hi ha desviació de res, hi ha una xifra que encara no és la seva.
+      //
+      // Ve DERIVADA del servidor (`taula-mesures.step_base_copiada`), que la calcula amb el
+      // mateix predicat que el motor. `GradedSpec` no la desa enlloc: és sortida pura.
+      baseCopiada,
       baseValue: teorica,
       // Viatgen a la cel·la perquè qui la pinti pugui dir l'estat sense refer el càlcul: la
       // desviació la calcula el servidor (`escalat_presa_views._cella`) i el veredicte és de

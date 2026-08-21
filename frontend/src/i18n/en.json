@@ -5058,6 +5058,8 @@
     "presa_versio_nota": "This session was born from grading v{{num}}, which is the current one.",
     "presa_versio_rancia": "This session was born from grading v{{presa}} and the model's current one is v{{vigent}}: the theoretical measurements you are comparing against come from an earlier curve. To compare against today's curve, open a new session with «Measure set».",
     "presa_versio_rancia_nota": "Session from v{{presa}} · current grading: v{{vigent}}",
-    "decisio_tancada_nota": "Read-only view of what was decided in this session."
+    "decisio_tancada_nota": "Read-only view of what was decided in this session.",
+    "step_base_copiada": "STEP rule with no value for this size: the base size value is shown. Values to be entered by hand in scaling.",
+    "step_base_copiada_avis": "{{count}} measurement(s) with a STEP rule and no value: the base size value was copied and must be fixed by hand in Scaling → {{detall}}"
   }
 }

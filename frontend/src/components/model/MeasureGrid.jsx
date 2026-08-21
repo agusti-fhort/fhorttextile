@@ -138,6 +138,14 @@ function ActiveCell({ active, editable, value, edited, onChange, onCommit, focus
     )
   }
   const modified = activeRed(value, active)
+  // TRAM E — el valor de la talla base COPIAT: xifra en vermell i fons d'error suau, amb l'avís
+  // al tooltip. Tokens de la llei G8 (`--err`/`--err-bg`), mai hex. El fons hi és perquè el
+  // número, per definició, és igual al de la talla base: sense ell, una cel·la «correcta» i una
+  // de prestada es veurien igual a la columna.
+  const baseCopiada = !!active.baseCopiada
+  const estilBaseCopiada = baseCopiada
+    ? { background: 'var(--err-bg)', color: 'var(--err)' } : null
+  const avisBaseCopiada = baseCopiada ? t('escalat.step_base_copiada') : undefined
   // E2b — pre-omplert sense gest: la xifra hi és perquè és la teòrica, no perquè ningú l'hagi
   // mesurada. Deixa de ser fantasma en tocar-la (`edited`), que és quan passa a ser una presa.
   const fantasma = !!active.fantasma && !edited
@@ -149,10 +157,13 @@ function ActiveCell({ active, editable, value, edited, onChange, onCommit, focus
     // Lectura: format de presentació (1 decimal cm · 2 inch). El veredicte també hi pinta: una
     // sessió segellada s'ha de poder rellegir amb els mateixos colors amb què es va decidir.
     return (
-      <td style={{ ...cellTd(true, false, false),
+      <td title={avisBaseCopiada}
+        style={{ ...cellTd(true, false, false),
+                   ...estilBaseCopiada,
                    // E2b — el fantasma també en LECTURA: una consulta no pot fer passar per
                    // presa una xifra que ningú no ha mesurat (és la llei d'E1 a la pantalla).
-                   color: fantasma ? 'var(--text-soft)'
+                   color: baseCopiada ? 'var(--err)'
+                     : fantasma ? 'var(--text-soft)'
                      : (colVerdicte || (modified ? 'var(--err)' : 'var(--text-main)')),
                    // `active.canvi` (B2) posa la negreta a la columna activa amb el mateix
                    // criteri que a les d'història: un canvi es marca encara que ningú no li
@@ -179,7 +190,8 @@ function ActiveCell({ active, editable, value, edited, onChange, onCommit, focus
     schedule(next)
   }
   return (
-    <td style={{ ...cellTd(true, false, false), position: 'relative' }}>
+    <td title={avisBaseCopiada}
+      style={{ ...cellTd(true, false, false), position: 'relative' }}>
       <span style={{ display: 'inline-flex', alignItems: 'stretch', gap: 2 }}>
         <input
           ref={el => registerInput?.(active.lineId, el)}
@@ -222,7 +234,11 @@ function ActiveCell({ active, editable, value, edited, onChange, onCommit, focus
             // Ara `--text-soft` (5.37:1, «secundari»): **gris perquè no està confirmada, recta
             // perquè és un valor de debò**. La distinció fantasma/presa NO es toca — segueix
             // sencera per sota, i qui mana és `presa_at`. Això és crom, no semàntica.
-            color: fantasma ? 'var(--text-soft)'
+            // TRAM E — en EDICIÓ la marca es queda: la cel·la prestada s'ha de reconèixer
+            // mentre s'hi escriu, que és exactament quan s'està reparant.
+            ...(baseCopiada && !edited ? { background: 'var(--err-bg)' } : null),
+            color: baseCopiada && !edited ? 'var(--err)'
+              : fantasma ? 'var(--text-soft)'
               : (colVerdicte || (modified ? 'var(--err)' : 'var(--text-main)')),
             fontWeight: verdicte || (modified && edited) ? 700 : 400,
             textDecoration: verdicte === 'REJECTED' ? 'line-through' : undefined,

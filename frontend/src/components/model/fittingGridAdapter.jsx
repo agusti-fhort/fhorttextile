@@ -377,10 +377,14 @@ export function buildEscalatGroups(sizeLabels, baseLabel, t) {
 export function buildEscalatRows(rows, sizeLabels, baseLabel, preses = {}) {
   return (rows || []).map(row => {
     const cells = {}
+    const copiades = row.step_base_copiada || []
     for (const s of sizeLabels) {
       const v = s === baseLabel ? row.base_value_cm : (row.graded?.[s] ?? null)
       const lineId = `${row.clau || row.pom_id}:${s}`
-      cells[s] = cellaEscalat({ lineId, vigent: v, presa: preses[lineId] || null })
+      cells[s] = cellaEscalat({ lineId, vigent: v, presa: preses[lineId] || null,
+        // TRAM E — la marca per CEL·LA, no per fila: una regla STEP pot tenir valors per a unes
+        // talles i no per a d'altres, i la que no en té és la que s'ha de posar a mà.
+        baseCopiada: copiades.includes(s) })
     }
     return {
       // Nomenclatura client COHERENT amb Mesures: prevaler nom_fitxa (nom de model editable) sobre
@@ -403,6 +407,11 @@ export function buildEscalatRows(rows, sizeLabels, baseLabel, preses = {}) {
       // TRAM F — els intervals viatgen amb la fila, com la resta de la forma de la regla: la
       // columna de trencament els ha de poder dir i el compacte els ha de poder compondre.
       breaks: row.breaks || [],
+      // TRAM E — les talles d'aquesta fila que porten el valor de la talla base COPIAT perquè
+      // la regla STEP no en té valor. Ve DERIVADA del servidor amb el mateix predicat que el
+      // motor (`step_delta_acumulat`), mai calculada aquí: si el front se la tornés a inventar,
+      // la cel·la vermella i la cel·la copiada podrien deixar de ser la mateixa.
+      step_base_copiada: row.step_base_copiada || [],
       // FIX-4 — la BASE del POM viatja amb la fila: és el referent de la guarda de plausibilitat
       // (una cel·la de talla molt lluny de la base sembla un increment, no una mesura).
       base_value_cm: row.base_value_cm ?? null,
