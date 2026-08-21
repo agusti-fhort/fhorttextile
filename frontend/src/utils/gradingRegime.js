@@ -17,12 +17,18 @@
 // delta li canviaria la tria sota els dits. Les files ja desades hi arriben ja
 // convertides per la migració de dades, així que el forat és teòric.
 
-/** Delta base efectiu d'una regla: forma canònica (increment_base) o fallback legacy (increment). */
+/**
+ * Delta base efectiu d'una regla. Des del FIX-A/PAS-3: NOMÉS `increment_base`.
+ *
+ * 🚨 Aquí hi havia el fallback a `increment`, i era el MIRALL del que feia `_apply_rule`. El dia
+ * que el motor va deixar de llegir el camp llegat, aquest mirall va quedar dient una cosa que ja
+ * no és certa: hauria pintat «LINEAR amb delta 2.0, correcta» sobre una fila que el motor ja no
+ * gradua. Va amb el seu bessó de backend (`pom/grading_regime.py`, `delta_base_efectiu`) i no
+ * es poden separar — és literalment el que aquest fitxer declara ser.
+ */
 function deltaBase(rule) {
   const ib = rule?.increment_base
   if (ib !== null && ib !== undefined && ib !== '') return Number(ib)
-  const inc = rule?.increment
-  if (inc !== null && inc !== undefined && inc !== '') return Number(inc)
   return 0
 }
 

@@ -3738,7 +3738,8 @@
     "save_error": "No se ha podido guardar el cambio.",
     "delete_error": "No se ha podido borrar el run.",
     "layers_none": "ninguna capa declarada",
-    "layers_order": "ordenan, nunca esconden"
+    "layers_order": "ordenan, nunca esconden",
+    "col_break": "Δ break"
   },
   "grading": {
     "summary": "{{sets}} conjuntos de reglas · {{rules}} reglas totales",

@@ -3738,7 +3738,8 @@
     "save_error": "No s'ha pogut desar el canvi.",
     "delete_error": "No s'ha pogut esborrar el run.",
     "layers_none": "cap capa declarada",
-    "layers_order": "ordenen, mai amaguen"
+    "layers_order": "ordenen, mai amaguen",
+    "col_break": "Δ break"
   },
   "grading": {
     "summary": "{{sets}} conjunts de regles · {{rules}} regles totals",

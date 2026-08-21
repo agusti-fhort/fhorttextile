@@ -109,7 +109,17 @@ class GradingRuleLightSerializer(serializers.Serializer):
     pom_codi = serializers.SerializerMethodField()
     pom_nom_en = serializers.SerializerMethodField()
     logica = serializers.CharField()
-    increment = serializers.FloatField()
+    # FIX-A/PAS-4 — `increment` era el camp LLEGAT i el motor ja no el llegeix. La clau es
+    # conserva (la pinta `SizeSetDetail.jsx` i la torna a enviar en editar) però ara diu el
+    # delta que MANA. `increment_break` i `talla_break_label` hi entren perquè una fila que
+    # ensenya mig delta d'una regla amb trencament és una fila que menteix a mitges.
+    increment = serializers.SerializerMethodField()
+    increment_base = serializers.FloatField(allow_null=True, required=False)
+    increment_break = serializers.FloatField(allow_null=True, required=False)
+    talla_break_label = serializers.CharField(allow_null=True, required=False)
+
+    def get_increment(self, obj):
+        return float(obj.increment_base) if obj.increment_base is not None else None
 
     def get_pom_codi(self, obj):
         if not obj.pom_id:

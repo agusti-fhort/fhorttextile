@@ -47,12 +47,27 @@ def te_break(increment_break=None, talla_break_label=None) -> bool:
 
 
 def delta_base_efectiu(increment_base=None, increment=None) -> float:
-    """Delta base que aplicarà el motor: la forma canònica (`increment_base`) si està
-    poblada, si no el fallback legacy (`increment`) que llegeix `_apply_rule`."""
-    ib = _f(increment_base)
-    if ib is not None:
-        return ib
-    return _f(increment) or 0.0
+    """Delta base que aplicarà el motor. Des del FIX-A/PAS-3: NOMÉS `increment_base`.
+
+    🚨 AQUÍ HI HAVIA EL FALLBACK AL LLEGAT, i era el MIRALL del que `_apply_rule` feia. Quan el
+    motor va deixar de llegir `increment` (PAS 3), aquesta funció va quedar dient una cosa que
+    ja no és certa —el seu propi docstring citava «el fallback legacy que llegeix `_apply_rule`»—
+    i el guard d'autoria que en penja hauria donat per bona una regla que el motor no gradua.
+
+    Un mirall que menteix és pitjor que no tenir-ne: la pantalla hauria dit «aquesta regla té
+    delta 2.0 i és correcta» d'una fila que després no emet cap cel·la.
+
+    `increment` es conserva al perfil de la funció perquè els quatre cridadors el passen i
+    treure'l seria tocar-los tots per res; simplement ja no compta. El mirall del front
+    (`frontend/src/utils/gradingRegime.js`, `deltaBase`) ha canviat amb aquesta.
+
+    CONSEQÜÈNCIA VOLGUDA: una LINEAR **sense** `increment_base` i **sense** break ara és
+    DEGENERADA i les portes d'autoria la rebutgen amb 400. Abans es desava i graduava amb el
+    delta fossilitzat del joc — que és el bug sencer d'aquest sprint, tancat també a l'entrada.
+    Amb break, `te_break` continua fent curtcircuit i la regla es desa: allà el rebuig el dona la
+    propagació, amb el seu missatge propi (llei D2, `_apply_rule`).
+    """
+    return _f(increment_base) or 0.0
 
 
 def es_linear_degenerada(logica, increment_base=None, increment=None,

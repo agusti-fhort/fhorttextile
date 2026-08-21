@@ -3738,7 +3738,8 @@
     "save_error": "Could not save the change.",
     "delete_error": "Could not delete the run.",
     "layers_none": "no layer declared",
-    "layers_order": "they order, they never hide"
+    "layers_order": "they order, they never hide",
+    "col_break": "Δ break"
   },
   "grading": {
     "summary": "{{sets}} rule sets · {{rules}} total rules",
