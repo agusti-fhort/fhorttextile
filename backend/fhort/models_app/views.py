@@ -5280,10 +5280,19 @@ def set_step_valor_view(request, model_id, pom_id):
     base_val = float(base_bm.base_value_cm)
 
     # Posició EN ESPAI DE SISTEMA (llei S24b) i el veí cap a la base.
+    #
+    # 🚨 AQUÍ HI HAVIA UN SEGON JUDICI DE «ÉS LA TALLA BASE?» (21/08). Deia el mateix fet que
+    # `valida_valor_step` acaba de dir quatre línies més amunt —i amb el mateix codi de
+    # rebuig, `STEP_TALLA_BASE`, escrit a mà—, però el MESURAVA D'UNA ALTRA MANERA: el punt
+    # únic compara ETIQUETES contra `model.base_size_label`; això comparava ÍNDEXS contra el
+    # `base_idx` d'`escala_del_model`. Mentre els dos coincideixin, aquesta branca no s'assoleix
+    # mai; i el dia que divergissin, la que mana és la primera —o sigui que el segon judici no
+    # protegeix de res i només fabrica la il·lusió que sí. És l'espècie del fix A i la del
+    # 400 d'avui: dues mesures del mateix fet.
+    # El que es queda és la FEINA (la posició, que fa falta per trobar el veí); el que marxa
+    # és el JUDICI. Si algun dia la porta ha de dir alguna cosa nova sobre la talla base, ho
+    # dirà `valida_valor_step`, que és qui en sap.
     idx = _pos(talla)
-    if idx == base_idx:
-        return Response({'detail': "La talla base s'edita com a mesura base.",
-                         'codi': 'STEP_TALLA_BASE'}, status=400)
     idx_vei = idx - 1 if idx > base_idx else idx + 1
     total_vei, falta = step_delta_acumulat(rule, run_sistema, base_idx, idx_vei)
     if falta is not None:
