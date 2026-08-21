@@ -11,7 +11,7 @@ import { test } from 'node:test'
 
 import {
   MAX_BREAKS, effectiveRegime, finalTriables, iniciTriables, intervalNou, intervalsDe,
-  intervalsVisibles, isDegenerateLinear, ordenaIntervals, relleuLlegat, teRelleu,
+  intervalsVisibles, isDegenerateLinear, ordenaIntervals, relleuLlegat, relleuResidual, teRelleu,
 } from './gradingRegime.js'
 
 test('el sostre és el mateix que el del backend', () => {
@@ -84,10 +84,19 @@ test('amb les dues formes informades mana `breaks`, i llavors no hi ha llegat', 
   assert.equal(relleuLlegat(r, RUN), false)
 })
 
-test('brk=0 amb etiqueta és un interval de delta 0 — el motor el llegeix i el xip el diu', () => {
+// ⚠️ CONTRACTE RETIRAT EL 21/08, i es diu. Aquest test asseia que un `brk=0` amb etiqueta es
+// PINTAVA com un interval de delta 0. La regla del silenci ho retira: un tram que repeteix el
+// delta que ja mana no diu res i no s'ha de pintar. El que el test protegia de debò —que la
+// DADA no es toca i que el MOTOR la segueix llegint igual— es conserva, i és el que fa que
+// silenciar-la sigui una decisió de pantalla i no una pèrdua d'informació.
+test('brk=0 amb etiqueta: el motor el llegeix, i la pantalla el CALLA', () => {
   const r = { logica: 'LINEAR', increment_base: 0, increment_break: 0, talla_break_label: 'M' }
-  assert.deepEqual(intervalsVisibles(r, RUN),
-    [{ inici: 'M', final: 'XL', delta: 0, llegat: true }])
+  assert.deepEqual(intervalsVisibles(r, RUN), [])
+  // La dada hi és i ningú l'ha tocada: `teRelleu` la segueix veient, i és el que el motor
+  // llegirà (`intervals_de` emet el tram; amb delta 0 dona el mateix valor que el general).
+  assert.equal(teRelleu(r), true)
+  assert.equal(r.increment_break, 0)
+  assert.equal(r.talla_break_label, 'M')
 })
 
 test('etiqueta forana o sense run: cap interval (com el motor, que no en troba cap)', () => {
@@ -139,4 +148,77 @@ test('els intervals es pinten ORDENATS, com els desarà `valida_breaks`', () => 
   // Una etiqueta que no cau al run no es pot situar: va al final i no en desplaça cap.
   const ambForana = [{ inici: 'ZZ', final: 'ZZ', delta: 9 }, { inici: 'M', final: 'L', delta: 2 }]
   assert.deepEqual(ordenaIntervals(ambForana, RUN).map(iv => iv.inici), ['M', 'ZZ'])
+})
+
+// ── LA REGLA DEL SILENCI (21/08, del passi visual del banc 1383) ──────────────────────────────
+//
+// UN XIP NOMÉS ES PINTA SI DIU ALGUNA COSA. El que això fixa no és cosmètic: un xip mut porta
+// un ✕ que convida a tocar una fila que no té res a dir, i tocar-la la fa entrar al lot del
+// Gravar amb el guard de degenerada al darrere.
+
+test('🚨 sota un règim que no gradua, cap xip (les 8 files FIXED del banc)', () => {
+  const fixedAmbResidu = {
+    logica: 'FIXED', increment_base: 0, increment_break: 0, talla_break_label: 'M' }
+  assert.deepEqual(intervalsVisibles(fixedAmbResidu, RUN), [])
+  // I amb intervals residuals de quan era LINEAR, igual: hi són a la BD i no surten a pantalla.
+  assert.deepEqual(intervalsVisibles(
+    { logica: 'FIXED', increment_base: 0, breaks: [{ inici: 'M', final: 'L', delta: 2 }] },
+    RUN), [])
+  // STEP també calla — però allà el relleu és LATENT i NO s'ha de netejar (PG-4b-3a).
+  assert.deepEqual(intervalsVisibles(
+    { logica: 'STEP', increment_base: 0, increment_break: 2, talla_break_label: 'M' }, RUN), [])
+})
+
+test('🚨 un break llegat que repeteix el delta general no es pinta', () => {
+  // brk 0 sobre general 0: no trenca res.
+  assert.deepEqual(intervalsVisibles(
+    { logica: 'LINEAR', increment_base: 0, increment_break: 0, talla_break_label: 'M' }, RUN), [])
+  // brk 2 sobre general 2: tampoc.
+  assert.deepEqual(intervalsVisibles(
+    { logica: 'LINEAR', increment_base: 2, increment_break: 2, talla_break_label: 'M' }, RUN), [])
+  // brk 2 sobre general 0: SÍ que trenca — és la F del 1383.
+  assert.deepEqual(intervalsVisibles(
+    { logica: 'LINEAR', increment_base: 0, increment_break: 2, talla_break_label: 'M' }, RUN),
+    [{ inici: 'M', final: 'XL', delta: 2, llegat: true }])
+})
+
+test('⚠️ el silenci és del LLEGAT: un interval explícit es pinta encara que sembli redundant', () => {
+  // La porta el rebutja en néixer (BREAKS_DELTA_REDUNDANT); si malgrat això n'hi ha un a la BD,
+  // amagar-lo el faria invisible i inesborrable. Una ⓘ muda no vol dir «no hi ha dada».
+  assert.deepEqual(intervalsVisibles(
+    { logica: 'LINEAR', increment_base: 0, breaks: [{ inici: 'M', final: 'L', delta: 0 }] }, RUN),
+    [{ inici: 'M', final: 'L', delta: 0, llegat: false }])
+})
+
+test('🔑 EL CAS F DEL 1383: general 0 + intervals vius NO és degenerada', () => {
+  const f = { logica: 'LINEAR', increment_base: 0, increment_break: null, talla_break_label: null,
+    breaks: [{ inici: 'M', final: 'L', delta: 2 }, { inici: 'XL', final: 'XL', delta: 3 }] }
+  assert.equal(isDegenerateLinear(f), false)
+  assert.equal(effectiveRegime(f), 'LINEAR')
+  assert.equal(intervalsVisibles(f, RUN).length, 2)
+})
+
+test('la llei de degenerada, dita sencera', () => {
+  const L = (extra) => ({ logica: 'LINEAR', increment_base: 0, ...extra })
+  // general 0 i cap tram viu → degenerada (com sempre)
+  assert.equal(isDegenerateLinear(L({})), true)
+  // general 0 + qualsevol tram viu → LEGAL
+  assert.equal(isDegenerateLinear(L({ breaks: [{ inici: 'M', final: 'L', delta: 2 }] })), false)
+  // tot a zero amb breaks informats → degenerada
+  assert.equal(isDegenerateLinear(L({ breaks: [{ inici: 'M', final: 'L', delta: 0 }] })), true)
+  // la forma VELLA hi compta: brk llegat ≠ 0 la salva (regles no migrades)
+  assert.equal(isDegenerateLinear(L({ increment_break: 2, talla_break_label: 'M' })), false)
+  assert.equal(isDegenerateLinear(L({ increment_break: 0, talla_break_label: 'M' })), true)
+})
+
+test('relleuResidual: què s\'ha de netejar en desar, i què no', () => {
+  const relleu = { increment_break: 2, talla_break_label: 'M' }
+  assert.equal(relleuResidual({ logica: 'FIXED', ...relleu }), true)
+  assert.equal(relleuResidual({ logica: 'ZERO', breaks: [{ inici: 'M', final: 'L', delta: 2 }] }), true)
+  // 🚨 MAI SOTA STEP: el relleu hi és LATENT per llei (PG-4b-3a).
+  assert.equal(relleuResidual({ logica: 'STEP', ...relleu }), false)
+  // Ni sota LINEAR, que és on el relleu MANA.
+  assert.equal(relleuResidual({ logica: 'LINEAR', ...relleu }), false)
+  // Un FIXED net no té res a netejar.
+  assert.equal(relleuResidual({ logica: 'FIXED', increment_base: 0 }), false)
 })

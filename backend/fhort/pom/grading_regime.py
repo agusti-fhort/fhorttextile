@@ -310,6 +310,24 @@ def es_linear_degenerada(logica, increment_base=None, increment=None,
                          increment_break=None, talla_break_label=None, breaks=None) -> bool:
     """True si la regla és LINEAR però matemàticament FIXED: CAP delta en joc és diferent de 0.
 
+    ── LA LLEI, DITA SENCERA (Agus, 21/08, del passi visual del banc) ──────────────────────────
+
+        DEGENERADA  ⟺  delta general == 0  I  cap interval amb delta ≠ 0
+
+    Els tres casos que això cobreix, i cap d'ells és nou —la funció ja els feia des del tram F—,
+    però convé que estiguin escrits perquè el dubte no torni a costar una diagnosi:
+
+      · sense breaks i general 0 ................. degenerada (com sempre)
+      · general 0 amb QUALSEVOL tram viu ......... **LEGAL** ← el cas canònic del disseny
+        d'intervals: «XXS→XS no creix, a partir de S creix 2». És la F del 1383.
+      · tot a zero amb breaks informats .......... degenerada, i el missatge d'aquí val
+        («fes-la FIXED o esborra-la»)
+
+    🔑 I LA FORMA VELLA HI COMPTA IGUALMENT, perquè les tres superfícies conviuen: una regla no
+    migrada amb `ib=0` i `increment_break=2` segueix sent LINEAR de ple dret. El guard llegeix
+    les DUES formes perquè cap regla es quedi fora de la llei per no haver passat encara per la
+    pantalla nova.
+
     🚨 TRAM F — EL DEUTE «LINEAR+0 AMB BREAK» (defecte 4 de la diagnosi de PROD §A.5).
     Aquí hi havia `if te_break(...): return False` a seques: n'hi havia prou d'informar una talla
     de break perquè una regla amb els DOS deltes a zero passés la porta i es presentés com a

@@ -154,16 +154,65 @@ function posDe(etiqueta, run) {
  *
  * Sense run no hi ha derivació possible (com `aDocument`): es torna llista buida i la columna
  * dirà que no pot oferir res, que és millor que inventar-se una talla final.
+ *
+ * ── 🚨 LA REGLA DEL SILENCI (Agus, 21/08, del passi visual del 1383) ────────────────────────
+ * **UN XIP NOMÉS ES PINTA SI DIU ALGUNA COSA.** Dos casos, i tots dos són de PINTAT, mai
+ * d'esborrat de dades:
+ *
+ *   ① **Sota un règim que no gradua, cap interval.** Un FIXED no creix i cap tram no li
+ *      aplica. Al banc 1383 hi ha VUIT files així —E5, E7, EK, EK1, EK2, G1, SLT, U: `FIXED`
+ *      amb `brk=0 · break M` residuals de quan eren LINEAR— i cadascuna pintava un xip amb
+ *      un ✕ que convidava a tocar una fila que no té res a dir.
+ *   ② **Un tram que repeteix el delta que ja mana no és un trencament.** El break llegat `+0`
+ *      sobre un general 0 (o qualsevol `+d` idèntic al general) no trenca res: pintar-lo és
+ *      soroll amb forma de dada. És el mateix criteri que `BREAKS_DELTA_REDUNDANT` aplica a
+ *      l'autoria, dit a la lectura.
+ *
+ * ⚠️ **EL SILENCI ÉS DEL LLEGAT, NO DELS INTERVALS EXPLÍCITS.** Un interval que algú ha desat
+ * expressament a `breaks` es pinta SEMPRE, encara que sembli redundant: la porta ja el rebutja
+ * en néixer si repeteix l'adjacent (`BREAKS_DELTA_REDUNDANT`), i si malgrat això n'hi ha un a
+ * la BD, amagar-lo faria invisible una dada que el tècnic no podria ni veure ni esborrar. Una
+ * ⓘ muda no vol dir «no hi ha dada».
+ *
+ * ⚠️ **I NO ES TOCA `grading_utils.intervals_de`.** Aquell és el MOTOR i és el node que el
+ * banc mesura; un tram amb el delta del general dona el mateix valor calculat, o sigui que
+ * silenciar-lo allà no canviaria cap xifra — però mouria el node del gate per un canvi de
+ * DIBUIX. La regla del silenci viu on es dibuixa.
  */
 export function intervalsVisibles(rule, run) {
   const propis = intervalsDe(rule)
+  // ① Sota un règim que no gradua no hi ha relleu a dir. Els `breaks` residuals hi poden ser
+  //    —una regla pot haver passat de LINEAR a FIXED— i es conserven a la BD; el que no fan és
+  //    sortir a pantalla. (Sota STEP el relleu és LATENT per llei PG-4b-3a: es conserva i es
+  //    calla, i torna a manar si algú refà la regla LINEAR.)
+  if ((rule?.logica || 'LINEAR') !== 'LINEAR') return []
   if (propis.length) return propis.map(iv => ({ ...iv, llegat: false }))
   const brk = rule?.increment_break
   if (brk === null || brk === undefined || brk === '') return []
+  // ② El break llegat que repeteix el delta general no trenca res.
+  if (Number(brk) === deltaBase(rule)) return []
   const et = etiquetesDelRun(run)
   const i = posDe(rule?.talla_break_label, et)
   if (i < 0) return []            // etiqueta forana o sense run: cap trencament (com el motor)
   return [{ inici: et[i], final: et[et.length - 1], delta: Number(brk), llegat: true }]
+}
+
+/**
+ * true si la regla porta relleu RESIDUAL sota un règim que no el llegeix: la condició que fa
+ * que desar-la n'hagi de netejar els camps.
+ *
+ * 🚨 NOMÉS SOTA FIXED/ZERO, mai sota STEP. Sota STEP el relleu es conserva LATENT (PG-4b-3a,
+ * el pas STEP↔LINEAR no-destructiu): netejar-lo en desar li trencaria la llei a una regla que
+ * només estava de pas. Un FIXED, en canvi, és una destinació: si algú el torna a LINEAR ha de
+ * trobar la fila neta i no un trencament fòssil que no ha escrit ell.
+ */
+export function relleuResidual(rule) {
+  const logica = (rule?.logica || '').toUpperCase()
+  if (logica !== 'FIXED' && logica !== 'ZERO') return false
+  const brk = rule?.increment_break
+  return intervalsDe(rule).length > 0
+    || (brk !== null && brk !== undefined && brk !== '')
+    || String(rule?.talla_break_label ?? '').trim() !== ''
 }
 
 /**
