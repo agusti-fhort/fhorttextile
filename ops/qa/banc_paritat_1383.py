@@ -58,6 +58,18 @@ from django_tenants.utils import schema_context  # noqa: E402
 # resultat anterior és comparable.
 HASH_JOC_REFERENCIA = '096990db404b778a2140fffd8327c54294849b73d42ec67b3265247f9840989f'
 
+#: Hash de les 142 residents del 1383, per si algú l'ha de comparar a ull. NO és una asserció —
+#: canvia legítimament cada cop que algú edita una regla del banc, i convertir-lo en guard
+#: convertiria el gate en una alarma d'incendi. Els segells coneguts:
+#:
+#:   5715f4a2a4663bead1c8b870936c75be3aa8923ebeee5b10ca747c57d403144e   21/08 · abans del fix A
+#:   59b84241aa138676cdb1b53ab210822a974820ea7d7fff257cdc91ce25e3c370   21/08 · FIX-A/PAS-2, després
+#:                                                                     del backfill del camp llegat
+#:                                                                     (14 files, cap cel·la moguda)
+#:
+#: Que el hash es mogui i A/B/C es quedin igual és, literalment, la prova que el backfill ha
+#: tocat el mirall i no la llei.
+
 TOL = 0.005     # els valors es comparen arrodonits a 2 decimals; això és mig últim dígit
 
 
