@@ -278,6 +278,154 @@ real** (§4.1) i amb les **vistes reals** (§4.2), que travessen la porta sencer
 
 ---
 
+# 8 · ADDENDA (mateix dia) · EL PASSI VISUAL D'AGUS
+
+Dues ordres seguides després del passi visual sobre el banc 1383: **el guard cec als intervals**
+i **la regla del silenci dels xips**. La segona resol el símptoma; la primera, com es veurà, no
+tenia el diagnòstic que semblava.
+
+## 8.1 · 🚨 EL GUARD NO ERA CEC — i cal dir-ho, perquè el fix hauria estat al lloc equivocat
+
+L'ordre deia: «Causa: el guard llegeix els camps vells; F4-bis els BUIDA en editar i escriu
+breaks — el guard no mira breaks». **Mesurat, i és fals.**
+
+`es_linear_degenerada` **ja llegia `breaks` des del tram F** (`grading_regime.py:336-338`), i
+els **SIS** cridadors ja li passaven `rule.breaks` (les quatre portes + les dues sembres). La
+matriu, en fred:
+
+| cas | guard | `valida_breaks` |
+|---|---|---|
+| **`ib=0` · `brk=None` · intervals vius** | **ok** | **ok** |
+| `ib=0` · `brk=2` (llegat) · sense breaks | ok | ok |
+| `ib=0` · `brk=0` (llegat) · sense breaks | DEGEN | ok |
+| `ib=0` · breaks tot a zero | DEGEN | `BREAKS_DELTA_REDUNDANT` |
+| `ib=0` · sense res | DEGEN | ok |
+
+I per la porta REAL, sobre la F del 1383 amb el payload exacte de F4-BIS: **200**, amb els
+intervals desats i els camps llegats a NULL. El gest sencer conduït sobre el bundle real
+(editar el xip → afegir-ne un → Gravar) **també passa**, i el POST que surt és el correcte.
+
+**No he pogut reproduir el 400 amb el codi al disc, i ho dic en comptes de tapar-ho.** El que
+sí que he trobat és el que el fa versemblant, i és el que la segona ordre ataca (§8.2): la
+pantalla pintava xips que no diuen res, tocar-ne un fa entrar la fila al lot del Gravar, i el
+missatge de degenerada **no deia quina fila era** — de manera que barrava el lot mentre el que
+tenies a la mà era una ALTRA regla. Això últim ja està arreglat: ara el missatge les nomena.
+
+**Sí que hi havia una cosa a arreglar al front, i era estructural:** hi havia **TRES**
+implementacions d'una sola llei — el backend, el mirall declarat (`gradingRegime.js`) i una
+**còpia local transcrita a mà** dins `GraduacioSuperficie.jsx`. Cap mentia avui; la tercera és
+la que un dia diria una altra cosa. Retirada: la fila consulta el punt únic. La llei queda
+escrita, amb la formulació d'Agus, al docstring del guard (cap canvi de comportament: la matriu
+és idèntica abans i després).
+
+## 8.2 · LA REGLA DEL SILENCI — el que Agus tenia a pantalla
+
+Al banc 1383 hi ha **vuit** files —`E5`, `E7`, `EK`, `EK1`, `EK2`, `G1`, `SLT`, `U`— que són
+**`FIXED` amb `brk=0 · break M` residuals** de quan eren LINEAR. Cadascuna pintava un
+`M → 3XL +0` amb el seu ✕.
+
+| | Regla | On viu |
+|---|---|---|
+| ① | Sota un règim que no gradua, **cap interval i cap `[+]`** — la columna calla sencera | `intervalsVisibles` + `ColumnaBreaks` |
+| ② | Un tram que **repeteix el delta que ja mana** no és un trencament i no es pinta | `intervalsVisibles` |
+| ③ | El `[+]` segueix a **LINEAR** encara que no hi hagi cap xip | `ColumnaBreaks` |
+| ④ | **Desar un FIXED neteja el relleu** (intervals + els dos camps llegats) | `relleuResidual` a les dues superfícies |
+
+**ABANS / DESPRÉS de la mateixa franja** (`ops/qa/captures/f4bis_8_silenci_abans.png` i
+`f4bis_9_silenci_despres.png`, capturades amb DOS bundles reals — el de l'«abans» construït a
+`/tmp` per no tocar mai `frontend/dist`, que **és** staging):
+
+```
+ABANS                          DESPRÉS
+E5  FIXED   M → 3XL +0         E5  FIXED   (buit)
+EK  FIXED   M → 3XL +0         EK  FIXED   (buit)
+EK2 FIXED   M → 3XL +0         EK2 FIXED   (buit)
+G1  FIXED   M → 3XL +0         G1  FIXED   (buit)
+F   LINEAR  M → 3XL +2  ✕ +    F   LINEAR  M → 3XL +2  ✕ +
+A   LINEAR  M → 3XL +3  ✕ +    A   LINEAR  M → 3XL +3  ✕ +
+```
+
+**Tres decisions que van amb això, i el motiu:**
+
+- ⚠️ **El silenci és del LLEGAT, no dels intervals explícits.** Un interval desat expressament a
+  `breaks` es pinta SEMPRE encara que sembli redundant. La porta ja el rebutja en néixer
+  (`BREAKS_DELTA_REDUNDANT`); si malgrat això n'hi ha un a la BD, amagar-lo el faria **invisible
+  i inesborrable**. Una ⓘ muda no vol dir «no hi ha dada».
+- ⚠️ **No s'ha tocat `grading_utils.intervals_de`.** L'ordre deia «el mirall `intervals_de` només
+  emet trams que CANVIEN el delta», i el mirall és el del **front**. `intervals_de` és el MOTOR i
+  és el node que el banc mesura: silenciar-hi un tram amb el delta del general no mouria cap
+  xifra —dona el mateix valor calculat— però mouria el node del gate per un canvi de **dibuix**.
+- ⚠️ **La neteja mai sota STEP.** Allà el relleu és LATENT per llei (PG-4b-3a, el pas
+  STEP↔LINEAR no-destructiu). Un STEP està de pas; un FIXED és una destinació.
+
+## 8.3 · QA de l'addenda
+
+| Prova | Resultat |
+|---|---|
+| `node --test gradingRegime` | **21/21** (6 casos nous: el silenci ①②, l'excepció de l'interval explícit, el cas F, la llei sencera, `relleuResidual`) |
+| `qa_f4bis_columna_breaks.py` | **30/30** · dos estats nous a les dues superfícies + ⑧ que captura el **cos del POST** per comprovar que la neteja VIATJA |
+| `qa_f4bis_staging.py` | **30/30** · ⑦ el cas F i ⑧ el LINEAR→FIXED→LINEAR |
+| `npx eslint src` · `npm run build` · `manage.py check` | 0 errors · net · net |
+
+**⑦ · EL CAS F, tal com Agus el té a pantalla** (en transacció REVERTIDA — v. §8.4):
+
+```
+ⓐ punt únic: general 0 + intervals vius NO és degenerada         ✅
+ⓐ tot a zero amb breaks informats SEGUEIX degenerada             ✅
+ⓐ regla vella d'1 break amb ib=0 i brk=2 SEGUEIX legal           ✅
+ⓑ porta ① `set_pom_regim_view`: la F es DESA                     ✅
+ⓒ porta ③ `GradingRuleSerializer`: la mateixa forma passa        ✅
+ⓓ propagat (base 110,5):  XS 110,5 · S 110,5 · M 112,5 · L 114,5 · XL 117,5
+   → passos 0 · 0 · 2 · 2 · 3, que és el que l'ordre demanava     ✅
+```
+
+**⑥ · EL MIRALL, REESCRIT.** Amb el silenci el front ja no emet la mateixa LLISTA que el motor,
+o sigui que la comparació de llistes hauria donat vermell **per disseny**. El que el mirall
+declara és «la pantalla diu el mateix que el motor CALCULARÀ», i això es mesura comparant
+**CORBES** — el delta que mana a cada posició del run. Sobre les 21 files vives del banc:
+
+```
+21 regles · 21 amb relleu al motor · 9 trams callats per la regla del silenci · CAP corba mòbil
+```
+
+Callar no perd cap xifra, i està mesurat sobre dades vives, no sobre fixtures meves.
+
+## 8.4 · 🚩 EL BANC · deriva anotada, i NO és d'aquesta sessió
+
+```
+A=✔(105)  B=✔(525)  C=✔(4)   ·  HASH JOC 096990db…989f IDÈNTIC
+HASH RESIDENTS  6e55bc13…b6b4  →  50982bbe…1f08
+```
+
+**El segell de residents s'ha mogut i la feina d'aquesta sessió no l'ha mogut.** L'evidència:
+
+1. **La QA d'aquesta sessió és hash-estable**: banc → `qa_f4bis_staging.py` sencer (30/30) →
+   banc, i el hash surt **idèntic** a banda i banda. Mesurat expressament en veure la deriva.
+2. La prova que toca el banc (⑦, la F) va **en transacció revertida**, i el propi script ho
+   verifica després: `la F del banc segueix com era (breaks NULL)`. Confirmat també a la BD —
+   la F té `updated_at` del **20/08**.
+3. Les files que s'han mogut són les **vuit** `FIXED` degenerades, totes amb `updated_at`
+   `2026-08-21 18:53:53–54` (una segona sencera, escriptura de màquina) — **després** de
+   l'últim commit d'aquesta sessió (18:47) i sense que cap script meu escrigui al 1383 fora de
+   la transacció revertida. És la normalització LINEAR+0 → FIXED que el tram E+F ja va anotar
+   com a conseqüència de segon ordre de `normalitza_logica`, i hi ha sessions concurrents a
+   `dev`.
+
+**Cap cel·la s'ha mogut** (A=105/105) i el **HASH JOC és idèntic**, que és el que diu que el
+catàleg no s'ha tocat. El banc mateix declara que aquest segell canvia legítimament quan algú
+edita una regla del banc — «per això és segell, no asserció»— i l'acta d'E+F ja en va registrar
+dues derives pel mateix motiu (`5715f4a2…` → `59b84241…` → `6e55bc13…`). Aquesta és la tercera.
+
+## 8.5 · Commits de l'addenda
+
+| Commit | Concern |
+|---|---|
+| `47709102` | **la regla del silenci** a `intervalsVisibles` + `relleuResidual` + la llei escrita al punt únic + 6 proves noves |
+| `72e801a1` | **UI** · la columna calla sota FIXED · la neteja en desar · l'error diu quina fila · **cau la tercera còpia del predicat** |
+| `0d25f610` | **QA** · el cas F, el LINEAR→FIXED→LINEAR, i el mirall que compara CORBES |
+
+---
+
 *Acta del 2026-08-21. Cada xifra d'aquest document surt d'una correguda que hi ha al repo i es
-pot repetir; les dues divergències respecte de l'ordre (§5.1 i §5.2) estan dites amb el motiu
-al davant i cap de les dues s'ha tapat.*
+pot repetir; les divergències respecte de les ordres (§5.1, §5.2 i §8.1) estan dites amb el
+motiu al davant i cap d'elles s'ha tapat.*
