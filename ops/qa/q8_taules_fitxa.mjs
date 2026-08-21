@@ -19,7 +19,7 @@ import { readFileSync } from 'node:fs'
 
 import { grupsDelFull } from '../../frontend/src/utils/grupsDelFull.js'
 import { ampladaPerTextos, repartimentEnPagines, trossosDeTalles } from '../../frontend/src/utils/repartimentTaules.js'
-import { filesFitting, filesGrading, filesNotes, filesSizeSet, filesSizeSetConsolidat } from '../../frontend/src/utils/taulesQ8.js'
+import { filesFitting, filesGrading, filesNotes, filesSizeSet, filesSizeSetConsolidat, fraseBreakQ8 } from '../../frontend/src/utils/taulesQ8.js'
 
 const dades = JSON.parse(readFileSync(new URL('./_out/q8_payloads.json', import.meta.url), 'utf8'))
 const { grid, peces } = dades
@@ -100,6 +100,49 @@ prova('la BASE surt de `base_value_cm`, no de `graded` (criteri de l\'Escalat)',
   const ch = q8b.find(f => f.codi === 'CH' && f.garment === '')
   assert.equal(ch.valors.S, 50)
   assert.equal(ch.valors.XS, null, 'sense spec, forat visible i no un 0')
+})
+
+// ── F4-QUATER · LA COLUMNA «BREAKS» DE LA FITXA, DE PUNTA A PUNTA ───────────────────────────
+//
+// 🚨 EL QUE AQUEST BLOC GUARDA ÉS LA JUNTURA, no la frase (que ja té banc a `taulesQ8.test.js`).
+// `filesGrading` REBATEJA els camps de la regla —`logica`→`regla`, `increment_base`→`delta`,
+// `increment_break`→`delta_break`, `talla_break_label`→`talla_break`— i `fraseBreakQ8` els ha de
+// tornar a traduir. Si algú desfés aquella correspondència, la fitxa sortiria SENSE CAP RELLEU i
+// tot seguiria verd: el build compila, el banc de motor no mira dibuixos i la taula s'imprimiria
+// igual. Per això la cadena es prova SENCERA i sobre la sortida real del constructor, mai sobre
+// una fila escrita a mà que ja tingués els noms bons.
+const _cm = (v) => Number(v).toFixed(1)
+const _q8bRelleu = (extra) => filesGrading(
+  [{ ...rowsTM[0], ...extra }], talles, dades.model.base_size_label)[0]
+
+prova('F4-QUATER · el break LLEGAT arriba a la columna de la fitxa (i en convenció de MOTOR)', () => {
+  // ⚠️ EL RUN DEL BANC ÉS `XS·S·M` (tres talles), no el de cinc dels altres fums: el break
+  // desat a `S` fa que el motor gradui `S..M`, i la frase ha de dir `S→M` — l'última talla del
+  // run, sigui quina sigui. Escriure-hi `M→XL` de memòria hauria estat provar un altre banc.
+  const f = _q8bRelleu({ increment_break: 3, talla_break_label: 'S' })
+  assert.equal(f.delta_break, 3, 'el constructor el rebateja a `delta_break`')
+  assert.equal(f.talla_break, 'S', '…i a `talla_break`, CRU')
+  assert.equal(fraseBreakQ8(f, talles, _cm), 'S→M +3.0',
+    'si això surt buit, la traducció de noms de camp de `fraseBreakQ8` s\'ha trencat')
+})
+
+prova('F4-QUATER · els INTERVALS explícits també hi arriben, i el 2n es compta', () => {
+  const f = _q8bRelleu({ breaks: [
+    { inici: 'XS', final: 'XS', delta: 3 },
+    { inici: 'S', final: 'M', delta: 4 }] })
+  assert.equal(fraseBreakQ8(f, talles, _cm), 'XS→XS +3.0 +1',
+    'el pressupost de paper: un tram lletrejat i la resta comptada')
+})
+
+prova('F4-QUATER · REGLA DEL SILENCI: la fitxa no imprimeix el que no mana', () => {
+  assert.equal(fraseBreakQ8(_q8bRelleu({}), talles, _cm), '', 'sense relleu, res')
+  assert.equal(
+    fraseBreakQ8(_q8bRelleu({ logica: 'FIXED', increment_base: 0, increment_break: 0,
+      talla_break_label: 'S' }), talles, _cm),
+    '', 'un FIXED amb residu llegat no gradua i no diu res')
+  assert.equal(
+    fraseBreakQ8(_q8bRelleu({ increment_break: 2, talla_break_label: 'S' }), talles, _cm),
+    '', 'un llegat que repeteix el Δ general (2) no és un trencament')
 })
 
 prova('l\'escalat també es reparteix en 2 grups', () => {
@@ -258,7 +301,8 @@ const CINC = ['XXS', 'XS', 'S', 'M', 'L']
 // H-bis/3 — i totes tres porten ara LAYER · POM · NAME al davant, no LAYER · POM.
 const casos = [
   ['Q8a fitting', ample([16, wCodi, wPom, 18, 18, 16, 22, 52])],
-  ['Q8b grading (5 talles)', ample([16, wCodi, wPom, 18, 14, 14, 18, ...CINC.map(() => 14)])],
+  // F4-QUATER — `Break`(14) + `B.Size`(18) han passat a una sola «Breaks»(26): −6 mm.
+  ['Q8b grading (5 talles)', ample([16, wCodi, wPom, 18, 14, 26, ...CINC.map(() => 14)])],
   ['Q8c size set (5 talles)', ample([16, wCodi, wPom, ...CINC.flatMap(() => [13, 13])])],
 ]
 for (const [nom, w] of casos) {
