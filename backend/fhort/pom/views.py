@@ -253,13 +253,80 @@ class GradingRuleSetViewSet(viewsets.ModelViewSet):
     ordering = ['nom']
 
     def get_queryset(self):
-        # B3 — filtre OPT-IN (?amb_regles=1) que amaga els contenidors ESQUELET (0 regles) al
-        # selector de graduació (RuleSetPicker). Les pantalles de CRUD/gestió NO passen el flag i
-        # segueixen veient els buits (esquelets a punt de sembrar). Fora del flag: cap canvi.
         qs = super().get_queryset()
-        if self.request.query_params.get('amb_regles') in ('1', 'true', 'True'):
-            qs = qs.annotate(n_regles=Count('regles')).filter(n_regles__gt=0)
-        return qs
+        params = self.request.query_params
+
+        # ══ S45/C — EL CATÀLEG S'OFEREIX ACOTAT ═══════════════════════════════════════
+        # A PROD hi ha 52 jocs: 34 actius i **18 JUBILATS**, 51 amb regles i 24 d'ells de
+        # LOS. Els quatre pickers de graduació els demanaven tots i els pintaven tots en un
+        # `<div>` sense sostre. Un joc jubilat que es pot triar no està jubilat: la
+        # jubilació no era una decisió, era una etiqueta que ningú llegia.
+        #
+        # EL SEDÀS ES CONSTRUEIX COM UNA SOLA `Q` I NO COM UNA CADENA DE `.filter()`, perquè
+        # al final s'hi ha d'aplicar una EXCEPCIÓ (`?inclou=`) que cap `.filter()` encadenat
+        # podria desfer: un cop has filtrat, el que has tret ja no torna.
+        sedas = Q()
+
+        # B3 — filtre OPT-IN (?amb_regles=1) que amaga els contenidors ESQUELET (0 regles)
+        # al selector de graduació. Les pantalles de CRUD/gestió NO passen el flag i
+        # segueixen veient els buits (esquelets a punt de sembrar).
+        if params.get('amb_regles') in ('1', 'true', 'True'):
+            qs = qs.annotate(n_regles=Count('regles'))
+            sedas &= Q(n_regles__gt=0)
+
+        # **JUBILAR ≠ AMAGAR, i per això el flag existeix.** Els jubilats segueixen sent
+        # visibles per a qui els ha de gestionar (`?include_inactive=1`: la pantalla de
+        # Gestió de jocs i la fitxa de client). El que canvia és el DEFECTE.
+        #
+        # ⚠️ `?actiu=<x>` EXPLÍCIT SEGUEIX MANANT. El `filterset_fields` ja el porta, i si el
+        # defecte s'hi superposés, `?actiu=false` tornaria SEMPRE buit — un filtre que es
+        # contradiu amb ell mateix és pitjor que no tenir-lo.
+        inclou_jubilats = (params.get('include_inactive') in ('1', 'true', 'True')
+                           or 'actiu' in params)
+        if not inclou_jubilats:
+            sedas &= Q(actiu=True)
+
+        # `?per_client=<id>` — els del client MÉS els de catàleg (sense client). No és el
+        # `?customer=<id>` del filterset: aquell és exacte i deixaria fora tot el catàleg de
+        # la casa, que és precisament el fons comú del qual tothom tria. `cap` = només
+        # catàleg. A PROD això és el que treu de la llista els 24 jocs LOS.
+        per_client = params.get('per_client')
+        if per_client:
+            if per_client in ('cap', 'null', 'none'):
+                sedas &= Q(customer__isnull=True)
+            else:
+                try:
+                    sedas &= Q(customer_id=int(per_client)) | Q(customer__isnull=True)
+                except (TypeError, ValueError):
+                    pass
+
+        # `?per_size_system=<id>` — el sistema del model MÉS els que no en declaren cap. El
+        # NULL és COMODÍ i no absència: un joc sense sistema val per a tots, i excloure'l
+        # (com faria `?size_system=<id>` exacte) buidaria la llista dels jocs genèrics.
+        per_ss = params.get('per_size_system')
+        if per_ss:
+            try:
+                sedas &= Q(size_system_id=int(per_ss)) | Q(size_system__isnull=True)
+            except (TypeError, ValueError):
+                pass
+
+        # 🚨 `?inclou=<id[,id…]>` — L'EXCEPCIÓ QUE EL SEDÀS NECESSITA PER NO MENTIR.
+        #
+        # Mesurat a staging el 21/08: el model 1383 (TRV-SS27-0001) és del client **TRV** i
+        # té assignat el joc **219, que és de BRW**. Amb `per_client=13` el sedàs se'l menja,
+        # i el picker s'obriria SENSE el joc que el model porta posat: ni a la llista, ni
+        # ressaltat, ni enlloc. La pantalla diria que el model no té joc quan en té un.
+        #
+        # És la mateixa llei que `include_inactive`, aplicada a l'altre eix: **el que està EN
+        # ÚS no s'amaga mai.** Un joc d'un altre client pot ser una anomalia a corregir —o una
+        # decisió deliberada—, però mentre hi sigui, s'ha de veure. Amagar-lo no el desassigna:
+        # només fa que ningú el pugui canviar.
+        inclou = [int(x) for x in (params.get('inclou') or '').split(',')
+                  if x.strip().isdigit()]
+        if inclou:
+            sedas |= Q(pk__in=inclou)
+
+        return qs.filter(sedas) if sedas else qs
 
     def get_permissions(self):
         if self.action in ('create', 'update', 'partial_update', 'destroy'):
