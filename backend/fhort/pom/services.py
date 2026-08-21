@@ -163,9 +163,15 @@ def escala_del_model(model):
     return size_run, run_sistema, _pos, _pos(base_size)
 
 
-def generate_graded_specs(size_fitting_id: int) -> int:
+def generate_graded_specs(size_fitting_id: int, informe: dict | None = None) -> int:
     """
     Generate GradedSpec for every size of the Size & Fitting.
+
+    `informe` (TRAM E, opcional) — dict que el cridador obre si vol el detall estructurat del
+    que ha passat. S'hi omple `step_base_copiada`: una entrada per POM amb les talles que han
+    sortit amb **el valor de la talla base copiat** perquè la seva regla STEP no en té valor
+    (v. `_apply_rule`). És la LLISTA DE TREBALL MANUAL que la propagació ha de poder ensenyar;
+    sense ella el senyal tornaria a viure només al log. El valor de retorn no canvia.
 
     Flow:
       1. Read BaseMeasurement of the model's base size
@@ -229,6 +235,7 @@ def generate_graded_specs(size_fitting_id: int) -> int:
     # Generate specs
     created = 0
     warnings: list[str] = []
+    marques_step: list[dict] = []      # TRAM E — cel·les amb el valor de la base copiat
     sense_regla: set[int] = set()   # D2: POMs amb base i sense regla → no emeten cap cel·la
     # FIX-A/PAS-3 — POMs amb regla INCOMPLETA (LINEAR sense `increment_base`, STEP sense
     # `valors_step`): en tenen, de regla, però no gradua. Fins ara el senyal vivia NOMÉS a
@@ -305,7 +312,7 @@ def generate_graded_specs(size_fitting_id: int) -> int:
             else:
                 graded_val, gt_applied = _apply_rule(
                     rule, base_val, steps, i, base_idx,
-                    size_run=run_sistema, warnings=warnings,
+                    size_run=run_sistema, warnings=warnings, marques=marques_step,
                 )
 
             if graded_val is None:
@@ -390,6 +397,25 @@ def generate_graded_specs(size_fitting_id: int) -> int:
             f"Grading SF {size_fitting_id}: {len(warnings)} avís(os) de regla incompleta — "
             "cel·les no calculades: " + " | ".join(warnings)
         )
+    # TRAM E — LA LLISTA DE TREBALL MANUAL. Les cel·les que han sortit amb el valor de la base
+    # copiat s'agrupen per POM i es lliuren al cridador. Patró «llista de treball manual, mai
+    # absència silenciosa»: la propagació les ha de poder dir en veu alta, i el log sol no
+    # arriba a ningú que estigui mirant la pantalla.
+    if marques_step:
+        per_pom: dict = {}
+        for m in marques_step:
+            fila = per_pom.setdefault(m['pom_id'], {'pom_id': m['pom_id'],
+                                                    'pom_codi': m['pom_codi'], 'talles': []})
+            if m['talla'] not in fila['talles']:
+                fila['talles'].append(m['talla'])
+        logger.warning(
+            f"Grading SF {size_fitting_id}: {len(per_pom)} POM(s) amb regla STEP sense valor → "
+            f"valor de talla base copiat, a posar a mà: {sorted(per_pom)}")
+        if informe is not None:
+            informe['step_base_copiada'] = list(per_pom.values())
+    elif informe is not None:
+        informe['step_base_copiada'] = []
+
     logger.info(f"Grading generated for SF {size_fitting_id}: {created} specs")
     return created
 
@@ -1085,7 +1111,7 @@ def _get_or_create_grading_version(sf):
 
 def bump_grading_version_and_generate(sf_id, *, base_changed, profile_id=None,
                                       allow_reopen_sealed=False, nom=None,
-                                      reopen_context=''):
+                                      reopen_context='', informe=None):
     """Crea la GradingVersion v+1 d'un SizeFitting i hi propaga el grading.
 
     PEÇA 1 (sprint paritat Grading): centralitza el versionat funcional que abans vivia
@@ -1150,7 +1176,10 @@ def bump_grading_version_and_generate(sf_id, *, base_changed, profile_id=None,
         )
 
     # 4. Pobla la versió nova (ara és l'activa que llegeix _get_or_create_grading_version).
-    generate_graded_specs(sf_id)
+    #    TRAM E — `informe` només travessa: aquest helper no en llegeix res, però és l'únic camí
+    #    de la propagació conscient i sense el pas la llista de treball manual no arribaria a la
+    #    pantalla que acaba de prémer «Propagar».
+    generate_graded_specs(sf_id, informe=informe)
     return new_version
 
 
@@ -1170,11 +1199,16 @@ def _add_warning(warnings, msg: str) -> None:
 
 
 def _apply_rule(rule, base_val: float, steps: int, size_idx: int, base_idx: int,
-                size_run=None, warnings=None):
+                size_run=None, warnings=None, marques=None):
     """Apply the grading rule and return (graded_value, grading_type_applied).
 
-    graded_value is None when the cell cannot be computed (hard STEP validation
-    failure); the caller MUST skip it instead of falling back silently.
+    graded_value is None when the cell cannot be computed (LINEAR sense Δ base, regla absent);
+    the caller MUST skip it instead of falling back silently.
+
+    `marques` (TRAM E) — llista opcional on s'hi apunta cada cel·la que surt amb el VALOR DE LA
+    TALLA BASE COPIAT perquè la regla STEP no té valor per a aquella talla. És el mateix patró
+    que `warnings` (un canal que el cridador obre si el vol) i és el que permet a la propagació
+    servir la LLISTA DE TREBALL MANUAL en comptes d'una absència silenciosa.
 
     ⚠️ **ESPAI DE SISTEMA (llei S24b, 2026-07-22).** `size_run` és el run del **SIZE SYSTEM**
     (totes les talles, ordenades per `SizeDefinition.ordre`), NO el run del model; i
@@ -1255,11 +1289,6 @@ def _apply_rule(rule, base_val: float, steps: int, size_idx: int, base_idx: int,
 
     elif grading_type == 'STEP':
         pom_codi = getattr(getattr(rule, 'pom', None), 'codi_client', None) or rule.pom_id
-        vs = rule.valors_step
-        if not isinstance(vs, dict) or not vs:
-            _add_warning(warnings,
-                f"Regla STEP del POM {pom_codi}: valors_step buit o invàlid; cap cel·la calculada.")
-            return None, 'STEP'
         if size_run is None:
             _add_warning(warnings,
                 f"Regla STEP del POM {pom_codi}: falta el size run per calcular.")
@@ -1267,22 +1296,38 @@ def _apply_rule(rule, base_val: float, steps: int, size_idx: int, base_idx: int,
         # The base size itself is the origin: no delta needed.
         if size_idx == base_idx:
             return base_val, 'STEP'
-        deltas = {_norm_label(k): v for k, v in vs.items()}
-        # Indices crossed when moving from the base toward this size; the farther
-        # label of each step carries that step's delta.
-        if size_idx > base_idx:
-            path, sign = range(base_idx + 1, size_idx + 1), 1.0
-        else:
-            path, sign = range(size_idx, base_idx), -1.0
-        total = 0.0
-        for j in path:
-            delta = deltas.get(_norm_label(size_run[j]))
-            if delta is None:
-                _add_warning(warnings,
-                    f"Regla STEP del POM {pom_codi}: falta delta per a la talla {size_run[j]}.")
-                return None, 'STEP'
-            total += float(delta)
-        return base_val + sign * total, 'STEP'
+        from fhort.pom.grading_utils import step_delta_acumulat
+        total, falta = step_delta_acumulat(rule, size_run, base_idx, size_idx)
+        if falta is not None:
+            # 🚨 TRAM E (decisió d'Agus, 21/08) — UNA STEP SENSE VALOR NO DEIXA LA CEL·LA BUIDA:
+            # hi va EL VALOR DE LA TALLA BASE, i la superfície el pinta en VERMELL amb l'avís
+            # «valors a posar a mà a l'escalat».
+            #
+            # Això és una EXCEPCIÓ CONSCIENT a la llei D2 de cel·la absent, i val la pena dir
+            # per què no la contradiu: D2 existeix perquè el motor no fabriqui una corba que
+            # sembli graduació (el FIXED inventat del model 163, 225 specs a delta 0 i 200 OK).
+            # Aquí la corba **no se sap dir i es diu que no se sap**: la fila apareix, el valor
+            # és reconeixible com a prestat (és el de la base, i cap cel·la no ho amaga), i la
+            # marca vermella + la llista de treball manual el reclamen. El silenci d'abans era
+            # pitjor: la fila desapareixia sencera de l'escalat i el senyal vivia només al log.
+            #
+            # LA MARCA NO S'EMMAGATZEMA: `GradedSpec` és sortida pura i no té camp d'origen. La
+            # superfície ho sap perquè la regla és STEP i `valors_step` no cobreix la talla —el
+            # MATEIX predicat que acaba de decidir aquí, `step_delta_acumulat`.
+            _add_warning(warnings,
+                f"Regla STEP del POM {pom_codi}: falta el delta de la talla {falta}; "
+                "s'hi copia el valor de la talla base, a posar a mà des de l'escalat.")
+            if marques is not None:
+                marques.append({'pom_id': getattr(rule, 'pom_id', None), 'pom_codi': pom_codi,
+                                'talla': size_run[size_idx], 'falta': falta})
+            return base_val, 'STEP'
+        if total is None:
+            # Sense geometria (run buit o índex fora del run) no hi ha ni camí ni talla que
+            # reclamar a mà: això no és el cas del TRAM E, és la cel·la absent de sempre.
+            _add_warning(warnings,
+                f"Regla STEP del POM {pom_codi}: geometria incompleta; cap cel·la calculada.")
+            return None, 'STEP'
+        return base_val + total, 'STEP'
 
     elif grading_type == 'FIXED':
         return base_val, 'FIXED'

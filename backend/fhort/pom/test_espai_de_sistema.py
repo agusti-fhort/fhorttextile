@@ -132,15 +132,25 @@ class RunNoContiguTest(SimpleTestCase):
 
     def test_step_necessita_el_delta_de_la_talla_TRAVESSADA(self):
         """CRITERI DOCUMENTAT (S24b): el camí es recorre sobre les talles del SISTEMA, i per
-        tant STEP necessita el delta de la M encara que el model no la fabriqui. Sense
-        aquest delta la cel·la queda ABSENT (None) — mai a zero ni col·lapsada: és la
-        mateixa llei D2 de cel·la absent que ja regia aquí."""
+        tant STEP necessita el delta de la M encara que el model no la fabriqui.
+
+        🚨 QUÈ PASSA QUAN FALTA — CONTRACTE CANVIAT PEL TRAM E (Agus, 2026-08-21). Aquí
+        s'asseria `None` (cel·la absent, llei D2). Ara la cel·la surt amb **el valor de la talla
+        base**, marcada en vermell a la superfície i apuntada a la llista de treball manual. El
+        que aquest test protegeix segueix intacte i és l'altra meitat: **el motor no col·lapsa
+        el camí ni el gradua sense el delta que li falta** —106.0 (el resultat amb la M
+        informada) segueix sent el número prohibit— i el warning segueix nomenant la M, que és
+        la talla que s'ha d'anar a buscar."""
         rule = _rule(logica='STEP', valors_step={'XS': 2, 'L': 3})   # falta la M
         warnings = []
-        val, _ = _apply_rule(rule, BASE_VAL, 2, 4, 2, size_run=SISTEMA, warnings=warnings)
-        self.assertIsNone(val)
+        marques = []
+        val, _ = _apply_rule(rule, BASE_VAL, 2, 4, 2, size_run=SISTEMA, warnings=warnings,
+                             marques=marques)
+        self.assertEqual(val, BASE_VAL)
+        self.assertNotEqual(val, 106.0, 'no pot col·lapsar el camí ni inventar el delta que falta')
         self.assertEqual(len(warnings), 1)
         self.assertIn('M', warnings[0])
+        self.assertEqual(marques, [{'pom_id': 1, 'pom_codi': 1, 'talla': 'L', 'falta': 'M'}])
 
     def test_step_amb_el_delta_de_la_talla_travessada_SI_calcula(self):
         rule = _rule(logica='STEP', valors_step={'XS': 2, 'M': 3, 'L': 3})

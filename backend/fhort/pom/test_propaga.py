@@ -152,11 +152,32 @@ class ApplyRuleStepGuardTest(SimpleTestCase):
         self.assertEqual(out['XL'], (61, 'STEP'))
         self.assertNotEqual(out['L'][0], 52)   # NO ha gradat canònic
 
-    # ── R3: STEP sense valors_step — increment_base poblat però logica='STEP', vs buit →
-    # comportament STEP definit (cel·la None + warning); NO inventa delta canònic.
+    # ── R3: STEP sense valors_step.
+    #
+    # 🚨 CONTRACTE CANVIAT PEL TRAM E (decisió d'Agus, 2026-08-21). Aquí s'asseria
+    # `(None, 'STEP')` — cel·la ABSENT— i el resultat era que la fila DESAPAREIXIA de l'escalat
+    # sencera, amb el motiu només al log. Ara la cel·la surt amb **el valor de la talla base**,
+    # la superfície la pinta en VERMELL i la propagació serveix la llista de POMs×talles a posar
+    # a mà.
+    #
+    # 🔑 EL QUE AQUEST TEST PROTEGIA NO HA CANVIAT, i segueix assertit: el motor **no inventa
+    # cap delta**. 52 (el canònic que sortiria d'`increment_base=2`) segueix sent el número
+    # prohibit. La diferència amb la LINEAR-sense-Δ del fix A —que sí que ha de callar— és que
+    # allà una columna plana es presentava com a graduació i ningú no ho podia veure; aquí el
+    # valor és reconeixiblement prestat, va marcat i entra en una llista de treball.
     def test_r3_step_sense_valors_step(self):
         rule = _rule(logica='STEP', increment_base=2, valors_step=None)
         warnings = []
-        out = self._grade(rule, warnings=warnings)
-        self.assertEqual(out['L'], (None, 'STEP'))   # no calcula (no 52 canònic)
+        marques = []
+        out = {}
+        for i, label in enumerate(self.RUN):
+            out[label] = _apply_rule(
+                rule, self.BASE_VAL, i - self.BASE_IDX, i, self.BASE_IDX,
+                size_run=self.RUN, warnings=warnings, marques=marques,
+            )
+        self.assertEqual(out['L'], (self.BASE_VAL, 'STEP'))   # el valor de la BASE, prestat
+        self.assertNotEqual(out['L'][0], 52, 'no pot graduar amb el delta canònic')
+        self.assertEqual(out['M'], (self.BASE_VAL, 'STEP'))   # la base, que sempre és seva
         self.assertTrue(warnings)
+        # I la cel·la queda APUNTADA, que és el que la converteix en feina i no en silenci.
+        self.assertEqual(sorted(m['talla'] for m in marques), ['L', 'S', 'XL'])

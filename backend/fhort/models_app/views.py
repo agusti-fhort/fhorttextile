@@ -2088,13 +2088,37 @@ def measurements_table_view(request, model_id):
     def _flt(v):
         return float(v) if v is not None else None
 
-    # TRAM F — la geometria del motor, per servir el run del SISTEMA (v. la resposta):
-    # és l'espai on el motor resol el relleu i el que el picker d'intervals ha d'oferir.
+    # ── TRAM E · LES TALLES SENSE VALOR STEP, DERIVADES AQUÍ I NO EMMAGATZEMADES ─────────────
+    # `GradedSpec` és sortida pura i no té camp d'origen (llei). La marca de «aquí hi ha el
+    # valor de la talla base copiat» no és una dada de l'spec: és una propietat de la REGLA
+    # (STEP + `valors_step` que no cobreix el camí fins a aquella talla), i per tant es deriva
+    # al LECTOR — l'alternativa de menys radi de les quatre censades.
+    #
+    # Es deriva AQUÍ i no al front perquè el predicat ha de ser EL MATEIX que el del motor, i el
+    # del motor és `step_delta_acumulat`. Amb un mirall a JavaScript, la cel·la vermella i la
+    # cel·la copiada podrien deixar de ser la mateixa el dia que una de les dues canviés — i
+    # justament aquest és el cas on el model pot no fabricar la talla que falta al camí.
+    from fhort.pom.grading_utils import step_delta_acumulat
     try:
         from fhort.pom.services import escala_del_model as _escala
         _run_model_e, _run_sist_e, _pos_e, _base_idx_e = _escala(model)
     except (ValueError, AttributeError):
         _run_model_e, _run_sist_e, _pos_e, _base_idx_e = [], [], None, None
+
+    def _talles_step_sense_valor(rule):
+        """Les talles del run del MODEL que sortiran amb el valor de la base copiat."""
+        if rule is None or getattr(rule, 'logica', None) != 'STEP' or _pos_e is None:
+            return []
+        fora = []
+        for etiqueta in _run_model_e:
+            try:
+                idx = _pos_e(etiqueta)
+            except (ValueError, KeyError):
+                continue
+            _total, falta = step_delta_acumulat(rule, _run_sist_e, _base_idx_e, idx)
+            if falta is not None:
+                fora.append(etiqueta)
+        return fora
 
     # C3 — nomenclatura del CLIENT del model, mateix resolutor que la resta de superfícies.
     from fhort.pom.identitat import clau_mesura
@@ -2154,6 +2178,9 @@ def measurements_table_view(request, model_id):
             # superfícies visuals de la regla: si el relleu no hi surt, la pantalla que l'edita
             # no el pot ni ensenyar ni tornar a desar sencer.
             'breaks': (getattr(rule, 'breaks', None) or []) if rule else [],
+            # TRAM E — les talles d'aquesta fila que porten el valor de la base COPIAT (regla
+            # STEP sense valor). Derivat, mai desat: v. `_talles_step_sense_valor`.
+            'step_base_copiada': _talles_step_sense_valor(rule),
             # P0.5d — D'ON VE LA REGLA, perquè la superfície de Graduació ho ha de poder dir.
             #
             # CALEN ELS DOS CAMPS, i el primer cop només en vaig posar un. `origen` sol MENTIA
@@ -3086,6 +3113,8 @@ def generate_grading_view(request, model_id):
 
     new_version = bool(request.data.get('new_version', False))
     allow_reopen_sealed = bool(request.data.get('allow_reopen_sealed', False))
+    # TRAM E — el canal de la llista de treball manual (v. `generate_graded_specs`).
+    informe: dict = {}
     n_consolidat = 0  # B3: POMs de talla base consolidats des de fittings oberts abans de propagar
 
     # Crida el motor. new_version=True → acte conscient de PROPAGAR (Peça 2): crea v+1 via el
@@ -3142,6 +3171,7 @@ def generate_grading_view(request, model_id):
                     allow_reopen_sealed=allow_reopen_sealed,
                     nom='Propagació conscient',
                     reopen_context='Propagació conscient',
+                    informe=informe,
                 )
             except ValueError as e:
                 # Rollback explícit: es retorna des de DINS de l'atòmic, i sense això Django
@@ -3174,7 +3204,7 @@ def generate_grading_view(request, model_id):
         # vigent, amb l'estat sense actualitzar i un 500 que no deia què havia quedat escrit.
         with transaction.atomic():
             try:
-                graded_count = generate_graded_specs(sf.id)
+                graded_count = generate_graded_specs(sf.id, informe=informe)
             except SealedGradingVersionError as e:
                 # G6-B/T1 · camí 1/6. Regenerar in-place sobre una versió segellada: refusat. La
                 # sortida és el `new_version=True` d'aquest mateix endpoint (el bump), no forçar.
@@ -3239,6 +3269,11 @@ def generate_grading_view(request, model_id):
         'size_run': size_run,
         'base_size': model.base_size_label,
         'base_consolidada_des_de_fitting': n_consolidat,  # B3: POMs base consolidats (0 si cap)
+        # TRAM E — LA LLISTA DE TREBALL MANUAL, no un avís genèric: quins POMs i quines talles
+        # han sortit amb el valor de la talla base copiat perquè la regla STEP no en té valor.
+        # Buida quan no n'hi ha cap (una clau que hi és sempre és més fàcil de llegir que una
+        # que apareix i desapareix).
+        'step_base_copiada': informe.get('step_base_copiada', []),
         'rows': rows,
     })
 

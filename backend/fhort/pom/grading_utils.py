@@ -1070,6 +1070,44 @@ def _break_idx_de(rule, run):
     return norm.index(tn) if tn in norm else None
 
 
+def step_delta_acumulat(rule, run, base_idx, size_idx):
+    """STEP: suma SIGNADA dels deltes del camí base → talla, o quina etiqueta falta.
+
+    Retorna `(total, falta)`: amb `falta=None` el total és bo; amb `falta` informada (l'etiqueta
+    del camí que `valors_step` no cobreix) el total no vol dir res i el cridador decideix.
+
+    🔑 TRAM E — PUNT ÚNIC DE «AQUESTA TALLA NO TÉ VALOR STEP». El motor l'usa per saber què
+    emet i **el lector l'usa per saber què pinta en vermell**: la marca es DERIVA de la regla,
+    no s'emmagatzema enlloc (`GradedSpec` és sortida pura, i no té camp d'origen). Si els dos
+    costats tinguessin el seu predicat, el dia que un canviés la cel·la vermella i la cel·la
+    copiada deixarien de ser la mateixa — i ningú no ho veuria.
+
+    Funció PURA. `run` és el run del SISTEMA (llei S24b) i els índexs hi són posicions.
+    """
+    vs = getattr(rule, 'valors_step', None)
+    deltas = {_norm(k): v for k, v in vs.items()} if isinstance(vs, dict) else {}
+    if size_idx == base_idx:
+        return 0.0, None
+    if not run:
+        return None, None
+    if size_idx > base_idx:
+        cami, signe = range(base_idx + 1, size_idx + 1), 1.0
+    else:
+        cami, signe = range(size_idx, base_idx), -1.0
+    total = 0.0
+    for j in cami:
+        if j < 0 or j >= len(run):
+            return None, None
+        delta = deltas.get(_norm(run[j]))
+        if delta is None:
+            return None, run[j]
+        try:
+            total += float(delta)
+        except (TypeError, ValueError):
+            return None, run[j]
+    return signe * total, None
+
+
 def intervals_de(rule, run):
     """El relleu d'una regla com a llista d'INTERVALS `[(i_ini, i_fi, delta)]` sobre `run`.
 
