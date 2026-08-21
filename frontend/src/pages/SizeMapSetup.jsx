@@ -13,7 +13,7 @@ import Badge from '../components/ui/Badge'
 import PageMenu from '../components/ui/PageMenu'
 import { botoPri, selS } from '../components/ui/buttons'
 import { useElements } from '../utils/vocabulariDominiFont'
-import { aDocument } from '../utils/breakConvention'
+import { etiquetaRegla } from '../utils/gradingRegime'
 
 // Size Map Setup — wizard de 5 passos per derivar un SizeSystem (+GradingRuleSet +SizingProfiles)
 // a partir d'una taula de mides de client, i mode llista dels sistemes existents.
@@ -832,13 +832,19 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
                             ? (g.valors_step_text
                                 ? <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)' }}>{g.valors_step_text}</span>
                                 : <span style={{ color: 'var(--text-soft)' }}>—</span>)
-                            : (g.increment_break != null
-                                /* El break, en convenció de DOCUMENT: aquesta previsualització
-                                   es llegeix contra el full del client, que és qui l'anomena.
-                                   El run és `wiz.gradingRun`, el mateix sobre el qual s'ha
-                                   derivat la regla (v. la nota de :415). */
-                                ? <span>+{g.increment_base} · +{g.increment_break} {t('size_map_g_break_from')} {aDocument(g.talla_break_label, wiz.gradingRun) || '—'}</span>
-                                : <span>+{g.increment_base}</span>)}
+                            /* ── F4-QUATER · EL RESUM DE PROPAGACIÓ DIU EL RELLEU COM TOTHOM ──
+                               🚨 AQUESTA LÍNIA ERA CEGA ALS INTERVALS. Només mirava
+                               `increment_break`, o sigui que una regla derivada amb `breaks`
+                               (tram F) es previsualitzava com si no trenqués enlloc —i aquesta
+                               previsualització és justament on l'humà valida la FIDELITAT del
+                               que s'ha llegit del document abans de persistir-ho.
+                               Ara la frase surt d'`etiquetaRegla`, que és la mateixa que pinta
+                               l'Escalat i el check: llegeix les DUES formes de relleu, porta la
+                               regla del silenci i diu els rangs en convenció de MOTOR (l'ordre
+                               n'ha jubilat la volta de document també aquí).
+                               El run és `wiz.gradingRun`, el mateix sobre el qual s'ha derivat
+                               la regla (v. la nota de :415). */
+                            : <span>{etiquetaRegla(g, wiz.gradingRun)}</span>}
                         </td>
                         {/* Paritat R7 (NOMÉS display): valors originals del document per talla + toleràncies
                             extretes, al costat de la regla derivada, perquè l'humà validi la fidelitat

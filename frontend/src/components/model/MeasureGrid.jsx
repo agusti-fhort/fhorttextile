@@ -717,8 +717,13 @@ export default function MeasureGrid({
             <th rowSpan={2} style={identitatHd(0, COL_CAPA_W)}>{t('capa.col')}</th>
             <th rowSpan={2} style={identitatHd(COL_CAPA_W, COL_POM_W)}>{t('measuregrid.col_pom')}</th>
             <th rowSpan={2} style={identitatHd(COL_CAPA_W + COL_POM_W, COL_NOM_W)}>{t('measuregrid.col_nom')}</th>
+            {/* F4-QUATER — `c.title`: l'ajuda de la columna, quan en declara. La «Breaks» n'ha de
+                dur perquè la seva frase es llegeix en convenció de MOTOR i això s'ha de poder
+                comprovar sense sortir de la graella. Opcional: les columnes que no en porten
+                surten igual que sempre. */}
             {leadCols.map((c, i) => (
-              <th key={c.key} rowSpan={2} style={stickyHd(leadLefts[i], c.width, i)}>{c.label}</th>
+              <th key={c.key} rowSpan={2} title={c.title || undefined}
+                  style={stickyHd(leadLefts[i], c.width, i)}>{c.label}</th>
             ))}
             {groups.map(g => {
               const span = (g.historyCols?.length || 0) + 1 + (g.trailCols?.length || 0)

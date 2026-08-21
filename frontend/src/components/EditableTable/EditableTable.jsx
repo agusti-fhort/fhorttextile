@@ -22,8 +22,7 @@ import AvisDiccionari from '../ui/AvisDiccionari'
 import { boto, botoTer } from '../ui/buttons'
 import BateigInput from '../model/BateigInput'
 import { baseMeasurements, poms } from '../../api/endpoints'
-import { intervalsDe } from '../../utils/gradingRegime'
-import { aDocument } from '../../utils/breakConvention'
+import { fraseBreaks } from '../../utils/gradingRegime'
 import { esBruta } from '../../utils/taulaBruta'
 import { construeixPayload } from '../../utils/payloadMesures'
 
@@ -59,12 +58,14 @@ import { construeixPayload } from '../../utils/payloadMesures'
 // perquè s'ha d'encongir al seu contingut a totes dues.
 export const AMPLADES = {
   capa: 104, codi: 90, nom: 236, base: 100,
-  regim: 96, delta: 84, delta_break: 96, talla_break: 96,
-  // F4-BIS — la columna «Breaks» de les superfícies d'AUTORIA, que hi substitueix
-  // `delta_break` + `talla_break` (96+96). És un pis, no un sostre: la taula va a amplada de
-  // contingut dins d'un `overflowX:auto` i els xips creixen amb els que la regla tingui. Les
-  // dues amplades velles es queden perquè la CONSULTA (aquesta taula) segueix tenint-les: allà
-  // no s'edita res i la lectura compacta hi cap.
+  regim: 96, delta: 84,
+  // F4-BIS/F4-QUATER — LA COLUMNA «BREAKS», I JA NO EN QUEDA CAP ALTRA. Va néixer a les
+  // superfícies d'AUTORIA substituint `delta_break` + `talla_break` (96+96); amb F4-QUATER la
+  // CONSULTA hi entra també i les dues amplades velles se'n van amb les columnes que
+  // dimensionaven — no queda ningú que les llegeixi.
+  //
+  // És un pis, no un sostre: totes dues taules van a amplada de contingut dins d'un
+  // `overflowX:auto`, i tant els xips com la frase creixen amb els trams que la regla tingui.
   breaks: 200,
 }
 
@@ -75,23 +76,25 @@ const COLS_GRADING = [
   { clau: 'regim', i18n: 'fitting.grid.regime', ample: AMPLADES.regim, valor: r => r.logica || null },
   { clau: 'delta', i18n: 'editable_table.col.delta', ample: AMPLADES.delta,
     valor: r => (r.increment_base == null ? null : r.increment_base) },
-  // TRAM F — amb INTERVALS no hi ha UN Δ de break ni UNA talla de break: n'hi ha un per tram.
-  // Les dues columnes es diuen compacte (`S→L +3`) en comptes d'inventar-se quin dels tres és
-  // «el» break. Les etiquetes d'un interval van en convenció de MOTOR, com al seu editor.
-  { clau: 'delta_break', i18n: 'editable_table.col.delta_break', ample: AMPLADES.delta_break,
-    valor: r => (intervalsDe(r).length ? null
-      : (r.increment_break == null ? null : r.increment_break)) },
-  // La talla del break es pinta com l'anomena el DOCUMENT del client (l'última del tram petit),
-  // no com la desa el motor. La volta viu a `utils/breakConvention` i enlloc més.
-  { clau: 'talla_break', i18n: 'editable_table.col.talla_break', ample: AMPLADES.talla_break,
-    valor: (r, sizeRun) => {
-      const ivs = intervalsDe(r).filter(iv => iv && iv.delta !== null && iv.delta !== undefined)
-      if (ivs.length) {
-        const primer = `${ivs[0].inici}→${ivs[0].final} ${Number(ivs[0].delta) < 0 ? '' : '+'}${ivs[0].delta}`
-        return ivs.length > 1 ? `${primer} +${ivs.length - 1}` : primer
-      }
-      return aDocument(r.talla_break_label, sizeRun)
-    } },
+  // ── F4-QUATER · UNA SOLA COLUMNA «BREAKS» ──────────────────────────────────────────────────
+  //
+  // 🚨 AQUÍ HI HAVIA DUES COLUMNES (`Δ break` + `Talla break`) I EREN DUES MEITATS D'UN SOL
+  // TRENCAMENT. Funcionaven mentre una regla només en podia tenir un; des del tram F en pot
+  // tenir tres, i llavors ni la parella sabia dir-los ni hi havia manera honesta de triar quin
+  // dels tres era «el» break. La consulta se n'inventava un apany —el primer interval encabit a
+  // la columna de la TALLA i un `+N` al costat, amb la columna del Δ en blanc— i l'Escalat i la
+  // fitxa se n'inventaven un altre de diferent. Tres dibuixos de la mateixa dada.
+  //
+  // Ara n'hi ha UNA que diu la frase sencera (`fraseBreaks`), i és la mateixa funció que pinta
+  // l'Escalat i la fitxa. Aquesta superfície NO passa `max`: no s'hi edita res, la taula va a
+  // amplada de contingut dins d'un `overflowX:auto` i els tres trams hi caben lletrejats. El
+  // pressupost d'amplada és de les superfícies amb carril de talles, no d'aquesta.
+  //
+  // 🔑 I AMB LA COLUMNA SE'N VA L'OFF-BY-ONE: `aDocument` ja no es crida des d'aquí. Un rang
+  // amb els dos extrems dits (`M→XL`) no necessita que ningú el tradueixi.
+  { clau: 'breaks', i18n: 'grading.intervals.col', ample: AMPLADES.breaks,
+    ajuda: 'grading.intervals.col_help_lectura',
+    valor: (r, sizeRun) => fraseBreaks(r, sizeRun) || null },
 ]
 
 const FS_HEAD = '9.5px'   // capçaleres, versaletes
@@ -922,7 +925,7 @@ export default function EditableTable({
                 {/* P0.5b — LA REGLA, en LECTURA, DESPRÉS de la talla base. Els quatre camps
                     viatgen a la fila; aquí només es pinten quan hi ha graduació de què parlar. */}
                 {mostraGrading && COLS_GRADING.map((c, i) => (
-                  <th key={c.clau} rowSpan={2}
+                  <th key={c.clau} rowSpan={2} title={c.ajuda ? t(c.ajuda) : undefined}
                       style={{ ...thS, textAlign: 'center', minWidth: c.ample,
                                borderLeft: i === 0 ? '1px solid var(--border)' : '0.5px solid var(--border)' }}>
                     {t(c.i18n)}

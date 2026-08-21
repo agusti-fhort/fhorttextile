@@ -12,9 +12,8 @@ import { useTranslation } from 'react-i18next'
 import { useEnumeracio } from '../../utils/vocabulariDominiFont'
 
 import { pieceFittingLines } from '../../api/endpoints'
-import { effectiveRegime } from '../../utils/gradingRegime'
+import { effectiveRegime, etiquetaRegla, fraseBreaks } from '../../utils/gradingRegime'
 import { formatDelta } from '../../utils/format'
-import { aDocument, etiquetaRegla } from '../../utils/breakConvention'
 import { clauDeFila } from '../../utils/identitatMesura'
 import { cellaEscalat } from '../../utils/cellaEscalat'
 
@@ -265,19 +264,22 @@ export function NotaFittingCell({ lineId, valor, onDesa }) {
   )
 }
 
-// Etiqueta compacta de regla (delta · trencament).
+// Etiqueta compacta de regla: el Δ general i el seu relleu (`+2 · M→XL +3`).
 //
-// 🔑 EL TRENCAMENT ES DIU EN CONVENCIÓ DE DOCUMENT (Agus, 10/08): la BD desa la primera talla
-// del tram gran i aquí es pinta l'ÚLTIMA DEL PETIT, que és com l'anomena el full del client.
-// La volta la fa `utils/breakConvention`, que és l'únic lloc de la casa on viu el ±1 — abans
-// aquesta funció era una còpia calcada de la de `CheckMeasureEditor` i totes dues pintaven
-// `talla_break_label` cru.
+// 🚨 F4-QUATER — EL RELLEU JA NO ES DIU EN CONVENCIÓ DE DOCUMENT. Des que la frase és d'INTERVAL
+// («M→XL +3», amb els dos extrems dits), la volta ±1 no hi pinta res: un rang no és ambigu, i
+// traduir-ne l'inici sense el final donaria una etiqueta que no casa ni amb la BD ni amb el
+// picker. `etiquetaRegla` viu ara a `utils/gradingRegime` —al costat d'`intervalsVisibles`, que
+// és qui sap llegir les dues formes de relleu i qui porta la REGLA DEL SILENCI— i és la mateixa
+// funció que alimenta el `title` de la columna «Breaks» d'aquesta mateixa graella.
 function regleLabel(row, t, sizeRun) {
   if (row.logica == null) return ''
   if (row.logica === 'STEP') return t('fitting.grid.rule_free')
   // LINEAR+0 sense break = FIXED: no té delta a ensenyar (§LLEI a utils/gradingRegime).
   if (effectiveRegime(row) === 'FIXED') return ''
-  return etiquetaRegla(row, sizeRun, t('fitting.grid.break'))
+  // El Δ va SENSE unitat, com sempre ha anat en aquesta etiqueta: és una xifra de regla al
+  // costat del règim, no una mesura, i la unitat la declara la graella sencera.
+  return etiquetaRegla(row, sizeRun)
 }
 
 // leadCol Règim del fitting (sticky): a diferència del check (lectura), aquí el règim és EDITABLE
@@ -449,38 +451,33 @@ export function escalatRuleLeadCols(t, onRegimChange, readOnly = false, unit = '
         ? <span style={cap}>{formatDelta(row.increment_base, unit)}</span>
         : <span style={buit}>—</span>),
     },
+    // ── F4-QUATER · UNA SOLA COLUMNA «BREAKS» ────────────────────────────────────────────────
+    //
+    // 🚨 AQUÍ HI HAVIA `Δ break` (54px) + `Talla break` (56px), DUES MEITATS D'UN SOL
+    // TRENCAMENT, i des del tram F la parella ja no sabia dir el que la regla diu: amb intervals
+    // la columna del Δ es buidava i la de la TALLA canviava de veu per encabir-hi `S→L +3`. Una
+    // columna que a vegades diu una talla i a vegades una frase sencera no és una columna.
+    //
+    // Ara n'hi ha una que diu la frase, i és la MATEIXA `fraseBreaks` que pinta la consulta i la
+    // fitxa. Els 110px són els 54+56 de les dues velles: **aquesta fusió no pren ni un píxel al
+    // carril de talles**, que és el que el pressupost d'aquesta graella no perdona.
+    //
+    // ⚠️ EL `max: 1` ÉS EL PRESSUPOST D'AMPLADA, I PER AIXÒ VA AMB EL `title`. Amb tres trams la
+    // frase sencera no cap en 110px i eixamplar-la es menjaria una talla; es lletreja el primer,
+    // es compta la resta (`+N`) i el relleu SENCER viu al tooltip. Una dada retallada sense on
+    // anar-la a veure seria una dada perduda — i la corba hi és igualment, xifra a xifra, a les
+    // columnes de talla de la mateixa fila.
     {
-      key: 'delta_break', label: t('measuregrid.regla_delta_break'), width: 54,
-      // TRAM F — amb intervals no hi ha UN Δ de break: n'hi ha un per tram, i es diuen tots a
-      // la columna del costat. Aquí, guió: val més dir menys que dir-ne un de tres.
-      render: (row) => (mostraDelta(row) && !(row.breaks || []).length && row.increment_break != null
-        ? <span style={cap}>{formatDelta(row.increment_break, unit)}</span>
-        : <span style={buit}>—</span>),
-    },
-    {
-      key: 'talla_break', label: t('measuregrid.regla_talla_break'), width: 56,
-      // Etiqueta de talla: DADA de domini (XS, 3XL) — no es tradueix ni porta signe. El que sí
-      // que se li fa és la volta de CONVENCIÓ: es pinta la del document, no la desada.
-      //
-      // TRAM F — AMB INTERVALS, AQUESTA COLUMNA CANVIA DE VEU i ho fa a posta. Un relleu de N
-      // trams no cap en dues columnes de 54px, i eixamplar-les es menja carril de talles (el
-      // mateix motiu pel qual la fitxa Q8b es reparteix en bandes). Es diu COMPACTE —`S→L +3`—
-      // i el tooltip porta el relleu sencer. Les etiquetes van en convenció de MOTOR, com al
-      // seu editor: són les que el picker ofereix i les que la BD desa.
+      key: 'breaks', label: t('grading.intervals.col'), width: 110,
+      title: t('grading.intervals.col_help_lectura'),
       render: (row) => {
-        const ivs = (row.breaks || []).filter(iv => iv && iv.delta !== null && iv.delta !== undefined)
-        if (mostraDelta(row) && ivs.length) {
-          const primer = `${ivs[0].inici}→${ivs[0].final} ${formatDelta(ivs[0].delta, unit)}`
-          return (
-            <span style={{ ...cap, whiteSpace: 'nowrap' }}
-              title={etiquetaRegla(row, sizeRun, t('fitting.grid.break'))}>
-              {primer}{ivs.length > 1 ? ` +${ivs.length - 1}` : ''}
-            </span>
-          )
-        }
-        const doc = mostraDelta(row) ? aDocument(row.talla_break_label, sizeRun) : null
-        return doc
-          ? <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)' }}>{doc}</span>
+        // Sota un règim que no gradua no hi ha relleu a dir: és la mateixa porta que el Δ
+        // general, i `fraseBreaks` ja hi calla pel seu compte (regla del silenci).
+        const frase = mostraDelta(row)
+          ? fraseBreaks(row, sizeRun, { delta: v => formatDelta(v, unit), max: 1 })
+          : ''
+        return frase
+          ? <span style={{ ...cap, whiteSpace: 'nowrap' }} title={etiquetaRegla(row, sizeRun)}>{frase}</span>
           : <span style={buit}>—</span>
       },
     },
