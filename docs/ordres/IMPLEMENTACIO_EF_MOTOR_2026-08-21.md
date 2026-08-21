@@ -244,7 +244,7 @@ propagarà — que és exactament el que ha de fer un preview. Cap altre camí e
 Canal nou i opcional al motor: `generate_graded_specs(sf_id, informe=None)` — mateix patró que
 `warnings` (un canal que el cridador obre si el vol). El valor de retorn no canvia.
 
-### 🚩 LA PORTA D'EDICIÓ DEL VALOR VERMELL — CENS I PROPOSTA (no construïda)
+### ✅ LA PORTA D'EDICIÓ DEL VALOR VERMELL — CENS, PROPOSTA I **CONSTRUÏDA** (OK d'Agus, 21/08)
 
 L'ordre demana censar les dues formes i **proposar amb el cens al davant**. Aquí són, i el cens
 canta un fet que decideix mig assumpte.
@@ -259,12 +259,29 @@ canta un fet que decideix mig assumpte.
 | 🚨 **Supervivència a la propagació següent** | **sobreviu** (és la regla) | **ES DESTRUEIX**: propagar amb `new_version=True` fa `ModelGradingOverride.objects.filter(model=model).delete()` — el «llenç net» és llei, i s'enduria tots els valors posats a mà |
 | Preu | el Δ d'una talla es defineix **respecte del veí**: editar una cel·la vol dir escriure una CADENA de deltes (o completar les talles del camí), no un número solt | cap: és una xifra absoluta per cel·la |
 
-**PROPOSTA (per a l'Agus, no construïda):** **(a)**, amb la conversió absolut→Δ feta al servidor
-en una porta pròpia (`.../pom/<id>/step-valor/` amb `{talla, valor}`), que ompli **tot el camí**
-des de la base fins a la talla editada amb el Δ que en resulti. És l'única de les dues que
-sobreviu a la propagació següent, i «posar-ho a mà una vegada» ha de voler dir una vegada. La (b)
-és més barata i ja existeix, però amb la llei del llenç net és una trampa: el tècnic escriuria 20
-xifres i el primer «Propagar» conscient se les enduria totes sense dir res.
+**PROPOSTA I DECISIÓ:** **(a)**. L'Agus la va confirmar el 21/08 i està **construïda**:
+`POST /models/<id>/pom/<pom_id>/step-valor/` `{talla, valor, capa?, instancia?, garment?}`.
+La (b) és més barata i ja existia, però amb la llei del llenç net és una trampa: el tècnic
+escriuria 20 xifres i el primer «Propagar» conscient se les enduria totes sense dir res.
+
+**Com ha quedat, i el detall que la fa delicada.** `valors_step` no desa valors: desa **passos
+entre veïns** acumulats cap enfora. Per tant «la M mesura 103» és `delta[M] = 103 − valor del veí
+cap a la base`, i el veí ha de ser CALCULABLE. Quan el camí té forats, la porta **rebutja
+nomenant la talla que s'ha d'omplir primer** (`STEP_CAMI_INCOMPLET`, amb `talla_que_falta`):
+omplir-los amb un zero seria fabricar la corba plana que la llei D2 prohibeix, i fer-ho en
+silenci seria pitjor. La conseqüència pràctica és que la feina es fa **de la base cap enfora**,
+que és l'ordre en què els deltes volen dir alguna cosa.
+
+| Node | On |
+|---|---|
+| Validació (punt únic) | `grading_regime.valida_valor_step` — només STEP · la base no · talla del run · valor numèric (el 0 hi és legítim) |
+| Camí | `grading_utils.step_delta_acumulat`, el MATEIX predicat del motor i de la marca |
+| Escriptura | `valors_step` de la `ModelGradingRule` + `origen='MANUAL'`, i **re-propaga in place** (com feia la porta d'override): sense això la marca cauria i la xifra seguiria sent la prestada |
+| UI | la columna **«Mesura»** de l'Escalat, que és on la xifra prestada viu: un llapis obre la cel·la (Enter desa, Escape plega) i l'error del servidor arriba al mateix control. **Opt-in** a `buildEscalatRows({onDesaValorRegla})`: qui no la passa té la cel·la en lectura |
+| Proves | 7 al mòdul de regressió (cicle sencer · camí incomplet que no escriu res · cadena amunt i avall · quatre portes tancades) + el bloc propi de `qa_tram_ef_staging.py` |
+
+**L'override no es jubila**: es queda per al seu ús propi —la decisió puntual per talla que el
+llenç net ha d'esborrar per disseny—. Dues intencions, dues portes.
 
 ---
 
@@ -273,7 +290,7 @@ xifres i el primer «Propagar» conscient se les enduria totes sense dir res.
 | Prova | Com | Resultat |
 |---|---|---|
 | **Banc de paritat** (3 blocs) | `ops/qa/banc_paritat_1383.py`, abans i després de cada tram | ✅ A=105 · B=525 · C=4 · hashos intactes |
-| **Cas Montse sobre STAGING**, model de prova **NO-banc** | `ops/qa/qa_tram_ef_staging.py` — crea `QA-TRAMF-0001` (pk **1384**), escriu la regla per la porta real i propaga amb el motor real | ✅ `XS 98 · S 100 · M 103 · L 106 · XL 108` (S→M 3, M→L 3, **XL torna a 2**) |
+| **QA sobre STAGING**, model de prova **NO-banc** | `ops/qa/qa_tram_ef_staging.py` — `QA-TRAMF-0001` (pk **1384**) amb **dos POMs**: `A` amb interval (tram F) i `B` amb STEP sense valors (tram E). Tot per les portes reals i el motor real | ✅ **22/22** · cas Montse `XS 98 · S 100 · M 103 · L 106 · XL 108` · porta del valor vermell · payload Q8b de 1384 i 1383 |
 | **Les cinc portes** (solapament · ordre · talla forana · Δ redundant · LINEAR+0 amb break) | el mateix script, per la porta `set_pom_regim_view` | ✅ 400 amb el `codi` exacte, les cinc |
 | **STEP sense valors** | el mateix script | ✅ totes les talles amb el valor base · llista `[{pom_codi: 'A', talles: [XS, M, L, XL]}]` a la propagació · marca derivada per fila a `taula-mesures` |
 | **Regressió pròpia** | `fhort.pom.test_tram_f_intervals` (nou) — equivalència pels dos camins, semàntica dels intervals, les 8 validacions, el deute LINEAR+0, la porta HTTP i el viatge del camp | ✅ |
@@ -334,12 +351,15 @@ staging expressament**, perquè la QA de pantalla es pugui fer sobre ell sense t
 
 ## 4 · EL QUE NO S'HA TOCAT (i per què)
 
-- **`TechSheetEditor.jsx`** — l'ordre ho prohibeix. 🚩 **SEGUIMENT**: la taula Q8b («Rule · Δ ·
-  Break · B.Size») té l'ample calculat amb **sis columnes fixes** i es reparteix en bandes per no
-  passar l'A4; amb intervals, una regla de tres trams **hi surt escapçada** (mostrarà el break
-  d'1 tram, que amb `breaks` informat és `NULL`). **Decisió d'Agus pendent**: o compacte a la
-  mateixa columna (`S→L +3 +2`), o una fila filla dins la taula. **Mai A3: la fitxa s'imprimeix
-  en A4.**
+- ✅ **`TechSheetEditor.jsx` · Q8b — FET** (seguiment tancat el 21/08, ordre d'Agus). La taula
+  d'Escalat de la fitxa diu els intervals amb les **tres columnes que ja hi havia**: `Δ` porta el
+  general, `Break` el Δ del tram i `B.Size` el tram (`S→L`), que llegides juntes són la frase
+  «+2,0 · S→L +3,0». Cap columna nova i cap mil·límetre de més — l'ample es reparteix en bandes
+  per no passar l'A4 (**mai A3**) i cada mil·límetre és una talla que deixa de cabre. Amb més
+  d'un interval hi cap el primer i un `+N`; la corba sencera hi és igualment a les columnes de
+  talla. Qui decideix quina de les dues formes parla és **`resumBreakQ8`** (una funció, amb banc
+  propi): break d'1 tram → convenció de DOCUMENT; intervals → convenció de MOTOR i **sense
+  volta**. QA sobre **1384** (interval) i **1383** (21 files de break d'1 tram, intactes).
 - **`CheckMeasureEditor.jsx`** — mostra el relleu compacte (ja hi arriba per `etiquetaRegla`) però
   **no edita intervals**. No perd res: el seu desat va per presència de clau i no toca `breaks`.
   🚩 seguiment si es vol paritat d'autoria a la tercera superfície.
@@ -372,7 +392,22 @@ staging expressament**, perquè la QA de pantalla es pugui fer sobre ell sense t
 | `196887d1` | **F4** · UI: `EditorIntervals` a les dues superfícies, compacte, mirall del règim, i18n ca/en/es + els dos bancs de `node --test` |
 | `8eb701e7` | **E** · motor: valor de la base copiat + `informe` + marca derivada al payload; dos contractes de test retirats amb acta |
 | `6bd405d7` | **E/UI** · el vermell de la cel·la prestada i la llista de treball manual a «Propagar» |
-| *(aquest)* | `ops/qa/qa_tram_ef_staging.py` + aquest document |
+| `eac1a92b` | l'acta (aquest document) + `ops/qa/qa_tram_ef_staging.py` |
+
+**Segona tanda (OK d'Agus sobre el cens · 21/08):**
+
+| Commit | Concern |
+|---|---|
+| `bbbc05e6` | **E/porta** · `step-valor/` escriu `valors_step` de la regla resident (mai un override) + validació al punt únic + 7 proves |
+| `03cd6a59` | **E/porta UI** · la cel·la prestada s'edita a la columna «Mesura», opt-in a l'adaptador; i el vermell de la cel·la activa s'acota al fantasma |
+| `7268138d` | **Q8b** · la fitxa diu els intervals amb les tres columnes que ja hi havia (`resumBreakQ8`, amb banc) |
+| `361a1ffd` + `8aa25afa` | **CENS_PODA_PLATAFORMA** surt del commit de codi i entra sol (v. sota) |
+| *(aquest)* | l'acta al dia + la QA d'staging ampliada |
+
+**Per què el cens de poda es parteix amb DOS commits i no amb un rebase:** `b0066c3c` té 42
+commits a sobre i `dev` la comparteixen diverses sessions alhora — reescriure-hi la història els
+trencaria la feina a totes. El resultat a l'arbre és idèntic (md5 comprovat) i el fitxer ja té
+commit propi i missatge propi.
 
 **F3 i F5 van al mateix commit a posta:** són el mateix concern dit dues vegades —«la forma nova
 entra» i «la forma nova viatja»— i comparteixen fitxer (`views.py`, `serializers.py`,
