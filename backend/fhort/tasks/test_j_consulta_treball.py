@@ -182,6 +182,51 @@ class TestSortidaSenseEscriptura(BaseJ):
         task.refresh_from_db()
         self.assertEqual(task.status, 'InProgress', 'qui ha treballat decideix ell')
 
+    def test_pausa_si_cal_amb_escriptura_PAUSA(self):
+        """J-bis/2 — la sortida del DESMUNTATGE, que no pot encadenar dues crides.
+
+        `keepalive` garanteix que surti la petició ja llançada, no la que vindria després de
+        resoldre-la: en tancar la pestanya, una segona crida no s'enviaria mai. Per això el
+        servidor decideix, i la MATEIXA petició que abans pausava sempre ara pausa només si toca.
+        """
+        task = self.tasca(status='Paused', assignee=self.p1)
+        transition_task(task, 'InProgress', self.p1)
+        TimerEntrada.objects.filter(model_task=task, fi__isnull=True).update(
+            escriptura_at=timezone.now())
+        r = self.api(self.u1).post(f'/api/v1/model-tasks/{task.pk}/sortir-sense-escriptura/',
+                                   {'pausa_si_cal': True}, format='json')
+        self.assertIs(r.data['revertit'], False)
+        self.assertIs(r.data['pausada'], True)
+        task.refresh_from_db()
+        self.assertEqual(task.status, 'Paused')
+        t = task.transitions.order_by('-id').first()
+        self.assertIsNone(t.auto, 'la pausa d\'una sessió AMB feina és la de sempre, no del sistema')
+
+    def test_pausa_si_cal_SENSE_escriptura_torna_a_lentrada(self):
+        """I amb el mateix flag, una consulta segueix tornant on era — `Pending` inclòs."""
+        task = self.tasca(status='Pending', assignee=self.p1)
+        transition_task(task, 'InProgress', self.p1)
+        r = self.api(self.u1).post(f'/api/v1/model-tasks/{task.pk}/sortir-sense-escriptura/',
+                                   {'pausa_si_cal': True}, format='json')
+        self.assertIs(r.data['revertit'], True)
+        task.refresh_from_db()
+        self.assertEqual(task.status, 'Pending')
+        self.assertIsNone(task.started_at)
+
+    def test_SENSE_el_flag_una_sessio_amb_feina_NO_es_pausa(self):
+        """⚠️ El flag és NOMÉS per a sortides que ja pausaven soles. La sortida DELIBERADA no
+        l'ha de passar: allà la persona ha de poder triar `Done`, i decidir-ho per ella seria
+        treure-li la decisió que el modal existeix per fer."""
+        task = self.tasca(status='Paused', assignee=self.p1)
+        transition_task(task, 'InProgress', self.p1)
+        TimerEntrada.objects.filter(model_task=task, fi__isnull=True).update(
+            escriptura_at=timezone.now())
+        r = self.api(self.u1).post(f'/api/v1/model-tasks/{task.pk}/sortir-sense-escriptura/')
+        self.assertIs(r.data['revertit'], False)
+        self.assertNotIn('pausada', r.data)
+        task.refresh_from_db()
+        self.assertEqual(task.status, 'InProgress', 'la decisió segueix sent de la persona')
+
     def test_el_tram_dun_ALTRE_no_es_pot_tancar_des_daqui(self):
         """El rellotge de cadascú és seu: la mateixa llei que el batec."""
         task = self.tasca(status='Paused', assignee=self.p2)

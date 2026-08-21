@@ -732,6 +732,20 @@ def sortir_sense_escriptura_view(request, pk):
 
     Retorna `{revertit, status, motiu}`. `revertit=False` vol dir «hi ha hagut escriptura (o no hi
     ha tram meu obert)»: qui crida ha de seguir amb el modal de sempre.
+
+    ── J-bis · `pausa_si_cal` — LA SORTIDA QUE NO POT ENCADENAR DUES CRIDES ──────────────────
+    Amb `{'pausa_si_cal': true}`, una sessió AMB escriptura es pausa aquí mateix en comptes de
+    tornar `revertit:false` i esperar que el client decideixi.
+
+    Existeix per al DESMUNTATGE (tancar la pestanya, navegar fora): allà el client no pot
+    encadenar res —`keepalive` garanteix que surti la petició que ja ha llançat, no la que
+    vindria després de resoldre-la— i el que hi havia era una **pausa cega**, que pausava
+    igualment una sessió on no s'havia tocat res. Amb el flag, la MATEIXA petició que abans
+    pausava sempre ara pausa només si toca, i si no, torna la tasca on era.
+
+    ⚠️ NOMÉS per a sortides que ja pausaven soles. La sortida DELIBERADA no l'ha de passar: allà
+    la persona ha de poder triar `Done`, i decidir-ho per ella seria treure-li la decisió que el
+    modal existeix per fer.
     """
     profile = getattr(request.user, 'profile', None)
     if profile is None:
@@ -752,6 +766,13 @@ def sortir_sense_escriptura_view(request, pk):
     if tram is None:
         return Response({'revertit': False, 'status': task.status, 'motiu': 'sense_tram_meu'})
     if tram.escriptura_at is not None:
+        # J-bis — el desmuntatge no pot encadenar: si demana la pausa, es fa aquí. `auto` null:
+        # això sí que és la pausa de sempre d'una sessió amb feina, i no un moviment del sistema.
+        if (request.data or {}).get('pausa_si_cal'):
+            transition_task(task, 'Paused', profile)
+            task.refresh_from_db()
+            return Response({'revertit': False, 'pausada': True, 'status': task.status,
+                             'motiu': 'amb_escriptura'})
         return Response({'revertit': False, 'status': task.status, 'motiu': 'amb_escriptura'})
 
     # ── J-bis · A QUIN ESTAT ES TORNA, i d'on se sap ─────────────────────────────────────────

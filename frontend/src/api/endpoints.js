@@ -431,8 +431,12 @@ export const modelTasks = {
   // J · R1 — sortir sense haver escrit res: la tasca torna en silenci i el tram queda marcat com
   // a consulta. Decideix el SERVIDOR (`escriptura_at`, que estampa només `batec_escriptura`);
   // `{revertit:false}` vol dir «hi ha hagut feina» i qui crida segueix amb el modal de sempre.
-  sortirSenseEscriptura: (id) =>
-    client.post(`/api/v1/model-tasks/${id}/sortir-sense-escriptura/`),
+  // J-bis — `{pausa_si_cal:true}` NOMÉS per a sortides que ja pausaven soles (el desmuntatge):
+  // amb escriptura pausa aquí mateix, en comptes d'esperar una segona crida que en tancar la
+  // pestanya no s'enviaria mai. La sortida DELIBERADA no l'ha de passar: allà la persona ha de
+  // poder triar `Done`.
+  sortirSenseEscriptura: (id, cos = {}) =>
+    client.post(`/api/v1/model-tasks/${id}/sortir-sense-escriptura/`, cos),
   // T3 · el CRONO declarat. Una sola porta amb quatre accions —engegar · aturar · descartar ·
   // corregir— perquè les quatre parlen del mateix tram i el servidor n'és l'amo: el navegador no
   // en guarda estat, el demana. `engegar` és idempotent (re-enganxar-s'hi després d'un F5).

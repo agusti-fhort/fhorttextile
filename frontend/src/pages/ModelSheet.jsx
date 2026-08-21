@@ -349,11 +349,17 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // entrades per URL) amb el tab on l'usuari ERA en obrir la superfície, i el modal d'acabar/
   // pausar hi torna. Ref i no estat: no ha de repintar res, només recordar-ho.
   const tabDeRetornRef = useRef(null)
+  // 🔑 J-bis · R1 AL DESMUNTATGE, i és el bessó del que la fitxa tècnica tenia. Aquí hi havia una
+  // **pausa cega**: navegar fora o tancar la pestanya pausava la tasca encara que la sessió
+  // hagués estat mirar i marxar — el mateix forat que `exitEdit` ja tenia tapat per la porta del
+  // davant. Ara passa pel MATEIX predicat de servidor: `pausa_si_cal` fa que la petició pausi
+  // només si hi ha hagut escriptura i, si no, torni la tasca a l'estat d'entrada (`Pending`
+  // inclòs). Una sola crida, perquè el desmuntatge no en pot encadenar dues.
   const pauseActiveTask = useCallback(() => {
     const tid = activeTaskRef.current
     if (tid == null) return                 // ja pausada o cap tasca En curs → no demanem transició (evita 400)
     activeTaskRef.current = null
-    modelTasks.transition(tid, { to_status: 'Paused' }).catch(() => {})
+    modelTasks.sortirSenseEscriptura(tid, { pausa_si_cal: true }).catch(() => {})
   }, [])
   // F2.1 — la tasca VIGENT d'una superfície. El backend ja la marca (`es_vigent`, resolt amb
   // `tasca_vigent`): aquí NO es reimplementa el criteri, només es llegeix.

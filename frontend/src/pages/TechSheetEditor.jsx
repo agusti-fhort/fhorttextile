@@ -3593,14 +3593,21 @@ export default function TechSheetEditor() {
 
     return () => {
       cancelled = true
-      // Si venia d'una tasca, deixa-la en Pausa; allibera sempre el lock del .ftt.
+      // Si venia d'una tasca, tanca-la-hi; allibera sempre el lock del .ftt.
       // T4 — si la sortida ha passat pel modal, la tasca JA té el seu estat (Done o Paused) i
-      // aquesta pausa cega en demanaria una altra: Done→Paused és il·legal i Paused→Paused
-      // també, o sigui un 400 per una feina ja feta. `tascaResolta` és el testimoni.
+      // demanar-ne un altre seria un 400 per una feina ja feta. `tascaResolta` és el testimoni.
+      //
+      // 🔑 J-bis · R1 AL DESMUNTATGE, I EN UNA SOLA PETICIÓ. Aquí hi havia una **pausa cega**:
+      // tancar la pestanya pausava la tasca encara que la sessió hagués estat mirar i marxar.
+      // No es pot arreglar encadenant dues crides —`keepalive` garanteix que surti la petició
+      // que ja s'ha llançat, no la que vindria després de resoldre-la, i en tancar la pestanya
+      // la segona no s'enviaria mai—, així que **decideix el servidor**: `pausa_si_cal` fa que
+      // la MATEIXA petició que abans pausava sempre ara pausi només si hi ha hagut escriptura, i
+      // si no, torni la tasca a l'estat d'entrada (`Pending` inclòs, J-bis/1).
       if (taskId && !tascaResolta.current) {
-        fetch(`${API}/api/v1/model-task-items/${taskId}/transition/`, {
+        fetch(`${API}/api/v1/model-tasks/${taskId}/sortir-sense-escriptura/`, {
           method: 'POST', headers: authHeaders,
-          body: JSON.stringify({ to_status: 'Paused' }), keepalive: true,
+          body: JSON.stringify({ pausa_si_cal: true }), keepalive: true,
         }).catch(() => {})
       }
       fetch(`${API}/api/v1/ftt-documents/${fttHeadId.current}/unlock/`, {
@@ -7345,10 +7352,28 @@ export default function TechSheetEditor() {
   // navegués pel seu compte, es faria fora de la fitxa amb la tasca oberta i el temps corrent,
   // que és exactament el que aquest modal existeix per no deixar passar. Una sola porta, i el
   // que canvia és cap a on dona.
+  //
+  // J-bis · R1 — I EL PREDICAT QUE FALTAVA A AQUESTA PORTA: **sense escriptura, cap modal.**
+  //
+  // L'editor de fitxa era l'última eina que preguntava «Has acabat?» a qui havia entrat, mirat i
+  // marxat. La resta de superfícies ja tenien el guard des del tram J; aquesta va quedar fora
+  // perquè el fitxer estava reservat. El senyal és el mateix i no se n'inventa cap:
+  // `sessio_amb_escriptura` surt de `TimerEntrada.escriptura_at`, que estampa `batec_escriptura`
+  // —i per a la fitxa, `SUP_FITXA` (`ftt_document_views.py`)—. Mai `last_heartbeat`.
+  //
+  // Qui decideix és el SERVIDOR: aquí es demana la tornada i s'obeeix. Si diu que no ho ha
+  // revertit (ha arribat un autosave entremig, o el tram és d'un altre), es cau al modal de
+  // sempre — el seu veredicte mana sobre la foto del client.
   const sortirDeLaFitxa = (desti = `/models/${id}`) => {
     if (!taskId || acabant) { navigate(desti); return }
     modelTasks.get(taskId)
-      .then(({ data }) => setAcabant({ ...data, desti }))
+      .then(async ({ data }) => {
+        if (data?.status === 'InProgress' && data.sessio_amb_escriptura === false) {
+          const r = await modelTasks.sortirSenseEscriptura(taskId).catch(() => null)
+          if (r?.data?.revertit) { tascaResolta.current = true; navigate(desti); return }
+        }
+        setAcabant({ ...data, desti })
+      })
       .catch(() => navigate(desti))   // si no es pot llegir, no es reté ningú aquí
   }
 
