@@ -92,8 +92,25 @@ export default function RuleSetPicker({
     )
   }
 
+  // S45/C — EL SOSTRE VIU AQUÍ, i per això arriba a les QUATRE portes de cop. El `<div>`
+  // d'aquesta llista no en tenia cap: a PROD hi ha 51 jocs amb regles i en mode `eliminatiu`
+  // es pinten tots (C5: ordena i no amaga), o sigui una pàgina de dos metres on el botó de
+  // tancar queda fora de pantalla. El sostre NO contradiu C5 —desplaçar-se no és ocultar—:
+  // el que acota és el CONTENIDOR, no el conjunt.
+  //
+  // Una sola solució per als quatre consumidors, a posta: dos pickers del mateix component
+  // amb comportaments propis serien la versió en runtime d'un fork.
   return (
-    <div style={{ marginTop: 8 }}>
+    <div style={{
+      marginTop: 8,
+      maxHeight: 'var(--llista-tria-max-h)',
+      overflowY: 'auto',
+      // el filet diu que la llista CONTINUA: sense vora, un tall a mitja targeta es llegeix
+      // com una llista acabada i ningú no busca la resta.
+      border: '1px solid var(--line-soft)',
+      borderRadius: 'var(--r-card)',
+      padding: '8px 10px 0',
+    }}>
       {matches.map(({ rs, compatible, motius }) => (
         <PickCard
           key={rs.id}

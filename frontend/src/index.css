@@ -87,6 +87,17 @@
      una taula de mesures; ve del §3 de la norma escrita. */
   --col-talla: 60px;
 
+  /* Mètrica · S45/C. Sostre d'una LLISTA DE TRIA llarga (el picker de jocs de graduació:
+     51 targetes a PROD dins d'un `<div>` sense alçada, que és el scroll infinit del brief).
+     El nom és de ROL i no de pantalla perquè és el mateix sostre per a les quatre portes que
+     el mateix component serveix — i el dia que se n'obri una cinquena, l'hereta.
+     El valor és el germà del `maxHeight: 320` que la llista de sistemes de talles ja porta
+     (`ResumWizardPartit:1042`), pujat perquè aquí les targetes fan tres línies i no una:
+     un sostre que no deixi veure tres targetes senceres es llegeix com una llista trencada.
+     DESPLAÇAR-SE NO ÉS OCULTAR (D-31.3): la llista hi és tota, el que no hi és és la pàgina
+     de dos metres. */
+  --llista-tria-max-h: 420px;
+
   /* Radis · §3: control 6 · targeta 12 · badge/chip 999 («píndola SEMPRE»). Els tres valors
      ja són els de la casa; el que hi faltava era el NOM, i sense nom cada pantalla els
      tornava a escriure a mà. Els literals que hi ha escampats pel producte NO es migren en

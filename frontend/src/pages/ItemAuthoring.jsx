@@ -94,6 +94,12 @@ export default function ItemAuthoring() {
     let alive = true
     setLoading(true)
     Promise.all([
+      // S45/C — aquí NO hi ha `per_client` i és deliberat: l'autoria d'ítem és feina de
+      // CATÀLEG i no té model al davant, o sigui que no hi ha cap client del qual acotar.
+      // El que sí que hereta és el defecte net del ViewSet: els 18 jocs JUBILATS de PROD ja
+      // no s'ofereixen com a assignables (jubilar ≠ amagar → `include_inactive=1` els torna).
+      // (sense `inclou`: la càrrega és d'entrada i encara no se sap quin joc porta l'ítem
+      // —arriba amb `itRes`—; sense `per_client` tampoc cap sedàs se'l pot menjar.)
       gradingRuleSets.list({ page_size: 200, amb_regles: 1 }),
       garmentGroups.list({ page_size: 200 }),
       isEdit ? garmentTypeItems.get(routeItemId) : Promise.resolve(null),

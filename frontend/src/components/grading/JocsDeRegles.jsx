@@ -951,7 +951,13 @@ export default function JocsDeRegles({ onImportar }) {
     try {
       const out = []
       for (let page = 1; ; page++) {
-        const { data } = await gradingRuleSets.list({ page_size: 200, page })
+        // S45/C — `include_inactive: 1` EXPLÍCIT: aquesta és la pantalla on es JUBILA i
+        // es reviu un joc, i una llista que amagués els jubilats faria la jubilació un camí
+        // de sentit únic. El defecte del ViewSet és net (els pickers no els ofereixen); qui
+        // els ha de gestionar els demana.
+        const { data } = await gradingRuleSets.list({
+          page_size: 200, page, include_inactive: 1,
+        })
         out.push(...(data?.results ?? (Array.isArray(data) ? data : [])))
         if (!data?.next) break
       }

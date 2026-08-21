@@ -38,10 +38,24 @@ export default function GraduacioContenidor({
   const [ggCodiById, setGgCodiById] = useState({})
   const [carregant, setCarregant] = useState(true)
 
+  const clientId = model?.customer ?? null
   useEffect(() => {
     let viu = true
     Promise.all([
-      gradingRuleSets.list({ page_size: 200, amb_regles: 1 }),
+      // S45/C — I EL CATÀLEG ARRIBA JA ACOTAT. Abans es demanaven els 51 jocs amb regles de
+      // PROD —18 d'ells JUBILATS i 24 de LOS— i el picker els pintava tots. El sedàs va al
+      // SERVIDOR i no aquí: quatre pantalles filtrant pel seu compte serien quatre filtres
+      // que divergeixen. `actiu=True` és ara el defecte del ViewSet (jubilar ≠ amagar: qui
+      // els vol, passa `include_inactive=1`), i `per_client` demana els del client del model
+      // MÉS els de catàleg —mai els d'un altre client.
+        // 🚨 `inclou`: EL JOC QUE EL MODEL JA PORTA NO ES POT AMAGAR MAI. Al 1383 (TRV) hi
+        // ha assignat el joc 219, que és de BRW: amb el sedàs de client, el picker s'obriria
+        // sense ell i diria que el model no en té cap. El que està EN ÚS travessa el sedàs.
+      gradingRuleSets.list({
+        page_size: 200, amb_regles: 1,
+        ...(clientId ? { per_client: clientId } : {}),
+        ...(gradingRuleSetId ? { inclou: gradingRuleSetId } : {}),
+      }),
       garmentGroups.list({ page_size: 200 }),
     ]).then(([rsRes, ggRes]) => {
       if (!viu) return
@@ -51,7 +65,7 @@ export default function GraduacioContenidor({
       setRuleSets(rs); setGgCodiById(map); setCarregant(false)
     }).catch(() => { if (viu) { setRuleSets([]); setCarregant(false) } })
     return () => { viu = false }
-  }, [])
+  }, [clientId, gradingRuleSetId])
 
   // ELS DEL CLIENT DEL MODEL, PRIMER. El classificador de dins del picker torna a partir la
   // llista en compatibles i atenuats, però conserva l'ordre relatiu dins de cada bloc: sortint
