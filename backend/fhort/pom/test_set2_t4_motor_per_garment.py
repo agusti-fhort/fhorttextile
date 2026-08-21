@@ -33,6 +33,12 @@ i se n'alcen QUATRE i no una, cadascuna pel seu motiu:
                                         tram buit — v. el mateix cas per a la capa a
                                         `test_c3_b_dues_germanes`.
 """
+# FIX-A/PAS-1c (21/08) — les fixtures d'aquest fitxer construïen la regla LINEAR amb el
+# camp LLEGAT `increment`. Funcionava perquè el motor hi queia per fallback; des que el
+# fallback no hi és (`_apply_rule`, llei D2), una regla sense `increment_base` NO gradua i
+# no emet cap cel·la. El SUBJECTE d'aquestes proves no és el camp sinó el que hi ha a
+# sobre (germanes, peces, transacció), o sigui que la fixture passa al camp que mana i
+# CAP asserció es toca: si alguna hagués canviat de valor, el canvi no seria de fixture.
 import contextlib
 import datetime
 
@@ -128,10 +134,10 @@ class MotorPerGarmentTest(TenantTestCase):
                 model=self.model, pom=self.pom, base_value_cm=50.0, ordre=2,
                 nom_fitxa='A-02', garment=SEGONA)
             ModelGradingRule.objects.create(
-                model=self.model, pom=self.pom, logica='LINEAR', increment=1.0,
+                model=self.model, pom=self.pom, logica='LINEAR', increment_base=1.0,
                 actiu=True, garment=MARE)
             ModelGradingRule.objects.create(
-                model=self.model, pom=self.pom, logica='LINEAR', increment=10.0,
+                model=self.model, pom=self.pom, logica='LINEAR', increment_base=10.0,
                 actiu=True, garment=SEGONA)
 
             generate_graded_specs(self.sf.pk)
@@ -159,7 +165,7 @@ class MotorPerGarmentTest(TenantTestCase):
                 model=self.model, pom=self.pom, base_value_cm=50.0, ordre=2,
                 nom_fitxa='A-02', garment=SEGONA)
             ModelGradingRule.objects.create(
-                model=self.model, pom=self.pom, logica='LINEAR', increment=1.0,
+                model=self.model, pom=self.pom, logica='LINEAR', increment_base=1.0,
                 actiu=True, garment=MARE)
 
             generate_graded_specs(self.sf.pk)
@@ -181,7 +187,7 @@ class MotorPerGarmentTest(TenantTestCase):
         BaseMeasurement.objects.create(
             model=self.model, pom=self.pom, base_value_cm=100.0, ordre=1, nom_fitxa='A')
         ModelGradingRule.objects.create(
-            model=self.model, pom=self.pom, logica='LINEAR', increment=1.0, actiu=True)
+            model=self.model, pom=self.pom, logica='LINEAR', increment_base=1.0, actiu=True)
 
         generate_graded_specs(self.sf.pk)
 
@@ -219,7 +225,7 @@ class ContracteDeLesFonsTest(TenantTestCase):
             base_size_label='M',
         )
         ModelGradingRule.objects.create(
-            model=self.model, pom=self.pom, logica='LINEAR', increment=1.0, actiu=True)
+            model=self.model, pom=self.pom, logica='LINEAR', increment_base=1.0, actiu=True)
 
     def test_load_grading_rules_serveix_la_clau_PLANA_als_seus_sis_consumidors(self):
         """El contracte públic. Sis lectors fora del motor hi fan `.get(pom_id)` pelat.

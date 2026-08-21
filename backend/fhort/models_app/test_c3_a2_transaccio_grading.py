@@ -12,6 +12,12 @@ no s'ha fet res quan de fet s'ha destruït patrimoni.
 
 Convenció del repo: `python manage.py test fhort.models_app` (el projecte NO fa servir pytest).
 """
+# FIX-A/PAS-1c (21/08) — les fixtures d'aquest fitxer construïen la regla LINEAR amb el
+# camp LLEGAT `increment`. Funcionava perquè el motor hi queia per fallback; des que el
+# fallback no hi és (`_apply_rule`, llei D2), una regla sense `increment_base` NO gradua i
+# no emet cap cel·la. El SUBJECTE d'aquestes proves no és el camp sinó el que hi ha a
+# sobre (germanes, peces, transacció), o sigui que la fixture passa al camp que mana i
+# CAP asserció es toca: si alguna hagués canviat de valor, el canvi no seria de fixture.
 import datetime
 from unittest import mock
 
@@ -67,7 +73,7 @@ class TransaccioGradingC3A2Test(TenantTestCase):
         )
         # `_te_regles` ha de dir que sí, o la vista surt per un 400 abans d'arribar al llenç net.
         ModelGradingRule.objects.create(
-            model=self.model, pom=self.pom, logica='LINEAR', increment=1.0, actiu=True)
+            model=self.model, pom=self.pom, logica='LINEAR', increment_base=1.0, actiu=True)
         BaseMeasurement.objects.create(
             model=self.model, pom=self.pom, base_value_cm=100.0, ordre=1, nom_fitxa='A-EXT')
         # EL PATRIMONI EN JOC: l'ajust per cel·la que el llenç net esborra.

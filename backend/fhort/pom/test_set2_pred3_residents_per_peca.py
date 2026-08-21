@@ -23,6 +23,12 @@ ha de fer és heretar de la seva mare.
 El control d'una sola prenda és tan important com el vermell: amb els residents tots a `''`
 —el 100% del corpus d'avui— el predicat ha de valer exactament el que valia.
 """
+# FIX-A/PAS-1c (21/08) — les fixtures d'aquest fitxer construïen la regla LINEAR amb el
+# camp LLEGAT `increment`. Funcionava perquè el motor hi queia per fallback; des que el
+# fallback no hi és (`_apply_rule`, llei D2), una regla sense `increment_base` NO gradua i
+# no emet cap cel·la. El SUBJECTE d'aquestes proves no és el camp sinó el que hi ha a
+# sobre (germanes, peces, transacció), o sigui que la fixture passa al camp que mana i
+# CAP asserció es toca: si alguna hagués canviat de valor, el canvi no seria de fixture.
 import contextlib
 import datetime
 
@@ -107,7 +113,7 @@ class _BasePred3Test(TenantTestCase):
         grs = GradingRuleSet.objects.create(nom='Catàleg PRED3', size_system=self.ss,
                                             actiu=True)
         GradingRule.objects.create(rule_set=grs, pom=self.pom, talla_base=self.talles['M'],
-                                   logica='LINEAR', increment=increment, actiu=True)
+                                   logica='LINEAR', increment_base=increment, actiu=True)
         self.model.grading_rule_set = grs
         self.model.save(update_fields=['grading_rule_set'])
         return grs
@@ -119,7 +125,7 @@ class _BasePred3Test(TenantTestCase):
 
     def _resident(self, garment, increment):
         return ModelGradingRule.objects.create(
-            model=self.model, pom=self.pom, logica='LINEAR', increment=increment,
+            model=self.model, pom=self.pom, logica='LINEAR', increment_base=increment,
             actiu=True, garment=garment)
 
     def _specs(self):
@@ -174,8 +180,12 @@ class ElVermellTest(_BasePred3Test):
 
             rules = _load_grading_rules_per_garment(self.model)
 
-            self.assertEqual(_regla_de(rules, self.pom.id, MARE).increment, 5.0)
-            self.assertEqual(_regla_de(rules, self.pom.id, SEGONA).increment, 10.0)
+            # FIX-A/PAS-1c — el DISCRIMINADOR passa a `increment_base`. Aquest test no mesura
+            # cap camp: mesura QUINA regla torna `_regla_de` per a cada peça, i el delta només
+            # hi és per distingir-les. Amb la fixture al camp canònic, el llegat val el default
+            # del model (0.00) i deixaria de distingir res.
+            self.assertEqual(float(_regla_de(rules, self.pom.id, MARE).increment_base), 5.0)
+            self.assertEqual(float(_regla_de(rules, self.pom.id, SEGONA).increment_base), 10.0)
 
 
 class LHerenciaNoCanviaTest(_BasePred3Test):
