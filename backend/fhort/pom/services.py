@@ -1189,7 +1189,12 @@ def _apply_rule(rule, base_val: float, steps: int, size_idx: int, base_idx: int,
     rule.increment_break / rule.talla_break_label (forma canònica), rule.valors_step (JSONField).
 
     Contracts:
-      - LINEAR: `rule.increment_base` (+ break opcional), per aresta. **`rule.increment` NO
+      - LINEAR: `rule.increment_base` (delta GENERAL) + el relleu, per aresta. El relleu és
+        `rule.breaks` —N intervals `[{inici, final, delta}]`, TRAM F— o, si el camp és buit, el
+        break d'1 tram de sempre (`talla_break_label` + `increment_break`), que es llegeix com
+        l'interval `[break .. última talla]`. Els dos camins passen pel MATEIX node
+        (`grading_utils.increment_de_l_aresta`), que és el que fa que Escalat i la presa no
+        puguin divergir. **`rule.increment` NO
         s'hi llegeix des del FIX-A/PAS-3 (21/08)**: era el camp llegat, cap superfície
         d'edició no l'actualitzava mai, i llegir-l'hi volia dir graduar amb el delta del joc
         antic. Sense `increment_base` la cel·la queda ABSENT (llei D2), com el STEP sense

@@ -6,6 +6,10 @@ evita importar un mòdul de *views* des d'un altre (i els cicles que això compo
 """
 import logging
 
+# TRAM F — la forma dels intervals i la seva lectura viuen a `grading_regime`, que és el punt
+# únic del règim i no importa res d'aquí (cap cicle). El motor n'agafa els DOS lectors purs.
+from fhort.pom.grading_regime import delta_de_posicio, intervals_en_index
+
 logger = logging.getLogger(__name__)
 
 
@@ -1040,6 +1044,36 @@ def _break_idx_de(rule, run):
     return norm.index(tn) if tn in norm else None
 
 
+def intervals_de(rule, run):
+    """El relleu d'una regla com a llista d'INTERVALS `[(i_ini, i_fi, delta)]` sobre `run`.
+
+    🔑 TRAM F — EL PUNT ÚNIC QUE DECIDEIX QUINA FORMA ES LLEGEIX, i n'hi ha exactament dues:
+
+      · **INTERVALS** (`rule.breaks`, la forma nova): llista ordenada de trams amb delta propi,
+        etiquetes en convenció de MOTOR i extrems INCLUSIUS.
+      · **1 BREAK** (`talla_break_label` + `increment_break`, la forma de tot el corpus viu): es
+        llegeix com **l'interval `[talla_break_label .. última talla del run]`**. No és una
+        interpretació: és el que el motor ja feia (`brk if exterior >= break_idx else ib`) dit
+        amb l'altra gramàtica, i està provat cel·la a cel·la contra el banc 1383 —105/105 al
+        camí de GradedSpec i 525/525 al de la presa— ABANS de canviar aquesta funció.
+        **L'etiqueta NO es desplaça**: la BD desa la primera talla del tram gran (convenció de
+        motor). Desplaçar-la aquí mouria 33 de les 105 cel·les del banc.
+
+    Els dos camps conviuen i no hi ha backfill. Si una regla porta les dues formes mana
+    `breaks`, que és la que algú ha escrit expressament amb la pantalla nova.
+    """
+    intervals = intervals_en_index(getattr(rule, 'breaks', None), run)
+    if intervals:
+        return intervals
+    brk_raw = getattr(rule, 'increment_break', None)
+    if brk_raw is None:
+        return []
+    break_idx = _break_idx_de(rule, run)
+    if break_idx is None:               # etiqueta forana o sense run: cap trencament (com sempre)
+        return []
+    return [(break_idx, len(run) - 1, float(brk_raw))]
+
+
 def increment_de_l_aresta(rule, run, base_idx, i, j):
     """Increment (cm, sempre POSITIU) de l'aresta entre dues talles VEÏNES del run.
 
@@ -1048,6 +1082,9 @@ def increment_de_l_aresta(rule, run, base_idx, i, j):
     BASE — l'origen de la regla — dins d'aquest mateix run.
 
     Règim canònic (`increment_base` poblat) → llei de l'extrem exterior (v. capçalera).
+
+    TRAM F — el relleu el diu `intervals_de` (1 break o N intervals; v. allà). Aquesta funció
+    només decideix QUIN EXTREM de l'aresta pregunta, i això no ha canviat: l'EXTERIOR.
 
     🚨 FIX-A/PAS-3 — `increment_base` a NULL ALÇA, i abans queia al camp llegat.
     Aquí hi havia `return float(rule.increment)`, i era **un dels dos** nodes que llegien el
@@ -1064,16 +1101,13 @@ def increment_de_l_aresta(rule, run, base_idx, i, j):
             "corba. Cap valor derivat (llei D2 de cel·la absent).")
 
     ib = float(ib_raw)
-    brk_raw = getattr(rule, 'increment_break', None)
-    brk = float(brk_raw) if brk_raw is not None else ib
-
-    break_idx = _break_idx_de(rule, run)
-    if break_idx is None:                       # sense break → tot el relleu és uniforme
+    intervals = intervals_de(rule, run)
+    if not intervals:                           # sense trencament → tot el relleu és uniforme
         return ib
 
     aresta = min(i, j)                          # l'aresta viu entre `aresta` i `aresta + 1`
     exterior = aresta + 1 if aresta >= base_idx else aresta
-    return brk if exterior >= break_idx else ib
+    return delta_de_posicio(exterior, intervals, ib)
 
 
 def desnivell_entre_talles(rule, run, base_idx, origen_idx, desti_idx):

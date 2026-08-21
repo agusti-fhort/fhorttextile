@@ -28,6 +28,24 @@ MISSATGE_LINEAR_ZERO = (
 CODI_LINEAR_ZERO = 'LINEAR_INCREMENT_ZERO'
 
 
+#: TRAM F — SOSTRE D'INTERVALS PER REGLA. **Constant ÚNICA de tota la casa**: el motor, les
+#: quatre portes d'autoria i el mirall del front (`frontend/src/utils/gradingRegime.js`,
+#: `MAX_BREAKS`) no en poden tenir cap de pròpia. Tres és decisió d'Agus, no una llei de domini:
+#: canviar-la aquí ha de bastar.
+MAX_BREAKS = 3
+
+#: Codis de rebuig dels intervals. El `detall` és text de domini en català (com la resta
+#: d'aquest fitxer i de `models_app/views.py`); el `codi` és el que el front pot traduir.
+CODI_BREAKS_MAX = 'BREAKS_MAX'
+CODI_BREAKS_FORMA = 'BREAKS_FORMA'
+CODI_BREAKS_NOMES_LINEAR = 'BREAKS_NOMES_LINEAR'
+CODI_BREAKS_TALLA_FORANA = 'BREAKS_TALLA_FORANA'
+CODI_BREAKS_ORDRE = 'BREAKS_ORDRE'
+CODI_BREAKS_SOLAPAMENT = 'BREAKS_SOLAPAMENT'
+CODI_BREAKS_DELTA_REDUNDANT = 'BREAKS_DELTA_REDUNDANT'
+CODI_BREAKS_SENSE_GENERAL = 'BREAKS_SENSE_GENERAL'
+
+
 def _f(v):
     """Decimal/str/None → float (None i '' compten com a absents)."""
     if v is None or v == '':
@@ -68,6 +86,73 @@ def delta_base_efectiu(increment_base=None, increment=None) -> float:
     propagació, amb el seu missatge propi (llei D2, `_apply_rule`).
     """
     return _f(increment_base) or 0.0
+
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────
+# TRAM F · ELS INTERVALS (multi-break) — lectura, i validació d'autoria
+#
+# 🔑 UNA SOLA FORMA, DOS LECTORS AMB CRITERIS DIFERENTS, I ÉS A POSTA:
+#
+#   · `intervals_en_index` — el que llegeix el MOTOR. **Tolerant**: un interval que no es pot
+#     resoldre contra el run s'ignora, exactament com avui `_break_idx_de` retorna None quan
+#     l'etiqueta del break no és al run. El motor no té canal per dir «aquesta dada és dolenta»
+#     (és una funció pura que retorna un float) i inventar-s'hi un valor seria pitjor.
+#   · `valida_breaks` — el que guarda les QUATRE PORTES d'autoria. **Estricte**: aquí sí que hi
+#     ha algú a qui dir-li que la regla que acaba d'escriure no vol dir res, i es diu amb 400.
+#
+# La distància entre els dos és la mateixa que ja hi ha entre `normalitza_logica` (sembra) i
+# `es_linear_degenerada` (autoria), i per la mateixa raó.
+# ─────────────────────────────────────────────────────────────────────────────────────────────
+
+def _norm_label(v) -> str:
+    """upper+strip — el criteri EXACTE del run i de `grading_utils._norm`. Afinar-lo aquí
+    mouria GradedSpec ja emesos."""
+    return str(v if v is not None else '').strip().upper()
+
+
+def _posicions(run):
+    return {_norm_label(x): i for i, x in enumerate(run or [])}
+
+
+def intervals_en_index(breaks, run):
+    """`breaks` (forma de BD) → `[(i_ini, i_fi, delta)]` en índexs del `run`, ordenats.
+
+    LECTURA DEL MOTOR (tolerant, v. la nota de dalt):
+      · forma invàlida, delta no numèric o `inici` que no és al run → l'interval s'IGNORA;
+      · `final` que no és al run → es CLAVA a l'última talla del run. És el cas normal d'una
+        regla d'1 break llegida com a interval quan el model no fabrica l'última talla del
+        sistema, i clavar-lo hi diu exactament el mateix que deia el break: «d'aquí cap amunt».
+    """
+    if not breaks or not isinstance(breaks, (list, tuple)) or not run:
+        return []
+    pos = _posicions(run)
+    out = []
+    for it in breaks:
+        if not isinstance(it, dict):
+            continue
+        delta = _f(it.get('delta'))
+        if delta is None:
+            continue
+        i_ini = pos.get(_norm_label(it.get('inici')))
+        if i_ini is None:
+            continue
+        i_fi = pos.get(_norm_label(it.get('final')))
+        if i_fi is None:
+            i_fi = len(run) - 1
+        if i_fi < i_ini:
+            continue
+        out.append((i_ini, i_fi, delta))
+    return sorted(out, key=lambda t: t[0])
+
+
+def delta_de_posicio(idx, intervals, general):
+    """El delta que mana a una posició del run: el del primer interval que la conté, o el
+    GENERAL. Punt únic de la regla de lectura — la comparteixen el motor (per l'extrem exterior
+    de cada aresta) i la validació de coherència (per als veïns d'un interval)."""
+    for (ini, fi, delta) in intervals:
+        if ini <= idx <= fi:
+            return delta
+    return general
 
 
 def es_linear_degenerada(logica, increment_base=None, increment=None,
