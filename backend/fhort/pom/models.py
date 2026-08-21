@@ -1517,6 +1517,31 @@ class GradingRule(models.Model):
     increment_break = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
     talla_break_label = models.CharField(max_length=30, null=True, blank=True)
     talla_break_pos = models.IntegerField(null=True, blank=True)  # cache opcional (run del ruleset)
+    # ── TRAM F (2026-08-21) · MULTI-BREAK PER INTERVALS ────────────────────────────────────
+    # Llista ORDENADA d'intervals amb delta propi:
+    #     [{"inici": "M", "final": "3XL", "delta": 3.0}, …]   (màx. `MAX_BREAKS`)
+    #
+    # · Etiquetes en **CONVENCIÓ DE MOTOR**, la mateixa que `talla_break_label`: `inici` és la
+    #   PRIMERA talla del delta nou. **Cap desplaçament** (esmena 21/08: la BD sempre ha desat
+    #   la convenció de motor; l'off-by-one és de PRESENTACIÓ i viu a `breakConvention.js`).
+    # · `inici` i `final` són **INCLUSIUS** i es resolen per etiqueta contra el run del SISTEMA,
+    #   igual que el break d'avui (`grading_utils._break_idx_de`).
+    # · El delta és **entre talles consecutives** (confirmat Montse): `S→L = 3` vol dir S→M 3
+    #   i M→L 3, no 3 repartit.
+    # · Fora de tot interval mana el delta GENERAL, que és `increment_base`.
+    #
+    # NULL/buit = regla d'1 break (o sense break), que es llegeix com l'interval
+    # `[talla_break_label .. última talla del sistema]` amb delta `increment_break` — provat
+    # cel·la a cel·la al 1383 (105/105) abans de tocar el motor. Els camps d'1 break NO es
+    # jubilen i no hi ha backfill massiu: les dues formes conviuen i el punt únic que decideix
+    # quina es llegeix és `grading_utils.intervals_de`.
+    #
+    # JSON i no taula filla per la raó que ja té precedent a la casa: `valors_step` és un
+    # `JSONField` que travessa el motor, els dos serializers, l'import, la federació, la fitxa i
+    # les comandes de sembra sense haver calgut mai res més. La unicitat i l'ordre que una taula
+    # filla donaria a la BD els dona aquí la validació de `pom/grading_regime.valida_breaks`,
+    # que és el punt únic de les quatre portes d'autoria.
+    breaks = models.JSONField(null=True, blank=True)
     actiu = models.BooleanField(default=True)
 
     class Meta:
