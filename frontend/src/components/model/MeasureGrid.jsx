@@ -33,9 +33,15 @@ const COL_NOM_W = 160
 
 // `filled` = gold-pale (NOMÉS la columna activa destaca); groupStart/End = filet subtil de
 // delimitació del grup (no daurat, per no competir amb el destacat de l'activa).
+// S45/G2 — ELS VALORS NUMÈRICS VAN CENTRATS a tota la superfície de mesures (v. la nota de
+// criteri a `EditableTable`). Aquesta era la tercera taula de la família amb la seva pròpia
+// resposta —`right` aquí, `center` a Mesures, `right` a Graduació—: tres taules que es miren
+// de costat i tres alineacions. El que fa que una columna de xifres es pugui escombrar amunt
+// i avall és `tabular-nums`, que es queda; la vora on s'arrambin és la part que ha de ser
+// IGUAL a tot arreu, i ara ho és.
 const cellTd = (filled, groupStart, groupEnd) => ({
   padding: '5px 8px', borderBottom: '1px solid var(--line-soft)', verticalAlign: 'middle',
-  textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums',
+  textAlign: 'center', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums',
   background: filled ? 'var(--sel)' : undefined,
   borderLeft: groupStart ? '1px solid var(--line)' : '1px solid var(--line-soft)',
   borderRight: groupEnd ? '1px solid var(--line)' : undefined,
@@ -202,7 +208,9 @@ function ActiveCell({ active, editable, value, edited, onChange, onCommit, focus
             else if (e.key === 'ArrowUp') { e.preventDefault(); onNav(active.lineId, -1) }
           }}
           style={{
-            font: 'inherit', width: 70, padding: '2px 4px', textAlign: 'right',
+            // S45/G2 — `center`, com la cel·la que substitueix mentre s'edita: amb l'input
+            // a la dreta i la cel·la centrada, la xifra SALTAVA en clicar-hi.
+            font: 'inherit', width: 70, padding: '2px 4px', textAlign: 'center',
             border: `1px solid ${colVerdicte || 'var(--line)'}`, borderRadius: 4, background: 'var(--white)',
             // ── E2c-bis (decisió d'Agus, 17/08) · GRIS NORMAL I RECTE ────────────────────
             // Això anava en `--text-faint` + CURSIVA, llegint el pre-omplert com un «estat
@@ -639,7 +647,8 @@ export default function MeasureGrid({
           </tr>
           <tr>
             {groups.flatMap(g => {
-              const sub = (start) => ({ ...thStyle, textAlign: 'right', fontSize: 'var(--fs-caption)', padding: '3px 8px',
+              // S45/G2 — la subcapçalera de valor va on van els valors: centrada.
+              const sub = (start) => ({ ...thStyle, textAlign: 'center', fontSize: 'var(--fs-caption)', padding: '3px 8px',
                 background: 'var(--panel)',
                 borderLeft: start ? '1px solid var(--line)' : '1px solid var(--line-soft)' })
               const activeSub = { ...sub(false), background: 'var(--sel)' }   // NOMÉS la columna activa destaca

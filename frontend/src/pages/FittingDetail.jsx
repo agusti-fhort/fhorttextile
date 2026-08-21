@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate, Navigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { fittingSessions, pieceFittings, fittingPhotos, modelFitxers, models } from '../api/endpoints'
+import { fittingSessions, pieceFittings, fittingPhotos, modelFitxers } from '../api/endpoints'
 import client from '../api/client'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import MeasureGrid from '../components/model/MeasureGrid'
 import EditorHeader from '../components/model/EditorHeader'
-import { buildFittingGroups, buildFittingRows, regimeLeadCol } from '../components/model/fittingGridAdapter'
+import { buildFittingGroups, buildFittingRows } from '../components/model/fittingGridAdapter'
 import { thStyle, SaveStatus, useDebouncedSave, fmtMeasure, useUnit } from './fittingShared'
 import { orderedSizes } from '../utils/sizeRun'
 import { identitatMesura } from '../utils/identitatMesura'
@@ -561,8 +561,10 @@ export default function FittingDetail() {
   const [reviewMode, setReviewMode] = useState(true)
   // P5: l'editor és MeasureGrid, que OWNS el seu buffer d'edició (reals/ancoratge/focus interns).
   // El remuntatge net per peça es fa via key={activePieceId} a MeasureGrid. Aquí ja no cal estat de cel·la.
-  // Avís discret si setPomRegim falla (p.ex. 400 sense fallback); no trenca la graella.
-  const [, setRegimErr] = useState(null)
+  // S45/G5 — AQUÍ VIVIA `regimErr` (avís si `setPomRegim` fallava). Cau amb la columna de
+  // règim: sense desplegable no hi ha cap gest que pugui fallar. Ja era mig mort —l'estat es
+  // desava (`const [, setRegimErr]`) i no es pintava enlloc—, o sigui que l'avís «discret»
+  // era, de fet, un silenci. El canvi de règim viu a MESURES i a ESCALAT, amb el seu error.
 
   const loadSession = useCallback((selectFirst = false) => {
     return fittingSessions.get(id).then(res => {
@@ -632,8 +634,6 @@ export default function FittingDetail() {
   const model = grid?.model || {}
   // Trim perquè base_size_label coincideixi amb les etiquetes de talla (poden venir amb espais).
   const baseLabel = (model.base_size_label || '').trim()
-  // El run del MODEL, per traduir la talla de break a convenció de document (v. breakConvention).
-  const sizeRunModel = (model.size_run_model || '').split('·').map(x => x.trim()).filter(Boolean)
 
   // Identificació (codi/nom): del grid si hi ha peça; si no, de la primera peça.
   const idCodi = model.codi || pieces[0]?.model_codi || null
@@ -674,23 +674,11 @@ export default function FittingDetail() {
   // Sprint Y — gridGroups/gridRows només alimenten ara el split de LECTURA (sessions segellades).
   // L'edició (onGridSave/onNomSave/lineRegimeMap) s'ha dissolt a la superfície Mesures.
 
-  // PG-4b-3c — canvi de règim del POM des de la capçalera de fila. Materialitza NOMÉS si difereix
-  // (mirar no materialitza). Èxit → actualitza in-place les línies del POM (logica + deltas) perquè
-  // la propagació posterior obeeixi el nou règim, sense reload sencer. Error (400 sense fallback) →
-  // avís discret; el select revé sol al valor anterior (és controlat per row.logica, inalterat).
-  const onRegimChange = (row, nova) => {
-    if (!nova || nova === (row.logica ?? '')) return
-    setRegimErr(null)
-    models.setPomRegim(session.model, row.pom_id, nova)
-      .then(res => {
-        const d = res.data
-        setGrid(g => g ? { ...g, lines: (g.lines || []).map(l => l.pom_id === row.pom_id
-          ? { ...l, logica: d.logica, increment_base: d.increment_base,
-              increment_break: d.increment_break, talla_break_label: d.talla_break_label }
-          : l) } : g)
-      })
-      .catch(err => setRegimErr(err?.response?.data?.detail || 'No s\'ha pogut canviar el règim.'))
-  }
+  // S45/G5 — I AQUÍ VIVIA `onRegimChange` (PG-4b-3c: canvi de règim del POM des de la
+  // capçalera de fila, via `models.setPomRegim`). Era l'ÚNIC consumidor de la columna que
+  // s'ha retirat i, sense ella, cap camí de la pantalla hi arriba. NO es retira la porta:
+  // `POST set-pom-regim` segueix viu i el criden Mesures i Escalat, que és on la regla
+  // s'autora. El que cau és la segona boca, la que estava a la sala de presa.
 
   return (
     <div>
@@ -760,11 +748,21 @@ export default function FittingDetail() {
               : lines.length === 0
                 ? <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-soft)', fontSize: 'var(--fs-body)' }}>{t('fitting.grid.empty')}</div>
                 : (
+                  /* S45/G5 — LA COLUMNA RÈGIM NO ENTRA A LA GRAELLA DE FITTING.
+                     Hi era en READ-ONLY (3r argument de `regimeLeadCol` a `true`: «el règim va
+                     read-only en mode sessió»), o sigui una columna de 118px que ocupava carril
+                     STICKY, no es podia tocar i deia una dada que ja té dues cases pròpies:
+                     MESURES, on la regla s'AUTORA, i ESCALAT, on es veu amb el seu Δ i el seu
+                     break al costat. Aquí, enmig d'on es PREN una mesura, és soroll amb dret
+                     de pas fix.
+                     NOMÉS EN AQUEST MODE: `escalatRuleLeadCols` (Escalat) i les columnes de
+                     regla d'`EditableTable` (Mesures) no es toquen — allà la columna ÉS la
+                     feina. Cap lògica canvia: `regimeLeadCol` es queda sencer i exportat.
+                     Això és PRESENTACIÓ. */
                   <MeasureGrid
                     key={activePieceId}
                     editable={false}
                     rows={gridRows} groups={gridGroups}
-                    leadCols={[regimeLeadCol(t, onRegimChange, true, { sizeRun: sizeRunModel })]}
                   />
                 )}
           </div>

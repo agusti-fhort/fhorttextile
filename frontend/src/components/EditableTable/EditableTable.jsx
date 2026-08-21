@@ -839,8 +839,14 @@ export default function EditableTable({
                     lletra. Un grup de columnes per EIX del diccionari (avui posició i estat) i
                     el `＋` de les combinacions. Va entre el NOM i el valor perquè és part de
                     QUINA mesura és la fila, no de què s'hi mesura. */}
+                {/* S45/G4 — LA BANDA BAIXA DE TO: `--sel`, no `--gold-pale`. Era el color més
+                    fort de la taula i cridava més que el carril de la talla base, que és on va
+                    l'ull. La lletra es queda en `--gold`: el que ha de dir la banda és QUÈ
+                    agrupa, i això ho diu la tinta, no el fons. I ho diu el sistema abans que
+                    aquest tram — la capçalera del carril, vint línies avall, ja ho porta
+                    escrit: «`--gold-pale` està ELIMINAT del sistema (§1)». */}
                 {!readOnly && dims.length > 0 && (
-                  <th colSpan={dims.length + 1} style={{ ...thS, textAlign: 'center', background: 'var(--gold-pale)',
+                  <th colSpan={dims.length + 1} style={{ ...thS, textAlign: 'center', background: 'var(--sel)',
                                            color: 'var(--gold)', fontWeight: 600, borderLeft: '1px solid var(--border)' }}>
                     {t('instancia.grup')}
                   </th>
@@ -857,7 +863,7 @@ export default function EditableTable({
                     fa dubtar de si són dues xifres diferents. Es queda la que respon la pregunta
                     de la consulta: la TALLA BASE. */}
                 {esPresa && !readOnly && (
-                  <th rowSpan={2} style={{ ...thS, textAlign: 'right', minWidth: 96,
+                  <th rowSpan={2} style={{ ...thS, textAlign: 'center', minWidth: 96,
                                            borderLeft: '1px solid var(--border)' }}>
                     {presa.baseLabel || t('presa.col_base_vigent')}
                   </th>
@@ -899,7 +905,7 @@ export default function EditableTable({
                     viatgen a la fila; aquí només es pinten quan hi ha graduació de què parlar. */}
                 {mostraGrading && COLS_GRADING.map((c, i) => (
                   <th key={c.clau} rowSpan={2}
-                      style={{ ...thS, textAlign: 'right', minWidth: c.ample,
+                      style={{ ...thS, textAlign: 'center', minWidth: c.ample,
                                borderLeft: i === 0 ? '1px solid var(--border)' : '0.5px solid var(--border)' }}>
                     {t(c.i18n)}
                   </th>
@@ -1375,7 +1381,7 @@ function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, o
       {/* LA BASE VIGENT, en lectura i NOMÉS a la presa (v. la capçalera). `—` quan el model
           encara no en té cap: una fila que s'està prenent per primera vegada no ment dient zero. */}
       {esPresa && !readOnly && (
-        <td style={{ ...tdS, textAlign: 'right', borderLeft: '1px solid var(--border)',
+        <td style={{ ...tdS, textAlign: 'center', borderLeft: '1px solid var(--border)',
                      fontVariantNumeric: 'tabular-nums', color: 'var(--text-main)' }}>
           {row.base_vigent == null || row.base_vigent === ''
             ? <span style={{ color: 'var(--text-muted)' }}>—</span>
@@ -1383,8 +1389,13 @@ function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, o
         </td>
       )}
       {/* v8.1 `td.valcell` — EL CARRIL, acotat pels dos costats sobre `--sel`.
-          CODA · retoc 1: el CAMP va centrat a la columna (el número de dins segueix alineat a
-          la dreta i tabular — el que s'ha de poder escombrar amunt i avall és la xifra). */}
+          CODA · retoc 1 deixava el CAMP centrat a la columna i el número de dins a la DRETA.
+          ⚠️ S45/G2-G4 HO CANVIA: el número de dins també va CENTRAT. L'ordre d'Agus és «valors
+          centrats» a tota la superfície, i amb el carril a la dreta la columna de la talla base
+          hauria quedat com l'ÚNICA numèrica alineada d'una altra manera — que és exactament la
+          divergència que G2 ve a tancar. La xifra segueix sent `tabular-nums`, o sigui que
+          continua formant columna per escombrar-la amunt i avall: el que la fa llegible en
+          vertical és l'amplada fixa del dígit, no la vora on s'arrambi. */}
       <td style={{ ...tdS, textAlign: 'center', background: 'var(--sel)',
                    borderLeft: '1px solid var(--gold-border)', borderRight: '1px solid var(--gold-border)' }}>
         <CarrilInput
@@ -1413,7 +1424,7 @@ function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, o
           buida es llegiria com un zero, i un règim sense delta no és un delta de zero. */}
       {mostraGrading && COLS_GRADING.map((c, i) => (
         <td key={c.clau}
-            style={{ ...tdS, textAlign: 'right', fontVariantNumeric: 'tabular-nums',
+            style={{ ...tdS, textAlign: 'center', fontVariantNumeric: 'tabular-nums',
                      color: 'var(--text-main)',
                      borderLeft: i === 0 ? '1px solid var(--border)' : '0.5px solid var(--border)' }}>
           {c.valor(row, sizeRun) ?? <span style={{ color: 'var(--text-muted)' }}>—</span>}
@@ -1804,7 +1815,7 @@ function CarrilInput({ value, readOnly, onCommit, registerVal, onNav, hint, onEn
         }
       }}
       style={{
-        width: 78, padding: '3px 8px', textAlign: 'right',
+        width: 78, padding: '3px 8px', textAlign: 'center',   // S45/G2 — v. la nota de `td.valcell`
         fontFamily: 'inherit', fontSize: FS_VAL, fontWeight: 600,
         fontVariantNumeric: 'tabular-nums',
         color: 'var(--text-main)', background: 'var(--white)',

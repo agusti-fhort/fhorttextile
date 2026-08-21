@@ -246,8 +246,11 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
   }, [reglesTocades, gravant, degenerades, edicions, modelId, files, t, carrega, onGravat])
 
   // ── Cel·les ────────────────────────────────────────────────────────────────────────────────
+  // S45/G2 — `center`, com la cel·la que substitueix mentre s'edita. Amb l'input a `right` i
+  // la cel·la a `center` la xifra SALTAVA en clicar-hi: la mateixa dada no pot canviar de lloc
+  // segons si s'està mirant o tocant.
   const inputStyle = (ko) => ({
-    width: '100%', boxSizing: 'border-box', textAlign: 'right',
+    width: '100%', boxSizing: 'border-box', textAlign: 'center',
     border: `0.5px solid ${ko ? 'var(--danger, #b3261e)' : 'var(--border)'}`,
     borderRadius: 4, padding: '2px 6px', fontSize: FS_VAL, font: 'inherit',
     fontVariantNumeric: 'tabular-nums', background: 'var(--white)', color: 'var(--text-main)',
@@ -274,17 +277,21 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
     const candidat = row.nom_traduit_model || row.nom_ca || traduccioDe(row.pom_id) || ''
     const traduit = candidat && candidat !== nomVisible ? candidat : ''
     const deltes = acceptaDeltes(regla.logica)
-    // D'ON VE EL QUE ES VEU. Això ho decidia `regla_origen` tot sol, i mentia: la regla del
-    // JOC (`pom.GradingRule`) no té camp `origen`, o sigui que quan el model gradua de debò pel
-    // joc arribava `null` i aquí es llegia «no és MANUAL... doncs del model». Just al revés.
+    // S45/G3 — AQUÍ VIVIA `delJoc`, EL CÀLCUL DE LA COLUMNA «VE DE», i es retira amb ella
+    // (`no-unused-vars` és ERROR en aquest repo). El que aquell càlcul sabia queda escrit
+    // perquè no s'hagi de tornar a descobrir si algun dia la columna torna:
     //
-    // Ara mana `regla_es_resident`, que diu de quina TAULA ha sortit la regla, i `origen` només
-    // desempata dins de les residents:
-    //   · no resident        → del JOC en directe (el model no té cap regla pròpia)
-    //   · resident + MANUAL  → del MODEL (algú l'ha escrita, aquí o a Gravar POM)
-    //   · resident + la resta→ del JOC (còpia materialitzada en assignar-lo)
-    const delJoc = !!regla.logica
-      && (row.regla_es_resident === false || (row.regla_es_resident && row.regla_origen !== 'MANUAL'))
+    //   Ho decidia `regla_origen` tot sol, i MENTIA: la regla del JOC (`pom.GradingRule`) no
+    //   té camp `origen`, o sigui que quan el model graduava de debò pel joc arribava `null` i
+    //   es llegia «no és MANUAL... doncs del model». Just al revés. La bona mana per
+    //   `regla_es_resident` —de quina TAULA ha sortit la regla— i `origen` només desempata
+    //   dins de les residents:
+    //     · no resident        → del JOC en directe (el model no té cap regla pròpia)
+    //     · resident + MANUAL  → del MODEL (algú l'ha escrita, aquí o a Gravar POM)
+    //     · resident + la resta→ del JOC (còpia materialitzada en assignar-lo)
+    //
+    //   const delJoc = !!regla.logica && (row.regla_es_resident === false
+    //     || (row.regla_es_resident && row.regla_origen !== 'MANUAL'))
     const regims = regimsAutorables.includes(row.logica) || !row.logica
       ? regimsAutorables : [...regimsAutorables, row.logica]
     return (
@@ -316,20 +323,23 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
             {traduit && <InfoTraduccio text={traduit} />}
           </div>
         </td>
-        {/* EL VALOR DE TALLA BASE, COLUMNA PRÒPIA — el mateix carril que la consulta (`--sel`
-            acotat pels dos costats), en LECTURA: aquí no es canvien mesures, es decideix com
-            creixen. Anava enganxat al nom amb un `marginLeft`, i així les xifres no formaven
-            columna: no es podien llegir en vertical, que és com es mira una taula de mesures. */}
-        <td style={{ ...tdS, textAlign: 'right', background: 'var(--gold-pale)',
+        {/* EL VALOR DE TALLA BASE, COLUMNA PRÒPIA — el mateix carril que la consulta, en
+            LECTURA: aquí no es canvien mesures, es decideix com creixen. Anava enganxat al nom
+            amb un `marginLeft`, i així les xifres no formaven columna: no es podien llegir en
+            vertical, que és com es mira una taula de mesures.
+            S45/G1 — I EL FONS TORNA AL PATRÓ DE LA FAMÍLIA: `--sel`, no `--gold-pale`. El
+            comentari de dalt ja deia «(`--sel` acotat pels dos costats)» i el codi pintava
+            `--gold-pale`: la taula germana (`EditableTable:1388`) porta `--sel` i aquesta havia
+            pujat un graó pel seu compte. Dues taules que es miren de costat amb la MATEIXA
+            columna en dos tons diuen que la columna no és la mateixa, i sí que ho és.
+            S45/G2 — i els números van CENTRATS i amb `tabular-nums`, com tots els valors
+            numèrics de la superfície (v. la nota de criteri, amunt). */}
+        <td style={{ ...tdS, textAlign: 'center', background: 'var(--sel)',
                      borderLeft: '1px solid var(--border)', borderRight: '1px solid var(--border)',
                      fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
           {row.base_value_cm === null || row.base_value_cm === undefined
             ? <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>—</span>
             : row.base_value_cm}
-        </td>
-        {/* Procedència: què mira la persona quan es pregunta «d'on surt això». */}
-        <td style={{ ...tdS, fontSize: FS_HEAD, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-          {!regla.logica ? '' : delJoc ? t('graduacio.superficie.origen_joc') : t('graduacio.superficie.origen_model')}
         </td>
         <td style={tdS}>
           {/* El desplegable de règim ha de CABRE a l'amplada de la família (`AMPLADES.regim`):
@@ -430,8 +440,10 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
               <thead>
                 <tr>
                   {/* ORDRE DE LA FAMÍLIA (Agus, 06/08): # · CAPA · POM · NOM · TALLA BASE ·
-                      VE DE · RÈGIM · Δ · Δ BREAK · TALLA BREAK. El valor va enganxat a la
-                      identitat i les regles tanquen la fila. */}
+                      RÈGIM · Δ · Δ BREAK · TALLA BREAK. El valor va enganxat a la identitat i
+                      les regles tanquen la fila. (S45/G3 — «VE DE» hi era entremig i s'ha
+                      retirat; la taula no va al 100% i per tant no cal repartir-ne l'amplada
+                      enlloc: simplement n'ocupa menys.) */}
                   {/* El `#` NO porta amplada, com a la consulta: s'encongeix al seu contingut. */}
                   <th style={thS}>#</th>
                   {/* El bloc d'IDENTITAT amb les amplades de la consulta (`width` + `minWidth`,
@@ -444,7 +456,7 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
                       nomena la columna i la talla va en cos gran, que és el que la fa trobar
                       sense llegir. Sense talla base declarada es queda el literal de sempre;
                       inventar-hi una «Talla base» prometria una talla que ningú ha dit. */}
-                  <th style={{ ...thS, minWidth: AMPLADES.base, textAlign: 'right', background: 'var(--gold-pale)',
+                  <th style={{ ...thS, minWidth: AMPLADES.base, textAlign: 'center', background: 'var(--sel)',
                                borderLeft: '1px solid var(--border)', borderRight: '1px solid var(--border)' }}>
                     {data?.base_size ? (
                       <>
@@ -458,21 +470,27 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
                       </>
                     ) : t('editable_table.col.base_value')}
                   </th>
-                  {/* «VE DE» és columna PRÒPIA d'aquesta pantalla (la consulta no la té): no hi ha
-                      cap amplada de la família a clonar-hi, i per això declara la seva. */}
-                  <th style={{ ...thS, minWidth: 90 }}>{t('graduacio.superficie.col_origen')}</th>
+                  {/* S45/G3 — «VE DE» RETIRADA. Era columna pròpia d'aquesta pantalla (la
+                      consulta no la té) i deia «del joc» / «del model» per a cada fila: una
+                      etiqueta que no canvia cap decisió —la regla es toca igual vingui d'on
+                      vingui— i que es menjava 90px del carril de la taula. Es retira per
+                      PRESENTACIÓ: `regla_origen` i `regla_es_resident` segueixen al payload
+                      (`models_app/views.py:2163-2164`), que és additiu i té altres lectors
+                      potencials; retirar-los seria un segon tram i una altra decisió.
+                      Els 90px que allibera se'n van al carril del NOM, que és on falten. */}
                   {/* Les QUATRE de la regla, amb les amplades de la consulta. Aquí són editables i
                       allà de lectura, però la columna ha de caure al mateix lloc: és la mateixa
                       taula mirada de dues maneres. */}
                   <th style={{ ...thS, minWidth: AMPLADES.regim, borderLeft: '1px solid var(--border)' }}>{t('fitting.grid.regime')}</th>
-                  <th style={{ ...thS, minWidth: AMPLADES.delta, textAlign: 'right' }}>{t('editable_table.col.delta')}</th>
-                  <th style={{ ...thS, minWidth: AMPLADES.delta_break, textAlign: 'right' }}>{t('editable_table.col.delta_break')}</th>
+                  {/* S45/G2 — els Δ són VALORS NUMÈRICS i van centrats com la resta. */}
+                  <th style={{ ...thS, minWidth: AMPLADES.delta, textAlign: 'center' }}>{t('editable_table.col.delta')}</th>
+                  <th style={{ ...thS, minWidth: AMPLADES.delta_break, textAlign: 'center' }}>{t('editable_table.col.delta_break')}</th>
                   <th style={{ ...thS, minWidth: AMPLADES.talla_break }}>{t('editable_table.col.talla_break')}</th>
                 </tr>
               </thead>
               <tbody>
                 {filesDelContenidor.length === 0
-                  ? <tr><td colSpan={10} style={{ ...tdS, color: 'var(--text-muted)', padding: '16px 10px' }}>
+                  ? <tr><td colSpan={9} style={{ ...tdS, color: 'var(--text-muted)', padding: '16px 10px' }}>
                       {t(peca && !peca.es_mare ? 'graduacio.superficie.buit_peca' : 'graduacio.superficie.buit')}
                     </td></tr>
                   : cos(filesDelContenidor)}
