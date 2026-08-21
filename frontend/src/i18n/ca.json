@@ -3915,7 +3915,15 @@
       "delta": "Δ de l’interval",
       "delta_help": "Creixement entre dues talles consecutives dins de l’interval.",
       "treure": "Treure aquest interval",
-      "incomplet": "Hi ha un interval a mitges: li falta la talla o el Δ."
+      "incomplet": "Hi ha un interval a mitges: li falta la talla o el Δ.",
+      "col": "Breaks",
+      "col_help": "Cada xip és un interval INCLUSIU «inici → final · Δ» que sobreescriu el Δ general dins del seu tram; fora del xip torna a manar el general. Les talles van en convenció de MOTOR: l’inici és la PRIMERA talla que creix amb el Δ nou.",
+      "max_curt": "màx. {{max}}",
+      "editar": "Editar aquest interval",
+      "confirmar": "Confirmar l’interval",
+      "cancellar": "Cancel·lar",
+      "sense_lliures": "No queda cap talla lliure: tot el run ja el cobreix un interval",
+      "llegat_help": "Aquest trencament està desat amb la forma d’un sol tram; editar-lo el desarà com a interval."
     }
   },
   "export_button": {

@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import client from '../../api/client'
 import { models } from '../../api/endpoints'
@@ -8,10 +8,9 @@ import { clauRegla, filesDeLaPeca } from '../../utils/identitatMesura'
 import { useEstatDiccionari } from '../../utils/diccionariMesuresFont'
 import { useTraduccioPoms } from '../../utils/traduccioPomFont'
 import { useElements } from '../../utils/vocabulariDominiFont'
-import { aDocument, aMotor, opcionsDocument } from '../../utils/breakConvention'
 import { InfoTraduccio, AMPLADES } from '../EditableTable/EditableTable'
-import { BotoAfegirInterval, FilesIntervals } from './EditorIntervals'
-import { intervalsDe, intervalsIncomplets } from '../../utils/gradingRegime'
+import ColumnaBreaks from './EditorIntervals'
+import { intervalsDe, intervalsIncomplets, relleuLlegat } from '../../utils/gradingRegime'
 
 // LA GRADUACIÓ ÉS UNA SUPERFÍCIE PRÒPIA (P0.5d · Agus, 06/08, a pantalla).
 //
@@ -142,6 +141,11 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
   // 🔴 EL MAP DE LA LLEI. Neix buit i només hi entra el que un gest humà canvia.
   // Map<pom_id, {logica?, increment_base?, increment_break?, talla_break_label?}>
   const [edicions, setEdicions] = useState(new Map())
+  // F4-BIS — L'ERROR DE LA PORTA D'INTERVALS, PER FILA. `Map<clauRegla, {codi, detall}>`. Va a
+  // part del `feedback` de peu perquè un `BREAKS_*` és de LA REGLA que el va provocar: amb el
+  // missatge només a la barra de baix, qui havia tocat sis files havia d'endevinar quina. El
+  // patró és el de la porta de `valors_step`, que retorna l'error al mateix control.
+  const [errBreaks, setErrBreaks] = useState(new Map())
 
   const carrega = useCallback(() => {
     if (!modelId) return
@@ -185,6 +189,13 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
 
   const canvia = useCallback((row, camp, v) => {
     setFeedback(null)
+    // Tocar la fila retira el seu error: el que es veia era el veredicte del payload ANTERIOR i
+    // deixar-lo posat mentre algú n'escriu un de nou és mentir sobre el que hi ha a pantalla.
+    setErrBreaks(prev => {
+      const clau = clauRegla(row)
+      if (!prev.has(clau)) return prev
+      const next = new Map(prev); next.delete(clau); return next
+    })
     setEdicions(prev => {
       const next = new Map(prev)
       const cur = { ...(next.get(clauRegla(row)) || {}) }
@@ -200,6 +211,27 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
       return next
     })
   }, [])
+
+  /**
+   * F4-BIS — ESCRIURE ELS INTERVALS D'UNA FILA, I RETIRAR LA FORMA VELLA SI N'HI HAVIA.
+   *
+   * 🚨 Una regla no pot quedar-se amb LES DUES FORMES. El motor ja sap què fer-ne (`breaks`
+   * mana, `grading_utils.intervals_de`), però `increment_break`/`talla_break_label` seguirien
+   * dient un trencament que ja no governa i que altres superfícies —la consulta, l'export, un
+   * import futur— encara llegeixen. El fòssil no és inofensiu: és una segona veritat.
+   *
+   * Per això, quan el relleu que es veia sortia NOMÉS de la forma vella (`relleuLlegat`) i
+   * algú l'edita, la mateixa crida envia els intervals I buida els dos camps llegats. Això és
+   * el que vol dir «editar-la escriu la forma nova»: no és una migració —cap fila que ningú
+   * toqui es mou— sinó la conseqüència d'un gest humà sobre aquella regla concreta.
+   */
+  const escriuBreaks = useCallback((row, regla, llista) => {
+    if (relleuLlegat(regla, runIntervals)) {
+      canvia(row, 'increment_break', null)
+      canvia(row, 'talla_break_label', null)
+    }
+    canvia(row, 'breaks', llista)
+  }, [canvia, runIntervals])
 
   // Les files que l'usuari ha tocat, i les que a més queden en LINEAR degenerada (que el backend
   // rebutjaria). Es compten per POM, que és la unitat de la regla.
@@ -239,7 +271,9 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
     }
     setGravant(true)
     setFeedback(null)
+    setErrBreaks(new Map())
     const fallits = []
+    const errsFila = new Map()
     for (const [clau] of reglesTocades) {
       const camps = { ...(edicions.get(clau) || {}) }
       const pomId = camps.__pom_id
@@ -262,10 +296,17 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
         await models.setPomRule(modelId, pomId, { ...payload, garment })
       } catch (e) {
         const fila = files.find(r => clauRegla(r) === clau)
-        fallits.push(`${fila?.pom_code || pomId}: ${e?.response?.data?.detail || t('graduacio.superficie.err_generic')}`)
+        const cos = e?.response?.data || {}
+        // Els `BREAKS_*` tenen adreça: la columna de la fila. La resta segueix anant al peu,
+        // que és on van els errors que no són d'un control concret.
+        if (String(cos.codi || '').startsWith('BREAKS_')) {
+          errsFila.set(clau, { codi: cos.codi, detall: cos.detail || cos.detall || '' })
+        }
+        fallits.push(`${fila?.pom_code || pomId}: ${cos.detail || t('graduacio.superficie.err_generic')}`)
       }
     }
     setGravant(false)
+    setErrBreaks(errsFila)
     if (fallits.length) {
       setFeedback({ type: 'err', text: fallits.join(' · ') })
       return
@@ -326,7 +367,7 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
     const regims = regimsAutorables.includes(row.logica) || !row.logica
       ? regimsAutorables : [...regimsAutorables, row.logica]
     const fila = (
-      <tr title={heretada ? t('graduacio.superficie.regla_heretada') : undefined}
+      <tr key={row.id} title={heretada ? t('graduacio.superficie.regla_heretada') : undefined}
         style={{ background: tocat ? 'var(--fila-activa)' : 'transparent',
           color: heretada ? 'var(--text-soft)' : undefined }}>
         {/* # — el número de fila, com a la consulta (mateix to i cos). */}
@@ -394,48 +435,21 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
             title={deltes ? '' : t('graduacio.superficie.delta_na', { regim: regla.logica })}
             style={{ ...inputStyle(ko), opacity: deltes ? 1 : 0.4 }} />
         </td>
+        {/* F4-BIS — LA COLUMNA «BREAKS» OCUPA EL LLOC DE «Δ BREAK» + «TALLA BREAK». Les dues
+            columnes que hi havia aquí deien entre totes dues UN trencament, i en convencions
+            diferents; el xip en diu N i cadascun sencer. La talla de break en convenció de
+            DOCUMENT segueix vivint a la CONSULTA (`EditableTable`), que és de lectura: aquí,
+            que és d'autoria, tot parla en convenció de MOTOR i no hi ha res que ho contradigui
+            al costat. */}
         <td style={tdS}>
-          {/* Q2 — `size={4}`: un `<input>` amb `width:100%` conserva l'amplada INTRÍNSECA del
-              seu `size` per defecte (20 caràcters), i en una taula d'amplada de contingut és
-              aquesta la que mana: la columna del delta demanava 202px per a un «1.5», el doble
-              que a la consulta. Amb `size` curt, la columna la decideix el `minWidth` de la
-              capçalera, que és el de la família. */}
-          <input type="text" inputMode="decimal" size={4} disabled={!deltes}
-            value={buit(regla.increment_break) ? '' : regla.increment_break}
-            onChange={e => canvia(row, 'increment_break', e.target.value)}
-            title={deltes ? '' : t('graduacio.superficie.delta_na', { regim: regla.logica })}
-            style={{ ...inputStyle(ko), opacity: deltes ? 1 : 0.4 }} />
-        </td>
-        <td style={tdS}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            {/* CONVENCIÓ DE DOCUMENT a la vista, MOTOR a la dada (v. utils/breakConvention). */}
-            <select value={aDocument(regla.talla_break_label, sizeRun) || ''} disabled={!deltes}
-              onChange={e => canvia(row, 'talla_break_label', aMotor(e.target.value, sizeRun))}
-              style={{ ...inputStyle(ko), textAlign: 'left', cursor: deltes ? 'pointer' : 'default',
-                       opacity: deltes ? 1 : 0.4 }}>
-              <option value="">—</option>
-              {opcionsDocument(sizeRun).map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-            {/* TRAM F — EL SIGNE [+] DE LA FILA. Mateixa gramàtica que a «Generar regles»: el
-                gest viu a la fila del POM i el que neix és una SUB-LÍNIA, no una columna. */}
-            <BotoAfegirInterval intervals={regla.breaks} run={runIntervals}
-              disabled={!deltes}
-              motiu={deltes ? '' : t('graduacio.superficie.delta_na', { regim: regla.logica })}
-              onCanvi={llista => canvia(row, 'breaks', llista)} />
-          </span>
+          <ColumnaBreaks rule={regla} run={runIntervals} readOnly={!deltes}
+            motiu={deltes ? '' : t('graduacio.superficie.delta_na', { regim: regla.logica })}
+            error={errBreaks.get(clauRegla(row)) || null}
+            onCanvi={llista => escriuBreaks(row, regla, llista)} />
         </td>
       </tr>
     )
-    // TRAM F — la fila del POM i les seves sub-línies són UNA unitat de lectura: van dins del
-    // mateix fragment i amb la clau de la fila, perquè cap re-ordenació les pugui separar.
-    return (
-      <Fragment key={row.id}>
-        {fila}
-        <FilesIntervals intervals={regla.breaks} run={runIntervals} clau={`iv-${row.id}`}
-          colSpanEsquerra={5} colSpanDreta={4} readOnly={!deltes}
-          onCanvi={llista => canvia(row, 'breaks', llista)} />
-      </Fragment>
-    )
+    return fila
   })
 
   // ── Capçalera de context ───────────────────────────────────────────────────────────────────
@@ -533,13 +547,21 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
                   <th style={{ ...thS, minWidth: AMPLADES.regim, borderLeft: '1px solid var(--border)' }}>{t('fitting.grid.regime')}</th>
                   {/* S45/G2 — els Δ són VALORS NUMÈRICS i van centrats com la resta. */}
                   <th style={{ ...thS, minWidth: AMPLADES.delta, textAlign: 'center' }}>{t('editable_table.col.delta')}</th>
-                  <th style={{ ...thS, minWidth: AMPLADES.delta_break, textAlign: 'center' }}>{t('editable_table.col.delta_break')}</th>
-                  <th style={{ ...thS, minWidth: AMPLADES.talla_break }}>{t('editable_table.col.talla_break')}</th>
+                  {/* F4-BIS — UNA COLUMNA EN LLOC DE DUES. «Δ break» i «Talla break» eren la
+                      meitat cadascuna d'un sol trencament i només en sabien dir un; «Breaks»
+                      en diu N i cadascun sencer. L'ⓘ que hi havia a la columna de la talla
+                      —deia en quina convenció es llegia— baixa aquí, perquè aquí és on ara es
+                      decideix: intervals en convenció de MOTOR, l'inici és la primera talla
+                      que creix amb el Δ nou. */}
+                  <th style={{ ...thS, minWidth: AMPLADES.breaks }}
+                      title={t('grading.intervals.col_help')}>
+                    {t('grading.intervals.col')}
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {filesDelContenidor.length === 0
-                  ? <tr><td colSpan={9} style={{ ...tdS, color: 'var(--text-muted)', padding: '16px 10px' }}>
+                  ? <tr><td colSpan={8} style={{ ...tdS, color: 'var(--text-muted)', padding: '16px 10px' }}>
                       {t(peca && !peca.es_mare ? 'graduacio.superficie.buit_peca' : 'graduacio.superficie.buit')}
                     </td></tr>
                   : cos(filesDelContenidor)}

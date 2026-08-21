@@ -3915,7 +3915,15 @@
       "delta": "Interval Δ",
       "delta_help": "Growth between two consecutive sizes inside the interval.",
       "treure": "Remove this interval",
-      "incomplet": "An interval is half-written: it is missing a size or its Δ."
+      "incomplet": "An interval is half-written: it is missing a size or its Δ.",
+      "col": "Breaks",
+      "col_help": "Each chip is an INCLUSIVE interval “start → end · Δ” that overrides the general Δ inside its range; outside the chip the general Δ rules again. Sizes use the ENGINE convention: the start is the FIRST size that grows by the new Δ.",
+      "max_curt": "max. {{max}}",
+      "editar": "Edit this interval",
+      "confirmar": "Confirm the interval",
+      "cancellar": "Cancel",
+      "sense_lliures": "No free size left: intervals already cover the whole run",
+      "llegat_help": "This break is stored in the single-range form; editing it will save it as an interval."
     }
   },
   "export_button": {

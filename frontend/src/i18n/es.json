@@ -3915,7 +3915,15 @@
       "delta": "Δ del intervalo",
       "delta_help": "Crecimiento entre dos tallas consecutivas dentro del intervalo.",
       "treure": "Quitar este intervalo",
-      "incomplet": "Hay un intervalo a medias: le falta la talla o la Δ."
+      "incomplet": "Hay un intervalo a medias: le falta la talla o la Δ.",
+      "col": "Breaks",
+      "col_help": "Cada chip es un intervalo INCLUSIVO «inicio → final · Δ» que sobrescribe la Δ general dentro de su tramo; fuera del chip vuelve a mandar la general. Las tallas van en convención de MOTOR: el inicio es la PRIMERA talla que crece con la Δ nueva.",
+      "max_curt": "máx. {{max}}",
+      "editar": "Editar este intervalo",
+      "confirmar": "Confirmar el intervalo",
+      "cancellar": "Cancelar",
+      "sense_lliures": "No queda ninguna talla libre: todo el run ya lo cubre un intervalo",
+      "llegat_help": "Este break está guardado con la forma de un solo tramo; editarlo lo guardará como intervalo."
     }
   },
   "export_button": {

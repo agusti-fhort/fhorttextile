@@ -60,6 +60,12 @@ import { construeixPayload } from '../../utils/payloadMesures'
 export const AMPLADES = {
   capa: 104, codi: 90, nom: 236, base: 100,
   regim: 96, delta: 84, delta_break: 96, talla_break: 96,
+  // F4-BIS — la columna «Breaks» de les superfícies d'AUTORIA, que hi substitueix
+  // `delta_break` + `talla_break` (96+96). És un pis, no un sostre: la taula va a amplada de
+  // contingut dins d'un `overflowX:auto` i els xips creixen amb els que la regla tingui. Les
+  // dues amplades velles es queden perquè la CONSULTA (aquesta taula) segueix tenint-les: allà
+  // no s'edita res i la lectura compacta hi cap.
+  breaks: 200,
 }
 
 // LES QUATRE COLUMNES DE LA REGLA (P0.5b). Es declaren un sol cop —capçalera i cel·la surten
