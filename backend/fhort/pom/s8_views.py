@@ -56,16 +56,21 @@ def _delta_de(r, unit):
     """
     if r.logica == 'STEP':
         return '(STEP)'                     # els valors viuen a `valors_step`, no en un escalar
+    if r.logica in ('FIXED', 'ZERO'):
+        # Règims SENSE delta per definició, i no és el mateix que una regla incompleta: una FIXED
+        # gradua —pla— i és una decisió del tècnic. Amb `—` les 44 FIXED del catàleg de Brownie
+        # sortirien al full com si estiguessin trencades.
+        return 0 if r.logica == 'FIXED' else '(ZERO)'
     if r.increment_base is None:
-        # Regla incompleta: des del PAS 3 no gradua i no emet cap cel·la (llei D2). El CSV ho
-        # ha de dir igual que ho diu la propagació, no imprimir-hi un 0 que sembli un delta.
+        # LINEAR sense delta base: des del PAS 3 no gradua i no emet cap cel·la (llei D2). El CSV
+        # ho diu igual que ho diu la propagació, no hi imprimeix un 0 que sembli un delta.
         return '—'
     return cv(r.increment_base, unit)
 
 
 def _delta_break_de(r, unit):
-    if r.logica == 'STEP' or r.increment_break is None:
-        return ''
+    if r.logica != 'LINEAR' or r.increment_break is None:
+        return ''                           # només LINEAR pot portar trencament
     return cv(r.increment_break, unit)
 
 
