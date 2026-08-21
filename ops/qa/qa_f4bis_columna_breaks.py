@@ -80,6 +80,9 @@ ROWS = [
     fila(7, 'E5', 'Sleeve opening', 12, 'LINEAR', ib=0, brk=0, lbl='M'),
     # I una FIXED amb residus llegats: la columna calla i la dada es queda a la BD.
     fila(8, 'U', 'Under placket', 4, 'FIXED', ib=0, brk=0, lbl='M'),
+    # ⑨ (21/08) LA FILA D'AGUS: Δ general 0 amb break llegat viu. És la forma sobre la qual
+    # «gravar amb un xip a mig editar» produïa el missatge que menteix a l'ull.
+    fila(9, 'F', 'Front length', 110.5, 'LINEAR', ib=0, brk=2, lbl='M'),
 ]
 
 _MODEL = {
@@ -366,6 +369,46 @@ def main():
         prova('⑦ FIXED amb residus llegats: la columna calla sencera',
               cU.locator('button').count() == 0 and cU.inner_text().strip() == '',
               cU.inner_html()[:160])
+
+        # ── ⑨ GRAVAR AMB UN XIP A MIG EDITAR ───────────────────────────────────────────────
+        #
+        # 🚨 EL GEST HUMÀ QUE CAP QA DE PORT VEU MAI. El payload directe contra la vista dona
+        # 200 —mesurat—, i tot i així el passi visual d'Agus el barrava: la divergència vivia
+        # entre el que la persona VEU (un xip amb el seu Δ escrit) i el que hi ha DESAT (encara
+        # res, perquè el ✓ no s'ha premut). Dues cares del mateix defecte, i totes dues aquí.
+        posts9 = []
+        page.route('**/regim/', lambda r: (posts9.append(r.request.post_data),
+                                           r.fulfill(status=200,
+                                                     content_type='application/json', body='{}')))
+
+        def esborra_i_obre():
+            """El gest de l'evidència: ✕ el xip llegat → [+] → escriure Δ → NO confirmar."""
+            _cel_la(page, 'F').locator('button[title*="Treure"]').first.click()
+            page.wait_for_timeout(250)
+            _cel_la(page, 'F').locator('button[title*="Afegir"]').first.click()
+            page.wait_for_timeout(200)
+            _cel_la(page, 'F').locator('input').first.fill('2')
+            page.wait_for_timeout(200)
+
+        esborra_i_obre()
+        page.get_by_role('button', name='Gravar').first.click()
+        page.wait_for_timeout(700)
+        cos9 = page.inner_text('body')
+        prova('⑨ gravar amb un xip obert NO envia res', not posts9, posts9)
+        prova('⑨ i el missatge diu el GEST que falta, no «no gradua res»',
+              'a mig escriure' in cos9 and '(F)' in cos9
+              and 'no gradua res' not in cos9,
+              [l for l in cos9.split('\n') if 'interval' in l.lower()][:1])
+        page.locator('table').first.screenshot(path=OUT / 'f4bis_11_esborrany_obert.png')
+
+        # Confirmant-lo, la mateixa pantalla grava: el guard no és una paret, és un recordatori.
+        _cel_la(page, 'F').locator('button[title*="Confirmar"]').first.click()
+        page.wait_for_timeout(250)
+        page.get_by_role('button', name='Gravar').first.click()
+        page.wait_for_timeout(700)
+        prova('⑨ amb el ✓ premut, la MATEIXA fila grava',
+              len(posts9) == 1 and '"delta":2' in (posts9[0] or ''), posts9)
+        page.unroute('**/regim/')
 
         # ══ LA SEGONA SUPERFÍCIE: «Generar regles» ═════════════════════════════════════════
         # 🔑 La prova no és que «també funcioni»: és que sigui LA MATEIXA COLUMNA. Les dues
