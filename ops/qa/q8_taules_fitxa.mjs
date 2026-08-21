@@ -210,6 +210,11 @@ const AMPLE_UTIL_MAX = 270
 const CHAR_MM = 3.175 * 0.6
 const noms = q8a.files.map(f => f.nom_en)
 const wPom = ampladaPerTextos(noms, { charMm: CHAR_MM, padMm: 4, minMm: 34, maxMm: 62 })
+// H-bis/3 — LA COLUMNA DE NOMENCLATURA, que ara la porten LES CINC taules. Una sola línia (un
+// codi partit deixa de servir per trobar la fila d'un cop d'ull) i sostre per als àlies llargs.
+const wCodi = ampladaPerTextos(q8a.files.map(f => f.codi), {
+  charMm: CHAR_MM, padMm: 4, minMm: 14, maxMm: 30, linies: 1,
+})
 
 // M1/M2 — la mateixa aritmètica que el builder: monoespaiada, cos de capçalera 8pt (el sòl),
 // tracking inclòs. Serveix per saber si una capçalera parteix en dues línies, que és el que fa
@@ -231,7 +236,7 @@ prova('M1 · «REAL» cap a UNA línia a la columna de 13 mm del size set; «ACT
 
 prova('M1 · cap capçalera de les taules Q8 parteix en dues línies', () => {
   const cols = [
-    ['LAYER', 16], ['POM', wPom], ['REAL', 18], ['REAL', 13], ['DIFF', 16],
+    ['LAYER', 16], ['POM', wCodi], ['NAME', wPom], ['REAL', 18], ['REAL', 13], ['DIFF', 16],
     ['VERDICT', 22], ['NOTES', 52], ['RULE', 18], ['Δ', 14], ['BREAK', 14], ['B. SIZE', 18],
   ]
   const parteixen = cols.filter(([et, w]) => liniesCapcalera(et, w) > 1)
@@ -250,10 +255,11 @@ const ample = (cols) => cols.reduce((a, b) => a + b, 0)
 const CINC = ['XXS', 'XS', 'S', 'M', 'L']
 // T3 — el size set ha passat de TRES columnes per talla a DUES (teòrica · Actual), i han caigut
 // la Dif i el Verdict. Aquesta és l'aritmètica que decideix si cal apaïsat.
+// H-bis/3 — i totes tres porten ara LAYER · POM · NAME al davant, no LAYER · POM.
 const casos = [
-  ['Q8a fitting', ample([16, wPom, 18, 18, 16, 22, 52])],
-  ['Q8b grading (5 talles)', ample([16, wPom, 18, 14, 14, 18, ...CINC.map(() => 14)])],
-  ['Q8c size set (5 talles)', ample([16, wPom, ...CINC.flatMap(() => [13, 13])])],
+  ['Q8a fitting', ample([16, wCodi, wPom, 18, 18, 16, 22, 52])],
+  ['Q8b grading (5 talles)', ample([16, wCodi, wPom, 18, 14, 14, 18, ...CINC.map(() => 14)])],
+  ['Q8c size set (5 talles)', ample([16, wCodi, wPom, ...CINC.flatMap(() => [13, 13])])],
 ]
 for (const [nom, w] of casos) {
   const capA4P = w <= FORMATS.A4P - 2 * MARGE
@@ -278,20 +284,31 @@ prova('M2 · el rètol (data · nom · unitat) cap a l\'amplada de la taula més
   console.log(`      → rètol més llarg ${need.toFixed(0)} mm · taula més estreta ${mesEstreta} mm`)
 })
 
-prova('T3 · amb DUES columnes per talla, el run de 5 torna a cabre en A4 VERTICAL', () => {
+// 🚨 H-bis/3 — AQUESTA PROVA DEIA EL CONTRARI I S'HA HAGUT DE REESCRIURE, que és exactament el
+// que ha de passar quan una decisió en substitueix una altra. T3 (18/08) va guanyar l'A4 VERTICAL
+// per al run de cinc traient la Dif i el Verdict del size set; l'ordre del 21/08 hi torna a posar
+// una columna —la NOMENCLATURA, que hi faltava a totes— i els mil·límetres se'n tornen.
+//
+// No és una regressió silenciosa: és el fallback SANCIONAT de T3 (apaïsat abans que encongir, i
+// mai A3). El que la prova gasta és que segueixi dins del sostre i per damunt del sòl de 8pt.
+// Si algun dia s'ha de recuperar el vertical, el mil·límetre és de la columna del NOM, no del codi.
+prova('H-bis · el run de 5 amb nomenclatura baixa a l\'APAÏSAT, dins del sostre i sobre el sòl', () => {
   const w = casos[2][1]
-  assert.ok(w <= FORMATS.A4P - 2 * MARGE, `${w} mm no hi cap`)
-  console.log(`      → size set de 5 talles: ${w} mm (abans de T3 en feia 262 i saltava a apaïsat)`)
+  const sensCodi = w - wCodi
+  assert.ok(sensCodi <= FORMATS.A4P - 2 * MARGE, 'sense la columna de codi hi cabia (era la T3)')
+  assert.ok(w <= AMPLE_UTIL_MAX, `${w} mm se surt fins i tot de l'apaïsat`)
+  assert.ok(9 * Math.min(1, (FORMATS.A4L - 2 * MARGE) / w) >= 8, 'per sota del sòl de 8pt')
+  console.log(`      → size set de 5 talles: ${sensCodi.toFixed(0)} mm sense codi (A4P) · ${w.toFixed(0)} mm amb codi (A4L)`)
 })
 
 prova('T3 · el que no cap ni en A4 apaïsat es parteix per TALLES, no puja de paper', () => {
-  // Un run de 20 talles: 16 + wPom fixos, 26 mm per talla, sostre 270.
-  const bandes = trossosDeTalles(20, 16 + wPom, 26, AMPLE_UTIL_MAX)
+  // Un run de 20 talles: 16 + wCodi + wPom fixos, 26 mm per talla, sostre 270.
+  const bandes = trossosDeTalles(20, 16 + wCodi + wPom, 26, AMPLE_UTIL_MAX)
   assert.ok(bandes.length > 1, 'hauria de partir')
   assert.equal(bandes[0][0], 0)
   assert.equal(bandes[bandes.length - 1][1], 20, 'cap talla es perd')
   bandes.slice(1).forEach((b, i) => assert.equal(b[0], bandes[i][1], 'ni se\'n repeteix cap'))
-  const ampleBanda = 16 + wPom + (bandes[0][1] - bandes[0][0]) * 26
+  const ampleBanda = 16 + wCodi + wPom + (bandes[0][1] - bandes[0][0]) * 26
   assert.ok(ampleBanda <= AMPLE_UTIL_MAX, `${ampleBanda} mm se surt del sostre`)
   console.log(`      → 20 talles = ${bandes.length} bandes de ${bandes[0][1]} · ${ampleBanda.toFixed(0)} mm cadascuna`)
 })
