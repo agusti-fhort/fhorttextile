@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { poms, pomCategories, customerAliases } from '../../api/endpoints'
 import { useTraduccioPoms } from '../../utils/traduccioPomFont'
+import { useEstatVocabulari, codisDe } from '../../utils/vocabulariDominiFont'
 import { InfoTraduccio } from '../EditableTable/EditableTable'
 
 // Segueix la paginació de DRF fins al final. `page_size: 1000` era un SOSTRE: amb un catàleg més
@@ -173,10 +174,17 @@ const LLIGAT = 'lligat'
 const NO_LLIGAT = 'no_lligat'
 const SENSE_INFORMAR = 'sense_informar'
 
+//
+// 🚨 EL 22/08 AIXÒ VA CANVIAR D'ORDRE, i no és cosmètica. El tram 3 va fer que el «com es
+// mesura» sigui INFORMABLE AL TENANT: un POM sense `pom_global` ja pot dir com es pren. Amb
+// el predicat vell —`pom_global == null` PRIMER— un POM propi acabat d'omplir hauria seguit
+// dient «no lligat al catàleg global» amb el valor escrit al davant i invisible. Ara mana el
+// VALOR: si n'hi ha, es diu; i el «per què no» només es demana quan de debò no n'hi ha.
 function estatCamp(sel, valor) {
-  if (sel?.pom_global == null) return NO_LLIGAT
   const buit = valor === null || valor === undefined || String(valor).trim() === ''
-  return buit ? SENSE_INFORMAR : LLIGAT
+  if (!buit) return LLIGAT
+  if (sel?.pom_global == null) return NO_LLIGAT
+  return SENSE_INFORMAR
 }
 
 /** El valor d'un camp del «com es mesura», o LA PARAULA que diu per què no hi és. Mai un guió. */
@@ -216,6 +224,47 @@ function Tags({ valors, buit }) {
   )
 }
 
+// ── S46/TRAM 4 · ELS CONTROLS DE L'EDICIÓ ──────────────────────────────────────────────────
+//
+// Locals a aquesta pantalla i no components compartits: la casa no té un `Field` de fitxa i
+// inventar-ne un aquí seria un component nou de sistema en un sprint que no ho demana (mateixa
+// decisió que els «tags» d'aquesta mateixa pàgina). S'ANOTA al report.
+//
+// Mateixa graella `cx.kv` que la fitxa de lectura a posta: el que s'edita ha de caure EXACTAMENT
+// on estava el text, o l'ull perd la fila que estava mirant.
+const campInput = {
+  fontFamily: 'inherit', fontSize: 'var(--fs-body)', border: '1px solid var(--line)',
+  borderRadius: 'var(--r-ctrl)', padding: '5px 9px', background: 'var(--panel)',
+  color: 'var(--text-main)', width: '100%', boxSizing: 'border-box', minWidth: 0,
+}
+
+function FilaEdit({ etiqueta, valor, onCanvia, mono, ...rest }) {
+  return (
+    <label style={cx.kv}>
+      <span style={cx.k}>{etiqueta}</span>
+      <input type="text" value={valor ?? ''} onChange={e => onCanvia(e.target.value)}
+        style={mono ? { ...campInput, fontFamily: 'IBM Plex Mono, monospace' } : campInput}
+        {...rest} />
+    </label>
+  )
+}
+
+/** Un select d'enumeració de domini. Els codis van CRUS: no es tradueixen (llei d'i18n). */
+function FilaTria({ etiqueta, valor, codis, onCanvia, buit }) {
+  return (
+    <label style={cx.kv}>
+      <span style={cx.k}>{etiqueta}</span>
+      {/* `codis` a null vol dir «encara no se sap», i llavors no s'ofereix res: una llista de
+          reserva escrita aquí seria la segona font de veritat que `vocabulariDominiFont` mata. */}
+      <select value={valor ?? ''} onChange={e => onCanvia(e.target.value)}
+        style={campInput} disabled={!codis}>
+        <option value="">{buit}</option>
+        {(codis || []).map(c => <option key={c} value={c}>{c}</option>)}
+      </select>
+    </label>
+  )
+}
+
 export default function POMCataleg() {
   // Sense `lang`: EL CATÀLEG VA EN ANGLÈS (maqueta v3). El nom canònic i el de la categoria
   // surten de `nom_en`, i el local viu darrere la ⓘ — no hi ha cap text que depengui de l'idioma
@@ -244,9 +293,20 @@ export default function POMCataleg() {
   // producte era la del MODEL (`pom-propi`, via la taula de Mesures), que exigeix un model al
   // davant i neix lligada a un client. Sense model, no hi havia porta.
   const [crearObert, setCrearObert] = useState(false)
+  // S46/TRAM 4 — L'EDICIÓ. El catàleg sabia LLEGIR, crear, desactivar i esborrar; l'única
+  // cosa que NO sabia fer era CORREGIR. Un POM mal batejat per l'import s'havia de deixar
+  // com era o esborrar i tornar a crear, perdent-ne l'ús. I «complementar la informació»
+  // era literalment impossible fins al tram 3: el «com es mesura» només vivia al catàleg
+  // GLOBAL, i el tenant no hi podia escriure ni que volgués.
+  const [editant, setEditant] = useState(false)
+  const [esborrany, setEsborrany] = useState(null)
   // LA ⓘ TÉ FONT (tram ⓘ). El catàleg sencer d'un cop: són 142 POMs i la petició va en lot, o
   // sigui tres crides al proveïdor el primer cop de cada idioma i cap més mai.
   const traduccioDe = useTraduccioPoms(llista.map(p => p.id))
+  // ELS VOCABULARIS TANCATS del «com es mesura», de la font única (`/api/v1/vocabulari/`).
+  // Llei d'Agus (08/08): cap enumeració de domini es declara al frontend. Els codis van CRUS
+  // —són dades de domini, com LINEAR/STEP— i per això no passen per `t()`.
+  const { voc: vocDomini, error: vocError } = useEstatVocabulari()
 
   const carrega = useCallback(() => {
     setCarregant(true); setError(null)
@@ -288,6 +348,9 @@ export default function POMCataleg() {
   // L'ús es demana per POM seleccionat: és el que habilita el botó d'esborrar i el que
   // omple les dues seccions d'ús observat. Una crida per fitxa, no per fila de la llista.
   useEffect(() => {
+    // Canviar de POM TANCA l'edició. Arrossegar l'esborrany d'una fila a una altra és el
+    // mode de fallada clàssic d'aquest patró: es desa el nom del POM anterior sobre el nou.
+    setEditant(false); setEsborrany(null)
     if (!selId) { setUs(null); setAlies([]); return }
     let viu = true
     setUs(null)
@@ -342,6 +405,55 @@ export default function POMCataleg() {
   }, [filtrats, catPerId, nomCat])
 
   const sel = useMemo(() => llista.find(p => p.id === selId) || null, [llista, selId])
+
+  // ── L'EDICIÓ ────────────────────────────────────────────────────────────────────────
+  //
+  // 🚨 EN DESAR UN POM LLIGAT AL CATÀLEG GLOBAL, EL POM ES SEPARA i passa a ser del tenant
+  // (decisió d'Agus, 22/08). La separació la fa el BACKEND —copy-on-write: els valors que
+  // venien del global es copien al tenant abans de desfer el lligam— i **no és un camp
+  // d'aquest formulari**: `pom_global` ja no és escrivible per API. Aquí només s'avisa qui
+  // està a punt de fer-ho, perquè és una decisió i no un efecte secundari.
+  const CAMPS_EDITABLES = [
+    'codi_client', 'nom_client', 'categoria', 'unitat',
+    'start_point', 'end_point', 'reference_point',
+    'scope', 'orientation', 'state', 'line', 'body_section',
+  ]
+
+  const obreEdicio = () => {
+    if (!sel) return
+    // L'esborrany surt del que la fitxa ENSENYA, no del camp cru: per a un POM lligat, el
+    // «com es mesura» que es veu és el del global, i és el que el copy-on-write conservarà.
+    // Si l'esborrany naixia buit, desar hauria semblat un canvi net i hauria estat un
+    // ESBORRAT silenciós de la meitat de la fitxa.
+    setEsborrany(Object.fromEntries(CAMPS_EDITABLES.map(c => [c, sel[c] ?? ''])))
+    setEditant(true)
+  }
+  const tancaEdicio = () => { setEditant(false); setEsborrany(null) }
+
+  const desaEdicio = async () => {
+    if (!sel || !esborrany) return
+    setError(null); setOcupat(true)
+    try {
+      // NOMÉS EL QUE HA CANVIAT. Un PATCH amb els dotze camps enviaria `codi_client` a cada
+      // desat i faria que la validació d'unicitat s'hagués d'excloure a ella mateixa a cada
+      // volta; i, sobretot, tocar `codi_client` és el que SEPARA un POM del global. Enviar-lo
+      // sense que ningú l'hagi tocat separaria POMs per desar una nota.
+      const canvis = Object.fromEntries(
+        CAMPS_EDITABLES.filter(c => (esborrany[c] ?? '') !== (sel[c] ?? ''))
+          .map(c => [c, c === 'categoria' ? (esborrany[c] || null) : esborrany[c]]))
+      if (!Object.keys(canvis).length) { tancaEdicio(); return }
+      await poms.update(sel.id, canvis)
+      tancaEdicio()
+      carrega()
+    } catch (e) {
+      // El backend diu QUIN camp i per què (p. ex. «U1 ja és al catàleg»). Un missatge
+      // genèric aquí taparia l'única frase que permet arreglar-ho.
+      const d = e?.response?.data
+      const primer = d && typeof d === 'object'
+        ? Object.values(d).flat().find(Boolean) : null
+      setError(primer || t('poms.cat.save_error'))
+    } finally { setOcupat(false) }
+  }
 
   const desactiva = async () => {
     if (!sel) return
@@ -502,43 +614,111 @@ export default function POMCataleg() {
                   <div style={cx.secH}>{t('poms.cat.sec_identity')}</div>
                   {/* El NOM LOCAL ja no té fila pròpia: el catàleg va en anglès i la traducció
                       viu darrere la ⓘ del nom canònic (maqueta v3, mateix patró a llista i fitxa). */}
-                  <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_name_en')}</span>
-                    <span>{sel.name_en || sel.nom_client}
-                      <InfoLocal nom={sel.name_cat !== sel.name_en ? sel.name_cat : null}
-                        traduccio={traduccioDe(sel.id)} /></span></div>
-                  <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_nomenclature')}</span>
-                    <span>{sel.abbreviation || sel.codi_client}</span></div>
-                  <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_family')}</span>
-                    <span>{sel.categoria != null
-                      ? nomCat(sel.categoria)
-                      : <span style={cx.buit}>{t('poms.cat.no_category')}</span>}</span></div>
-                  <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_unit')}</span>
-                    <ValorGlobal sel={sel} valor={sel.unitat} t={t} /></div>
+                  {!editant && (<>
+                    <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_name_en')}</span>
+                      <span>{sel.name_en || sel.nom_client}
+                        <InfoLocal nom={sel.name_cat !== sel.name_en ? sel.name_cat : null}
+                          traduccio={traduccioDe(sel.id)} /></span></div>
+                    <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_nomenclature')}</span>
+                      <span>{sel.abbreviation || sel.codi_client}</span></div>
+                    <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_family')}</span>
+                      <span>{sel.categoria != null
+                        ? nomCat(sel.categoria)
+                        : <span style={cx.buit}>{t('poms.cat.no_category')}</span>}</span></div>
+                    <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_unit')}</span>
+                      <ValorGlobal sel={sel} valor={sel.unitat} t={t} /></div>
+                  </>)}
+                  {editant && (<>
+                    {/* L'AVÍS DE SEPARACIÓ. Un POM lligat al catàleg global es SEPARA en desar,
+                        i això és una decisió del domini, no un efecte secundari: qui l'edita ho
+                        ha de saber ABANS, no descobrir-ho a la fitxa de després. */}
+                    {sel.pom_global != null && (
+                      <p style={{ ...cx.note, margin: '0 0 8px', color: 'var(--warn-ink)' }}>
+                        {t('poms.cat.edit_will_detach')}
+                      </p>
+                    )}
+                    <FilaEdit etiqueta={t('poms.cat.f_name_en')} valor={esborrany?.nom_client}
+                      onCanvia={v2 => setEsborrany(e => ({ ...e, nom_client: v2 }))} />
+                    <FilaEdit etiqueta={t('poms.cat.f_nomenclature')} mono
+                      valor={esborrany?.codi_client}
+                      onCanvia={v2 => setEsborrany(e => ({ ...e, codi_client: v2.toUpperCase() }))} />
+                    <label style={cx.kv}>
+                      <span style={cx.k}>{t('poms.cat.f_family')}</span>
+                      <select style={campInput} value={esborrany?.categoria ?? ''}
+                        onChange={e2 => setEsborrany(e => ({
+                          ...e, categoria: e2.target.value ? Number(e2.target.value) : '' }))}>
+                        <option value="">{t('poms.cat.create_category_none')}</option>
+                        {cats.map(c => (
+                          <option key={c.id} value={c.id}>{c.nom_en || c.nom_ca || c.codi}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <FilaTria etiqueta={t('poms.cat.f_unit')} valor={esborrany?.unitat}
+                      codis={codisDe(vocDomini, 'unitats_pom')} buit={t('poms.cat.edit_unset')}
+                      onCanvia={v2 => setEsborrany(e => ({ ...e, unitat: v2 }))} />
+                  </>)}
                 </section>
 
                 <section style={cx.sec}>
                   <div style={cx.secH}>{t('poms.cat.sec_howto')}</div>
                   {/* La CAPÇALERA de la secció diu l'estat un sol cop quan afecta tota la secció:
                       repetir cinc vegades «no lligat al catàleg global» seria cert i il·legible. */}
-                  {sel.pom_global == null && (
+                  {/* La nota de secció només si NO hi ha res: un POM propi que ja ha estat
+                      informat no té cap avís a donar. Mateix criteri que `estatCamp`. */}
+                  {sel.pom_global == null && !sel.start_point && !sel.end_point
+                    && !sel.reference_point && !sel.scope && !sel.body_section && (
                     <p style={{ ...cx.note, margin: '0 0 8px' }}>{t('poms.cat.howto_unlinked')}</p>
                   )}
                   {sel.pom_global != null && !sel.start_point && !sel.end_point
                     && !sel.reference_point && !sel.scope && !sel.body_section && (
                     <p style={{ ...cx.note, margin: '0 0 8px' }}>{t('poms.cat.howto_uninformed')}</p>
                   )}
-                  <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_from')}</span>
-                    <ValorGlobal sel={sel} valor={sel.start_point} t={t} /></div>
-                  <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_to')}</span>
-                    <ValorGlobal sel={sel} valor={sel.end_point} t={t} /></div>
-                  <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_reference')}</span>
-                    <ValorGlobal sel={sel} valor={sel.reference_point} t={t} /></div>
-                  <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_scope')}</span>
-                    <ValorGlobal sel={sel}
-                      valor={[sel.scope, sel.orientation, sel.state, sel.line].filter(Boolean).join(' · ')}
-                      t={t} /></div>
-                  <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_body')}</span>
-                    <ValorGlobal sel={sel} valor={sel.body_section} t={t} /></div>
+                  {!editant && (<>
+                    <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_from')}</span>
+                      <ValorGlobal sel={sel} valor={sel.start_point} t={t} /></div>
+                    <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_to')}</span>
+                      <ValorGlobal sel={sel} valor={sel.end_point} t={t} /></div>
+                    <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_reference')}</span>
+                      <ValorGlobal sel={sel} valor={sel.reference_point} t={t} /></div>
+                    <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_scope')}</span>
+                      <ValorGlobal sel={sel}
+                        valor={[sel.scope, sel.orientation, sel.state, sel.line].filter(Boolean).join(' · ')}
+                        t={t} /></div>
+                    <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_body')}</span>
+                      <ValorGlobal sel={sel} valor={sel.body_section} t={t} /></div>
+                  </>)}
+                  {editant && (<>
+                    {/* Si el vocabulari no arriba, els selects es queden inerts i es DIU. La
+                        pantalla no s'inventa opcions (llei de `vocabulariDominiFont`). */}
+                    {vocError && (
+                      <p role="alert" style={{ ...cx.note, margin: '0 0 8px', color: 'var(--err)' }}>
+                        {t('poms.cat.edit_vocab_error')}</p>
+                    )}
+                    <FilaEdit etiqueta={t('poms.cat.f_from')} valor={esborrany?.start_point}
+                      onCanvia={v2 => setEsborrany(e => ({ ...e, start_point: v2 }))} />
+                    <FilaEdit etiqueta={t('poms.cat.f_to')} valor={esborrany?.end_point}
+                      onCanvia={v2 => setEsborrany(e => ({ ...e, end_point: v2 }))} />
+                    <FilaEdit etiqueta={t('poms.cat.f_reference')} valor={esborrany?.reference_point}
+                      onCanvia={v2 => setEsborrany(e => ({ ...e, reference_point: v2 }))} />
+                    {/* Els quatre eixos del scope, cadascun al seu select: a la lectura van en
+                        una sola línia («FULL · CURVED · FLAT · ALONG CURVE») perquè es llegeixen
+                        junts, però són quatre vocabularis independents i s'editen per separat. */}
+                    <FilaTria etiqueta={t('poms.cat.f_scope')} valor={esborrany?.scope}
+                      codis={codisDe(vocDomini, 'scopes_pom')} buit={t('poms.cat.edit_unset')}
+                      onCanvia={v2 => setEsborrany(e => ({ ...e, scope: v2 }))} />
+                    <FilaTria etiqueta={t('poms.cat.f_orientation')} valor={esborrany?.orientation}
+                      codis={codisDe(vocDomini, 'orientacions_pom')} buit={t('poms.cat.edit_unset')}
+                      onCanvia={v2 => setEsborrany(e => ({ ...e, orientation: v2 }))} />
+                    <FilaTria etiqueta={t('poms.cat.f_state')} valor={esborrany?.state}
+                      codis={codisDe(vocDomini, 'estats_pom')} buit={t('poms.cat.edit_unset')}
+                      onCanvia={v2 => setEsborrany(e => ({ ...e, state: v2 }))} />
+                    <FilaTria etiqueta={t('poms.cat.f_line')} valor={esborrany?.line}
+                      codis={codisDe(vocDomini, 'linies_pom')} buit={t('poms.cat.edit_unset')}
+                      onCanvia={v2 => setEsborrany(e => ({ ...e, line: v2 }))} />
+                    <FilaTria etiqueta={t('poms.cat.f_body')} valor={esborrany?.body_section}
+                      codis={codisDe(vocDomini, 'seccions_cos_pom')} buit={t('poms.cat.edit_unset')}
+                      onCanvia={v2 => setEsborrany(e => ({ ...e, body_section: v2 }))} />
+                  </>)}
                 </section>
 
                 {/* 🔑 ÚS OBSERVAT, no política declarada (decisió Agus 07/08). El model no té
@@ -595,15 +775,38 @@ export default function POMCataleg() {
               </div>
 
               <div style={cx.ffoot}>
-                <button type="button" style={btn('ter')} onClick={desactiva} disabled={ocupat}>
-                  {sel.actiu ? t('poms.cat.act_deactivate') : t('poms.cat.act_reactivate')}
-                </button>
-                <button type="button" style={btn('dang')} onClick={esborra}
-                        disabled={ocupat || !us || !us.pot_esborrar}>
-                  {t('poms.cat.act_delete')}
-                </button>
-                {/* La nota diu SEMPRE el motiu, la redacta el backend (és qui sap el recompte). */}
-                <span style={cx.note}>{us ? us.motiu : t('poms.cat.usage_loading')}</span>
+                {!editant && (<>
+                  <button type="button" style={btn()} onClick={obreEdicio} disabled={ocupat}>
+                    {t('poms.cat.act_edit')}
+                  </button>
+                  <button type="button" style={btn('ter')} onClick={desactiva} disabled={ocupat}>
+                    {sel.actiu ? t('poms.cat.act_deactivate') : t('poms.cat.act_reactivate')}
+                  </button>
+                  <button type="button" style={btn('dang')} onClick={esborra}
+                          disabled={ocupat || !us || !us.pot_esborrar}>
+                    {t('poms.cat.act_delete')}
+                  </button>
+                  {/* La nota diu SEMPRE el motiu, la redacta el backend (és qui sap el recompte). */}
+                  <span style={cx.note}>{us ? us.motiu : t('poms.cat.usage_loading')}</span>
+                </>)}
+                {editant && (<>
+                  <button type="button" style={btn('ter')} onClick={tancaEdicio} disabled={ocupat}>
+                    {t('poms.cat.create_cancel')}
+                  </button>
+                  <button type="button" onClick={desaEdicio} disabled={ocupat}
+                    style={{
+                      border: 'none', borderRadius: 'var(--r-ctrl)',
+                      background: ocupat ? 'var(--line)' : 'var(--accio)',
+                      color: ocupat ? 'var(--text-faint)' : 'var(--white)',
+                      padding: '7px 18px', cursor: ocupat ? 'wait' : 'pointer',
+                      fontFamily: 'inherit', fontSize: 'var(--fs-body)', fontWeight: 600,
+                    }}>
+                    {ocupat ? t('poms.cat.edit_saving') : t('poms.cat.edit_save')}
+                  </button>
+                  {/* L'ÚS SEGUEIX DIT MENTRE S'EDITA: un POM en 12 models i 40 regles no s'ha
+                      de rebatejar a la lleugera, i és justament ara que cal saber-ho. */}
+                  <span style={cx.note}>{us ? us.motiu : t('poms.cat.usage_loading')}</span>
+                </>)}
               </div>
             </>
           )}
