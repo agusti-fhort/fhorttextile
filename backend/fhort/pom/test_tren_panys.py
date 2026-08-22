@@ -158,3 +158,80 @@ class PanyP1LoadLosanPackageTest(TenantTestCase):
         self.assertEqual(pom.nom_client, 'Chest width')
         self.assertIn('nomenclatura REESCRITA', sortida)
         self.assertIn('CH', sortida)
+
+
+class PanyP2ExtendPomCatalogTest(TenantTestCase):
+    """P2 · el catàleg global AMPLIA el tenant i no li rebateja el que ja té.
+
+    🚨 EL CAS DEL CENS. `extend_pom_catalog` és el germà de P1 i tenia el mateix forat, amb
+    una diferència que el fa més fàcil de passar per alt: el POM ni tan sols cal que estigui
+    desenganxat. N'hi ha prou que el tenant l'hagi rebatejat (`codi_client`/`nom_client`) o
+    recategoritzat sense separar-lo — llavors `separat_de_global` és buit, el pany de sobirania
+    no el veu, i el `update_or_create` per `pom_global` li tornava el text del canònic.
+
+    I el DESTÍ: `--schema` tenia `default='fhort'`. Una sembra que tria sola el tenant on
+    escriu és una sembra que un dia escriu al que no toca.
+    """
+
+    @classmethod
+    def setup_tenant(cls, tenant):
+        tenant.nom = 'Test Panys P2'
+        tenant.tipologia = 'MARCA'
+        tenant.codi_tenant = 'TP2'
+        return tenant
+
+    def setUp(self):
+        POMCategory.objects.get_or_create(codi='Upper body', defaults={'nom_en': 'Upper body'})
+
+    def _run(self, **extra):
+        out = StringIO()
+        call_command('extend_pom_catalog', schema=self.tenant.schema_name, stdout=out, **extra)
+        return out.getvalue()
+
+    def _rebateja(self):
+        """El tenant fa seu el POM del canesú SENSE separar-lo del global (el cas que el pany
+        de sobirania no veu)."""
+        pom = POMMaster.objects.get(pom_global__codi='POM-029')
+        pom.codi_client, pom.nom_client = 'CAN', 'Llargada de canesú'
+        pom.save(update_fields=['codi_client', 'nom_client'])
+        self.assertEqual(pom.separat_de_global, '')   # invisible per al pany de sobirania
+        return pom
+
+    # ── (b) el camí legítim, que és també el fixture de (a) ──────────────────────────────
+    def test_create_if_missing_segueix_viu(self):
+        self._run()
+        pom = POMMaster.objects.get(pom_global__codi='POM-029')
+        self.assertEqual(pom.codi_client, 'YK L')      # l'abreviatura del global
+        self.assertEqual(pom.nom_client, 'Front yoke length (center)')
+
+    # ── (a) el cas del cens, ara bloquejat ───────────────────────────────────────────────
+    def test_un_pom_rebatejat_no_torna_al_text_del_canonic(self):
+        self._run()
+        pom = self._rebateja()
+
+        sortida = self._run()
+
+        pom.refresh_from_db()
+        self.assertEqual(pom.codi_client, 'CAN')
+        self.assertEqual(pom.nom_client, 'Llargada de canesú')
+        self.assertIn('nomenclatura PROTEGIDA', sortida)
+        self.assertIn('POM-029', sortida)
+        # i cap segona fila per al mateix global
+        self.assertEqual(POMMaster.objects.filter(pom_global__codi='POM-029').count(), 1)
+
+    def test_overwrite_nomenclature_reescriu_i_ho_fa_constar(self):
+        self._run()
+        pom = self._rebateja()
+
+        sortida = self._run(overwrite_nomenclature=True)
+
+        pom.refresh_from_db()
+        self.assertEqual(pom.codi_client, 'YK L')
+        self.assertEqual(pom.nom_client, 'Front yoke length (center)')
+        self.assertIn('nomenclatura REESCRITA', sortida)
+
+    # ── el destí és sempre explícit ──────────────────────────────────────────────────────
+    def test_el_desti_no_te_default(self):
+        from django.core.management.base import CommandError
+        with self.assertRaises(CommandError):
+            call_command('extend_pom_catalog', stdout=StringIO())
