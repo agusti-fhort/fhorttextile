@@ -218,3 +218,99 @@ def _alias_code(alias):
         return alias.get('client_code') or ''
     return alias or ''
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# EL «COM ES MESURA» — cascada TENANT > GLOBAL
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# Els nou camps que descriuen com es pren una mesura (`unitat` i el bloc «des d'on · fins on ·
+# referència · scope · orientació · estat · línia · secció») només vivien a `POMGlobal`. Des
+# del 22/08 també viuen al tenant, buits per defecte, i la llei és la mateixa que la del nom:
+# **el que el tenant ha informat mana; el global és el pla B.**
+#
+# Buit al tenant NO vol dir «no hi ha»: vol dir «no informat aquí», i per això cau al global
+# en comptes de tapar-lo. Qui pinta segueix podent distingir els tres estats —dada / lligat
+# sense informar / no lligat— perquè el POM segueix dient si té `pom_global` o no.
+
+COM_ES_MESURA = ('unitat', 'start_point', 'end_point', 'reference_point',
+                 'scope', 'orientation', 'state', 'line', 'body_section')
+
+
+def com_es_mesura_de(pom):
+    """`{camp: valor}` dels nou camps, amb el tenant al davant i el global de reserva."""
+    if pom is None:
+        return {c: '' for c in COM_ES_MESURA}
+    pg = _global(pom)
+    return {c: (_net(getattr(pom, c, '')) or _net(getattr(pg, c, '') if pg else ''))
+            for c in COM_ES_MESURA}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LA SEPARACIÓ — copy-on-write (decisió d'Agus, 22/08)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# 🚨 «EL POM SE SEPARA I PASSA A SER MEU.» En editar qualsevol camp PROPI d'un POM lligat al
+# catàleg global, el POM deixa de dependre'n: `pom_global → NULL`. És la mateixa llei que el
+# model que reescriu una regla sembrada —qui toca una dada n'assumeix la propietat— i té el
+# mateix motiu: el catàleg global el comparteixen tots els tenants i **no es toca mai**.
+#
+# 🔑 I ÉS COPY-ON-WRITE, NO UN TALL. Separar-se no pot voler dir perdre informació: abans de
+# desfer el lligam, tot el que el POM ENSENYAVA gràcies al global es COPIA al tenant —el nom,
+# l'abreviatura si no en tenia codi propi, i els nou camps del «com es mesura»—. Un POM separat
+# ha de seguir dient exactament el mateix que deia el segon abans; el que canvia és de qui és.
+#
+# La marca (`separat_de_global` + `separat_at`) és el que permet als importadors distingir
+# aquest POM d'un que mai no ha estat lligat, i per tant no tornar-li a enganxar el global.
+
+
+def separa_del_global(pom, *, quan=None):
+    """Separa `pom` del catàleg global copiant-hi el que en penjava. NO desa.
+
+    Retorna la llista de camps que ha tocat (buida si el POM ja era del tenant), perquè qui
+    crida pugui incloure'ls al seu `update_fields` i el desat segueixi sent acotat.
+
+    No fa `save()` a posta: la separació és part de l'escriptura que la provoca i ha d'entrar
+    a la MATEIXA transacció, mai en una de pròpia que pugui quedar orfe si l'altra falla.
+    """
+    if pom is None or not getattr(pom, 'pom_global_id', None):
+        return []
+    from django.utils import timezone
+
+    pg = pom.pom_global
+    tocats = []
+
+    def _posa(camp, valor):
+        valor = _net(valor)
+        if valor and not _net(getattr(pom, camp, '')):
+            setattr(pom, camp, valor)
+            tocats.append(camp)
+
+    # El NOM de la casa: si el tenant no en tenia, hereta el CANÒNIC (mai el deixa mut).
+    #
+    # 🔒 I NOMÉS EL CANÒNIC. `POMGlobal` té dos noms (`nom_en` + `nom_ca`) i `POMMaster` en té
+    # UN: és la decisió d'Agus del 09/08, vigent — *la traducció de vocabulari de domini NO viu
+    # a la BD*, i `nom_ca`/`nom_es` a `POMMaster` hi estan explícitament descartats. El nom
+    # local no es perd en separar-se: CANVIA DE FONT, i passa a `TranslationCache`
+    # (`/api/v1/translate/pom/`), que és on la casa ha decidit que viu. Afegir aquí un camp
+    # «per no perdre'l» seria desfer aquella decisió de passada.
+    _posa('nom_client', pg.nom_en or pg.nom_ca)
+    # El CODI: si el tenant no en tenia, hereta l'abreviatura del global i, si no n'hi ha, el
+    # codi canònic. Que la columna no surti mai buida és una promesa d'aquest producte.
+    _posa('codi_client', pg.abbreviation or pg.codi)
+    for camp in COM_ES_MESURA:
+        _posa(camp, getattr(pg, camp, ''))
+
+    pom.separat_de_global = pg.codi
+    pom.separat_at = quan or timezone.now()
+    pom.pom_global = None
+    tocats += ['separat_de_global', 'separat_at', 'pom_global']
+    return tocats
+
+
+#: Els camps que, en canviar, fan que un POM lligat es SEPARI. Són els que descriuen el POM
+#: en si —què és i com es mesura—, no els que descriuen la seva vida al tenant.
+#:
+#: `actiu`, `notes`, `pendent_revisio`, `origen_import` i les toleràncies per defecte NO hi
+#: són a posta: desactivar un POM del catàleg o anotar-hi una nota és administrar-lo, no
+#: redefinir-lo, i separar-lo per això obligaria a triar entre arxivar-lo i mantenir-lo lligat.
+CAMPS_QUE_SEPAREN = ('codi_client', 'nom_client', 'categoria') + COM_ES_MESURA
