@@ -1,0 +1,35 @@
+{
+  "tenant": "fhort",
+  "n_poms": 144,
+  "n_regles_cataleg": 142,
+  "jocs": [
+    "GRADING BROWNIE 2026"
+  ],
+  "poms_amb_breaks": 0,
+  "hash_poms": "44416f27e095bda4de93d91cbaedef6b16bea9bac5c164668b26baace4f8dbcc",
+  "hash_regles": "f5c7cd98926d2463a54e8c1ec7dc42c13c2905913740ad4225646a7f7c939018",
+  "hash_global": "89a76ea42350911fb32a28ce9271350b3674f9a859c3d9a6d05727ff52eb9ced",
+  "columnes_poms": [
+    "codi_client",
+    "nom_client",
+    "familia",
+    "unitat",
+    "actiu",
+    "pom_global_codi"
+  ],
+  "columnes_regles": [
+    "joc",
+    "pom_codi",
+    "regim",
+    "logica",
+    "talla_base",
+    "increment_base",
+    "increment_break",
+    "talla_break_label",
+    "talla_break_pos",
+    "breaks",
+    "valors_step",
+    "increment_llegat",
+    "actiu"
+  ]
+}

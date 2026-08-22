@@ -1,0 +1,145 @@
+codi_client;nom_client;familia;unitat;actiu;pom_global_codi;hash_fila;pk_local
+A;1/2 chest width (armpit to armpit);A;\N;1;\N;7c3814748a69d974;904
+A1;Underbust width;A;\N;1;\N;e12b6f351fed3ac4;905
+B;Waist width;B;\N;1;\N;9590e3155a1d083b;906
+BF;Waistband height;B;\N;1;\N;4f6ff527981578b5;908
+BL;Fold length;B;\N;1;\N;c4ea4f27b01c7141;911
+BR;Fly width;B;\N;1;\N;20bc3da883e4ffd1;909
+BR1;Fly length;B;\N;1;\N;8010e32027eab2d0;910
+BT;Waist position from HPS;B;\N;1;\N;fd407152369cd59a;907
+BW;Fold width;B;\N;1;\N;6c62e84ebfb39493;912
+C;Hip width;C;\N;1;\N;00193cb7dea9ff07;913
+CB1;Collar total contour;E;\N;1;\N;ed3819bb989fc1d3;945
+CP;Collar peak;E;\N;1;\N;7a0c127e9706cb70;944
+CR;Front crotch width;C;\N;1;\N;4efef57a233123b1;915
+CR1;Back crotch width;C;\N;1;\N;a8e81fa9f24ce6ef;916
+CR2;Zipper;C;\N;1;\N;9951f4631917bd24;919
+CR3;Crotch width placement;C;\N;1;\N;4d7efe1d783ca544;917
+CR4;Crotch length;C;\N;1;\N;223e885844c6ff52;918
+CT;Thigh width;C;\N;1;\N;c1de74f97ccd8803;914
+D;Bottom width;D;\N;1;\N;1275aa0cf2142984;920
+E;Shoulder to shoulder;E;\N;1;\N;ce966b6328428416;921
+E1;Shoulder width at true shoulder;E;\N;1;\N;ba5c262c4daa3414;922
+E2;Across front width (11 cm from HPS);E;\N;1;\N;f10b484328570c1d;923
+E3;Across back width (11 cm from HPS);E;\N;1;\N;e7e2087150b0e509;924
+E4;Shoulder forward;E;\N;1;\N;60c1c1377fe1196b;925
+E5;Shoulder drop (from HPS to shoulder point);E;\N;1;\N;697e33ae58142f1c;926
+E6;Front collar panel height;E;\N;1;\N;1777b128da9b2457;932
+E7;Centre collar panel height;E;\N;1;\N;a6fecc5cdc73945e;933
+E8;Collar panel length;E;\N;1;\N;ca982b66c20de989;934
+E88;Collar join;E;\N;1;\N;c9d303388b2f8bd1;935
+EB;Neck binding width;E;\N;1;\N;e4bd8c63e07b02e7;942
+EC;Collar point length;E;\N;1;\N;cb6371f7140ae91f;936
+EK;Neck width;E;\N;1;\N;2671a826a482a928;927
+EK1;Front neck drop from HPS;E;\N;1;\N;3ff514f710824928;928
+EK2;Back neck drop from HPS;E;\N;1;\N;da16aacaf311b480;929
+EK4;Neckline contour;E;\N;1;\N;7a780b3e24027d3b;930
+EKK;Back neckline width;E;\N;1;\N;edca4a7f36c1cd9a;931
+EL;Lapel width;E;\N;1;\N;70aa5501f77693b4;937
+EL1;Lapel length;E;\N;1;\N;0c83b515065d9d26;938
+EL2;Gorge height;E;\N;1;\N;640e2582ea319a06;939
+EL3;Lapel notch opening;E;\N;1;\N;267cc7b74d457a10;940
+EP;Collar height;E;\N;1;\N;28b191be8691013c;941
+F;Centre front length from HPS;F;\N;1;\N;032bcd28b7a21689;946
+F1;Side curve (CB length minus side seam);F;\N;1;\N;369c147969e1669e;948
+F2;Side length;F;\N;1;\N;e2e27d54b10583c4;949
+F3;Front centre total length;F;\N;1;\N;375f41a249250953;950
+F4;Back centre total length;F;\N;1;\N;b950ce68a7d339a7;951
+FB;Body length;F;\N;1;\N;e266aba3a08d3507;952
+FC;Hip position;F;\N;1;\N;294b84346dc99e50;953
+FD;Front rise length;F;\N;1;\N;4714592572a51296;954
+FE;Back rise length;F;\N;1;\N;37088f9ea1664909;955
+FF;Centre back length from HPS;F;\N;1;\N;3f82704b4af09466;947
+FI;Inseam length;F;\N;1;\N;658da4cd59aca82a;956
+FJ;Wingspan length;F;\N;1;\N;6e9a06bafdf60a63;961
+FR;Knee position;F;\N;1;\N;f755b321e52b5322;957
+FS;Skirt length;F;\N;1;\N;92f040ed2f92fa82;958
+FS4;Top layer of the skirt length distance from waistband bottom seam;A;\N;1;\N;32e145bd59b80106;1050
+FS5;Lining length difference;F;\N;1;\N;d065e004a18f2bd5;960
+FT;Pants length (outseam);F;\N;1;\N;9fbc751eadb3f828;959
+G1;Bottom finish height;G;\N;1;\N;233e546b6822857c;962
+GD;Godet length at longest point;G;\N;1;\N;c55e55f7d041a009;963
+GD1;Godet length at seams;G;\N;1;\N;436fcbb4d122cef0;964
+H1;Hood width placement;H;\N;1;\N;11d4635ebe4ab789;968
+HL;Hood length;H;\N;1;\N;1ae3b9ea46f7b9cf;965
+HO;Hood opening width;H;\N;1;\N;b47c558ef32414a8;967
+HP;Hood piece width;H;\N;1;\N;3763eaea67e444ad;969
+HW;Hood width;H;\N;1;\N;e22f9e5275c49778;966
+I;Sleeve length;I;\N;1;\N;7463177238418370;970
+I2;Sleeve hem width;I;\N;1;\N;534a72327a601a97;971
+I3;Cuff slit;I;\N;1;\N;102ab2455293906d;972
+I4;Sleeve length from CB over shoulder point (cuff included);I;\N;1;\N;7cb7ff0e9db7cedd;973
+I5;Elbow position from CB over shoulder point;I;\N;1;\N;c78125ea4652340a;974
+I6;Under sleeve length;I;\N;1;\N;da951b6f7e8794df;975
+I7;Sleeve cap height;I;\N;1;\N;c2d7c99f9fffaa01;976
+IC;Elbow patch placement;I;\N;1;\N;933edb70538c73c8;977
+IC1;Elbow patch width;I;\N;1;\N;e8486e40cb05515a;978
+IC2;Elbow patch length;I;\N;1;\N;d26ec06c04de6674;979
+J;1/2 Bicep width;J;\N;1;\N;23aa74268cf2b7b4;980
+J1;Sleeve opening;J;\N;1;\N;68dae94a4191ba88;981
+J3;Cuff height;J;\N;1;\N;e78cb67c5064dbc1;982
+JJ;Sleeve width at elbow;J;\N;1;\N;3c9d662ca8562765;983
+JTA;Sleeve strap;J;\N;1;\N;fb89a8b00f78fe76;984
+K;Buttonhole placement;K;\N;1;\N;b601660cb4d9ffbe;985
+KB;Button placement;K;\N;1;\N;015ad490ebcdbd7f;986
+KU;Eyelet placement;K;\N;1;\N;33ad963f979e23c3;987
+L;Back yoke width;L;\N;1;\N;3e09b9f02053c326;988
+L1;Yoke seam length;L;\N;1;\N;0b3bb62de0f557ce;989
+M;Leg opening;M;\N;1;\N;b840339fde09b5cf;993
+N;Motive placement;N;\N;1;\N;7382bf8099b814a5;994
+NF;Motive width;N;\N;1;\N;605973c2b21063df;995
+NL;Motive height;N;\N;1;\N;d1fa30ba119811a9;996
+P;Centre back yoke height;P;\N;1;\N;4be8c20ba33f5cfa;990
+P1;Side yoke height;P;\N;1;\N;750e305739c6fe45;991
+P2;Centre front yoke height;P;\N;1;\N;4a17e51d6b05a18b;992
+PC;Neck pipe width;E;\N;1;\N;c7ea4edc055ad3d8;943
+PR;Pocket placement;R;\N;1;\N;9c4b9935cdc30d31;1011
+Q;Dart length;Q;\N;1;\N;a3bed3329135e4b6;997
+QP;Dart placement;Q;\N;1;\N;dc9d54fecc7ee2bc;998
+QT;Pleat width;Q;\N;1;\N;c4ec6a3bc338f493;1000
+QTD;Pleat depth;Q;\N;1;\N;210041b576b4abc5;1002
+QTP;Pleat placement;Q;\N;1;\N;6ee836957e3f1f1d;1001
+QTS;Pleat spacing;Q;\N;1;\N;e52328f66d80a0fe;1003
+QW;Dart intake;Q;\N;1;\N;2e35e99e4ff51668;999
+R;Pocket mouth width;R;\N;1;\N;70e09f7fed4cdd80;1004
+R1;Pocket mouth length;R;\N;1;\N;f7352025620e194c;1005
+R2;Pocket width;R;\N;1;\N;96a8c7776f576212;1006
+R3;Pocket length;R;\N;1;\N;09aeb2ae24bdb0ee;1007
+RF;Pocket flap width;R;\N;1;\N;cd562d6fadf5f4f3;1008
+RF1;Pocket flap height;R;\N;1;\N;1a7458b12d41cde4;1009
+RW;Welt height;R;\N;1;\N;8cce9f5d2002f58c;1010
+S;Front armhole along seam;S;\N;1;\N;2d309ccb51c95a5d;1012
+S2;Back armhole along seam;S;\N;1;\N;38ca9af521eaddfe;1013
+S3;Armhole curve;S;\N;1;\N;846d00f25385cc35;1014
+SF;Armhole depth from HPS;S;\N;1;\N;804009f6063460b8;1015
+SLT;Slit / opening length;S;\N;1;\N;c600a09ed35bcf8d;1016
+SLT1;Vent overlap width;S;\N;1;\N;288c5af79085b461;1017
+T;Strap length;T;\N;1;\N;de0a6fc38b1ce5bf;1018
+T1;Strap width;T;\N;1;\N;dcface319f04e56f;1019
+T2;Strap placement;T;\N;1;\N;b6fb5da66bbf57bc;1020
+T3;Strap thickness;T;\N;1;\N;2bf852935e707966;1022
+T4;Strap cut width;T;\N;1;\N;97f423aa515c2342;1023
+TR;Placket height;T;\N;1;\N;3ad64c88b9811537;1021
+U;Front overlap;U;\N;1;\N;24b0eee31d44ce40;1024
+U1;Button spacing;U;\N;1;\N;8d4ab75b8b58d88d;1025
+U2;First button placement;U;\N;1;\N;55a1925d6a1d26ec;1026
+U3;Last button placement;U;\N;1;\N;a6f607faa3861d73;1027
+U4;Flounce height;U;\N;1;\N;d3a02522501e2a95;1028
+UT1;Loop height;U;\N;1;\N;938f27167091fd21;1029
+UT2;Loop width;U;\N;1;\N;2e6d78868349ad1e;1030
+V;Ruffle height;V;\N;1;\N;1b58a324b20e37ae;1031
+VP;Ruffle end placement;V;\N;1;\N;f7e3ce894a54bacb;1033
+VR;Ruffle length;V;\N;1;\N;9d5b94296fd70e10;1032
+W;Elastic width;W;\N;1;\N;8e699b27dddf3748;1034
+WP;Elastic placement;W;\N;1;\N;034b109f252f83ce;1035
+X;Stitching width;X;\N;1;\N;2e5133654161ddd4;1036
+XP;Stitching placement;X;\N;1;\N;b5bccaf499bce8b7;1037
+XV;Jetting width;X;\N;1;\N;6b48277b52ba6173;1038
+Y;Panel width;Y;\N;1;\N;929899b7275fc420;1039
+Y1;Panel height;Y;\N;1;\N;d4dac0585df7d940;1040
+YC1;Cut-out width;Y;\N;1;\N;9daa08f815750117;1042
+YP;Panel and cut-out placement;Y;\N;1;\N;9356decc71374882;1041
+ZC2;Cord channel height;Z;\N;1;\N;57c657dd512addc4;1045
+ZF;Complement width;Z;\N;1;\N;2d5ef5fdaf07f1aa;1044
+ZL;Complement length;Z;\N;1;\N;38dfabb3d23e04c2;1043
+ZZS45D;Mesura de prova S45/D;\N;\N;1;\N;d3b36d7ff3ba105a;1051

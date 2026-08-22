@@ -1,4 +1,4 @@
-# CENS CATÀLEG v5 · STAGING — **FASE 1 (CODI)**
+# CENS CATÀLEG v5 · STAGING — **COMPLET (fases 1, 2 i 3)**
 
 **Data:** 2026-08-22 · **Entorn:** `/var/www/ftt-staging`, branca `dev`, schemes `fhort` + `public`
 **Patró A · READ-ONLY** · Venv: `backend/venv/bin/python`
@@ -15,11 +15,9 @@
 
 ---
 
-# 🛑 ATURADA REGLAMENTÀRIA — LA PREMISSA DE C7 HA CANVIAT
-
-El brief diu: *«Tota la forma del pla penja d'aquesta frase: si ha canviat, PARA i reporta abans
-de fer res més.»* **Ha canviat el 2026-08-12** (SET-2/PRED-3). La Fase 2 i la Fase 3 **no s'han
-executat**. El que segueix és la Fase 1 sencera.
+> **HISTÒRIC.** La Fase 1 es va lliurar sola el 22/08 amb una aturada reglamentària: la
+> premissa de C7 havia canviat el 12/08 (SET-2/PRED-3). Amb els aclariments d'Agus, les fases 2
+> i 3 s'han completat i s'afegeixen a sota. La Fase 1 es conserva intacta.
 
 ---
 
@@ -249,16 +247,247 @@ llei del destí poblat (`--additive`) existeix precisament per això.
 
 ---
 
-# ESTAT DE LES FASES
+
+# 🚨 PREMISSES DE LA REPRESA QUE NO ES CONFIRMEN
+
+## ① **A STAGING NO HI HA CAP JOC CONDEMNAT. N'HI HA UN, I ÉS EL SUPERVIVENT.**
+
+`GradingRuleSet` a `fhort`: **1 fila**. `pk=219 · 'GRADING BROWNIE 2026' · ACTIU · 142 regles`.
+
+Ni jubilats (`actiu=False`) ni els **11 ISO actius**: **cap dels dos existeix aquí**. La neteja
+del 09/08 (`fhort` 44→1 ruleset) ja es va fer en aquest entorn.
+
+**Conseqüència directa: C1–C5 surten estructuralment buits, i no perquè no s'hagin mesurat.**
+Les xifres que dimensionen la feina —quants jocs, quants models hi pengen, quantes
+`GradingVersion` segellades— **són de PROD, i staging no les pot donar**. No hi ha res a partir
+en dues: **no hi ha cap xifra que usés només els jubilats, perquè no hi ha jubilats**.
+
+## ② **`#152` no existeix.** El joc Brownie a staging és **pk=219**
+
+`GradingRuleSet.objects.filter(pk=152).exists()` → **False**. S'ha resolt **pel NOM**
+(`GRADING BROWNIE 2026`), que el brief també donava. És la confirmació pràctica de la llei
+R-POM: la pk ja ha divergit entre entorns, i per això l'empremta de C9 no en fa servir cap.
+
+## ③ Les comportes `*_garment_gate_set2` **ja són retirades a staging**
+
+`models_app/0084_set2_12_retirada_comportes_garment` consta **aplicada** a `django_migrations`.
+*(La coincidència `pom/0027` és un fals positiu: `0027_delete_tascaglobal`, res a veure.)*
+O sigui que staging **ja està en l'estat post-12/08**, com PROD.
+
+---
+
+# C0 · COM S'HA DE COMPTAR LA RESTA → **VIU**, però el cas perillós no hi és
+
+| | staging |
+|---|---|
+| `ModelGarment` | **4 files** — models 1320, 1322, 1379, 1380 (tots `codi='02'`) |
+| `ModelGradingRule` amb `garment <> ''` | **1 fila** — model **1380** |
+| comportes `*_garment_gate_set2` | **RETIRADES** (0084 aplicada) |
+| *(context)* | 505 `ModelGradingRule` en total · 504 amb `garment=''` · valors distints: `['', '02']` |
+
+Cap de les dues primeres és 0 → **per la regla del brief, C2/C4 es compten PER PEÇA**, i és el
+que s'ha fet.
+
+## 🔑 Però el cas que C7 va obrir **no existeix a staging**
+
+El perill de C7 és **filla amb residents + mare SENSE** (llavors el contenidor entra com a llei
+de la mare). Als **quatre** models amb segona peça, **la mare té residents**:
+
+| model | codi | FK joc | residents mare | residents `02` | mesures mare / `02` | estat C7 |
+|---|---|---|---|---|---|---|
+| 1320 | `BRW-FW26-0001` | 219 | **142** | 0 | 28 / 0 | mare té residents → contenidor **ignorat** |
+| 1322 | `BRW-26-FW-0002` | 219 | **142** | 0 | 28 / 0 | contenidor **ignorat** |
+| 1379 | `BRW-FW26-0002` | — | **13** | 0 | 11 / 7 | sense FK; contenidor irrellevant |
+| 1380 | `QA-F1-GARMENT` | — | **1** | **1** | 1 / 1 | sense FK; **és un banc de QA**, no domini |
+
+L'única fila amb `garment='02'` de tot `fhort` és del **banc `QA-F1-GARMENT`**. O sigui: la
+capacitat és **viva al codi i a l'esquema**, i **el domini encara no l'ha estrenada**.
+
+---
+
+# C7-bis · ¿«tallar FKs inertes» és inert de debò? → **SÍ, i està mesurat**
+
+Per cada model amb `ModelGradingRule` activa: POMs del model (per peça), coberts per una regla
+que `_regla_de` trobaria (pròpia de la peça, o de la mare), i els que caurien a **cel·la absent**.
+
+| model | codi | FK joc | peça | POMs | coberts | **ABSENTS** |
+|---|---|---|---|---|---|---|
+| 1320 | `BRW-FW26-0001` | 219 | mare | 26 | 26 | 0 |
+| 1322 | `BRW-26-FW-0002` | 219 | mare | 26 | 26 | 0 |
+| 1352 | `BANC-01` | — | mare | 27 | 27 | 0 |
+| 1353 | `BANC-02` | — | mare | 12 | 12 | 0 |
+| **1355** | **`BANC-04`** | **—** | mare | 24 | 23 | **1** *(POM 925)* |
+| 1379 | `BRW-FW26-0002` | — | mare | 7 | 7 | 0 |
+| 1379 | `BRW-FW26-0002` | — | `02` | 7 | 7 | 0 |
+| 1380 | `QA-F1-GARMENT` | — | mare | 1 | 1 | 0 |
+| 1380 | `QA-F1-GARMENT` | — | `02` | 1 | 1 | 0 |
+| 1383 | `TRV-SS27-0001` | 219 | mare | 21 | 21 | 0 |
+| 1384 | `QA-TRAMF-0001` | — | mare | 2 | 2 | 0 |
+| | | | | | **TOTAL** | **1** |
+
+## El contra-test, que és el que respon la pregunta
+
+Per als **tres** models que tenen FK al contenidor 219 (142 regles):
+
+| model | POMs | coberts per resident | coberts pel contenidor | **que NOMÉS el contenidor cobriria** |
+|---|---|---|---|---|
+| 1320 | 26 | 26 | 26 | **0** |
+| 1322 | 26 | 26 | 26 | **0** |
+| 1383 | 21 | 21 | 21 | **0** |
+
+> ✅ **Tallar la FK al contenidor en aquests tres models NO perd cap cel·la.** Les residents
+> cobreixen exactament el mateix conjunt de POMs que el contenidor cobriria. No és el cas
+> «3 residents i 40 POMs»: és cobertura **completa** (142 residents sobre 26 POMs vius).
+
+⚠️ **L'única absència, i NO té a veure amb la FK:** POM **925** a **`BANC-04` (pk=1355)**, que
+**no té FK a cap joc**. És una absència preexistent d'un banc; tallar FKs no la crea ni la
+resol.
+
+---
+
+# FASE 2 · C1–C5 i C8-dades
+
+## C1 · Inventari de `GradingRuleSet` — **1 fila**
+
+| camp | valor |
+|---|---|
+| pk | **219** *(no 152)* |
+| nom | `GRADING BROWNIE 2026` |
+| actiu | **True** |
+| regles | **142** |
+| origen | `CLIENT_RUN` |
+| codi_sistema | `BRW-CATALEG-v3` |
+| version_number · is_system_default | 1 · False |
+| customer | **BRW** |
+| size_system | **ALPHA_EU_W** |
+| targets (M2M) | **buit** |
+| construcció · fit · grup · item | **tots buits** |
+| pendents_vincular | False |
+
+**CONDEMNATS: 0.**
+
+## C2 · Models per joc — **3**
+
+`Model` a `fhort`: **33** · amb FK a un joc: **3** · **sense FK: 30**.
+
+| model | codi | client | GradedSpec | residents (mare / filles) |
+|---|---|---|---|---|
+| 1320 | `BRW-FW26-0001` | BRW | **SÍ** | 142 / 0 |
+| 1322 | `BRW-26-FW-0002` | BRW | **SÍ** | 142 / 0 |
+| 1383 | `TRV-SS27-0001` | TRV | **SÍ** | 142 / 0 |
+
+🔑 **Els 3 tenen GradedSpec**: no hi ha cap model penjat del joc sense corba materialitzada.
+
+## C3 · `GradingVersion` cap a jocs condemnats — **0**
+
+`GradingVersion` totals a `fhort`: **78**. Cap joc condemnat → **0 cap a condemnats**, **0
+segellades cap a condemnats**. *(El segell és `GradingVersion.aprovada`; la FK al model va per
+`size_fitting__model`, no directa.)*
+
+## C4 · Models de joc condemnat sense `GradedSpec` — **llista BUIDA**
+
+No hi ha jocs condemnats. `ModelGradingOverride`: **2 files**, totes del **model 1322**.
+
+## C5 · Apuntadors G6 (només comptar, frontera intocada)
+
+| | staging |
+|---|---|
+| `SizingProfile` totals | **30** |
+| `SizingProfile` → jocs condemnats | **0** |
+| `GarmentTypeItem` amb `grading_rule_set` | **0** |
+| `GarmentTypeItem` → jocs condemnats | **0** |
+
+## C8-dades · `POMCategory`
+
+### `fhort` — 25 files, **100 % vocabulari LLETRA A-Z**
+
+`A B C D E F G H I J K L P M N Q R S T U V W X Y Z` · `display_order` 1-25 sense salts · totes
+actives · **`nom_ca` 25/25 · `nom_en` 0/25 · `descripcio` 0/25 · `body_area` 0/25**.
+
+POMs per família: E=25 · F=16 · I=10 · R=8 · B/C/Q/U=7 · S/T=6 · H/J=5 · Y=4 ·
+A/G/K/N/V/X/Z=3 · L/W=2 · D/M=1. **Cap família òrfena.**
+`POMMaster`: 144 · amb família **143** · sense **1**.
+
+### `public` — 15 files, **100 % vocabulari SECTOR bilingüe**
+
+`nom_ca` 15/15 · `nom_en` 15/15 · `descripcio` 15/15 · `body_area` 0/15 · totes actives ·
+**`POMMaster` = 0 → les 15 són òrfenes**.
+
+### ¿Cap que no encaixi?
+
+**CAP.** No hi ha cap `CAT-*` a cap dels dos schemes, ni cap codi fora dels dos vocabularis.
+Els dos blocs són **purs i disjunts**: 25 lletres al tenant, 15 rètols de sector a `public`, i
+cap fila híbrida.
+
+---
+
+# FASE 3 · C9 · EMPREMTA
+
+**Script:** `docs/ordres/empremta_cataleg_v5.py` — corre a PROD **sense cap canvi**
+(`--tenant`, `--out`). Read-only per construcció: només `SELECT`, cap import del motor, cap
+camí d'escriptura.
+
+## Resultat a staging (`fhort`)
+
+| bloc | files | hash |
+|---|---|---|
+| `POMMaster` | **144** | `44416f27e095bda4…` |
+| `GradingRule` de catàleg | **142** | `f5c7cd98926d2463…` |
+| **GLOBAL** | | **`89a76ea42350911fb32a28ce9271350b3674f9a859c3d9a6d05727ff52eb9ced`** |
+
+CSV a `docs/ordres/`: `empremta_poms_fhort.csv` · `empremta_regles_fhort.csv` ·
+`empremta_fhort.json`.
+
+## Decisions de l'empremta, i per què
+
+- **Tot per CODI, cap pk.** `POMMaster.codi_client`, el POM d'una regla pel seu codi, la
+  **família pel seu `POMCategory.codi`** i el **joc pel seu `nom`**. Les pks hi són com a
+  columna `pk_local`, **fora del hash**, només per poder anar a la fila. El cas #152→219 d'aquest
+  mateix cens demostra per què.
+- 🚨 **`breaks` hi entra, i `talla_break_pos` també.** El paquet LOSAN **no els transporta**
+  (0 ocurrències a l'export i al load): sense aquestes columnes, un delta donaria dos entorns
+  per iguals havent perdut tots els intervals. *A staging el catàleg en porta **0** —els 2 que
+  hi ha viuen a `ModelGradingRule`, que és dada de MODEL i queda fora a posta— o sigui que avui
+  la columna surt buida; el seu valor és que **no pot passar en silenci mai més**.*
+- **`regim` i `logica` són dues columnes.** `logica` és el que hi ha desat; `regim` és el que el
+  motor n'entén després de `normalitza_logica` (llei del 22/07: **LINEAR amb delta 0 i sense
+  break ÉS FIXED**). Amb una sola columna el delta mentiria en tots dos sentits.
+- **`unitat` és la CASCADA** tenant > global (sobirania del POM, 22/08), no el camp cru: és el
+  que el producte ensenya.
+- **`increment` (llegat) hi entra** encara que ningú el llegeixi: viatja als paquets i un delta
+  ha de poder-lo veure.
+- **`None` i `''` no es col·lapsen** (`\N` vs cadena buida), i els JSON van amb claus ordenades.
+
+## Com es completa el delta
+
+```
+# staging
+PGOPTIONS='-c default_transaction_read_only=on' \
+  venv/bin/python ../docs/ordres/empremta_cataleg_v5.py --out /tmp/emp_staging
+# PROD — el MATEIX fitxer, sense cap canvi
+PGOPTIONS='-c default_transaction_read_only=on' \
+  venv/bin/python ../docs/ordres/empremta_cataleg_v5.py --out /tmp/emp_prod
+
+diff /tmp/emp_staging/empremta_poms_fhort.csv  /tmp/emp_prod/empremta_poms_fhort.csv
+diff /tmp/emp_staging/empremta_regles_fhort.csv /tmp/emp_prod/empremta_regles_fhort.csv
+```
+
+Hashes iguals → els dos catàlegs diuen el mateix. Diferents → el `diff` diu quina fila i quin
+camp. **La meitat PROD la corre l'Agus.**
+
+---
+
+# ESTAT
 
 | Fase | Estat |
 |---|---|
-| **1 · CODI** (C7 · C6 · C8-codi) | ✅ **feta — aquest document** |
-| **2 · DADES** (C1–C5, C8-dades) | ⏸️ **NO EXECUTADA** — aturada per C7 |
-| **3 · EMPREMTA** (C9-staging) | ⏸️ **NO EXECUTADA** — aturada per C7 |
+| **1 · CODI** (C7 · C6 · C8-codi) | ✅ completa |
+| **0 · com es compta** | ✅ **VIU** → per peça (però el cas perillós no existeix) |
+| **7-bis · cobertura de residents** | ✅ **tallar la FK és inert: 0 cel·les perdudes** |
+| **2 · DADES** (C1–C5, C8-dades) | ✅ completa — **i surt buida perquè staging no té condemnats** |
+| **3 · EMPREMTA** (C9) | ✅ script + CSV + hash global · meitat PROD pendent d'Agus |
 
-🚩 **Contradicció del brief, per decidir:** la capçalera prohibeix *«tocar cap fitxer del repo
-fora de `docs/ordres/`»* i la Fase 3 demana *«deixar-ho com a SCRIPT REUTILITZABLE a `ops/`»*.
-Quan es reprengui, cal dir on va l'script.
+**Cap escriptura a cap BD. Cap command. Cap migració. Cap restart. Cap push. Cap fitxer del
+repo tocat fora de `docs/ordres/`.**
 
 **Cap reparació proposada. Les decisions són d'Agus.**
