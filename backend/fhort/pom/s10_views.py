@@ -4,8 +4,10 @@ fhort/pom/s10_views.py — Sprint S10 / 5B.5: Fitting vs Spec (PieceFitting)
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from fhort.pom.nomenclatura import codi_de, noms_de
 
 CM_TO_INCH = 0.393701
+
 
 def get_unit(request):
     try:
@@ -21,20 +23,15 @@ def cv(val, unit):
     return round(v * CM_TO_INCH, 3) if unit == 'INCH' else round(v, 2)
 
 
+# FONT ÚNICA (22/08) — la cadena de precedència d'un POM viu a `pom/nomenclatura.py`
+# (llei d'Agus: ÀLIES > TENANT > GLOBAL). Aquests dos helpers eren una còpia més de la
+# mateixa veritat, i feien guanyar el GLOBAL.
 def _pom_codi(p):
-    if not p:
-        return ''
-    if getattr(p, 'pom_global_id', None):
-        return p.pom_global.codi
-    return p.codi_client or ''
+    return codi_de(p)
 
 
 def _pom_name_en(p):
-    if not p:
-        return ''
-    if getattr(p, 'pom_global_id', None) and p.pom_global.nom_en:
-        return p.pom_global.nom_en
-    return p.nom_client or ''
+    return noms_de(p)['nom_en']
 
 
 TOL_FALLBACK = 0.6

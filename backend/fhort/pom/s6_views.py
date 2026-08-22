@@ -4,6 +4,7 @@ fhort/pom/s6_views.py — Sprint S6: HTM tooltips + units in fittings
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from fhort.pom.nomenclatura import noms_de
 
 CM_TO_INCH = 0.393701
 
@@ -112,7 +113,7 @@ def base_measurements_with_units_view(request, model_id):
                 'instancia': bm.instancia,
                 'codi_client': pom.codi_client if pom else '',
                 'nom_client': pom.nom_client if pom else '',
-                'nom_en': pom.pom_global.nom_en if (pom and pom.pom_global_id) else '',
+                'nom_en': noms_de(pom)['nom_en'] if pom else '',   # FONT ÚNICA (22/08)
                 'categoria_nom': categoria_nom,
                 'base_value_cm': float(bm.base_value_cm) if bm.base_value_cm is not None else None,
                 'base_value_display': cv(bm.base_value_cm, unit),
@@ -204,7 +205,7 @@ def graded_specs_with_units_view(request, sf_id):
                     'instancia': spec.instancia,
                     'codi_client': pom.codi_client if pom else '',
                     'nom_client': pom.nom_client if pom else '',
-                    'nom_en': pom.pom_global.nom_en if (pom and pom.pom_global_id) else '',
+                    'nom_en': noms_de(pom)['nom_en'] if pom else '',   # FONT ÚNICA (22/08)
                     'categoria_nom': categoria_nom,
                     'is_key': pom.is_key_measure if pom else False,
                     'values': {},

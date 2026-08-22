@@ -28,6 +28,7 @@ from rest_framework.response import Response
 from fhort.pom.models import MeasurementLayer
 
 from .models import BaseMeasurement, ItemFitxer, POMPlacement
+from fhort.pom.nomenclatura import codi_de
 
 
 @api_view(['GET', 'POST'])
@@ -104,7 +105,10 @@ def _cascada(request, item):
 
     placements, no_al_model = [], []
     for (pom_id, _capa, _inst), (p, derivat) in merged.items():
-        codi = p.pom.pom_global.codi if p.pom.pom_global_id else ''
+        # FONT ÚNICA (22/08) — l'etiqueta de la cota surt del resolutor únic
+        # (`pom/nomenclatura.py`: ÀLIES > TENANT > GLOBAL). Abans, per a un POM
+        # tenant-only, la cota precedent viatjava amb el codi BUIT.
+        codi = codi_de(p.pom)
         bm_id = bm_by_pom.get((pom_id, p.capa, p.instancia))
         if model_id and bm_id is None:
             # El POM del precedent NO existeix al model destí → a llista manual, mai crash.

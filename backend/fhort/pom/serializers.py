@@ -4,6 +4,7 @@ from rest_framework import serializers, status
 from rest_framework.exceptions import APIException
 
 from .size_labels import _tipus_de_les_etiquetes
+from .nomenclatura import abreviatura_de, categoria_de, codi_de, noms_de
 from .grading_regime import valida_breaks
 
 from .models import (
@@ -94,28 +95,26 @@ class POMMasterSerializer(serializers.ModelSerializer):
     body_measure_iso_nom = serializers.CharField(
         source='pom_global.body_measure_iso.nom_en', read_only=True, allow_null=True)
 
+    # 🚨 FONT ÚNICA (22/08) — aquests cinc mètodes feien guanyar el GLOBAL, i la propietat
+    # `POMMaster.pom_code` feia guanyar el TENANT: dues implementacions de la mateixa veritat
+    # dient coses contràries sobre la mateixa fila. Ara tots dos camins passen pel resolutor
+    # de `pom/nomenclatura.py` (llei d'Agus: ÀLIES > TENANT > GLOBAL). El catàleg no té
+    # context de client —és de la casa, no d'un client—, i per això no hi passa cap àlies:
+    # la cadena hi comença al tenant. La FORMA de la resposta no canvia; el VALOR, sí.
     def get_pom_code(self, obj):
-        pg = obj.pom_global
-        return (pg.codi if pg else None) or obj.codi_client
+        return codi_de(obj)
 
     def get_name_en(self, obj):
-        pg = obj.pom_global
-        return (pg.nom_en if pg else None) or obj.nom_client
+        return noms_de(obj)['nom_en']
 
     def get_name_cat(self, obj):
-        pg = obj.pom_global
-        return (pg.nom_ca if pg else None) or obj.nom_client
+        return noms_de(obj)['nom_ca']
 
     def get_abbreviation(self, obj):
-        pg = obj.pom_global
-        return (pg.abbreviation if pg else None) or obj.codi_client
+        return abreviatura_de(obj)
 
     def get_categoria_nom(self, obj):
-        pg = obj.pom_global
-        if pg and pg.categoria:
-            return pg.categoria
-        cat = obj.categoria
-        return (cat.nom_ca or cat.nom_en) if cat else ''
+        return categoria_de(obj)
 
     def validate_codi_client(self, value):
         """El codi és ÚNIC AL CATÀLEG i les majúscules no el distingeixen — dit amb un 400.
@@ -268,20 +267,17 @@ class GradingRuleSerializer(serializers.ModelSerializer):
     pom_categoria = serializers.SerializerMethodField()
     talla_base_etiqueta = serializers.CharField(source='talla_base.etiqueta', read_only=True)
 
+    # FONT ÚNICA (22/08) — la cadena de precedència passa pel resolutor. `pom_code_global` i
+    # `pom_categoria` (a sota) NO hi passen a posta: el seu nom diu «global» i el seu contracte
+    # és servir el camp del catàleg canònic tal com és, no una cadena.
     def get_pom_nom_en(self, obj):
-        if obj.pom and obj.pom.pom_global:
-            return obj.pom.pom_global.nom_en
-        return obj.pom.nom_client if obj.pom else None
+        return noms_de(obj.pom)['nom_en'] if obj.pom_id else None
 
     def get_pom_nom_ca(self, obj):
-        if obj.pom and obj.pom.pom_global:
-            return obj.pom.pom_global.nom_ca
-        return None
+        return noms_de(obj.pom)['nom_ca'] if obj.pom_id else None
 
     def get_pom_abbreviation(self, obj):
-        if obj.pom and obj.pom.pom_global:
-            return obj.pom.pom_global.abbreviation
-        return obj.pom.codi_client if obj.pom else None
+        return abreviatura_de(obj.pom) if obj.pom_id else None
 
     def get_pom_code_global(self, obj):
         if obj.pom and obj.pom.pom_global:
@@ -586,28 +582,23 @@ class GarmentPOMMapSerializer(serializers.ModelSerializer):
     garment_type_item_codi = serializers.CharField(source='garment_type_item.code', read_only=True)
     garment_type_item_name = serializers.CharField(source='garment_type_item.name', read_only=True)
 
+    # FONT ÚNICA (22/08) — mateixa llei i mateix resolutor que la resta (ÀLIES > TENANT >
+    # GLOBAL). La pertinença és de CATÀLEG (quins POMs porta una peça), no d'un model d'un
+    # client: no hi ha àlies a passar-hi.
     def get_pom_code(self, obj):
-        pg = obj.pom.pom_global
-        return (pg.codi if pg else None) or obj.pom.codi_client
+        return codi_de(obj.pom)
 
     def get_name_en(self, obj):
-        pg = obj.pom.pom_global
-        return (pg.nom_en if pg else None) or obj.pom.nom_client
+        return noms_de(obj.pom)['nom_en']
 
     def get_name_cat(self, obj):
-        pg = obj.pom.pom_global
-        return (pg.nom_ca if pg else None) or obj.pom.nom_client
+        return noms_de(obj.pom)['nom_ca']
 
     def get_abbreviation(self, obj):
-        pg = obj.pom.pom_global
-        return (pg.abbreviation if pg else None) or obj.pom.codi_client
+        return abreviatura_de(obj.pom)
 
     def get_categoria(self, obj):
-        pg = obj.pom.pom_global
-        if pg and pg.categoria:
-            return pg.categoria
-        cat = obj.pom.categoria
-        return (cat.nom_ca or cat.nom_en) if cat else ''
+        return categoria_de(obj.pom)
 
     class Meta:
         model = GarmentPOMMap
@@ -648,28 +639,23 @@ class _POMDisplayMixin(serializers.Serializer):
     #: Els camps que el mixin aporta, per no repetir-los a cada `Meta.fields`.
     CAMPS = ('pom_code', 'name_en', 'name_cat', 'abbreviation', 'categoria', 'unitat')
 
+    # FONT ÚNICA (22/08) — mateixa llei i mateix resolutor que la resta (ÀLIES > TENANT >
+    # GLOBAL). La pertinença és de CATÀLEG (quins POMs porta una peça), no d'un model d'un
+    # client: no hi ha àlies a passar-hi.
     def get_pom_code(self, obj):
-        pg = obj.pom.pom_global
-        return (pg.codi if pg else None) or obj.pom.codi_client
+        return codi_de(obj.pom)
 
     def get_name_en(self, obj):
-        pg = obj.pom.pom_global
-        return (pg.nom_en if pg else None) or obj.pom.nom_client
+        return noms_de(obj.pom)['nom_en']
 
     def get_name_cat(self, obj):
-        pg = obj.pom.pom_global
-        return (pg.nom_ca if pg else None) or obj.pom.nom_client
+        return noms_de(obj.pom)['nom_ca']
 
     def get_abbreviation(self, obj):
-        pg = obj.pom.pom_global
-        return (pg.abbreviation if pg else None) or obj.pom.codi_client
+        return abreviatura_de(obj.pom)
 
     def get_categoria(self, obj):
-        pg = obj.pom.pom_global
-        if pg and pg.categoria:
-            return pg.categoria
-        cat = obj.pom.categoria
-        return (cat.nom_ca or cat.nom_en) if cat else ''
+        return categoria_de(obj.pom)
 
 
 class GarmentTypePOMMapSerializer(_POMDisplayMixin, serializers.ModelSerializer):
@@ -791,20 +777,18 @@ class CustomerPOMAliasSerializer(serializers.ModelSerializer):
             return obj.pom.pom_global.codi
         return None
 
+    # FONT ÚNICA (22/08). Aquí NO s'hi passa l'àlies encara que la fila EN SIGUI un: aquests
+    # camps descriuen el POM de destí perquè qui llegeix la biblioteca pugui dir «U1 és
+    # BUTTON SPACING al catàleg» — si hi caiguessin els camps de la pròpia fila, la columna
+    # repetiria el `client_code` que ja hi ha al costat.
     def get_pom_abbreviation(self, obj):
-        if obj.pom and obj.pom.pom_global:
-            return obj.pom.pom_global.abbreviation
-        return obj.pom.codi_client if obj.pom else None
+        return abreviatura_de(obj.pom) if obj.pom_id else None
 
     def get_pom_nom_en(self, obj):
-        if obj.pom and obj.pom.pom_global:
-            return obj.pom.pom_global.nom_en
-        return obj.pom.nom_client if obj.pom else None
+        return noms_de(obj.pom)['nom_en'] if obj.pom_id else None
 
     def get_pom_nom_ca(self, obj):
-        if obj.pom and obj.pom.pom_global:
-            return obj.pom.pom_global.nom_ca
-        return None
+        return noms_de(obj.pom)['nom_ca'] if obj.pom_id else None
 
     class Meta:
         model = CustomerPOMAlias

@@ -450,21 +450,25 @@ class POMMaster(models.Model):
     # ── Alias properties for the sprint3/4 code ────────────────────────────
     # Resolve TECH_DEBT.md #2. Read-only — they do not work in the ORM (.filter/order_by).
     # For the ORM, use the natural FKs: pom__categoria__display_order, pom__pom_global__nom_ca.
+    # 🚨 FONT ÚNICA (22/08) — aquestes tres propietats es CONTRADEIEN entre elles: `pom_code`
+    # feia guanyar el TENANT i `name_cat`/`name_en` feien guanyar el GLOBAL, o sigui que una
+    # mateixa fila sortia amb el codi de la casa i el nom del catàleg canònic. Ara les tres
+    # deleguen al resolutor de `pom/nomenclatura.py`, que aplica la llei d'Agus
+    # (ÀLIES > TENANT > GLOBAL) per a tothom. Import local: `nomenclatura` importa `models`.
     @property
     def pom_code(self):
-        return self.codi_client or (self.pom_global.codi if self.pom_global_id else '')
+        from .nomenclatura import codi_de
+        return codi_de(self)
 
     @property
     def name_cat(self):
-        if self.pom_global_id and self.pom_global.nom_ca:
-            return self.pom_global.nom_ca
-        return self.nom_client
+        from .nomenclatura import noms_de
+        return noms_de(self)['nom_ca']
 
     @property
     def name_en(self):
-        if self.pom_global_id and self.pom_global.nom_en:
-            return self.pom_global.nom_en
-        return self.nom_client
+        from .nomenclatura import noms_de
+        return noms_de(self)['nom_en']
 
     @property
     def display_order(self):

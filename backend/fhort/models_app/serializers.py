@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from fhort.pom.nomenclatura import abreviatura_de, codi_de, noms_de
 from .models import (BaseMeasurement, Contracte, GarmentSet, ItemFitxer, LiniaContracte,
                      Model, ModelFitxer, Watchpoint)
 
@@ -430,13 +431,30 @@ class ModelDetailSerializer(serializers.ModelSerializer):
 
 # Sprint S14B — BaseMeasurement CRUD
 class BaseMeasurementSerializer(serializers.ModelSerializer):
-    # Expose POM fields via `pom.pom_global` for the UI.
-    pom_code = serializers.CharField(source='pom.pom_global.codi', read_only=True)
-    pom_name_en = serializers.CharField(source='pom.pom_global.nom_en', read_only=True)
-    pom_name_cat = serializers.CharField(source='pom.pom_global.nom_ca', read_only=True)
-    pom_abbreviation = serializers.CharField(source='pom.pom_global.abbreviation', read_only=True)
+    # 🚨 FONT ÚNICA (22/08). Aquests quatre camps llegien NOMÉS `pom.pom_global` i, en travessar
+    # un FK nul, DRF els feia desaparèixer de la resposta (SkipField): per a un POM tenant-only
+    # —els 144 de `fhort`— aquest serializer no deia ni el codi ni el nom. Ara passen pel
+    # resolutor de `pom/nomenclatura.py` (ÀLIES > TENANT > GLOBAL) i SEMPRE hi són.
+    # `pom_is_key` i `pom_category` es queden com estaven: el primer no té equivalent al tenant
+    # i el segon és el text del vocabulari global, no la família de la casa.
+    pom_code = serializers.SerializerMethodField()
+    pom_name_en = serializers.SerializerMethodField()
+    pom_name_cat = serializers.SerializerMethodField()
+    pom_abbreviation = serializers.SerializerMethodField()
     pom_is_key = serializers.BooleanField(source='pom.pom_global.is_key', read_only=True)
     pom_category = serializers.CharField(source='pom.pom_global.categoria', read_only=True)
+
+    def get_pom_code(self, obj):
+        return codi_de(obj.pom) if obj.pom_id else ''
+
+    def get_pom_name_en(self, obj):
+        return noms_de(obj.pom)['nom_en'] if obj.pom_id else ''
+
+    def get_pom_name_cat(self, obj):
+        return noms_de(obj.pom)['nom_ca'] if obj.pom_id else ''
+
+    def get_pom_abbreviation(self, obj):
+        return abreviatura_de(obj.pom) if obj.pom_id else ''
     # Legacy POMMaster fields (fallback when there is no associated pom_global).
     pom_codi_client = serializers.CharField(source='pom.codi_client', read_only=True)
     pom_nom_client = serializers.CharField(source='pom.nom_client', read_only=True)

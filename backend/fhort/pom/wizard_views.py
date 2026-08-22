@@ -11,6 +11,7 @@ from django.utils import timezone
 
 from fhort.pom.models import MeasurementLayer
 from fhort.pom.services import SealedGradingVersionError, _te_regles
+from fhort.pom.nomenclatura import abreviatura_de, noms_de
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -307,8 +308,10 @@ def search_poms_view(request):
                 'seccio': 'client' if es_alies else 'casa',
                 'codi_client': p.codi_client,     # el codi de la CASA (v. `nomenclatura`)
                 'nom_client': p.nom_client,
-                'nom_ca': p.pom_global.nom_ca if p.pom_global_id else '',
-                'nom_en': p.pom_global.nom_en if p.pom_global_id else '',
+                # FONT ÚNICA (22/08) — ÀLIES > TENANT > GLOBAL. L'àlies del client va a part
+                # (`camps_de`, just a sota): aquests dos són el nom del CATÀLEG resolt.
+                'nom_ca': noms_de(p)['nom_ca'],
+                'nom_en': noms_de(p)['nom_en'],
                 'categoria_nom': p.categoria.nom_ca if p.categoria_id else '',
                 'nivell': _nivell(p.id),
             }
@@ -679,11 +682,14 @@ def base_measurements_view(request, model_id):
             'regla_model': _regla_de(bm.pom_id, bm.garment),
             'codi_client': bm.pom.codi_client,
             'nom_client': bm.pom.nom_client,
-            'nom_ca': bm.pom.pom_global.nom_ca if bm.pom.pom_global_id else '',
+            # FONT ÚNICA (22/08) — ÀLIES > TENANT > GLOBAL (`pom/nomenclatura.py`). Abans
+            # aquests dos naixien BUITS per a tot POM tenant-only, i el front havia de caure
+            # a `nom_client` pel seu compte: ara el resolutor ja hi cau.
+            'nom_ca': noms_de(bm.pom)['nom_ca'],
             # `nom_en` és el nom CANÒNIC del sector: el parell "anglès primari + local al
             # costat" (PomNamePair) no es pot muntar sense ell, i fins ara els consumidors
             # d'aquest endpoint se l'havien d'anar a buscar a la GradingRule.
-            'nom_en': bm.pom.pom_global.nom_en if bm.pom.pom_global_id else '',
+            'nom_en': noms_de(bm.pom)['nom_en'],
             # Sprint NOMS-POM (30/07) — el BATEIG d'aquest model (nom canònic + traducció del
             # client), CRU. '' = no batejat → qui llegeix cau al catàleg (`nom_en`/`nom_ca`),
             # que segueixen exactament igual que abans. Camps NOUS, res existent no es toca.
@@ -718,7 +724,7 @@ def base_measurements_view(request, model_id):
             # una diagnosi que aquesta font no servia l'eix —i per poc no fa néixer un endpoint
             # nou per a la taula de mesures base de la fitxa (Q8e). Un comentari datat no descriu
             # el codi d'avui: el COS de la funció, sí.
-            'pom_abbreviation': bm.pom.pom_global.abbreviation if bm.pom.pom_global_id else '',
+            'pom_abbreviation': abreviatura_de(bm.pom),
             'pom_code_global': bm.pom.pom_global.codi if bm.pom.pom_global_id else '',
             'pom_is_key': bool(bm.pom.pom_global.is_key) if bm.pom.pom_global_id else False,
             # F1 (cota viva): nomenclatura del client per a l'etiqueta de la cota, o None.

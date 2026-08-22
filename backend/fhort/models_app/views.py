@@ -26,6 +26,8 @@ from fhort.pom.plausibilitat import CODI_MESURA_FORA_RANG, mesura_fora_de_rang
 from .models import (BaseMeasurement, ConsumptionRecord, GarmentSet, Model, ModelFitxer,
                      ModelGarment, Watchpoint)
 from .services_fitxers import DOWNLOAD_SALT, DOWNLOAD_TTL
+from fhort.pom.nomenclatura import (abreviatura_de, alies_per_pom, camps_de,
+                                    categoria_de, codi_de, noms_de)
 from .serializers import (
     BaseMeasurementSerializer,
     ModelDetailSerializer,
@@ -1305,7 +1307,6 @@ def suggested_poms_view(request, model_id):
         return Response({'poms': [], 'warning': 'Garment type item no definit'})
 
     from fhort.pom.models import GarmentPOMMap
-    from fhort.pom.nomenclatura import alies_per_pom, camps_de
 
     maps = GarmentPOMMap.objects.filter(
         garment_type_item=model.garment_type_item,
@@ -1319,14 +1320,17 @@ def suggested_poms_view(request, model_id):
     result = []
     for m in maps:
         pom = m.pom
-        pg = getattr(pom, 'pom_global', None)
+        # FONT ÚNICA (22/08) — el codi i els noms del CATÀLEG surten del resolutor
+        # (`pom/nomenclatura.py`: ÀLIES > TENANT > GLOBAL). L'àlies del client viatja a part
+        # (`camps_de`, tres línies més avall) perquè la pantalla el pugui distingir.
+        _noms = noms_de(pom)
         result.append({
             'pom_id': pom.id,
-            'pom_code': pom.codi_client,
-            'nom_en': pg.nom_en if pg else pom.nom_client,
-            'nom_ca': pg.nom_ca if pg else pom.nom_client,
-            'abbreviation': pg.abbreviation if pg else '',
-            'categoria': pg.categoria if pg else '',
+            'pom_code': codi_de(pom),
+            'nom_en': _noms['nom_en'],
+            'nom_ca': _noms['nom_ca'],
+            'abbreviation': abreviatura_de(pom),
+            'categoria': categoria_de(pom),
             'is_key': m.is_key,
             'ordre': m.ordre,
             **camps_de(alias_by_pom, pom.id),
@@ -2122,13 +2126,11 @@ def measurements_table_view(request, model_id):
 
     # C3 — nomenclatura del CLIENT del model, mateix resolutor que la resta de superfícies.
     from fhort.pom.identitat import clau_mesura
-    from fhort.pom.nomenclatura import alies_per_pom, camps_de
     alias_by_pom = alies_per_pom(model.customer_id)
 
     rows = []
     for bm in base_measurements:
         pom = bm.pom
-        pg = getattr(pom, 'pom_global', None)
         # ✅ SET-2/F1 · Q1-bis — LA REGLA DE LA SEVA PEÇA. Era `rules_by_pom.get(pom.id)`:
         # amb la mare i la 02 compartint POM, les dues files rebien la MATEIXA llei i el
         # contenidor de la 02 ensenyava el règim, la Δ i el break de la mare. Aquesta taula
@@ -2147,7 +2149,10 @@ def measurements_table_view(request, model_id):
             'clau': clau_mesura(pom.id, bm.capa, bm.instancia, bm.garment),
             # SET-2/T6a — l'eix de la fila al contracte, al costat dels dos de germanor.
             'garment': bm.garment,
-            'pom_code': pom.codi_client,
+            # FONT ÚNICA (22/08) — el codi del CATÀLEG resolt (tenant > global); l'àlies
+            # del client segueix viatjant a part, a `camps_de`, que és el que permet al front
+            # dir-los amb paraules diferents.
+            'pom_code': codi_de(pom),
             **camps_de(alias_by_pom, pom.id),
             'nom_fitxa': bm.nom_fitxa or '',
             # Sprint NOMS-POM — el BATEIG d'aquest model, CRU i al costat del catàleg
@@ -2161,9 +2166,9 @@ def measurements_table_view(request, model_id):
             # sense res a editar perquè el payload no li portava el bateig.
             'nom_canonic_model': bm.nom_canonic_model or '',
             'nom_traduit_model': bm.nom_traduit_model or '',
-            'nom_en': pg.nom_en if pg else pom.nom_client,
-            'nom_ca': pg.nom_ca if pg else pom.nom_client,
-            'abbreviation': pg.abbreviation if pg else '',
+            'nom_en': noms_de(pom)['nom_en'],
+            'nom_ca': noms_de(pom)['nom_ca'],
+            'abbreviation': abreviatura_de(pom),   # FONT ÚNICA (22/08)
             'base_value_cm': float(bm.base_value_cm) if bm.base_value_cm is not None else None,
             'is_key': bm.is_key,
             'origen': bm.origen,
@@ -3229,7 +3234,6 @@ def generate_grading_view(request, model_id):
         .select_related('pom', 'pom__pom_global').order_by('ordre')
     ):
         pom = bm.pom
-        pg = getattr(pom, 'pom_global', None)
         graded = {}
         if gv:
             # C4/BLOC 2 — LA CORBA ÉS DE LA MESURA, NO DEL POM. Aquesta consulta filtrava per
@@ -3254,10 +3258,12 @@ def generate_grading_view(request, model_id):
             # la mesura) és l'àncora forta de cada element.
             'capa': bm.capa,
             'instancia': bm.instancia,
-            'pom_code': pom.codi_client,
+            # FONT ÚNICA (22/08) — codi i noms del catàleg pel resolutor de
+            # `pom/nomenclatura.py` (ÀLIES > TENANT > GLOBAL).
+            'pom_code': codi_de(pom),
             'nom_fitxa': bm.nom_fitxa or '',
-            'nom_ca': pg.nom_ca if pg else pom.nom_client,
-            'nom_en': pg.nom_en if pg else pom.nom_client,
+            'nom_ca': noms_de(pom)['nom_ca'],
+            'nom_en': noms_de(pom)['nom_en'],
             'base_value_cm': float(bm.base_value_cm) if bm.base_value_cm is not None else None,
             'graded': graded,
             'ordre': bm.ordre,
@@ -4134,7 +4140,6 @@ def base_stages_view(request, model_id):
     rows = []
     for bm in bms:
         pom = bm.pom
-        pg = getattr(pom, 'pom_global', None)
         tm, tp = _tol(bm)
         takes = {}
         # C2/Onada 1 + C1-ins — la fila demana ELS SEUS estadis, no els del POM.
@@ -4145,10 +4150,12 @@ def base_stages_view(request, model_id):
                 takes[st['key']] = v
         rows.append({
             'pom_id': pom.id,
-            'pom_code': pom.codi_client,
+            # FONT ÚNICA (22/08) — codi i noms del catàleg pel resolutor de
+            # `pom/nomenclatura.py` (ÀLIES > TENANT > GLOBAL).
+            'pom_code': codi_de(pom),
             'nom_fitxa': bm.nom_fitxa or '',
-            'nom_ca': pg.nom_ca if pg else pom.nom_client,
-            'nom_en': pg.nom_en if pg else pom.nom_client,
+            'nom_ca': noms_de(pom)['nom_ca'],
+            'nom_en': noms_de(pom)['nom_en'],
             # Sprint NOMS-POM (30/07) — el BATEIG d'aquest model, CRU i al costat del catàleg
             # (`nom_ca`/`nom_en`, que no es toquen): '' vol dir «no batejat, mana el catàleg».
             # La cascada la resol qui pinta, que és qui sap si mostra un input amb placeholder
