@@ -1,9 +1,12 @@
-"""bootstrap_tenant --additive — materialització estrictament additiva (Federació v2, P5).
+"""bootstrap_tenant — materialització additiva (Federació v2, P5) i la GUARDA DE DESTÍ.
 
 Les lleis que defensen:
   · ADDITIU = crear el que falta, NO tocar MAI el que ja existeix (get_or_create, no
     update_or_create). Ni camps ni M2M d'una fila preexistent es toquen.
-  · Sense el flag, el comportament actual (update_or_create, sobreescriu) queda intacte.
+  · 🔒 PANY P5 (TREN DE PANYS, 22/08): l'additiu és el MODE PER DEFECTE. Sobreescriure exigeix
+    `--overwrite`. Fins al 22/08 el defecte era el contrari i el destí es reescrivia sol.
+  · 🔒 GUARDA DE DESTÍ: amb catàleg propi al destí i cap flag declarat, s'ATURA amb el
+    recompte del que trepitjaria. Un tenant amb catàleg propi no és un tenant que neix.
   · --additive contra un destí ja ACTIU no en tanca l'onboarding ni en regenera la Template.
 
 Dos tenants reals: un ORIGEN (src) amb catàleg i un DESTÍ (test) poblat.
@@ -13,6 +16,7 @@ Dos tenants reals: un ORIGEN (src) amb catàleg i un DESTÍ (test) poblat.
 import io
 
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.db import connection
 from django_tenants.test.cases import TenantTestCase
 from django_tenants.utils import get_tenant_model, schema_context
@@ -75,10 +79,11 @@ class BootstrapAdditiveTest(TenantTestCase):
         with schema_context(schema):
             return Target.objects.create(codi=codi, nom_en=codi)
 
-    def _run(self, additive=False, dry=False):
+    def _run(self, additive=False, dry=False, overwrite=False):
         out = io.StringIO()
         call_command('bootstrap_tenant', self.dest_schema, source='src',
-                     additive=additive, dry_run=dry, stdout=out, verbosity=1)
+                     additive=additive, overwrite=overwrite, dry_run=dry,
+                     stdout=out, verbosity=1)
         return out.getvalue()
 
     # ── additiu no toca el preexistent (camps + M2M) ───────────────────────────
@@ -119,13 +124,84 @@ class BootstrapAdditiveTest(TenantTestCase):
             self.assertEqual(SizeSystem.objects.get(codi='SS-X').nom, 'DEST-ORIG')   # intacte
             self.assertTrue(SizeSystem.objects.filter(codi='SS-NEW').exists())       # creada
 
-    # ── sense el flag: comportament actual (sobreescriu) ───────────────────────
-    def test_sense_additive_sobreescriu(self):
+    # ── amb --overwrite: sobreescriu (el que fins al 22/08 era el defecte silenciós) ──
+    def test_amb_overwrite_sobreescriu(self):
         self._ss('src', 'SS-X', 'SOURCE')
         self._ss(self.dest_schema, 'SS-X', 'DEST-ORIG')
-        self._run(additive=False)
+        self._run(overwrite=True)
         with schema_context(self.dest_schema):
             self.assertEqual(SizeSystem.objects.get(codi='SS-X').nom, 'SOURCE')   # sobreescrit
+
+    # ── 🔒 PANY P5 · sense cap flag, el defecte JA NO sobreescriu ─────────────────────
+    def test_sense_cap_flag_el_defecte_es_create_only(self):
+        """🚨 EL CAS DEL CENS. `bootstrap_tenant <destí>` sense `--additive` reescrivia el
+        destí amb l'origen, i el botó del backoffice acceptava qualsevol destí. Ara el
+        defecte és create-only i el que ja hi és no es toca."""
+        self._ss('src', 'SS-X', 'SOURCE')
+        self._ss('src', 'SS-NEW', 'NOVA')
+        self._ss(self.dest_schema, 'SS-X', 'DEST-ORIG')
+
+        self._run()
+
+        with schema_context(self.dest_schema):
+            self.assertEqual(SizeSystem.objects.get(codi='SS-X').nom, 'DEST-ORIG')  # intacte
+            self.assertTrue(SizeSystem.objects.filter(codi='SS-NEW').exists())      # i crea
+
+    # ── 🔒 PANY P5 · la guarda de destí ──────────────────────────────────────────────
+    def test_un_desti_amb_families_propies_no_les_perd(self):
+        """El destí té famílies de POM pròpies: sense declarar res, la comanda ATURA i diu
+        quantes en trepitjaria. Cap fila tocada."""
+        with schema_context('src'):
+            POMCategory.objects.create(codi='C1', nom_ca='Del origen')
+        with schema_context(self.dest_schema):
+            POMCategory.objects.create(codi='C1', nom_ca='MEVA')
+            POMCategory.objects.create(codi='C2', nom_ca='MEVA TAMBÉ')
+
+        with self.assertRaises(CommandError) as cm:
+            self._run()
+
+        missatge = str(cm.exception)
+        self.assertIn('ja té catàleg propi', missatge)
+        self.assertIn('POMCategory: 2 propis, 1 que src trepitjaria', missatge)
+        self.assertIn('--additive', missatge)
+        self.assertIn('--overwrite', missatge)
+        with schema_context(self.dest_schema):
+            self.assertEqual(POMCategory.objects.get(codi='C1').nom_ca, 'MEVA')   # intacta
+
+    def test_additive_explicit_travessa_la_guarda_i_no_toca_res(self):
+        with schema_context('src'):
+            POMCategory.objects.create(codi='C1', nom_ca='Del origen')
+        with schema_context(self.dest_schema):
+            POMCategory.objects.create(codi='C1', nom_ca='MEVA')
+
+        self._run(additive=True)
+
+        with schema_context(self.dest_schema):
+            self.assertEqual(POMCategory.objects.get(codi='C1').nom_ca, 'MEVA')
+
+    def test_overwrite_explicit_travessa_la_guarda_i_si_que_toca(self):
+        with schema_context('src'):
+            POMCategory.objects.create(codi='C1', nom_ca='Del origen')
+        with schema_context(self.dest_schema):
+            POMCategory.objects.create(codi='C1', nom_ca='MEVA')
+
+        self._run(overwrite=True)
+
+        with schema_context(self.dest_schema):
+            self.assertEqual(POMCategory.objects.get(codi='C1').nom_ca, 'Del origen')
+
+    def test_un_desti_verge_no_troba_la_guarda(self):
+        """El camí del botó del backoffice: tenant acabat de provisionar, catàleg buit → la
+        guarda no salta i la sembra corre sencera, create-only."""
+        self._ss('src', 'SS-NEW', 'NOVA')
+        with schema_context('src'):
+            POMCategory.objects.create(codi='C1', nom_ca='Del origen')
+
+        self._run()
+
+        with schema_context(self.dest_schema):
+            self.assertTrue(POMCategory.objects.filter(codi='C1').exists())
+            self.assertTrue(SizeSystem.objects.filter(codi='SS-NEW').exists())
 
     # ── clau AMBIGUA al destí (deute de dades): saltar i reportar, mai crear ───
     def test_additiu_clau_ambigua_al_desti(self):
