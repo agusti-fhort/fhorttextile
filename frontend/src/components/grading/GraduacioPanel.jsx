@@ -34,16 +34,33 @@ export default function GraduacioPanel({
   gradingRuleSetId, onUsar,
   noGrading = false, onNoGrading = null,
   customerCodi = null,
+  // S45/C — l'ID del client, per acotar el catàleg al SERVIDOR. `customerCodi` (a sobre) és
+  // per a la retolació; el sedàs vol la clau, no l'etiqueta.
+  customerId = null,
 }) {
   const { t } = useTranslation()
   const [ruleSets, setRuleSets] = useState([])
   const [ggCodiById, setGgCodiById] = useState({})
   const [perfilSuggestedRsId, setPerfilSuggestedRsId] = useState(null)
 
+  // S45/C — EL CATÀLEG ARRIBA JA ACOTAT, i aquí amb els TRES eixos que el pas 4 sap:
+  // actiu (defecte nou del ViewSet), client i sistema de talles. El `strict` del picker ja
+  // exigia el `size_system` al client; demanar-ho també al servidor no és redundant —el
+  // matching estricte NOMÉS pot descartar el que li han enviat, i el que no arriba no s'ha
+  // de transportar. El NULL del joc és COMODÍ i el servidor el respecta (`per_size_system`).
+  const ssIdCarrega = sizing?.size_system_id ?? null
   useEffect(() => {
     let viu = true
     Promise.all([
-      gradingRuleSets.list({ page_size: 200, amb_regles: 1 }),
+        // 🚨 `inclou`: EL JOC QUE EL MODEL JA PORTA NO ES POT AMAGAR MAI. Al 1383 (TRV) hi
+        // ha assignat el joc 219, que és de BRW: amb el sedàs de client, el picker s'obriria
+        // sense ell i diria que el model no en té cap. El que està EN ÚS travessa el sedàs.
+      gradingRuleSets.list({
+        page_size: 200, amb_regles: 1,
+        ...(customerId ? { per_client: customerId } : {}),
+        ...(ssIdCarrega ? { per_size_system: ssIdCarrega } : {}),
+        ...(gradingRuleSetId ? { inclou: gradingRuleSetId } : {}),
+      }),
       garmentGroups.list({ page_size: 200 }),
     ]).then(([rsRes, ggRes]) => {
       if (!viu) return
@@ -53,7 +70,7 @@ export default function GraduacioPanel({
       setRuleSets(rs); setGgCodiById(map)
     }).catch(() => { if (viu) setRuleSets([]) })
     return () => { viu = false }
-  }, [])
+  }, [customerId, ssIdCarrega, gradingRuleSetId])
 
   // El suggeriment ve del PERFIL (SizingProfile), no de l'item: és la font viva des del
   // 2026-07-23. Només ORDENA el picker (SUGGERIR ≠ ARROSSEGAR); mai s'assigna sol.

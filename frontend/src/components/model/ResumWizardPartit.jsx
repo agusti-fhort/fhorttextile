@@ -977,7 +977,7 @@ function EditorTalles({ model, inicial, onDesar, onCancel, extra }) {
       .then(r => { if (viu) setCodiClient(r.data?.codi ?? null) })
       .catch(() => { if (viu) setCodiClient(null) })
     return () => { viu = false }
-  }, [model.customer])
+  }, [model.customer, model.grading_rule_set])
 
   // Triar un sistema NO substitueix el run en silenci: si el que hi ha desat hi cap, es
   // conserva (i amb ell la talla base). És la mateixa llei F1.2 del wizard.
@@ -1185,7 +1185,20 @@ function EditorGraduacio({ model, inicialId, onDesar, onCancel, extra }) {
       // `amb_regles: 1` com al wizard: un joc sense regles no és una opció llunyana, és un
       // bloqueig dur al backend (400 `ruleset_buit`). Oferir-lo seria oferir un carreró sense
       // sortida, que no és el que «no amagar» vol dir.
-      gradingRuleSets.list({ page_size: 200, amb_regles: 1 }),
+      // S45/C — I EL CATÀLEG ARRIBA JA ACOTAT. Abans es demanaven els 51 jocs amb regles de
+      // PROD —18 d'ells JUBILATS i 24 de LOS— i el picker els pintava tots. El sedàs va al
+      // SERVIDOR i no aquí: quatre pantalles filtrant pel seu compte serien quatre filtres
+      // que divergeixen. `actiu=True` és ara el defecte del ViewSet (jubilar ≠ amagar: qui
+      // els vol, passa `include_inactive=1`), i `per_client` demana els del client del model
+      // MÉS els de catàleg —mai els d'un altre client.
+        // 🚨 `inclou`: EL JOC QUE EL MODEL JA PORTA NO ES POT AMAGAR MAI. Al 1383 (TRV) hi
+        // ha assignat el joc 219, que és de BRW: amb el sedàs de client, el picker s'obriria
+        // sense ell i diria que el model no en té cap. El que està EN ÚS travessa el sedàs.
+      gradingRuleSets.list({
+        page_size: 200, amb_regles: 1,
+        ...(model.customer ? { per_client: model.customer } : {}),
+        ...(model.grading_rule_set ? { inclou: model.grading_rule_set } : {}),
+      }),
       garmentGroups.list({ page_size: 200 }),
     ])
       .then(([rsRes, ggRes]) => {
@@ -1197,7 +1210,7 @@ function EditorGraduacio({ model, inicialId, onDesar, onCancel, extra }) {
       })
       .catch(() => { if (viu) setJocs([]) })
     return () => { viu = false }
-  }, [])
+  }, [model.customer, model.grading_rule_set])
 
   // Els eixos del MODEL, tal com els porta el seu detall. El `fit` va en MAJÚSCULES perquè
   // `Model.fit_type` és un choice ('Regular') i els jocs el declaren pel codi del vocabulari

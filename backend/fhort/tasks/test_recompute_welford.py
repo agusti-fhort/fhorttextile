@@ -26,6 +26,7 @@ from django_tenants.test.cases import TenantTestCase
 from fhort.pom.models import GarmentType
 from fhort.tasks.models import (Customer, GarmentTypeItem, ModelTask, TaskTimeEstimate,
                                 TaskType, TimerEntrada)
+from fhort.tasks.services_batec import batec_escriptura
 from fhort.tasks.services_c import transition_task
 from fhort.tasks.services_i import MAX_MINUTS_TRAM
 
@@ -62,11 +63,33 @@ class RecomputeWelfordTest(TenantTestCase):
             temporada='SS', sequencial=self._seq, customer=self.customer,
             garment_type_item=self.item, nom_prenda='Peça')
 
+
+    def _hi_escriu(self, task):
+        """J (21/08) — SIMULA L'ESCRIPTURA, i pel camí VIU.
+
+        🚨 Aquestes fixtures deien «treballada» i no escrivien res. Fins a J això no era una
+        contradicció: un tram obert i tancat ERA temps de feina i prou. Des de J/R2 no —
+        `_close_open_timer` jutja `consulta=True` el tram que es tanca sense cap `escriptura_at`,
+        i `TRAMS_SANS` el deixa fora del Welford, de l'albarà i del consum—, o sigui que una
+        «tasca treballada» sense escriptura és, ara, exactament una CONSULTA.
+
+        La fixture, doncs, no és que hagi quedat obsoleta: és que **li faltava dir una cosa que
+        abans no calia dir**. Aquí es diu, i es diu pel MATEIX emissor que la fa servir el
+        producte (`batec_escriptura`, font única de «s'hi ha escrit») i no estampant
+        `escriptura_at` a mà: si algun dia aquell emissor deixés d'estampar-lo, aquests tests
+        ho han de veure. Escriure-hi el camp directament els faria cecs precisament al node
+        del qual depenen.
+        """
+        r = batec_escriptura(task.model, self.tt.code, self.prof)
+        self.assertTrue(r['batec'], f"el batec no ha estampat res: {r}")
+        return r
+
     def _tasca_treballada(self, minuts):
         """Una tasca oberta, treballada `minuts` i tancada — pel camí VIU (alimenta el Welford)."""
         task = ModelTask.objects.create(model=self._model(), task_type=self.tt, order=0,
                                         status='Pending', assignee=self.prof)
         transition_task(task, 'InProgress', self.prof)
+        self._hi_escriu(task)            # J — treballar vol dir escriure (v. `_hi_escriu`)
         timer = TimerEntrada.objects.get(model_task=task, fi__isnull=True, actiu=True)
         TimerEntrada.objects.filter(pk=timer.pk).update(
             inici=timezone.now() - datetime.timedelta(minutes=minuts))
@@ -99,6 +122,7 @@ class RecomputeWelfordTest(TenantTestCase):
         total acumulat. Si el recompute no ho reproduís, n baixaria i la mitjana es mouria."""
         task = self._tasca_treballada(20)
         transition_task(task, 'InProgress', self.prof)   # rectificació
+        self._hi_escriu(task)                            # ...i s'hi torna a treballar
         transition_task(task, 'Done', self.prof)
         c = self._cella()
         self.assertEqual(c.n, 2)

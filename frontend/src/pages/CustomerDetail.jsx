@@ -301,7 +301,9 @@ function TecnicTab({ customer, canEdit, t, navigate, notify }) {
     let alive = true
     Promise.all([
       fetchAllAliases(),
-      gradingRuleSets.list({ customer: customer.id }),
+      // S45/C — LLISTA INFORMATIVA, no picker: el patrimoni de graduació d'aquest client
+      // és tot el que té, jubilats inclosos. Amagar-los aquí seria dir que no existeixen.
+      gradingRuleSets.list({ customer: customer.id, include_inactive: 1 }),
       sizingProfiles.list({ customer_codi: customer.codi }),
     ]).then(([a, g, p]) => {
       if (!alive) return

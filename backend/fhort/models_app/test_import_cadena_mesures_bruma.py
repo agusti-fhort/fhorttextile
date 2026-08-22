@@ -27,6 +27,12 @@ El que aquest fitxer defensa:
      sense `ordre`) ha de fer EXACTAMENT el que fa avui. Tot el que aquesta peça afegeix és
      additiu; una sessió a mig fer amb el front vell ha de poder-se confirmar igual.
 """
+# FIX-A/PAS-1c (21/08) — les fixtures d'aquest fitxer construïen la regla LINEAR amb el
+# camp LLEGAT `increment`. Funcionava perquè el motor hi queia per fallback; des que el
+# fallback no hi és (`_apply_rule`, llei D2), una regla sense `increment_base` NO gradua i
+# no emet cap cel·la. El SUBJECTE d'aquestes proves no és el camp sinó el que hi ha a
+# sobre (germanes, peces, transacció), o sigui que la fixture passa al camp que mana i
+# CAP asserció es toca: si alguna hagués canviat de valor, el canvi no seria de fixture.
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from fhort.models_app.extraction_views import (
@@ -217,7 +223,7 @@ class CadenaNoRegressioTest(_BaseCadenaTest):
         rs = GradingRuleSet.objects.create(nom=self._codi('RS'), size_system=self.ss)
         GradingRule.objects.create(rule_set=rs, pom=b,
                                    talla_base=self.ss.talles.get(etiqueta='M'),
-                                   logica=GradingRule.LOGICA_LINEAR, increment='2.00',
+                                   logica=GradingRule.LOGICA_LINEAR, increment_base='2.00',
                                    actiu=True)
         self.model.grading_rule_set = rs
         self.model.save(update_fields=['grading_rule_set'])

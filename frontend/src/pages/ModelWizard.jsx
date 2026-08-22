@@ -879,6 +879,7 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
             onUsar={(rs) => { setGradingRuleSetId(rs.id); setNoGrading(false); onUsarJoc?.(rs) }}
             noGrading={noGrading}
             onNoGrading={(v) => { setNoGrading(v); if (v) { setFit(null); setGradingRuleSetId(null) } }}
+            customerId={customerId}
           />
         )}
       </div>

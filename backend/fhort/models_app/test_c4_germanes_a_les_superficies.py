@@ -79,6 +79,12 @@ Cap DDL sobreviu al test.
 
 Convenció del repo: `python manage.py test fhort.models_app` (el projecte NO fa servir pytest).
 """
+# FIX-A/PAS-1c (21/08) — les fixtures d'aquest fitxer construïen la regla LINEAR amb el
+# camp LLEGAT `increment`. Funcionava perquè el motor hi queia per fallback; des que el
+# fallback no hi és (`_apply_rule`, llei D2), una regla sense `increment_base` NO gradua i
+# no emet cap cel·la. El SUBJECTE d'aquestes proves no és el camp sinó el que hi ha a
+# sobre (germanes, peces, transacció), o sigui que la fixture passa al camp que mana i
+# CAP asserció es toca: si alguna hagués canviat de valor, el canvi no seria de fixture.
 import contextlib
 import csv
 import datetime
@@ -201,7 +207,7 @@ class GermanesALesSuperficiesC4Test(TenantTestCase):
         )
         for pom in (self.pom_a, self.pom_b):
             ModelGradingRule.objects.create(
-                model=self.model, pom=pom, logica='LINEAR', increment=1.0, actiu=True)
+                model=self.model, pom=pom, logica='LINEAR', increment_base=1.0, actiu=True)
 
     # ── El banc ──────────────────────────────────────────────────────────────────────
 

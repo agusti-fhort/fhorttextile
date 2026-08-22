@@ -231,6 +231,19 @@ export default function POMCataleg() {
   const [carregant, setCarregant] = useState(true)
   const [error, setError] = useState(null)
   const [ocupat, setOcupat] = useState(false)
+  // S45/D — ALTA DE POM AL CATÀLEG.
+  //
+  // 🚨 EL CENS §D DEIA «només falta la UI del POMBrowser», i el POMBrowser **ja no té ruta**:
+  // U1 (07/08) li va treure la pestanya i `/poms` renderitza AQUESTA pantalla
+  // (`pages/POMs.jsx:9`). L'acta d'allà encara diu «el consumeixen 5 pantalles més» i és
+  // FALS: del seu `export default` no en queda cap importador (només dos exports amb nom,
+  // que se'n van a `POMCatalogue`). Posar-hi el botó hauria estat enviar-lo a una pantalla
+  // morta. Va aquí, que és el catàleg viu.
+  //
+  // I EL FORAT ERA REAL: el catàleg sabia LLEGIR, filtrar i esborrar; l'única alta de POM del
+  // producte era la del MODEL (`pom-propi`, via la taula de Mesures), que exigeix un model al
+  // davant i neix lligada a un client. Sense model, no hi havia porta.
+  const [crearObert, setCrearObert] = useState(false)
   // LA ⓘ TÉ FONT (tram ⓘ). El catàleg sencer d'un cop: són 142 POMs i la petició va en lot, o
   // sigui tres crides al proveïdor el primer cop de cada idioma i cap més mai.
   const traduccioDe = useTraduccioPoms(llista.map(p => p.id))
@@ -251,6 +264,26 @@ export default function POMCataleg() {
   }, [t])
 
   useEffect(() => { carrega() }, [carrega])
+
+  // EL POM NEIX SOL. `poms/crear-tenant/` el crea al catàleg del TENANT: ACTIU, sense
+  // `pom_global` (el pont amb els 290 canònics de `public` és de backoffice), sense
+  // `CustomerPOMAlias`, sense `GarmentPOMMap` i sense entrar a cap sembra. Posar-lo en una
+  // peça és el flux ASSIGN que ja existeix, i són dos gestos a posta: crear una mesura al
+  // catàleg i decidir que una peça la porta són dues decisions, sovint de dues persones.
+  const crearPom = useCallback(async ({ codi, nom, categoriaId }) => {
+    setError(null); setOcupat(true)
+    try {
+      const r = await poms.crearTenant({
+        codi_client: codi, nom_client: nom, categoria_id: categoriaId || null,
+      })
+      setCrearObert(false)
+      carrega()
+      // El deixa SELECCIONAT: qui acaba de crear-lo el vol veure, i sovint completar-lo.
+      if (r.data?.id) setSelId(r.data.id)
+    } catch (e) {
+      setError(e?.response?.data?.error || t('poms.cat.create_error'))
+    } finally { setOcupat(false) }
+  }, [carrega, t])
 
   // L'ús es demana per POM seleccionat: és el que habilita el botó d'esborrar i el que
   // omple les dues seccions d'ús observat. Una crida per fitxa, no per fila de la llista.
@@ -368,7 +401,26 @@ export default function POMCataleg() {
             <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', whiteSpace: 'nowrap' }}>
               {t('poms.cat.count', { n: filtrats.length })}
             </span>
+            {/* S45/D — LA PORTA D'ALTA, a la capçalera de la LLISTA i no en un menú: el moment
+                en què algú descobreix que la mesura no hi és és, exactament, el moment en què
+                la busca — i la cerca és tres píxels més amunt. */}
+            <button type="button" onClick={() => setCrearObert(v => !v)} disabled={ocupat}
+              style={{
+                marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 6,
+                border: `1px solid ${crearObert ? 'var(--gold)' : 'var(--line)'}`,
+                borderRadius: 'var(--r-ctrl)', background: 'var(--panel)',
+                color: crearObert ? 'var(--gold)' : 'var(--text-soft)',
+                padding: '6px 14px', cursor: ocupat ? 'wait' : 'pointer', font: 'inherit',
+                fontSize: 'var(--fs-body)', whiteSpace: 'nowrap',
+              }}>
+              <i className="ti ti-plus" aria-hidden="true" />
+              {t('poms.cat.create_new')}
+            </button>
           </div>
+          {crearObert && (
+            <FormulariPomNou cats={cats} ocupat={ocupat} t={t}
+              onCrea={crearPom} onTanca={() => setCrearObert(false)} />
+          )}
           <div style={cx.list}>
             {carregant && <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-faint)', fontStyle: 'italic' }}>
               {t('poms.loading_catalogue')}</div>}
@@ -556,6 +608,103 @@ export default function POMCataleg() {
             </>
           )}
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ── S45/D · EL FORMULARI D'ALTA DE POM AL CATÀLEG ─────────────────────────────────────────
+//
+// QUÈ DEMANA I PER QUÈ NOMÉS AIXÒ. `POMMaster` té onze camps i només DOS són obligatoris per
+// néixer: `codi_client` —únic per tenant, i **les majúscules no el distingeixen**: la
+// constraint és `uniq_pommaster_codi_client_ci`— i `nom_client`. La CATEGORIA és opcional al
+// model (319 dels 645 POMs de `fhort` la tenen a NULL) i s'ofereix perquè és el que fa
+// TROBABLE el POM en aquesta mateixa pantalla, que agrupa per categoria: un POM sense
+// categoria cau al bloc final, i el bloc final no és on ningú el busca.
+//
+// 🔑 CAPES, INSTÀNCIES I UNITAT NO SURTEN AQUÍ, I NO ÉS UN OBLIT: **el POM no en porta.** La
+// capa i la instància viatgen amb la MESURA (`BaseMeasurement.capa/instancia/garment`, la
+// unicitat de cinc camps), no amb el POM del catàleg — el mateix «CF» és el del folre i el de
+// l'exterior alhora. Demanar-les en néixer seria inventar un eix que el domini no té i que
+// després ningú llegiria. Les TOLERÀNCIES tampoc: neixen a 0.6 i es copien a la mesura en
+// abocar-la; canviar-les és una decisió del catàleg amb la seva pantalla.
+//
+// EL CATÀLEG VA EN ANGLÈS (maqueta v3) i per això el camp de nom no diu «nom local»: el que
+// s'hi escriu és el `nom_client`, que és el que la llista pinta.
+function FormulariPomNou({ cats, ocupat, t, onCrea, onTanca }) {
+  const [codi, setCodi] = useState('')
+  const [nom, setNom] = useState('')
+  const [categoriaId, setCategoriaId] = useState('')
+
+  // El codi va en MAJÚSCULES a la vista perquè és com es llegeix a tot el producte. La unicitat
+  // és insensible a la caixa, o sigui que això no canvia QUÈ xoca amb què: fa que el que
+  // s'escriu s'assembli al que es veurà.
+  const codiNet = codi.trim().toUpperCase()
+  const nomNet = nom.trim()
+  const pot = !!codiNet && !!nomNet && !ocupat
+
+  const desa = () => { if (pot) onCrea({ codi: codiNet, nom: nomNet, categoriaId }) }
+
+  const camp = {
+    fontFamily: 'inherit', fontSize: 'var(--fs-body)', border: '1px solid var(--line)',
+    borderRadius: 'var(--r-ctrl)', padding: '8px 12px', background: 'var(--panel)',
+    color: 'var(--text-main)', width: '100%', boxSizing: 'border-box', minWidth: 0,
+  }
+  const retol = {
+    fontSize: 'var(--fs-label)', color: 'var(--text-faint)',
+    textTransform: 'uppercase', letterSpacing: '.06em',
+  }
+
+  return (
+    <div style={{
+      padding: '12px 16px', borderBottom: '1px solid var(--line)', background: 'var(--sel)',
+      display: 'flex', flexDirection: 'column', gap: 10,
+    }}>
+      <p style={{ margin: 0, fontSize: 'var(--fs-caption)', color: 'var(--text-soft)' }}>
+        {t('poms.cat.create_hint')}
+      </p>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: '0 0 130px' }}>
+          <span style={retol}>{t('poms.cat.create_code')}</span>
+          <input type="text" value={codi} autoFocus onChange={e => setCodi(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') desa() }}
+            style={{ ...camp, fontFamily: 'IBM Plex Mono, monospace', textTransform: 'uppercase' }} />
+        </label>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: '1 1 200px' }}>
+          <span style={retol}>{t('poms.cat.create_name')}</span>
+          <input type="text" value={nom} onChange={e => setNom(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') desa() }} style={camp} />
+        </label>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: '1 1 180px' }}>
+          <span style={retol}>{t('poms.cat.create_category')}</span>
+          <select value={categoriaId} onChange={e => setCategoriaId(e.target.value)} style={camp}>
+            <option value="">{t('poms.cat.create_category_none')}</option>
+            {cats.map(c => (
+              <option key={c.id} value={c.id}>{c.nom_en || c.nom_ca || c.codi}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}>
+        {!pot && !ocupat && (
+          <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-faint)' }}>
+            {t('poms.cat.create_need_fields')}
+          </span>
+        )}
+        <button type="button" onClick={onTanca} disabled={ocupat}
+          style={{
+            border: '1px solid var(--line)', borderRadius: 'var(--r-ctrl)',
+            background: 'var(--panel)', color: 'var(--text-soft)', padding: '7px 16px',
+            cursor: ocupat ? 'wait' : 'pointer', font: 'inherit', fontSize: 'var(--fs-body)',
+          }}>{t('poms.cat.create_cancel')}</button>
+        <button type="button" onClick={desa} disabled={!pot}
+          style={{
+            border: 'none', borderRadius: 'var(--r-ctrl)',
+            background: pot ? 'var(--accio)' : 'var(--line)',
+            color: pot ? 'var(--white)' : 'var(--text-faint)',
+            padding: '7px 18px', cursor: pot ? 'pointer' : 'default',
+            font: 'inherit', fontSize: 'var(--fs-body)', fontWeight: 600,
+          }}>{ocupat ? t('poms.cat.create_saving') : t('poms.cat.create_submit')}</button>
       </div>
     </div>
   )

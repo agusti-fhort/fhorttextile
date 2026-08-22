@@ -744,6 +744,11 @@ def _llegeix_patrimoni(model):
             'increment_break': r.increment_break,
             'talla_break_label': r.talla_break_label,
             'talla_break_pos': r.talla_break_pos,
+            # TRAM F — CONTRACTE ENTRE CASES. Els intervals viatgen al manifest (que ja és
+            # JSON) perquè una casa amb multi-break i una altra sense no es perdin el relleu
+            # EN SILENCI: el destí que no els sap llegir els ignora, però el que sí els rep
+            # sencers. El `.get` del costat de l'arribada tanca l'altre sentit (paquets vells).
+            'breaks': r.breaks,
         })
 
     fitxers = []
@@ -901,6 +906,9 @@ def _escriu_a_la_marca(brand_schema, codi_intern, patrimoni):
                     increment_break=row['increment_break'],
                     talla_break_label=row['talla_break_label'],
                     talla_break_pos=row['talla_break_pos'],
+                    # TRAM F — `.get` i no `[...]`: un paquet emès abans d'aquest tram no porta
+                    # la clau, i un KeyError aquí trencaria una federació que fins ara anava.
+                    breaks=row.get('breaks'),
                     origen=ORIGEN_FEDERAT,
                 )
                 viatjat['regles'] += 1

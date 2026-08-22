@@ -335,8 +335,10 @@ class UpdateStep2GradingTest(_BaseSembraTest):
 # ═════════════════════════════════════════════════════════════════════════════════════════
 
 class LinearZeroEsFixedTest(_BaseSembraTest):
-    """A2/A3 — la llei «LINEAR amb delta 0 i sense break ÉS FIXED», als dos costats:
-    el filtre de la migració de dades i el helper únic que guarda els camins d'escriptura."""
+    """A2/A3 — la llei «LINEAR que no gradua res ÉS FIXED», als dos costats: el filtre de la
+    migració de dades (CONGELAT al juliol: delta 0 i cap break informat) i el helper únic que
+    guarda els camins d'escriptura, que des del tram F llegeix també els INTERVALS i no accepta
+    un relleu de zero. Coincideixen sobre les formes que la migració va veure — v. l'abast."""
 
     PREFIX = 'LZF'
 
@@ -393,19 +395,83 @@ class LinearZeroEsFixedTest(_BaseSembraTest):
         self.assertEqual(float(degenerada.increment_base), 0.0)
 
     # ── el helper únic del backend (A3) ───────────────────────────────────────────────
-    def test_helper_classifica_igual_que_la_migracio(self):
+    #
+    # 🚨 ABAST RE-ACOTAT (22/08). Aquest test deia «el helper classifica IGUAL QUE LA MIGRACIÓ»
+    # sobre TOTES les formes, i des del tram F això és mentida per abast: la 0042 és una
+    # conversió de dades de 22/07, CONGELADA, i no pot opinar de formes que el dia que es va
+    # escriure no existien. Dues l'han deixada enrere, totes dues segellades a DECISIONS
+    # (Δ absolut + intervals):
+    #
+    #   · els INTERVALS (`breaks`) — una LINEAR amb Δ general 0 però un tram amb delta viu
+    #     GRADUA (el cas F del 1383): NO és degenerada i NO és FIXED-able. La 0042 ni sap que
+    #     el camp existeix.
+    #   · el RELLEU DE ZERO (defecte 4 de la diagnosi de PROD §A.5) — `ib=0 · brk=0` amb
+    #     etiqueta de break informada. La migració la deixa passar («el break és sagrat», que
+    #     era la llei del juliol); el helper ja no, perquè un relleu de zero no és relleu.
+    #
+    # Per això la comparació es re-acota a LES FORMES QUE LA MIGRACIÓ VA VEURE —sense cap
+    # trencament informat— i es MESURA contra el filtre real en comptes de dues llistes escrites
+    # a mà, que és exactament com aquest desfasament va poder amagar-se fins a la suite nocturna.
+    # La llei vigent la mesuren aquest fitxer (avall) i
+    # `fhort/pom/test_tram_f_intervals.py::DeuteLinearZeroAmbBreakTest`.
+    def test_helper_classifica_igual_que_la_migracio_sobre_les_formes_sense_break(self):
+        from importlib import import_module
         from fhort.pom.grading_regime import es_linear_degenerada, normalitza_logica
-        self.assertTrue(es_linear_degenerada('LINEAR', increment_base=0, increment=0))
-        self.assertTrue(es_linear_degenerada('LINEAR', increment_base=None, increment=0))
+        mig = import_module('fhort.pom.migrations.0042_linear_zero_to_fixed')
+
+        formes = {
+            'H_ZERO': dict(logica='LINEAR', increment='0.00', increment_base='0.00'),
+            # increment_base NULL + increment 0/NULL: el llegat que la migració també agafava.
+            'H_LEG0': dict(logica='LINEAR', increment='0.00', increment_base=None),
+            'H_DELTA': dict(logica='LINEAR', increment='2.00', increment_base='2.00'),
+            'H_FIXED': dict(logica='FIXED', increment='0.00', increment_base='0.00'),
+            'H_STEP': dict(logica='STEP', increment='0.00', increment_base='0.00'),
+            # increment_base poblat MANA sobre el llegat: el motor ja no llegeix `increment`.
+            'H_IB0_I5': dict(logica='LINEAR', increment='5.00', increment_base='0.00'),
+        }
+        regles = {codi: self._regla(codi, **kw) for codi, kw in formes.items()}
+        de_la_migracio = set(mig._zero_delta_no_break(GradingRule.objects.all())
+                             .values_list('id', flat=True))
+
+        for codi, r in regles.items():
+            del_helper = es_linear_degenerada(r.logica, r.increment_base, r.increment)
+            self.assertEqual(
+                del_helper, r.id in de_la_migracio,
+                f'{codi}: el helper i la migració 0042 discrepen sobre una forma SENSE break, '
+                'que és on han de dir el mateix')
+            self.assertEqual(normalitza_logica(r.logica, r.increment_base, r.increment),
+                             'FIXED' if del_helper else r.logica, codi)
+
+        # ⚠️ La forma «tot NULL» no es pot MESURAR aquí: `pom.GradingRule.increment` és NOT NULL
+        # (`default=0`) i només la regla RESIDENT el té nullable, o sigui que la branca
+        # `increment__isnull` del filtre de la migració només aplica a `ModelGradingRule`. El
+        # helper hi ha de dir el mateix, i es comprova directament.
         self.assertTrue(es_linear_degenerada('LINEAR', increment_base=None, increment=None))
-        self.assertFalse(es_linear_degenerada('LINEAR', increment_base=2))
-        self.assertFalse(es_linear_degenerada('FIXED', increment_base=0))
-        self.assertFalse(es_linear_degenerada('STEP', increment_base=0))
-        # El break, per etiqueta o per valor, protegeix la regla.
-        self.assertFalse(es_linear_degenerada('LINEAR', increment_base=0, talla_break_label='L'))
+
+    def test_linear_zero_amb_intervals_vius_NO_es_FIXEDable(self):
+        """La llei VIGENT, la que la migració congelada no pot dir (DECISIONS · Δ absolut i
+        intervals): degenerada ⟺ Δ general 0 I cap delta ≠ 0 enlloc més."""
+        from fhort.pom.grading_regime import es_linear_degenerada, normalitza_logica
+
+        # El cas F del banc 1383: no creix fins a S, i a partir d'S creix 2. GRADUA.
+        vius = [{'inici': 'S', 'final': 'XL', 'delta': 2.0}]
+        self.assertFalse(es_linear_degenerada('LINEAR', increment_base=0, increment=0,
+                                              breaks=vius),
+                         'un tram amb delta viu gradua: la regla NO és FIXED-able')
+        self.assertEqual(normalitza_logica('LINEAR', increment_base=0, increment=0,
+                                           breaks=vius), 'LINEAR')
+
+        # I el revers, que és la mateixa llei: tots els trams a zero no és relleu.
+        morts = [{'inici': 'S', 'final': 'XL', 'delta': 0}]
+        self.assertTrue(es_linear_degenerada('LINEAR', increment_base=0, increment=0,
+                                             breaks=morts))
+
+        # LA DIVERGÈNCIA AMB LA 0042, A POSTA I MESURADA: una etiqueta de break sense cap delta
+        # ≠ 0 no salva res (la migració sí que la salvava); amb relleu de debò, segueix LINEAR.
+        self.assertTrue(es_linear_degenerada('LINEAR', increment_base=0, talla_break_label='L'))
         self.assertFalse(es_linear_degenerada('LINEAR', increment_base=0, increment_break=1.5))
-        # increment_base poblat MANA sobre el fallback legacy.
-        self.assertTrue(es_linear_degenerada('LINEAR', increment_base=0, increment=5))
+
+        # El fons de la llei A3, intacte per a la forma vella sense cap trencament.
         self.assertEqual(normalitza_logica('LINEAR', increment_base=0), 'FIXED')
         self.assertEqual(normalitza_logica('LINEAR', increment_base=3), 'LINEAR')
         self.assertEqual(normalitza_logica('STEP', increment_base=0), 'STEP')

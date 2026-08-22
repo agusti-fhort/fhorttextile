@@ -369,11 +369,19 @@ def materialize_model_grading_rules(model, source_rules, origen,
             # A3 (2026-07-22) — LINEAR+0 sense break s'etiqueta FIXED en sembrar. Aquest camí
             # NO és autoria (no hi ha ningú a qui preguntar i rebutjar trencaria l'import):
             # es normalitza. La conversió és neutra — cap valor graduat canvia.
+            # `getattr` i no accés directe, pel MATEIX motiu que `rule_set_id` aquí sota: aquesta
+            # funció rep regles NO DESADES (specs convertits a objecte) i un camp nou llegit amb
+            # accés directe hi peta amb AttributeError. Va cantar a `test_set2_t3`.
             logica=normalitza_logica(r.logica, r.increment_base, r.increment,
-                                     r.increment_break, r.talla_break_label),
+                                     r.increment_break, r.talla_break_label,
+                                     getattr(r, 'breaks', None)),
             increment=r.increment, valors_step=r.valors_step,
             increment_base=r.increment_base, increment_break=r.increment_break,
             talla_break_label=r.talla_break_label, talla_break_pos=r.talla_break_pos,
+            # TRAM F — el relleu SENCER. Materialitzar és copiar la llei del joc al model: si
+            # els intervals no hi viatgen, el model gradua amb la meitat de la regla i ningú no
+            # ho pot veure (el mateix mode de fallada que el clon de perfil del fix A).
+            breaks=getattr(r, 'breaks', None),
             # M3 — la traçabilitat, presa a la FONT: aquesta fila ve d'aquesta regla, i aquesta
             # regla ve d'aquest joc. Ho sap el `GradingRule` d'origen, ningú més ho tornarà a
             # saber després. `getattr` perquè algun caller passa regles no desades (specs
@@ -415,10 +423,12 @@ def materialize_model_grading_rules_from_specs(model, specs, origen,
             model=model, pom_id=s['pom_id'], garment=garment,
             # A3 — mateixa normalització que materialize_model_grading_rules (vegeu-hi la nota).
             logica=normalitza_logica(s['logica'], s.get('increment_base'), s.get('increment'),
-                                     s.get('increment_break'), s.get('talla_break_label')),
+                                     s.get('increment_break'), s.get('talla_break_label'),
+                                     s.get('breaks')),
             increment=s.get('increment'), valors_step=s.get('valors_step'),
             increment_base=s.get('increment_base'), increment_break=s.get('increment_break'),
             talla_break_label=s.get('talla_break_label'), talla_break_pos=s.get('talla_break_pos'),
+            breaks=s.get('breaks'),      # TRAM F — v. la germana
             # M3 — igual que la germana, però aquí el camí és MIXT a posta: els specs que vénen
             # d'una regla de contenidor el porten (`grading_utils.rule_to_spec`) i els que vénen
             # del DOCUMENT del client no (no surten de cap joc). NULL, doncs, no és una pèrdua:

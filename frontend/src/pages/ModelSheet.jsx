@@ -31,7 +31,7 @@ import BadgeLliurable from '../components/model/BadgeLliurable'
 import { CARA_CAP, caraDeError, caraObrirTasca } from '../utils/caraObrirTasca'
 import { CODE_PER_TAB, saltDeSuperficie, minutsDeSessio } from '../utils/sessioActiva'
 import { SECCIONS_MODEL, ETIQUETA_SECCIO, pindolesDeModel } from '../utils/modelSeccions'
-import { motiuPasPresa } from '../utils/motiuPasPresa'
+import { motiuPasMesurarSet, motiuPasPresa } from '../utils/motiuPasPresa'
 import { estatDeLaPresa } from '../utils/estatPresa'
 import { UPLOAD_ACCEPT } from '../utils/uploads'
 import RegistreActivitatTab from '../components/model/RegistreActivitatTab'
@@ -349,11 +349,17 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // entrades per URL) amb el tab on l'usuari ERA en obrir la superfície, i el modal d'acabar/
   // pausar hi torna. Ref i no estat: no ha de repintar res, només recordar-ho.
   const tabDeRetornRef = useRef(null)
+  // 🔑 J-bis · R1 AL DESMUNTATGE, i és el bessó del que la fitxa tècnica tenia. Aquí hi havia una
+  // **pausa cega**: navegar fora o tancar la pestanya pausava la tasca encara que la sessió
+  // hagués estat mirar i marxar — el mateix forat que `exitEdit` ja tenia tapat per la porta del
+  // davant. Ara passa pel MATEIX predicat de servidor: `pausa_si_cal` fa que la petició pausi
+  // només si hi ha hagut escriptura i, si no, torni la tasca a l'estat d'entrada (`Pending`
+  // inclòs). Una sola crida, perquè el desmuntatge no en pot encadenar dues.
   const pauseActiveTask = useCallback(() => {
     const tid = activeTaskRef.current
     if (tid == null) return                 // ja pausada o cap tasca En curs → no demanem transició (evita 400)
     activeTaskRef.current = null
-    modelTasks.transition(tid, { to_status: 'Paused' }).catch(() => {})
+    modelTasks.sortirSenseEscriptura(tid, { pausa_si_cal: true }).catch(() => {})
   }, [])
   // F2.1 — la tasca VIGENT d'una superfície. El backend ja la marca (`es_vigent`, resolt amb
   // `tasca_vigent`): aquí NO es reimplementa el criteri, només es llegeix.
@@ -443,7 +449,7 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // `('Escalat','grading')` també l'usa `autoEdit` en muntar la ruta `/models/:id/escalat`, i
   // fer-hi néixer una sessió + peça + N línies convertiria un ENLLAÇ en una escriptura de domini.
   // Crear és del gest; entrar-hi, de la ruta.
-  const obreDeDebo = useCallback((tab, code, opts = {}) => {
+  const obreDeDebo = useCallback((tab, code, opts = {}, gestos = {}) => {
     setOpeningTask(true)
     // D'ON VENIM, abans d'obrir res: el tab on l'usuari és ARA. Les quatre portes del tab Mesures
     // hi passen totes, i també les entrades per URL (`?mode=entry`, `?task_id=`), que arriben
@@ -469,7 +475,9 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
         // abans, amb una sessió oberta que ningú no veuria. `resolvePieceFitting` és la funció
         // que la font de fitting ja fa servir —amb el seu 409 `piece_exists`—, no una segona.
         if (volPresa) await resolvePieceFitting({ id: parseInt(id) }, sessio)
-        return models.openTask(parseInt(id), code, sessio?.id ?? null)
+        // J · R3 — `gestos` és `{}` a l'entrada normal, i llavors `open-task` es comporta
+        // exactament com sempre. Només porta res quan la persona ha respost el diàleg.
+        return models.openTask(parseInt(id), code, sessio?.id ?? null, gestos)
       })
       .then(res => {
         if (!res) return
@@ -503,13 +511,15 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // navegava sense `task_id`, l'editor autodesava cada 2 s i el temps d'editar la fitxa no
   // existia enlloc. Ara obre sessió sobre la tasca vigent `tech_sheet` i propaga el `task_id` a
   // la URL, que és el que fa que l'editor demani el lock i pausi en sortir.
-  const obreFitxa = useCallback((fitxerId) => {
+  const obreFitxa = useCallback((fitxerId, gestos = {}) => {
     const anar = tid => navigate(`/models/${id}/ftt/${fitxerId}?task_id=${tid}`)
     const vigent = tascaVigentDe('tech_sheet')
-    const cara = caraObrirTasca(vigent, jo)
+    // J · R3 — amb el gest ja fet, la cara no es torna a calcular: qui ha respost el diàleg no
+    // l'ha de tornar a veure. Sense gest, la porta és la de sempre.
+    const cara = Object.keys(gestos).length ? CARA_CAP : caraObrirTasca(vigent, jo)
     if (cara !== CARA_CAP) { setDialeg({ cara, tab: 'Fitxa tècnica', code: 'tech_sheet', tasca: vigent, fitxerId }); return }
     setOpeningTask(true)
-    models.openTask(parseInt(id), 'tech_sheet')
+    models.openTask(parseInt(id), 'tech_sheet', null, gestos)
       .then(res => anar(res.data.task_id))
       .catch(e => {
         const c = caraDeError(e)
@@ -591,11 +601,26 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // ⚠️ EL CRITERI NO ÉS LA DURADA. «No hi ha hagut sessió» no vol dir «ha durat poc»: una
   // sessió de dos minuts amb la tasca oberta ensenya el modal igual que una de dues hores
   // (decisió d'Agus). El que el fa callar és que no hi hagi res obert.
+  //
+  // J · R1 (21/08) — I LA SEGONA MEITAT DEL PREDICAT: **SENSE ESCRIPTURA, CAP MODAL.**
+  //
+  // La nota de sobre ja deia que el criteri no pot ser la durada, i tenia raó; el que li faltava
+  // era dir quin ÉS. «Hi ha hagut sessió» no vol dir «hi ha alguna cosa oberta»: vol dir que
+  // s'hi ha TREBALLAT. Entrar a una pantalla, mirar i sortir deixava igualment el modal «Has
+  // acabat?» al davant —una decisió que porta a albarà— sobre una sessió on no s'havia tocat res.
+  //
+  // El senyal no és nou i no se n'inventa cap: `sessio_amb_escriptura` surt de
+  // `TimerEntrada.escriptura_at`, que estampa `batec_escriptura` i només ell —l'únic lloc del
+  // sistema que sap que hi ha hagut feina real i no una pestanya oberta—. Mai `last_heartbeat`,
+  // que té dos emissors i no distingeix «sóc davant la pantalla» de «he escrit».
+  //
+  // I QUI DECIDEIX ÉS EL SERVIDOR. Aquí es demana la tornada i s'obeeix el que respon: el client
+  // és el testimoni menys fiable de si s'ha escrit, i una sessió pot morir sense passar per aquí.
   const exitEdit = useCallback(() => {
     const tid = activeTaskRef.current
     if (tid == null) { netejaEdicio(); return }
     modelTasks.get(tid)
-      .then(res => {
+      .then(async res => {
         const tasca = res.data
         if (tasca?.status !== 'InProgress') {
           // Res obert: cap decisió a prendre i cap transició a demanar.
@@ -603,12 +628,24 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
           netejaEdicio()
           return
         }
+        if (tasca.sessio_amb_escriptura === false) {
+          // Mirar no és treballar: la tasca torna sola i el tram no compta. Si el servidor diu
+          // que no ho ha revertit (ha arribat una escriptura entremig, o el tram és d'un altre),
+          // es cau al modal de sempre — el seu veredicte mana sobre aquesta foto.
+          const r = await modelTasks.sortirSenseEscriptura(tid).catch(() => null)
+          if (r?.data?.revertit) {
+            activeTaskRef.current = null
+            netejaEdicio()
+            reloadTasks()
+            return
+          }
+        }
         setAcabant({ taskId: tid, tasca })
       })
       // Sense resposta no s'inventa un modal: val més sortir net que preguntar sobre un estat
       // que no sabem. El guard de tasca oblidada segueix cobrint la tasca que quedi oberta.
       .catch(() => { activeTaskRef.current = null; netejaEdicio() })
-  }, [netejaEdicio])
+  }, [netejaEdicio, reloadTasks])
   // La transició la fa el modal; aquí només queda deixar-ho tot al seu lloc. `activeTaskRef` es
   // buida perquè el cleanup de desmuntatge no torni a demanar una pausa ja feta (el 400 de la
   // PEÇA 2), i la reposició va al panell de Tasques del model — el Kanban no existeix.
@@ -820,9 +857,10 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // dos endpoints per a la mateixa pregunta acabarien donant dues respostes.
   const [estatPas, setEstatPas] = useState(null)
   useEffect(() => {
-    // E3b — I TAMBÉ A ESCALAT. «Mesurar set» té la MATEIXA dependència que el ③ («create-piece»
-    // exigeix versió activa amb specs) i per tant li toca el MATEIX motiu escrit, no un 400 cru
-    // a la cara després de prémer. Un endpoint més no: el mateix, en un tab més.
+    // E3b — I TAMBÉ A ESCALAT. «Mesurar set» també vol el motiu escrit i no un 400 cru a la
+    // cara després de prémer. Un endpoint més no: el mateix, en un tab més.
+    // S45/B — el que ja NO comparteix amb el ③ és el PREDICAT (v. `motiuSet`, avall): E3b deia
+    // «la MATEIXA dependència», i des que la prenda no exigeix propagat són dues.
     if ((activeTab !== 'Mesures' && activeTab !== 'Escalat') || !id) return undefined
     let viu = true
     models.gradingStatus(parseInt(id))
@@ -835,7 +873,13 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // S42/F2 — PER QUÈ el pas ③ està apagat, deduït de l'estat i no codificat al JSX. `null` =
   // res l'atura (inclòs «encara no ha contestat»), i és el mateix predicat que bloquejava el
   // botó abans: un sol lloc per a la condició i per al motiu, que no poden divergir.
+  //
+  // S45/B — I SÓN DOS PREDICATS, no un: «Mesurar prenda» (③) i «Mesurar set» (Escalat) ja no
+  // demanen el mateix. La prenda només vol que hi hagi alguna cosa a prendre (`te_mesures`);
+  // el set vol la taula PROPAGADA, perquè el seu full ÉS la corba propagada. El perquè de
+  // cada un viu a `utils/motiuPasPresa`, amb banc.
   const motiuPresa = motiuPasPresa(estatPas)
+  const motiuSet = motiuPasMesurarSet(estatPas)
   // E3b — L'ESTAT DE LA PRESA, per pintar «Mesurar set» honestament: amb una presa VIVA el botó
   // hi torna a entrar (FET, §6: «la feina hi és»), i sense —cap o tancada— és la feina d'ara.
   // Mateixa font que l'Escalat (`fitting/model/<id>/presa/`): no se n'estrena cap.
@@ -991,7 +1035,22 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
     const body = { new_version: true }
     if (allowReopen) body.allow_reopen_sealed = true
     models.generarGrading(parseInt(id), body)
-      .then(() => { setPropStatus(null); setPropStep(0); setActiveTab('Escalat') })   // porta a Escalat (inline)
+      .then(res => {
+        setPropStatus(null); setPropStep(0); setActiveTab('Escalat')   // porta a Escalat (inline)
+        // ── TRAM E · LA LLISTA DE TREBALL MANUAL, NO UNA ABSÈNCIA SILENCIOSA ────────────
+        // Les regles STEP sense valor ja no fan desaparèixer la fila: el motor hi copia el
+        // valor de la talla base i la cel·la surt en vermell a l'Escalat. Però una marca que
+        // s'ha d'anar a buscar no és un avís — el tècnic acaba de prémer «Propagar» i és ARA
+        // que ha de saber què li queda per posar a mà, i a quines talles.
+        const pendents = res?.data?.step_base_copiada || []
+        if (pendents.length) {
+          const detall = pendents
+            .map(p => `${p.pom_codi}: ${(p.talles || []).join(' · ')}`)
+            .join(' | ')
+          setFeedback({ type: 'err',
+            text: t('escalat.step_base_copiada_avis', { count: pendents.length, detall }) })
+        }
+      })
       .catch(() => setFeedback({ type: 'err', text: t('grading_propagate.err') }))
       .finally(() => setPropagating(false))
   }
@@ -1025,11 +1084,17 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
     // (el menú «Definició POM»), i deixar-hi el paràmetre faria que l'F5 el tornés a ficar a
     // editar just després d'haver dit que no hi volia entrar.
     if (accio === 'consultar') { netejaEdicio(); setActiveTab(d.tab); return }
-    if (accio === 'treballar') {
-      if (d.fitxerId) { obreFitxa(d.fitxerId); return }   // la fitxa té la seva pròpia navegació
+    // J · R3 — EL GEST VIATJA FINS A LA PORTA. «Treballar-hi jo» sobre una tasca d'un altre és
+    // el HANDOFF (`PLA_DE_TREBALL §6`: la reassignació és condició obligada per entrar-hi), i
+    // «Reobrir» sobre una feta és la RECTIFICACIÓ. Cap de les dues és l'efecte d'entrar: totes
+    // dues són el que la persona acaba de dir que vol, i per això `open-task` les exigeix
+    // explícites i respon 409 a qui no les porti.
+    if (accio === 'treballar' || accio === 'reobrir') {
+      const gestos = accio === 'reobrir' ? { reobrir: true } : { handoff: true }
+      if (d.fitxerId) { obreFitxa(d.fitxerId, gestos); return }   // la fitxa té la seva navegació
       // E3b — les OPCIONS del gest viatgen amb el diàleg: qui prem «Mesurar set» i es troba un
       // conflicte ha d'acabar obrint la presa quan digui que sí, no una edició sense presa.
-      obreDeDebo(d.tab, d.code, d.opts || {}); return
+      obreDeDebo(d.tab, d.code, d.opts || {}, gestos); return
     }
     // `ronda` i `correccio` van per la MATEIXA porta: una correcció és una volta d'una sola
     // tasca. El backend hi posa el motiu i la genealogia (mare) sense que la UI ho hagi de saber.
@@ -1282,21 +1347,24 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
                     tasca és `size_check`, i `obreDeDebo` ja el porta a `editing='Mesures'`, que
                     és exactament la presa. Si el model ve amb `?fitting_session=`, la sessió ja
                     resolta mana i la presa s'hi lliga sola (font `fitting`). */}
-                {/* El gate el mana el backend (`create-piece` exigeix versió activa amb specs).
-                    Aquí NO es reimplementa: es DEMANA a `grading-status` i es diu abans, en
-                    comptes de deixar prémer i contestar amb un error. El motiu va escrit. */}
+                {/* El gate el mana el backend. Aquí NO es reimplementa: es DEMANA a
+                    `grading-status` i es diu abans, en comptes de deixar prémer i contestar
+                    amb un error. El motiu va escrit. */}
                 {/* B4 — I QUAN JA S'HA MESURAT, LA PORTA HO DIU. El Dashboard deia «Mesurar
                     prenda: Feta» i aquesta porta es pintava normal: no és que discrepessin, és
                     que el stepper no tenia cap fet per a aquest pas. Ara `te_presa` el porta —hi
                     ha algun fitting amb contingut—, i l'ordre de precedència és: BLOQUEJAT (no
-                    hi ha taula) → FET (s'hi ha mesurat) → disponible. */}
+                    hi ha res a prendre) → FET (s'hi ha mesurat) → disponible. */}
                 {/* S42/F2 — EL RÈTOL DIU EL PAS QUE FALTA, i el diu perquè el DEDUEIX.
                     Era una constant («Cal gravar el POM») i al 1379 acusava un pas que ja
-                    lluïa el ✓ del costat: els POM hi eren i el que faltava era propagar. El
-                    predicat de `disabled` NO canvia —segueix sent `te_taula`, el mateix que
-                    exigeix `create-piece`—; el que canvia és que ara n'hi ha UN de sol, i és
-                    el motiu mateix: `motiuPasPresa(...) != null` ÉS `!te_taula` amb l'estat
-                    resolt. La llei viu a `utils/motiuPasPresa` amb banc, no aquí dins. */}
+                    lluïa el ✓ del costat: els POM hi eren i el que faltava era propagar.
+                    S45/B — I ARA EL PREDICAT ÉS UN ALTRE: aquesta porta ja no espera el
+                    propagat. Un PROTOTIP pot no tenir graduació definida i s'ha de poder
+                    mesurar igual; l'únic que la presa necessita és que hi hagi alguna cosa a
+                    prendre (`te_mesures`). Segueix havent-hi UN sol lloc per a la condició i
+                    per al motiu —`motiuPasPresa`, amb banc—, i el backend hi va al pas:
+                    `create_piece_fitting` materialitza la versió buida i les línies surten de
+                    la talla base. El botó no és més estricte que la porta que obre. */}
                 <button type="button"
                   disabled={openingTask || motiuPresa != null}
                   title={motiuPresa ? t(motiuPresa) : undefined}
@@ -1397,22 +1465,29 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
                   {t('model_sheet.back_to_consult')}
                 </button>
               )}
+              {/* S45/B — AQUÍ EL PREDICAT ÉS `motiuSet`, NO `motiuPresa`. E3b els havia
+                  agermanat («la MATEIXA dependència que el ③») i era cert mentre les dues
+                  portes esperaven la taula. Ja no: el ③ s'obre amb mesures i prou, i aquesta
+                  segueix exigint la taula PROPAGADA perquè el full del set ÉS la corba
+                  propagada —sense `GradedSpec` només existeix la talla base i `desa_presa_
+                  escalat` alçaria `PresaSenseLiniaError`. Compartir el predicat, ara, seria
+                  obrir una graella on no es pot anotar res. */}
               {(editing !== 'Escalat' || !presaVivaSet) && (
                 <button type="button"
-                  disabled={openingTask || motiuPresa != null}
-                  title={motiuPresa ? t(motiuPresa) : undefined}
+                  disabled={openingTask || motiuSet != null}
+                  title={motiuSet ? t(motiuSet) : undefined}
                   onClick={() => enterEdit('Escalat', 'grading', null, { obrePresa: true })}
-                  style={btnPas(motiuPresa ? 'blocat' : (presaVivaSet ? 'fet' : 'ara'),
+                  style={btnPas(motiuSet ? 'blocat' : (presaVivaSet ? 'fet' : 'ara'),
                                 openingTask)}>
-                  <i className={`ti ti-${motiuPresa == null && presaVivaSet
+                  <i className={`ti ti-${motiuSet == null && presaVivaSet
                     ? 'check' : 'ruler-measure'}`} style={{ fontSize: 14 }} />
                   {t('model_sheet.measure_set')}
                 </button>
               )}
-              {motiuPresa && (
+              {motiuSet && (
                 <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
                                alignSelf: 'center' }}>
-                  {t(motiuPresa)}
+                  {t(motiuSet)}
                 </span>
               )}
             </div>

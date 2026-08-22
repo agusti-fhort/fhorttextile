@@ -43,6 +43,37 @@ def _pom_name_en(p):
     return p.nom_client or ''
 
 
+def _delta_de(r, unit):
+    """FIX-A/PAS-4 — LA COLUMNA «Increment/talla» DEIA EL CAMP LLEGAT.
+
+    Els dos CSV d'aquest fitxer imprimien `r.increment`, que des del FIX-A/PAS-3 ja no el
+    llegeix ningú (i abans tampoc manava: el motor gradua per `increment_base`). Un joc amb
+    break s'exportava, a més, amb UNA sola columna, o sigui que el full que sortia d'aquí no
+    es podia tornar a entrar: hi faltava la meitat de la llei.
+
+    Ara surt el delta que MANA i, quan hi ha trencament, també el seu — cada cosa a la seva
+    columna, que és com el document del client ja les escriu.
+    """
+    if r.logica == 'STEP':
+        return '(STEP)'                     # els valors viuen a `valors_step`, no en un escalar
+    if r.logica in ('FIXED', 'ZERO'):
+        # Règims SENSE delta per definició, i no és el mateix que una regla incompleta: una FIXED
+        # gradua —pla— i és una decisió del tècnic. Amb `—` les 44 FIXED del catàleg de Brownie
+        # sortirien al full com si estiguessin trencades.
+        return 0 if r.logica == 'FIXED' else '(ZERO)'
+    if r.increment_base is None:
+        # LINEAR sense delta base: des del PAS 3 no gradua i no emet cap cel·la (llei D2). El CSV
+        # ho diu igual que ho diu la propagació, no hi imprimeix un 0 que sembli un delta.
+        return '—'
+    return cv(r.increment_base, unit)
+
+
+def _delta_break_de(r, unit):
+    if r.logica != 'LINEAR' or r.increment_break is None:
+        return ''                           # només LINEAR pot portar trencament
+    return cv(r.increment_break, unit)
+
+
 def _category_name(p):
     if not p or not getattr(p, 'categoria_id', None):
         return ''
@@ -72,14 +103,21 @@ def export_grading_csv_view(request, rule_set_id):
 
         writer = csv.writer(response)
         writer.writerow(['POM Code', 'POM Name EN', 'Categoria', 'Logica',
-                         f'Increment ({unit.lower()})/talla'])
+                         f'Increment ({unit.lower()})/talla',
+                         f'Increment break ({unit.lower()})/talla', 'Talla break'])
         for r in rules:
             writer.writerow([
                 _pom_codi(r.pom),
                 _pom_name_en(r.pom),
                 _category_name(r.pom),
                 r.logica,
-                cv(r.increment, unit),
+                _delta_de(r, unit),
+                _delta_break_de(r, unit),
+                # 🔒 EN CONVENCIÓ DE MOTOR, i és deliberat. La volta a convenció de DOCUMENT
+                # (`utils/breakConvention`) viu al front i necessita el run per fer-la; un CSV
+                # que se l'inventés mouria l'etiqueta una talla sencera. Qui exporti i torni a
+                # importar troba la MATEIXA etiqueta que hi ha a la BD.
+                r.talla_break_label or '',
             ])
         return response
     except GradingRuleSet.DoesNotExist:
@@ -137,14 +175,18 @@ def export_size_set_csv_view(request, profile_id):
             writer.writerow(['Alcada corporal (cm)'] + [s.body_height_cm or '' for s in sizes_list])
         writer.writerow([])
 
-        writer.writerow(['POM', 'Nom', 'Categoria', 'Logica', f'Increment ({unit.lower()})/talla'])
+        writer.writerow(['POM', 'Nom', 'Categoria', 'Logica',
+                         f'Increment ({unit.lower()})/talla',
+                         f'Increment break ({unit.lower()})/talla', 'Talla break'])
         for r in rules:
             writer.writerow([
                 _pom_codi(r.pom),
                 _pom_name_en(r.pom),
                 _category_name(r.pom),
                 r.logica,
-                cv(r.increment, unit),
+                _delta_de(r, unit),
+                _delta_break_de(r, unit),
+                r.talla_break_label or '',     # convenció de MOTOR (v. l'export germà)
             ])
         return response
     except SizingProfile.DoesNotExist:

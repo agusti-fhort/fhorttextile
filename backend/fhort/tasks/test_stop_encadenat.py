@@ -26,6 +26,7 @@ from django_tenants.test.cases import TenantTestCase
 from fhort.pom.models import GarmentType
 from fhort.tasks.models import (Customer, GarmentTypeItem, ModelTask, TaskTimeEstimate,
                                 TaskType, TimerEntrada)
+from fhort.tasks.services_batec import batec_escriptura
 from fhort.tasks.services_c import ALLOWED, TransitionError, transition_task
 from fhort.tasks.services_i import MAX_MINUTS_TRAM
 
@@ -69,6 +70,7 @@ class StopEncadenatTest(TenantTestCase):
         task = ModelTask.objects.create(model=self._model(), task_type=self.tt, order=0,
                                         status='Pending', assignee=self.prof)
         transition_task(task, 'InProgress', self.prof)
+        self._hi_escriu(task)            # J — treballar vol dir escriure (v. `_hi_escriu`)
         timer = TimerEntrada.objects.get(model_task=task, fi__isnull=True, actiu=True)
         TimerEntrada.objects.filter(pk=timer.pk).update(
             inici=timezone.now() - datetime.timedelta(minutes=minuts_treballats))
@@ -77,10 +79,36 @@ class StopEncadenatTest(TenantTestCase):
         self.assertEqual(task.status, 'Paused')
         return task
 
+
+    def _hi_escriu(self, task):
+        """J (21/08) — SIMULA L'ESCRIPTURA, i pel camí VIU.
+
+        🚨 Aquestes fixtures deien «treballada» i no escrivien res. Fins a J això no era una
+        contradicció: un tram obert i tancat ERA temps de feina i prou. Des de J/R2 no —
+        `_close_open_timer` jutja `consulta=True` el tram que es tanca sense cap `escriptura_at`,
+        i `TRAMS_SANS` el deixa fora del Welford, de l'albarà i del consum—, o sigui que una
+        «tasca treballada» sense escriptura és, ara, exactament una CONSULTA.
+
+        La fixture, doncs, no és que hagi quedat obsoleta: és que **li faltava dir una cosa que
+        abans no calia dir**. Aquí es diu, i es diu pel MATEIX emissor que la fa servir el
+        producte (`batec_escriptura`, font única de «s'hi ha escrit») i no estampant
+        `escriptura_at` a mà: si algun dia aquell emissor deixés d'estampar-lo, aquests tests
+        ho han de veure. Escriure-hi el camp directament els faria cecs precisament al node
+        del qual depenen.
+        """
+        r = batec_escriptura(task.model, self.tt.code, self.prof)
+        self.assertTrue(r['batec'], f"el batec no ha estampat res: {r}")
+        return r
+
     def _gest_stop(self, task):
         """El gest: play+stop encadenat. El segon pas NOMÉS si el primer ha anat bé — mateixa
-        seqüència que farà el front (i mateixa raó: cap estat intermedi silenciós)."""
+        seqüència que farà el front (i mateixa raó: cap estat intermedi silenciós).
+
+        ⚠️ El play del gest obre un tram NOU, i aquell tram tampoc no s'escriu sol. Sense
+        `_hi_escriu` el segon tram seria una consulta i el gest no aportaria el temps que el
+        test mesura — que és precisament el que el test existeix per comprovar."""
         transition_task(task, 'InProgress', self.prof)
+        self._hi_escriu(task)
         task.refresh_from_db()
         transition_task(task, 'Done', self.prof)
         task.refresh_from_db()

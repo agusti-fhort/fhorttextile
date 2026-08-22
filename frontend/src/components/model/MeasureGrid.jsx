@@ -33,9 +33,15 @@ const COL_NOM_W = 160
 
 // `filled` = gold-pale (NOMÉS la columna activa destaca); groupStart/End = filet subtil de
 // delimitació del grup (no daurat, per no competir amb el destacat de l'activa).
+// S45/G2 — ELS VALORS NUMÈRICS VAN CENTRATS a tota la superfície de mesures (v. la nota de
+// criteri a `EditableTable`). Aquesta era la tercera taula de la família amb la seva pròpia
+// resposta —`right` aquí, `center` a Mesures, `right` a Graduació—: tres taules que es miren
+// de costat i tres alineacions. El que fa que una columna de xifres es pugui escombrar amunt
+// i avall és `tabular-nums`, que es queda; la vora on s'arrambin és la part que ha de ser
+// IGUAL a tot arreu, i ara ho és.
 const cellTd = (filled, groupStart, groupEnd) => ({
   padding: '5px 8px', borderBottom: '1px solid var(--line-soft)', verticalAlign: 'middle',
-  textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums',
+  textAlign: 'center', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums',
   background: filled ? 'var(--sel)' : undefined,
   borderLeft: groupStart ? '1px solid var(--line)' : '1px solid var(--line-soft)',
   borderRight: groupEnd ? '1px solid var(--line)' : undefined,
@@ -96,6 +102,78 @@ function NotaDot({ nota }) {
   )
 }
 
+// ── TRAM E · LA CEL·LA PRESTADA, I LA SEVA PORTA ────────────────────────────────────────────
+//
+// Una cel·la que porta el valor de la talla base COPIAT (regla STEP sense valor per a aquella
+// talla) es pinta en vermell i, si qui munta la graella dona una porta (`onDesa`), s'hi pot
+// escriure el valor de veritat.
+//
+// 🔑 EL QUE S'HI ESCRIU ÉS LA REGLA, NO UNA PRESA. La columna del costat («Fit actual») anota
+// `PieceFittingLine.valor_real` i no toca el domini (llei E1/B3); aquesta escriu `valors_step`
+// de la `ModelGradingRule` — el valor sobreviu a les re-propagacions perquè ÉS la regla. Són
+// dues escriptures amb dos significats i per això són dos controls, no un.
+//
+// El gest ha de DIR QUÈ FA (§8c): la cel·la no és un input permanent —seria indistingible de la
+// columna de presa—, sinó una xifra vermella amb un llapis que l'obre.
+function CellaPrestada({ valor, unit, onDesa, t }) {
+  const [obert, setObert] = useState(false)
+  const [txt, setTxt] = useState('')
+  const [desant, setDesant] = useState(false)
+  const [err, setErr] = useState('')
+  if (!onDesa) {
+    return (
+      <span style={{ color: 'var(--err)' }} title={t('escalat.step_base_copiada')}>
+        {fmtMeasure(valor, unit) ?? '—'}
+      </span>
+    )
+  }
+  if (!obert) {
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--err)' }}
+        title={t('escalat.step_base_copiada')}>
+        {fmtMeasure(valor, unit) ?? '—'}
+        <button type="button" aria-label={t('escalat.step_posar_valor')}
+          title={t('escalat.step_posar_valor')}
+          onClick={() => { setTxt(valor == null ? '' : String(valor)); setErr(''); setObert(true) }}
+          style={{ border: 'none', background: 'transparent', color: 'var(--err)',
+                   cursor: 'pointer', padding: 0, lineHeight: 1 }}>
+          <i className="ti ti-pencil" aria-hidden="true" style={{ fontSize: 11 }} />
+        </button>
+      </span>
+    )
+  }
+  const desa = () => {
+    if (desant) return
+    setDesant(true); setErr('')
+    Promise.resolve(onDesa(txt))
+      .then(() => { setObert(false) })
+      .catch(e => setErr(e?.response?.data?.detail || t('escalat.step_valor_err')))
+      .finally(() => setDesant(false))
+  }
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+      <input autoFocus type="text" inputMode="decimal" value={txt} disabled={desant}
+        aria-label={t('escalat.step_posar_valor')}
+        onChange={e => setTxt(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === 'Enter') desa()
+          if (e.key === 'Escape') { setObert(false); setErr('') }
+        }}
+        style={{ width: 58, font: 'inherit', fontSize: 'var(--fs-body)', textAlign: 'center',
+                 border: `1px solid ${err ? 'var(--err)' : 'var(--gold)'}`, borderRadius: 4,
+                 padding: '1px 4px', fontVariantNumeric: 'tabular-nums',
+                 background: 'var(--white)', color: 'var(--text-main)' }} />
+      <button type="button" onClick={desa} disabled={desant}
+        aria-label={t('escalat.step_posar_valor')} title={err || t('escalat.step_posar_valor')}
+        style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0,
+                 color: err ? 'var(--err)' : 'var(--gold)', lineHeight: 1 }}>
+        <i className={err ? 'ti ti-alert-triangle' : 'ti ti-check'} aria-hidden="true"
+          style={{ fontSize: 12 }} />
+      </button>
+    </span>
+  )
+}
+
 // Cel·la activa editable (única amb input + autosave). Vermell si difereix de baseValue; negreta si
 // editada a mà (ancoratge). Buida si no hi ha línia activa per a aquest (pom, grup).
 const stepBtnStyle = {
@@ -132,6 +210,18 @@ function ActiveCell({ active, editable, value, edited, onChange, onCommit, focus
     )
   }
   const modified = activeRed(value, active)
+  // TRAM E — el valor de la talla base COPIAT: xifra en vermell i fons d'error suau, amb l'avís
+  // al tooltip. Tokens de la llei G8 (`--err`/`--err-bg`), mai hex. El fons hi és perquè el
+  // número, per definició, és igual al de la talla base: sense ell, una cel·la «correcta» i una
+  // de prestada es veurien igual a la columna.
+  // TRAM E — a la cel·la ACTIVA la marca només val mentre la xifra que s'hi veu ÉS la prestada
+  // (el fantasma). Amb una presa anotada, el número és una mesura de veritat i pintar-lo de
+  // vermell diria una cosa falsa: el vermell d'aquesta columna és el de R1 («la peça arribada
+  // s'aparta»), i no s'hi pot barrejar un segon significat.
+  const baseCopiada = !!active.baseCopiada && !!active.fantasma
+  const estilBaseCopiada = baseCopiada
+    ? { background: 'var(--err-bg)', color: 'var(--err)' } : null
+  const avisBaseCopiada = baseCopiada ? t('escalat.step_base_copiada') : undefined
   // E2b — pre-omplert sense gest: la xifra hi és perquè és la teòrica, no perquè ningú l'hagi
   // mesurada. Deixa de ser fantasma en tocar-la (`edited`), que és quan passa a ser una presa.
   const fantasma = !!active.fantasma && !edited
@@ -143,10 +233,13 @@ function ActiveCell({ active, editable, value, edited, onChange, onCommit, focus
     // Lectura: format de presentació (1 decimal cm · 2 inch). El veredicte també hi pinta: una
     // sessió segellada s'ha de poder rellegir amb els mateixos colors amb què es va decidir.
     return (
-      <td style={{ ...cellTd(true, false, false),
+      <td title={avisBaseCopiada}
+        style={{ ...cellTd(true, false, false),
+                   ...estilBaseCopiada,
                    // E2b — el fantasma també en LECTURA: una consulta no pot fer passar per
                    // presa una xifra que ningú no ha mesurat (és la llei d'E1 a la pantalla).
-                   color: fantasma ? 'var(--text-soft)'
+                   color: baseCopiada ? 'var(--err)'
+                     : fantasma ? 'var(--text-soft)'
                      : (colVerdicte || (modified ? 'var(--err)' : 'var(--text-main)')),
                    // `active.canvi` (B2) posa la negreta a la columna activa amb el mateix
                    // criteri que a les d'història: un canvi es marca encara que ningú no li
@@ -173,7 +266,8 @@ function ActiveCell({ active, editable, value, edited, onChange, onCommit, focus
     schedule(next)
   }
   return (
-    <td style={{ ...cellTd(true, false, false), position: 'relative' }}>
+    <td title={avisBaseCopiada}
+      style={{ ...cellTd(true, false, false), position: 'relative' }}>
       <span style={{ display: 'inline-flex', alignItems: 'stretch', gap: 2 }}>
         <input
           ref={el => registerInput?.(active.lineId, el)}
@@ -202,7 +296,9 @@ function ActiveCell({ active, editable, value, edited, onChange, onCommit, focus
             else if (e.key === 'ArrowUp') { e.preventDefault(); onNav(active.lineId, -1) }
           }}
           style={{
-            font: 'inherit', width: 70, padding: '2px 4px', textAlign: 'right',
+            // S45/G2 — `center`, com la cel·la que substitueix mentre s'edita: amb l'input
+            // a la dreta i la cel·la centrada, la xifra SALTAVA en clicar-hi.
+            font: 'inherit', width: 70, padding: '2px 4px', textAlign: 'center',
             border: `1px solid ${colVerdicte || 'var(--line)'}`, borderRadius: 4, background: 'var(--white)',
             // ── E2c-bis (decisió d'Agus, 17/08) · GRIS NORMAL I RECTE ────────────────────
             // Això anava en `--text-faint` + CURSIVA, llegint el pre-omplert com un «estat
@@ -214,7 +310,11 @@ function ActiveCell({ active, editable, value, edited, onChange, onCommit, focus
             // Ara `--text-soft` (5.37:1, «secundari»): **gris perquè no està confirmada, recta
             // perquè és un valor de debò**. La distinció fantasma/presa NO es toca — segueix
             // sencera per sota, i qui mana és `presa_at`. Això és crom, no semàntica.
-            color: fantasma ? 'var(--text-soft)'
+            // TRAM E — en EDICIÓ la marca es queda: la cel·la prestada s'ha de reconèixer
+            // mentre s'hi escriu, que és exactament quan s'està reparant.
+            ...(baseCopiada && !edited ? { background: 'var(--err-bg)' } : null),
+            color: baseCopiada && !edited ? 'var(--err)'
+              : fantasma ? 'var(--text-soft)'
               : (colVerdicte || (modified ? 'var(--err)' : 'var(--text-main)')),
             fontWeight: verdicte || (modified && edited) ? 700 : 400,
             textDecoration: verdicte === 'REJECTED' ? 'line-through' : undefined,
@@ -412,7 +512,20 @@ function CodiCell({ codi, nomFitxa, pomCode, bmId, isKey, editable, editCodi, on
 
 export default function MeasureGrid({
   rows = [],
-  groups = [],            // [{key, label, accent?, historyCols:[{key,label}], activeLabel, trailCols:[{key,label}]}]
+  groups = [],            // [{key, label, accent?, historyCols:[{key,label}], activeLabel, trailCols:[{key,label}], senseActiva?}]
+  // ── ESCALAT/VIGENT · UN GRUP POT NO TENIR COLUMNA ACTIVA (`senseActiva`) ─────────────────
+  // Fins ara TOT grup n'emetia una: el `+1` era literal a les tres sumes de columnes, al
+  // `<thead>` i al cos. És el que aquesta graella ha estat sempre —una taula d'HISTÒRIA amb una
+  // columna de TREBALL al final—, i per a Mesures, Fitting i la Presa és exactament el que cal.
+  //
+  // La sub-pestanya «Vigent» de l'Escalat no té treball: és la corba teòrica del model, en
+  // consulta. Amb la columna activa hi sortiria una casella buida per talla sota el rètol «Fit
+  // actual», convidant a escriure on no hi ha res a anotar — i pintant, un cop més, una presa
+  // allà on l'usuari demanava el vigent.
+  //
+  // 🔑 ÉS PER GRUP I OPT-IN, no un mode de la graella: qui no el declara pinta EXACTAMENT com
+  // abans, i una taula futura pot barrejar grups amb treball i grups de consulta sense que
+  // aquesta aritmètica hagi de tornar a canviar.
   leadCols = [],          // [{key, label, width, render:(row)=>node}]  sticky després de POM/Nom (consulta: render pot ser text)
   // FIX-4 (DIAGNOSI_MESURES_TEA_205) — MESURA i DELTA no es poden confondre. Amb `leadGroupLabel`
   // la graella guanya una FILA DE CAPÇALERA per damunt: els leadCols queden agrupats sota el seu
@@ -570,8 +683,11 @@ export default function MeasureGrid({
     verticalAlign: 'middle', whiteSpace: 'nowrap',
     ...(esUltimLead(i) && { borderRight: SEP }),
   })
-  const totalGroupCols = groups.reduce(
-    (s, g) => s + (g.historyCols?.length || 0) + 1 + (g.trailCols?.length || 0), 0)
+  // El `+1` de la columna activa només compta si el grup en té (v. `senseActiva`). Punt únic
+  // de l'amplada d'un grup: la capçalera i el cos hi passen tots dos.
+  const ampladaGrup = (g) => (g.historyCols?.length || 0) + (g.senseActiva ? 0 : 1)
+                             + (g.trailCols?.length || 0)
+  const totalGroupCols = groups.reduce((s, g) => s + ampladaGrup(g), 0)
   const identitatHd = (left, w) => stickyHd(left, w)     // POM/Nom: mai del bloc de regla
 
   return (
@@ -617,11 +733,16 @@ export default function MeasureGrid({
             <th rowSpan={2} style={identitatHd(0, COL_CAPA_W)}>{t('capa.col')}</th>
             <th rowSpan={2} style={identitatHd(COL_CAPA_W, COL_POM_W)}>{t('measuregrid.col_pom')}</th>
             <th rowSpan={2} style={identitatHd(COL_CAPA_W + COL_POM_W, COL_NOM_W)}>{t('measuregrid.col_nom')}</th>
+            {/* F4-QUATER — `c.title`: l'ajuda de la columna, quan en declara. La «Breaks» n'ha de
+                dur perquè la seva frase es llegeix en convenció de MOTOR i això s'ha de poder
+                comprovar sense sortir de la graella. Opcional: les columnes que no en porten
+                surten igual que sempre. */}
             {leadCols.map((c, i) => (
-              <th key={c.key} rowSpan={2} style={stickyHd(leadLefts[i], c.width, i)}>{c.label}</th>
+              <th key={c.key} rowSpan={2} title={c.title || undefined}
+                  style={stickyHd(leadLefts[i], c.width, i)}>{c.label}</th>
             ))}
             {groups.map(g => {
-              const span = (g.historyCols?.length || 0) + 1 + (g.trailCols?.length || 0)
+              const span = ampladaGrup(g)
               return (
                 <th key={g.key} colSpan={span} style={{
                   ...thStyle, textAlign: 'center',
@@ -639,12 +760,13 @@ export default function MeasureGrid({
           </tr>
           <tr>
             {groups.flatMap(g => {
-              const sub = (start) => ({ ...thStyle, textAlign: 'right', fontSize: 'var(--fs-caption)', padding: '3px 8px',
+              // S45/G2 — la subcapçalera de valor va on van els valors: centrada.
+              const sub = (start) => ({ ...thStyle, textAlign: 'center', fontSize: 'var(--fs-caption)', padding: '3px 8px',
                 background: 'var(--panel)',
                 borderLeft: start ? '1px solid var(--line)' : '1px solid var(--line-soft)' })
               const activeSub = { ...sub(false), background: 'var(--sel)' }   // NOMÉS la columna activa destaca
               const hs = (g.historyCols || []).map((h, idx) => <th key={`${g.key}-h-${h.key}`} style={sub(idx === 0)}>{h.label}</th>)
-              hs.push(<th key={`${g.key}-active`} style={activeSub}>{g.activeLabel}</th>)
+              if (!g.senseActiva) hs.push(<th key={`${g.key}-active`} style={activeSub}>{g.activeLabel}</th>)
               for (const tcol of (g.trailCols || [])) hs.push(<th key={`${g.key}-t-${tcol.key}`} style={{ ...sub(false), textAlign: 'center' }}>{tcol.label}</th>)
               return hs
             })}
@@ -715,18 +837,22 @@ export default function MeasureGrid({
                                  fontWeight: canviat ? 600 : undefined,
                                  textDecoration: canviat && hv.veredicte === 'REJECTED'
                                    ? 'line-through' : undefined }}>
-                        {fmtMeasure(v, unit) ?? '—'}
+                        {obj && hv.baseCopiada
+                          ? <CellaPrestada valor={v} unit={unit} onDesa={hv.onDesa} t={t} />
+                          : (fmtMeasure(v, unit) ?? '—')}
                         {obj && <NotaDot nota={hv.nota} />}
                       </td>
                     )
                   })
                   const a = cell.active
-                  out.push(
-                    <ActiveCell key={`${g.key}-active`} active={a} editable={editable} unit={unit}
-                      value={a ? (vals[a.lineId] ?? '') : ''} edited={a ? edited.has(a.lineId) : false}
-                      onChange={onChange} onCommit={a ? commitFor(a.lineId) : (() => Promise.resolve())} focusRef={focusRef}
-                      registerInput={registerInput} onNav={onNav} />
-                  )
+                  if (!g.senseActiva) {
+                    out.push(
+                      <ActiveCell key={`${g.key}-active`} active={a} editable={editable} unit={unit}
+                        value={a ? (vals[a.lineId] ?? '') : ''} edited={a ? edited.has(a.lineId) : false}
+                        onChange={onChange} onCommit={a ? commitFor(a.lineId) : (() => Promise.resolve())} focusRef={focusRef}
+                        registerInput={registerInput} onNav={onNav} />
+                    )
+                  }
                   for (const tcol of (g.trailCols || [])) {
                     out.push(<td key={`${g.key}-t-${tcol.key}`} style={{ padding: '5px 8px', borderBottom: '1px solid var(--line-soft)', verticalAlign: 'middle' }}>{cell.trail?.[tcol.key] ?? null}</td>)
                   }

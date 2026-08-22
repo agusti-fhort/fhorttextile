@@ -48,15 +48,47 @@ class PropagaAncoratgesTest(SimpleTestCase):
                                  run_sistema=self.RUN, base_label='M')
         self.assertEqual(out, {'S': 46, 'M': 48, 'L': 50, 'XL': 52})
 
-    # ── T_regla_incompleta: regla sense cap delta (increment_base=None, increment=None)
-    # → propagació PLANA (totes = anchor_val) + un únic warning (degradació gràcil).
-    def test_regla_incompleta_warning_i_columna_plana(self):
+    # ── T_regla_incompleta ────────────────────────────────────────────────────
+    #
+    # 🚨 AQUEST TEST DEIA «propagació PLANA (totes = anchor_val) + un warning», i era la
+    # «degradació gràcil» que el FIX-A/PAS-3 (21/08) ha retirat. La columna plana ÉS un valor
+    # fabricat: repeteix l'ancoratge a totes les talles i el presenta com si fos graduació —
+    # exactament el FIXED inventat que la llei D2 prohibeix, i el que va deixar el model 163 amb
+    # 225 specs a delta 0 tornant 200 OK.
+    #
+    # Una regla sense delta no gradua. Ara `increment_de_l_aresta` alça `ReglaSenseDeltaError`,
+    # `propaga_ancoratges` la caça i torna **`None` a cada talla**: «d'aquestes cel·les no en
+    # tenim dada», que és el mateix que ja diu `_apply_rule` per al seu costat i el que fa que
+    # Escalat i la presa no puguin divergir.
+    #
+    # El warning ES QUEDA i segueix sent UN de sol: el que canvia és el valor, no el senyal.
+    def test_regla_incompleta_NO_gradua_i_ho_diu(self):
         rule = _rule(logica='LINEAR')           # sense increment_base ni increment
         warnings = []
         out = propaga_ancoratges(rule, 'M', 50, self.RUN, warnings=warnings,
                                  run_sistema=self.RUN, base_label='M')
-        self.assertEqual(out, {'S': 50, 'M': 50, 'L': 50, 'XL': 50})
+        self.assertEqual(out, {'S': None, 'M': None, 'L': None, 'XL': None})
         self.assertEqual(len(warnings), 1)
+        self.assertIn('increment_base', warnings[0])
+
+    def test_ni_tan_sols_la_talla_ANCORADA_rep_valor(self):
+        """El detall que separa «cel·la absent» de «columna plana»: ni l'ancoratge se salva.
+
+        Tornar-hi el valor mesurat semblaria innocu —és una dada real— però la fila sortiria amb
+        una xifra i tres buits, i això es llegeix com «aquesta talla sí i les altres encara no»
+        en comptes de «aquesta regla no gradua».
+        """
+        out = propaga_ancoratges(_rule(logica='LINEAR'), 'L', 50, self.RUN, warnings=[],
+                                 run_sistema=self.RUN, base_label='M')
+        self.assertIsNone(out['L'])
+
+    def test_amb_delta_base_el_llegat_divergent_no_mou_res(self):
+        """Control del backfill del PAS 2: `increment` divergent no pot canviar cap valor."""
+        amb = _rule(logica='LINEAR', increment=99, increment_base=2)
+        sense = _rule(logica='LINEAR', increment_base=2)
+        kw = dict(run_sistema=self.RUN, base_label='M')
+        self.assertEqual(propaga_ancoratges(amb, 'M', 50, self.RUN, **kw),
+                         propaga_ancoratges(sense, 'M', 50, self.RUN, **kw))
 
     # ── T_retrocompat: ancorant a la BASE, propaga_ancoratges ha de coincidir EXACTAMENT
     # amb _apply_rule talla a talla (regla canònica uniforme i regla amb break).
@@ -120,11 +152,32 @@ class ApplyRuleStepGuardTest(SimpleTestCase):
         self.assertEqual(out['XL'], (61, 'STEP'))
         self.assertNotEqual(out['L'][0], 52)   # NO ha gradat canònic
 
-    # ── R3: STEP sense valors_step — increment_base poblat però logica='STEP', vs buit →
-    # comportament STEP definit (cel·la None + warning); NO inventa delta canònic.
+    # ── R3: STEP sense valors_step.
+    #
+    # 🚨 CONTRACTE CANVIAT PEL TRAM E (decisió d'Agus, 2026-08-21). Aquí s'asseria
+    # `(None, 'STEP')` — cel·la ABSENT— i el resultat era que la fila DESAPAREIXIA de l'escalat
+    # sencera, amb el motiu només al log. Ara la cel·la surt amb **el valor de la talla base**,
+    # la superfície la pinta en VERMELL i la propagació serveix la llista de POMs×talles a posar
+    # a mà.
+    #
+    # 🔑 EL QUE AQUEST TEST PROTEGIA NO HA CANVIAT, i segueix assertit: el motor **no inventa
+    # cap delta**. 52 (el canònic que sortiria d'`increment_base=2`) segueix sent el número
+    # prohibit. La diferència amb la LINEAR-sense-Δ del fix A —que sí que ha de callar— és que
+    # allà una columna plana es presentava com a graduació i ningú no ho podia veure; aquí el
+    # valor és reconeixiblement prestat, va marcat i entra en una llista de treball.
     def test_r3_step_sense_valors_step(self):
         rule = _rule(logica='STEP', increment_base=2, valors_step=None)
         warnings = []
-        out = self._grade(rule, warnings=warnings)
-        self.assertEqual(out['L'], (None, 'STEP'))   # no calcula (no 52 canònic)
+        marques = []
+        out = {}
+        for i, label in enumerate(self.RUN):
+            out[label] = _apply_rule(
+                rule, self.BASE_VAL, i - self.BASE_IDX, i, self.BASE_IDX,
+                size_run=self.RUN, warnings=warnings, marques=marques,
+            )
+        self.assertEqual(out['L'], (self.BASE_VAL, 'STEP'))   # el valor de la BASE, prestat
+        self.assertNotEqual(out['L'][0], 52, 'no pot graduar amb el delta canònic')
+        self.assertEqual(out['M'], (self.BASE_VAL, 'STEP'))   # la base, que sempre és seva
         self.assertTrue(warnings)
+        # I la cel·la queda APUNTADA, que és el que la converteix en feina i no en silenci.
+        self.assertEqual(sorted(m['talla'] for m in marques), ['L', 'S', 'XL'])

@@ -1202,6 +1202,11 @@ class ModelGradingRule(models.Model):
     increment_break = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
     talla_break_label = models.CharField(max_length=30, null=True, blank=True)
     talla_break_pos = models.IntegerField(null=True, blank=True)  # cache opcional (run del model)
+    # TRAM F — MULTI-BREAK PER INTERVALS. Forma i llei IDÈNTIQUES a la germana del catàleg
+    # (`pom.GradingRule.breaks`, on viu l'acta sencera): llista ordenada
+    # `[{"inici","final","delta"}]`, etiquetes en convenció de MOTOR, extrems inclusius, màxim
+    # `grading_regime.MAX_BREAKS`. Buit = la regla d'1 break dels camps de sobre.
+    breaks = models.JSONField(null=True, blank=True)
 
     origen = models.CharField(max_length=20, default='CANONICAL', choices=ORIGEN_CHOICES)
     # ── M3 (2026-08-07) · LA TRAÇABILITAT: DE QUIN JOC VE AQUESTA FILA ────────────────────────

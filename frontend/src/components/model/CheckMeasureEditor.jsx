@@ -5,8 +5,8 @@ import { construeixFilesDePresa } from '../../utils/filesDePresa'
 import { useNavigate } from 'react-router-dom'
 import client from '../../api/client'
 import { models, sizeChecks, sizeCheckLines, baseMeasurements, pieceFittingLines } from '../../api/endpoints'
-import { effectiveRegime } from '../../utils/gradingRegime'
-import { aDocument, aMotor, etiquetaRegla, opcionsDocument } from '../../utils/breakConvention'
+import { effectiveRegime, etiquetaRegla } from '../../utils/gradingRegime'
+import { aDocument, aMotor, opcionsDocument } from '../../utils/breakConvention'
 import { useEnumeracio } from '../../utils/vocabulariDominiFont'
 import { finestraHistoric } from './fittingGridAdapter'
 import MeasureGrid from './MeasureGrid'
@@ -126,14 +126,20 @@ function Tecla({ children }) {
 const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }
 const modal = { background: 'var(--white)', borderRadius: 8, padding: 24, maxWidth: 460, fontFamily: MONO, boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }
 
-// Etiqueta compacta de regla (delta · trencament), com el fitting (fittingGridAdapter.regleLabel).
-// El trencament es diu en CONVENCIÓ DE DOCUMENT: el ±1 el fa `utils/breakConvention`, mai aquí.
+// Etiqueta compacta de regla (Δ general · relleu), com el fitting (fittingGridAdapter.regleLabel).
+//
+// 🚨 F4-QUATER — AQUESTA ETIQUETA ÉS LECTURA I SEGUEIX LA LLEI DE LECTURA: la frase és
+// d'INTERVAL i en convenció de MOTOR (`+2 · M→XL +3`). Els `<select>` de sota, en canvi, són
+// AUTORIA d'un break d'un sol tram i es queden en convenció de DOCUMENT amb `aDocument`/`aMotor`
+// — són l'últim lector viu d'aquell ±1 i el deute ② d'aquest tram els ha de jubilar. Que a la
+// mateixa pantalla convisquin les dues convencions és PRECISAMENT per què el deute existeix, no
+// un descuit: mentre l'editor escrigui `talla_break_label`, la volta hi ha de ser.
 function regleLabel(row, t, sizeRun) {
   if (row.logica == null) return ''
   if (row.logica === 'STEP') return t('fitting.grid.rule_free')
   // LINEAR+0 sense break = FIXED: no té delta a ensenyar (§LLEI a utils/gradingRegime).
   if (effectiveRegime(row) === 'FIXED') return ''
-  return etiquetaRegla(row, sizeRun, t('fitting.grid.break'))
+  return etiquetaRegla(row, sizeRun)
 }
 
 // P3 — editor de la REGLA VIVA del model (delta + break) a la talla base. La regla és patrimoni del
@@ -601,10 +607,20 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
   // ho sap dir. Amb la clau curta, la fila de la mare i la de la 02 queien al MATEIX calaix i
   // la segona sobreescrivia la primera en construir el Map: el contenidor de la 02 ensenyava
   // el règim i la Δ de la mare. El deute el declarava `filesDePresa` amb un 🚩 apuntant aquí.
+  //
+  // 🚨 F4-QUATER · `breaks` HI FALTAVA, I ERA UN FORAT DE LECTURA SILENCIÓS. Aquest Map és un
+  // CLON de la regla, no la regla: copia camp a camp, i el tram F va afegir `breaks` a la fila
+  // sense afegir-lo aquí. Conseqüència: una regla amb intervals explícits arribava a la consulta
+  // amb `breaks` UNDEFINED i la superfície la pintava com si no trenqués enlloc — la corba de
+  // talles al costat sí que creixia amb els trams, o sigui que la pantalla es contradeia a si
+  // mateixa. És exactament la llei que ja havia cremat abans: **un camp nou de la regla vol
+  // línia pròpia a cada clon**, perquè cap gate veu el que un `...spread` d'un objecte incomplet
+  // deixa de portar.
   const reglaPerPom = new Map(
     ((raw?.regles?.rows) || []).map(x => [clauRegla(x), {
       logica: x.logica, increment_base: x.increment_base,
       increment_break: x.increment_break, talla_break_label: x.talla_break_label,
+      breaks: Array.isArray(x.breaks) ? x.breaks : [],
     }]))
   // LES COLUMNES DE GRADUACIO surten quan el model GRADUA: joc assignat o alguna regla propia.
   // Amb joc pero sense regla resolta, la fila diu `—`, que es informacio i no un forat.

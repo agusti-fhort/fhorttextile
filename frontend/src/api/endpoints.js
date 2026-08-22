@@ -92,8 +92,12 @@ export const models = {
   defineTasks: (id, data) => client.post(`/api/v1/models/${id}/define-tasks/`, data),   // {task_type_ids:[...]}
   // Porta-menú: obre una tasca concreta del model (crea-si-falta + auto-assign + En curs). {code}
   // Sprint Y — fittingSessionId opcional: lliga la tasca a la sessió (FK) i obre la sessió Programada.
-  openTask: (id, code, fittingSessionId = null) =>
-    client.post(`/api/v1/models/${id}/open-task/`, { code, ...(fittingSessionId ? { fitting_session_id: fittingSessionId } : {}) })
+  // J · R3 — `gestos` porta el que l'entrada SOLA no pot decidir: `{reobrir:true}` per tornar a
+  // obrir una tasca Feta i `{handoff:true}` per endur-se la d'un altre. Sense ells el backend
+  // respon 409 amb codi i el modal ofereix consultar — entrar a mirar no pot reobrir ni prendre
+  // res. Opcional i additiu: cap cridador existent canvia.
+  openTask: (id, code, fittingSessionId = null, gestos = {}) =>
+    client.post(`/api/v1/models/${id}/open-task/`, { code, ...gestos, ...(fittingSessionId ? { fitting_session_id: fittingSessionId } : {}) })
       .then(planChanged),   // C4 — l'auto-start pot reancorar el pla → invalida Board+Gantt
   // Acte lleuger de gènesi POM: base+nomenclatura+regles i tanca la tasca pom. No propaga.
   gravarPom: (id, data) => client.post(`/api/v1/models/${id}/gravar-pom/`, data),
@@ -147,6 +151,15 @@ export const models = {
   // aquell també és jubilat (E1/B4, més avall). **Cap dels dos camins existeix ja**, i per tant
   // avui no hi ha cap API per editar el valor d'UNA talla no-base: si algun dia cal, es reobre
   // conscientment i per un gest que digui què fa.
+  // ── TRAM E · LA PORTA DEL VALOR VERMELL (21/08) ─────────────────────────────────────────
+  // La nota de sobre deia que «avui no hi ha cap API per editar el valor d'UNA talla no-base:
+  // si algun dia cal, es reobre conscientment i per un gest que digui què fa». Doncs això:
+  // aquesta porta escriu **`valors_step` de la regla resident**, i per tant el valor SOBREVIU a
+  // les re-propagacions —és la regla—. No és un override (aquells el llenç net de propagar els
+  // esborra, i és el seu disseny) ni una presa (això és `presaEscalat`, i no toca el domini).
+  // Només té sentit sobre una cel·la que ha sortit amb el valor de la talla base prestat.
+  setStepValor: (modelId, pomId, body) =>
+    client.post(`/api/v1/models/${modelId}/pom/${pomId}/step-valor/`, body),
   // Taula base amb estadis (històric per presa + tolerància + base vigent). Read-only.
   baseStages: (modelId) => client.get(`/api/v1/models/${modelId}/base-stages/`),
   // D-31.17 — LA COMPROVACIÓ del model: què falta i què s'ha de mirar abans que la fitxa
@@ -424,6 +437,15 @@ export const modelTasks = {
   // F2.5 · D-2 — temps DECLARAT per a les tasques Externa-lliure (les que es fan fora de l'eina
   // i que cap batec pot observar). Cos: {minuts} XOR {inici, fi}. El backend rebutja les internes.
   tempsDeclarat: (id, data) => client.post(`/api/v1/model-tasks/${id}/temps-declarat/`, data),
+  // J · R1 — sortir sense haver escrit res: la tasca torna en silenci i el tram queda marcat com
+  // a consulta. Decideix el SERVIDOR (`escriptura_at`, que estampa només `batec_escriptura`);
+  // `{revertit:false}` vol dir «hi ha hagut feina» i qui crida segueix amb el modal de sempre.
+  // J-bis — `{pausa_si_cal:true}` NOMÉS per a sortides que ja pausaven soles (el desmuntatge):
+  // amb escriptura pausa aquí mateix, en comptes d'esperar una segona crida que en tancar la
+  // pestanya no s'enviaria mai. La sortida DELIBERADA no l'ha de passar: allà la persona ha de
+  // poder triar `Done`.
+  sortirSenseEscriptura: (id, cos = {}) =>
+    client.post(`/api/v1/model-tasks/${id}/sortir-sense-escriptura/`, cos),
   // T3 · el CRONO declarat. Una sola porta amb quatre accions —engegar · aturar · descartar ·
   // corregir— perquè les quatre parlen del mateix tram i el servidor n'és l'amo: el navegador no
   // en guarda estat, el demana. `engegar` és idempotent (re-enganxar-s'hi després d'un F5).

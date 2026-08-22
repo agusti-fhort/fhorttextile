@@ -15,7 +15,7 @@ import django_filters
 from fhort.accounts.capabilities import HasCapability, EXECUTE_TASKS, CONFIGURE
 from fhort.pom.services import SealedGradingVersionError, _te_regles
 from fhort.pom.grading_regime import (
-    CODI_LINEAR_ZERO, MISSATGE_LINEAR_ZERO, es_linear_degenerada,
+    CODI_LINEAR_ZERO, MISSATGE_LINEAR_ZERO, es_linear_degenerada, valida_breaks,
 )
 # F1.3 — el batec d'escriptura: escriure sobre un model és el senyal de «hi estic
 # treballant» (D-2). El decorador bat NOMÉS en 2xx i mai llança.
@@ -2088,6 +2088,38 @@ def measurements_table_view(request, model_id):
     def _flt(v):
         return float(v) if v is not None else None
 
+    # ── TRAM E · LES TALLES SENSE VALOR STEP, DERIVADES AQUÍ I NO EMMAGATZEMADES ─────────────
+    # `GradedSpec` és sortida pura i no té camp d'origen (llei). La marca de «aquí hi ha el
+    # valor de la talla base copiat» no és una dada de l'spec: és una propietat de la REGLA
+    # (STEP + `valors_step` que no cobreix el camí fins a aquella talla), i per tant es deriva
+    # al LECTOR — l'alternativa de menys radi de les quatre censades.
+    #
+    # Es deriva AQUÍ i no al front perquè el predicat ha de ser EL MATEIX que el del motor, i el
+    # del motor és `step_delta_acumulat`. Amb un mirall a JavaScript, la cel·la vermella i la
+    # cel·la copiada podrien deixar de ser la mateixa el dia que una de les dues canviés — i
+    # justament aquest és el cas on el model pot no fabricar la talla que falta al camí.
+    from fhort.pom.grading_utils import step_delta_acumulat
+    try:
+        from fhort.pom.services import escala_del_model as _escala
+        _run_model_e, _run_sist_e, _pos_e, _base_idx_e = _escala(model)
+    except (ValueError, AttributeError):
+        _run_model_e, _run_sist_e, _pos_e, _base_idx_e = [], [], None, None
+
+    def _talles_step_sense_valor(rule):
+        """Les talles del run del MODEL que sortiran amb el valor de la base copiat."""
+        if rule is None or getattr(rule, 'logica', None) != 'STEP' or _pos_e is None:
+            return []
+        fora = []
+        for etiqueta in _run_model_e:
+            try:
+                idx = _pos_e(etiqueta)
+            except (ValueError, KeyError):
+                continue
+            _total, falta = step_delta_acumulat(rule, _run_sist_e, _base_idx_e, idx)
+            if falta is not None:
+                fora.append(etiqueta)
+        return fora
+
     # C3 — nomenclatura del CLIENT del model, mateix resolutor que la resta de superfícies.
     from fhort.pom.identitat import clau_mesura
     from fhort.pom.nomenclatura import alies_per_pom, camps_de
@@ -2142,6 +2174,13 @@ def measurements_table_view(request, model_id):
             'increment_base': _flt(getattr(rule, 'increment_base', None)) if rule else None,
             'increment_break': _flt(getattr(rule, 'increment_break', None)) if rule else None,
             'talla_break_label': getattr(rule, 'talla_break_label', None) if rule else None,
+            # TRAM F — els intervals. Aquest payload és el punt d'entrada de 5 de les 7
+            # superfícies visuals de la regla: si el relleu no hi surt, la pantalla que l'edita
+            # no el pot ni ensenyar ni tornar a desar sencer.
+            'breaks': (getattr(rule, 'breaks', None) or []) if rule else [],
+            # TRAM E — les talles d'aquesta fila que porten el valor de la base COPIAT (regla
+            # STEP sense valor). Derivat, mai desat: v. `_talles_step_sense_valor`.
+            'step_base_copiada': _talles_step_sense_valor(rule),
             # P0.5d — D'ON VE LA REGLA, perquè la superfície de Graduació ho ha de poder dir.
             #
             # CALEN ELS DOS CAMPS, i el primer cop només en vaig posar un. `origen` sol MENTIA
@@ -2210,6 +2249,13 @@ def measurements_table_view(request, model_id):
         'base_size': base_size,
         'size_run': size_run,               # kept so as not to break consumers
         'size_run_complet': size_run,
+        # TRAM F — EL RUN DEL SISTEMA, i tanca una frontera que amb un sol break ja coixejava.
+        # El motor resol el relleu contra el run del SISTEMA (llei S24b) però la pantalla només
+        # sabia oferir el run del MODEL: un interval que acabi a una talla que el sistema té i
+        # el model no fabrica —que és la forma canònica de tota regla d'1 break llegida com a
+        # interval— no era ni triable ni re-desable sense perdre'l. Amb el run del sistema al
+        # payload, el picker pot oferir exactament el que el motor sap llegir.
+        'run_sistema': _run_sist_e,
         'sizes_amb_dades': sizes_with_data,
         'deltes': deltas,
         'rows': rows,
@@ -2520,6 +2566,15 @@ def gravar_pom_view(request, model_id):
                                             _abast_de_poda(request.data))
 
             valid_logiques = {code for code, _ in GradingRule.LOGICA_CHOICES}
+            from fhort.pom.services import escala_del_model
+            # TRAM F — el run del SISTEMA es llegeix UN cop per a totes les files: és el referent
+            # dels intervals (llei S24b) i demanar-lo per fila serien N consultes per res. Un
+            # model sense geometria completa el deixa buit, i llavors la validació d'intervals
+            # comprova forma i recompte però no pot comprovar etiquetes (v. `valida_breaks`).
+            try:
+                _sr_g, run_sistema_gravar, _p_g, _bi_g = escala_del_model(model)
+            except (ValueError, AttributeError):
+                run_sistema_gravar = []
             for r in rules:
                 pom_id = r.get('pom_id')
                 if not pom_id:
@@ -2542,6 +2597,7 @@ def gravar_pom_view(request, model_id):
                         increment_break=(src.increment_break if src else None),
                         talla_break_label=(src.talla_break_label if src else None),
                         talla_break_pos=(src.talla_break_pos if src else None),
+                        breaks=(src.breaks if src else None),      # TRAM F — el relleu sencer
                         # M3 — mateix criteri que `set_pom_regim_view` (vegeu-hi la nota): la
                         # fila que neix del fallback del catàleg ve d'aquell joc; la que neix
                         # de zero, de ningú. Una fila que ja existia no es re-etiqueta.
@@ -2557,11 +2613,23 @@ def gravar_pom_view(request, model_id):
                     label = (r.get('talla_break_label') or '').strip() or None
                     rule.talla_break_label = label
                     rule.talla_break_pos = _break_pos(label)
+                # TRAM F — els intervals, amb la MATEIXA validació que la porta germana i contra
+                # el mateix run (el del SISTEMA). Un error aquí s'acumula com la resta: aquesta
+                # porta desa moltes files i ha de dir totes les que no van.
+                if 'breaks' in r:
+                    nets, err_breaks = valida_breaks(
+                        r.get('breaks'), logica=rule.logica, run=run_sistema_gravar,
+                        increment_base=rule.increment_base)
+                    if err_breaks:
+                        errors.append(f"POM {pom_id}: {err_breaks['detall']}")
+                        continue
+                    rule.breaks = nets
                 # A3 (2026-07-22) — MATEIX guard que set_pom_regim_view. Aquest camí
                 # (gravar_pom, la taula de gènesi) escrivia LINEAR+0 sense cap comprovació:
                 # era el forat per on la llei encara es podia trencar.
                 if es_linear_degenerada(rule.logica, rule.increment_base, rule.increment,
-                                        rule.increment_break, rule.talla_break_label):
+                                        rule.increment_break, rule.talla_break_label,
+                                        rule.breaks):
                     errors.append(f'POM {pom_id}: {MISSATGE_LINEAR_ZERO}')
                     continue
                 rule.origen = 'MANUAL'
@@ -3045,6 +3113,8 @@ def generate_grading_view(request, model_id):
 
     new_version = bool(request.data.get('new_version', False))
     allow_reopen_sealed = bool(request.data.get('allow_reopen_sealed', False))
+    # TRAM E — el canal de la llista de treball manual (v. `generate_graded_specs`).
+    informe: dict = {}
     n_consolidat = 0  # B3: POMs de talla base consolidats des de fittings oberts abans de propagar
 
     # Crida el motor. new_version=True → acte conscient de PROPAGAR (Peça 2): crea v+1 via el
@@ -3101,6 +3171,7 @@ def generate_grading_view(request, model_id):
                     allow_reopen_sealed=allow_reopen_sealed,
                     nom='Propagació conscient',
                     reopen_context='Propagació conscient',
+                    informe=informe,
                 )
             except ValueError as e:
                 # Rollback explícit: es retorna des de DINS de l'atòmic, i sense això Django
@@ -3133,7 +3204,7 @@ def generate_grading_view(request, model_id):
         # vigent, amb l'estat sense actualitzar i un 500 que no deia què havia quedat escrit.
         with transaction.atomic():
             try:
-                graded_count = generate_graded_specs(sf.id)
+                graded_count = generate_graded_specs(sf.id, informe=informe)
             except SealedGradingVersionError as e:
                 # G6-B/T1 · camí 1/6. Regenerar in-place sobre una versió segellada: refusat. La
                 # sortida és el `new_version=True` d'aquest mateix endpoint (el bump), no forçar.
@@ -3198,6 +3269,11 @@ def generate_grading_view(request, model_id):
         'size_run': size_run,
         'base_size': model.base_size_label,
         'base_consolidada_des_de_fitting': n_consolidat,  # B3: POMs base consolidats (0 si cap)
+        # TRAM E — LA LLISTA DE TREBALL MANUAL, no un avís genèric: quins POMs i quines talles
+        # han sortit amb el valor de la talla base copiat perquè la regla STEP no en té valor.
+        # Buida quan no n'hi ha cap (una clau que hi és sempre és més fàcil de llegir que una
+        # que apareix i desapareix).
+        'step_base_copiada': informe.get('step_base_copiada', []),
         'rows': rows,
     })
 
@@ -3451,16 +3527,25 @@ def escalat_ajustar_talla_view(request, model_id):
                 # col·lapsava el pas i el break queia on no toca — d'aquí que reescriure el
                 # valor vigent d'una cel·la moqués la base (DIAGNOSI_MESURES_TEA_205, B1).
                 nova_base = valor
+                avisos_regla = []
                 if talla != base_size:
                     try:
                         _run_model, run_sistema, _pos, _bidx = escala_del_model(model)
                     except ValueError as e:
                         return Response({'error': str(e)}, status=400)
                     nova_base = propaga_ancoratges(
-                        rule, talla, valor, size_run,
+                        rule, talla, valor, size_run, warnings=avisos_regla,
                         run_sistema=run_sistema, base_label=base_size).get(base_size)
                 if nova_base is None:
-                    return Response({'error': "No s'ha pogut derivar la base des de la talla ancorada."}, status=400)
+                    # FIX-A/PAS-3 — EL MOTIU VIATJA. Des que la regla incompleta deixa de caure
+                    # al camp llegat, `propaga_ancoratges` pot tornar tot None, i el missatge
+                    # genèric d'aquí feia buscar el defecte a la talla ancorada quan el que
+                    # falla és la REGLA. `warnings` en porta la frase exacta.
+                    return Response(
+                        {'error': (avisos_regla[0] if avisos_regla
+                                   else "No s'ha pogut derivar la base des de la talla ancorada."),
+                         'code': 'regla_sense_delta' if avisos_regla else 'base_no_derivable'},
+                        status=400)
                 _write_base(model, pom, round(float(nova_base), 2), auth_user,
                             f'Escalat · ajust talla {talla} (propaga per regla)',
                             capa=capa, instancia=instancia, garment=garment)
@@ -5119,6 +5204,155 @@ def _sembra_step_des_dels_specs(model, pom_id):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 @bat_escriptura(SUP_ESCALAT)
+def set_step_valor_view(request, model_id, pom_id):
+    """TRAM E · LA PORTA DEL VALOR VERMELL (decisió d'Agus, 2026-08-21).
+
+    `POST /api/v1/models/<model_id>/pom/<pom_id>/step-valor/`
+    Body: `{talla, valor, capa?, instancia?, garment?}`
+
+    Una cel·la que ha sortit amb el valor de la talla base PRESTAT (regla STEP sense valor per a
+    aquella talla) s'edita AQUÍ, i el que s'escriu és **`valors_step` de la `ModelGradingRule`**.
+
+    ── PER QUÈ LA REGLA I NO UN OVERRIDE ──────────────────────────────────────────────────────
+    Les dues formes existien i el cens les va contrastar (acta d'E+F §2). La que decideix:
+    **propagar amb `new_version=True` esborra TOTS els `ModelGradingOverride` del model** —el
+    «llenç net», que és llei— o sigui que el tècnic hauria escrit vint xifres a mà i el primer
+    «Propagar» conscient se les hauria endut sense dir res. Escrivint la REGLA, el valor
+    sobreviu a totes les re-propagacions perquè **és** la regla: la cel·la surt del vermell per
+    la raó correcta, no perquè algú l'hagi tapada.
+
+    L'override no es jubila: es queda per al seu ús propi —la decisió puntual per talla que el
+    llenç net ha d'esborrar per disseny—. Són dues intencions diferents i ara tenen dues portes.
+
+    ── LA CADENA DE DELTES, QUE ÉS EL QUE FA AQUESTA PORTA DELICADA ───────────────────────────
+    `valors_step` no desa valors: desa **deltes entre veïns**, acumulats cap enfora des de la
+    base. Per tant escriure «la M mesura 101.5» vol dir escriure `delta[M] = 101.5 − valor(veí
+    cap a la base)`, i el veí ha de tenir valor CALCULABLE. Si el camí fins aquí té forats, el
+    valor demanat no es pot expressar i la porta **rebutja dient quina talla s'ha d'omplir
+    primer** (`STEP_CAMI_INCOMPLET`): omplir-los amb un 0 seria fabricar la corba plana que la
+    llei D2 prohibeix, i fer-ho en silenci seria pitjor.
+
+    Efecte lateral volgut i inherent al règim STEP: com que els deltes són relatius, corregir
+    una talla desplaça les de MÉS ENFORA que ja tinguin delta. És el que vol dir STEP.
+
+    Re-propaga IN PLACE sobre la versió vigent (com feia la porta d'override): sense això la
+    marca cauria —es deriva de la REGLA— però la xifra seguiria sent la prestada fins a la
+    propagació següent, i la pantalla diria dues coses alhora.
+    """
+    from fhort.models_app.models import ModelGradingRule
+    from fhort.pom.grading_regime import (CODI_STEP_CAMI_INCOMPLET, valida_valor_step)
+    from fhort.pom.grading_utils import step_delta_acumulat
+    from fhort.pom.services import escala_del_model, generate_graded_specs
+    from fhort.fitting.services import _resolve_working_size_fitting
+
+    data = request.data or {}
+    model = Model.objects.filter(pk=model_id).first()
+    if model is None:
+        return Response({'detail': 'Model no trobat.'}, status=404)
+
+    # Els eixos, pel punt únic de la casa: la regla només travessa `garment` (D4), però la
+    # MESURA BASE d'on surt la corba sí que és de (capa, instància, garment).
+    capa, instancia, garment = _identitat_de_mesura(data)
+
+    rule = ModelGradingRule.objects.filter(
+        model=model, pom_id=pom_id, garment=garment).first()
+    if rule is None:
+        return Response({'detail': "Aquest POM no té regla al model: informa-la des de Graduació.",
+                         'codi': 'STEP_SENSE_REGLA'}, status=400)
+
+    try:
+        size_run, run_sistema, _pos, base_idx = escala_del_model(model)
+    except (ValueError, AttributeError) as e:
+        return Response({'detail': f'Geometria de talles incompleta: {e}'}, status=400)
+
+    talla = (data.get('talla') or '').strip()
+    valor, err = valida_valor_step(rule.logica, talla, data.get('valor'),
+                                   model.base_size_label, size_run)
+    if err:
+        return Response({'detail': err['detall'], 'codi': err['codi']}, status=400)
+
+    base_bm = BaseMeasurement.objects.filter(
+        model=model, pom_id=pom_id, capa=capa, instancia=instancia, garment=garment,
+        is_active=True, base_value_cm__isnull=False).first()
+    if base_bm is None:
+        return Response({'detail': "Aquesta mesura no té valor de talla base: la corba no té d'on sortir.",
+                         'codi': 'STEP_SENSE_BASE'}, status=400)
+    base_val = float(base_bm.base_value_cm)
+
+    # Posició EN ESPAI DE SISTEMA (llei S24b) i el veí cap a la base.
+    #
+    # 🚨 AQUÍ HI HAVIA UN SEGON JUDICI DE «ÉS LA TALLA BASE?» (21/08). Deia el mateix fet que
+    # `valida_valor_step` acaba de dir quatre línies més amunt —i amb el mateix codi de
+    # rebuig, `STEP_TALLA_BASE`, escrit a mà—, però el MESURAVA D'UNA ALTRA MANERA: el punt
+    # únic compara ETIQUETES contra `model.base_size_label`; això comparava ÍNDEXS contra el
+    # `base_idx` d'`escala_del_model`. Mentre els dos coincideixin, aquesta branca no s'assoleix
+    # mai; i el dia que divergissin, la que mana és la primera —o sigui que el segon judici no
+    # protegeix de res i només fabrica la il·lusió que sí. És l'espècie del fix A i la del
+    # 400 d'avui: dues mesures del mateix fet.
+    # El que es queda és la FEINA (la posició, que fa falta per trobar el veí); el que marxa
+    # és el JUDICI. Si algun dia la porta ha de dir alguna cosa nova sobre la talla base, ho
+    # dirà `valida_valor_step`, que és qui en sap.
+    idx = _pos(talla)
+    idx_vei = idx - 1 if idx > base_idx else idx + 1
+    total_vei, falta = step_delta_acumulat(rule, run_sistema, base_idx, idx_vei)
+    if falta is not None:
+        return Response({
+            'detail': (f"Abans d'aquesta talla cal el valor de la {falta}: els valors d'una "
+                       "regla STEP són passos entre talles veïnes i es completen des de la "
+                       "talla base cap enfora."),
+            'codi': CODI_STEP_CAMI_INCOMPLET,
+            'talla_que_falta': falta,
+        }, status=400)
+    valor_vei = base_val + (total_vei or 0.0)
+
+    # El delta és el PAS entre el veí i aquesta talla, sempre comptat cap enfora (és la
+    # convenció de `valors_step`, i la que `step_delta_acumulat` desfà: pujant se suma, baixant
+    # es resta).
+    delta = round(valor - valor_vei if idx > base_idx else valor_vei - valor, 2)
+
+    with transaction.atomic():
+        # L'etiqueta es desa amb l'ORTOGRAFIA DEL RUN, com fa `valida_breaks`: el motor compara
+        # normalitzat, però la dada que es desa ha de ser llegible i estable.
+        etiqueta = next((x for x in run_sistema if x.strip().upper() == talla.upper()), talla)
+        vs = dict(rule.valors_step or {})
+        vs[etiqueta] = delta
+        rule.valors_step = vs
+        rule.origen = 'MANUAL'
+        rule.save(update_fields=['valors_step', 'origen', 'updated_at'])
+
+        sf = _resolve_working_size_fitting(model)
+        if sf is not None:
+            try:
+                generate_graded_specs(sf.id)
+            except SealedGradingVersionError as e:
+                transaction.set_rollback(True)
+                return Response(e.payload, status=409)
+            except ValueError as e:
+                transaction.set_rollback(True)
+                return Response({'detail': str(e)}, status=400)
+
+    # Les talles que ENCARA porten el valor prestat, amb el mateix predicat del motor: la
+    # pantalla ha de poder treure el vermell d'aquesta i deixar-lo a les que segueixen.
+    pendents = []
+    for etiqueta_run in size_run:
+        try:
+            i_run = _pos(etiqueta_run)
+        except (ValueError, KeyError):
+            continue
+        if step_delta_acumulat(rule, run_sistema, base_idx, i_run)[1] is not None:
+            pendents.append(etiqueta_run)
+
+    return Response({
+        'model': model.id, 'pom': int(pom_id), 'garment': garment,
+        'talla': etiqueta, 'delta': delta, 'valor': round(valor, 2),
+        'valors_step': rule.valors_step,
+        'step_base_copiada': pendents,
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@bat_escriptura(SUP_ESCALAT)
 def set_pom_regim_view(request, model_id, pom_id):
     """PG-4b-3a / P3 — UPSERT de la REGLA resident (ModelGradingRule) per (model, pom).
 
@@ -5129,6 +5363,9 @@ def set_pom_regim_view(request, model_id, pom_id):
       - increment_base: float|null   (delta base, p.ex. 4)
       - increment_break: float|null  (delta a partir del trencament, p.ex. 2.5)
       - talla_break_label: str|null  (talla d'inici del break; del run del model)
+      - breaks: [{inici, final, delta}]|null  (TRAM F — intervals; etiquetes del run del
+        SISTEMA en convenció de MOTOR, extrems inclusius, màx. `MAX_BREAKS`. Llista buida o
+        null = la regla no en porta, i el camp es desa NULL.)
     Si la resident no existeix: es materialitza des del fallback del catàleg; si tampoc n'hi ha,
     es crea de nou (autoria manual de la regla des de zero). Innocu sobre el grading persistent
     (no toca GradedSpec/GradingVersion; només el proper generate_graded_specs).
@@ -5139,6 +5376,7 @@ def set_pom_regim_view(request, model_id, pom_id):
     """
     from fhort.models_app.models import ModelGradingRule
     from fhort.pom.models import GradingRule
+    from fhort.pom.services import escala_del_model
 
     data = request.data
     has = lambda k: k in data   # noqa: E731 — actualització selectiva per presència de camp
@@ -5190,6 +5428,10 @@ def set_pom_regim_view(request, model_id, pom_id):
                 increment_break=(src.increment_break if src else None),
                 talla_break_label=(src.talla_break_label if src else None),
                 talla_break_pos=(src.talla_break_pos if src else None),
+                # TRAM F — els intervals viatgen amb la resta de la forma: una resident que neix
+                # del joc ha de néixer amb el relleu SENCER del joc, no amb la meitat. És el
+                # mateix defecte que el clon de perfil arrossegava fins al fix A.
+                breaks=(src.breaks if src else None),
                 # M3 — el criteri d'aquest upsert, i el sap ell mateix: si la fila NEIX del
                 # fallback del catàleg (`src`), ve d'aquell joc, per molt que el `MANUAL` de
                 # sota li digui el contrari —és exactament la mentida que M3 desfà. Si neix
@@ -5215,6 +5457,27 @@ def set_pom_regim_view(request, model_id, pom_id):
                 run = [s.strip() for s in model.size_run_model.replace(';', '·').split('·') if s.strip()]
                 if tbl in run:
                     rule.talla_break_pos = run.index(tbl)
+        # TRAM F — ELS INTERVALS. Es validen contra el run del SISTEMA (no el del model): és
+        # l'espai on el motor resol el relleu (llei S24b), i un interval que acabi a una talla
+        # que el sistema té i el model no fabrica segueix sent llegible — que és exactament la
+        # forma de tota regla d'1 break llegida com a interval.
+        #
+        # Només quan el client els ENVIA (`has`), com la resta de camps: sota STEP el relleu es
+        # conserva LATENT, igual que `increment_base` i `valors_step` (PG-4b-3a). El motor no
+        # el llegeix mentre el règim sigui STEP, i torna a manar si algú refà la regla LINEAR.
+        if has('breaks'):
+            try:
+                _sr, run_sistema, _p, _bi = escala_del_model(model)
+            except (ValueError, AttributeError):
+                run_sistema = []
+            nets, err_breaks = valida_breaks(
+                data.get('breaks'), logica=rule.logica, run=run_sistema,
+                increment_base=rule.increment_base)
+            if err_breaks:
+                return Response({'detail': err_breaks['detall'], 'codi': err_breaks['codi']},
+                                status=400)
+            rule.breaks = nets
+
         # El pas a STEP CONSERVA els valors vigents (DIAGNOSI_GRADING_POP, 30/07). Una regla
         # STEP viu dels seus `valors_step`; passar-hi amb el calaix buit deixava `_apply_rule`
         # retornant None per a cada cel·la i el `continue` de services.py:277 no reescrivia res
@@ -5230,7 +5493,7 @@ def set_pom_regim_view(request, model_id, pom_id):
         # A3 (2026-07-22): la condició viu ara a pom.grading_regime (punt únic del backend),
         # perquè aquest camí i el de `gravar_pom` no divergeixin.
         if es_linear_degenerada(rule.logica, rule.increment_base, rule.increment,
-                                rule.increment_break, rule.talla_break_label):
+                                rule.increment_break, rule.talla_break_label, rule.breaks):
             return Response({
                 'detail': MISSATGE_LINEAR_ZERO,
                 'codi': CODI_LINEAR_ZERO,
@@ -5252,4 +5515,7 @@ def set_pom_regim_view(request, model_id, pom_id):
         'increment_base': float(rule.increment_base) if rule.increment_base is not None else None,
         'increment_break': float(rule.increment_break) if rule.increment_break is not None else None,
         'talla_break_label': rule.talla_break_label,
+        # TRAM F — la resposta diu el relleu SENCER: la pantalla desa per presència de clau i ha
+        # de poder confirmar què ha quedat desat sense tornar a demanar la taula.
+        'breaks': rule.breaks or [],
     })

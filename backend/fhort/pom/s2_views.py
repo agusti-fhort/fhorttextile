@@ -2,6 +2,7 @@
 fhort/pom/s2_views.py — Sprint S2 views
 """
 import logging
+from decimal import Decimal, InvalidOperation
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -9,8 +10,26 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from fhort.accounts.capabilities import CONFIGURE, get_capabilities
+from fhort.pom.grading_regime import (CODI_LINEAR_ZERO, MISSATGE_LINEAR_ZERO,
+                                      es_linear_degenerada)
 
 logger = logging.getLogger(__name__)
+
+
+def _to_decimal_delta(v):
+    """Payload → `Decimal` amb la precisió del camp, o `None` si no és un número.
+
+    `Decimal` i no `float`: els camps de delta són `DecimalField(6,2)` i barrejar-hi floats fa
+    que la comparació `increment != increment_base` (la del backfill i la del gate) balli per
+    l'últim dígit. `str(v)` abans del Decimal perquè un float que arribi del JSON no s'hi coli
+    amb la seva cua binària.
+    """
+    if v is None or v == '':
+        return None
+    try:
+        return Decimal(str(v)).quantize(Decimal('0.01'))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
 
 
 @api_view(['GET'])
@@ -223,17 +242,40 @@ def clone_sizing_profile_view(request, pk):
             # sencer de l'original, no només el primer com feia el FK legacy.
             nou_rs.targets.set(original_rs.targets.all())
 
-            # Copy all the rules — tots els camps reals de GradingRule des de l'original
-            # (talla_base és NOT NULL; valors_step preserva la fidelitat del grading).
+            # 🚨 FIX-A/PAS-1 — EL CLON PERDIA ELS BREAKS, I NINGÚ HO PODIA VEURE.
+            #
+            # El comentari d'aquí deia «tots els camps reals de GradingRule» i en copiava SIS de
+            # deu: hi faltaven `increment_base`, `increment_break`, `talla_break_label`,
+            # `talla_break_pos` i `talla_base_label`. Un joc amb break clonat sortia amb el break
+            # ESBORRAT i el `increment` llegat intacte — i com que el motor gradua per
+            # `increment_base` (`_apply_rule`, forma canònica), el clon graduava PLA on
+            # l'original tenia relleu. Res petava, res avisava: la corba simplement era una
+            # altra. Al catàleg de `fhort` això són 98 regles LINEAR, de les quals les que porten
+            # break perdien la meitat de la seva llei en un clic.
+            #
+            # Es copia la regla SENCERA i s'enumeren els camps un a un a posta (no
+            # `pk=None; save()`): un camp nou al model ha d'aparèixer aquí i fer-se veure, no
+            # colar-se per una còpia màgica que ningú revisa.
             rules_creades = 0
             for rule in GradingRule.objects.filter(rule_set=original_rs):
                 GradingRule.objects.create(
                     rule_set=nou_rs,
                     pom=rule.pom,
                     talla_base=rule.talla_base,
+                    talla_base_label=rule.talla_base_label,
                     logica=rule.logica,
                     increment=rule.increment,
                     valors_step=rule.valors_step,
+                    # La FORMA CANÒNICA, que és la que el motor llegeix de debò.
+                    increment_base=rule.increment_base,
+                    increment_break=rule.increment_break,
+                    talla_break_label=rule.talla_break_label,
+                    talla_break_pos=rule.talla_break_pos,
+                    # TRAM F — I ELS INTERVALS. El fix A va trobar aquesta còpia amb sis camps
+                    # de deu i el clon graduant PLA on l'original tenia relleu; un camp de forma
+                    # nou que no s'afegís aquí tornaria a obrir exactament aquell forat. Per
+                    # això s'enumeren un a un: perquè el camp nou s'hi hagi de fer veure.
+                    breaks=rule.breaks,
                     actiu=rule.actiu,
                 )
                 rules_creades += 1
@@ -320,15 +362,42 @@ def update_grading_rule_view(request, rule_set_id, pom_codi):
         if not rule:
             return Response({'error': f'Regla {pom_codi} no trobada'}, status=404)
 
+        # 🚨 FIX-A/PAS-1 — `increment` SOL NO GRADUAVA RES.
+        #
+        # Aquesta porta escrivia el camp LLEGAT i prou. El motor gradua per `increment_base`
+        # (`_apply_rule`, forma canònica) i només cau a `increment` quan `increment_base` és
+        # NULL — cosa que al corpus d'avui no passa mai. Resultat: aquest PATCH tornava 200 OK,
+        # la resposta ensenyava el número nou, i la graduació no es movia ni un mil·límetre.
+        #
+        # El paràmetre públic segueix dient-se `increment` (és el contracte de l'endpoint); el
+        # que canvia és ON aterra: al delta que MANA. El mirall al llegat és TRANSITORI i mor al
+        # PAS 3, quan el camp es queda sense cap lector.
         if 'increment' in request.data:
-            rule.increment = float(request.data['increment'])
+            valor = _to_decimal_delta(request.data['increment'])
+            if valor is None:
+                return Response({'error': "increment ha de ser un número."}, status=400)
+            rule.increment_base = valor
+            rule.increment = valor          # mirall transitori (PAS 1) — v. la nota de dalt
         if 'logica' in request.data:
             rule.logica = request.data['logica']
-        rule.save(update_fields=['increment', 'logica'])
+        # A3 — el MATEIX guard que `set_pom_regim_view` i `gravar_pom_view`. Ara que aquesta
+        # porta mou la graduació de debò, també pot fabricar la mentida que A3 va tancar: una
+        # LINEAR amb delta 0 i sense trencament que es presenta com a graduada i no gradua.
+        # TRAM F — el guard jutja la regla SENCERA, intervals inclosos: aquesta porta pot
+        # canviar `logica` i deixar uns intervals penjats sota un règim que no els llegeix.
+        if es_linear_degenerada(rule.logica, rule.increment_base, rule.increment,
+                                rule.increment_break, rule.talla_break_label, rule.breaks):
+            return Response({'error': MISSATGE_LINEAR_ZERO, 'code': CODI_LINEAR_ZERO},
+                            status=400)
+        rule.save(update_fields=['increment', 'increment_base', 'logica'])
 
         return Response({
             'pom_codi': pom_codi,
-            'increment': rule.increment,
+            # `increment` es conserva a la resposta per contracte, però ara diu el delta que
+            # MANA (`increment_base`), no el llegat: un client que llegís l'antic hauria vist
+            # el número nou i una corba vella.
+            'increment': rule.increment_base,
+            'increment_base': rule.increment_base,
             'logica': rule.logica,
             'missatge': 'Regla actualitzada',
         })

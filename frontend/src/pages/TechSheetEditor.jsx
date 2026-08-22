@@ -32,7 +32,7 @@ import { useUnit, fmtMeasure } from './fittingShared'
 import { comptaPecesInserides, esPecaInserible } from '../utils/pecaInsercio'
 import { potTancar, treuAncoratgeFantasma } from '../utils/tracatPloma'
 import { reparteixCotes, superficieDeCotes } from '../utils/cotesAuto'
-import { nomsDePom } from '../utils/nomenclaturaPom'
+import { nomenclaturaDePom, nomsDePom } from '../utils/nomenclaturaPom'
 import { sufixIdentitat } from '../utils/capaInstancia'
 import { useDiccionariMesures } from '../utils/diccionariMesuresFont'
 // F4 — el `format` per pàgina: la regla d'escriptura i la de lectura, en un sol lloc.
@@ -40,10 +40,12 @@ import { ambFormat, hidratarPagines } from '../utils/paginesFtt'
 import { GARMENT_MARE, agrupaPerGarment, calArbrePerGarment, garmentDeFila } from '../utils/garmentFitxa'
 import { ampladaPerTextos, paginesDelRepartiment, repartimentEnPagines, trossosDeTalles } from '../utils/repartimentTaules'
 import { grupsDelFull } from '../utils/grupsDelFull'
-import { aDocument } from '../utils/breakConvention'
+// F4-QUATER — la frase del relleu no es fabrica AQUÍ: `fraseBreakQ8` és el vestit de paper del
+// formatador comú (`gradingRegime.fraseBreaks`), i és el mateix que pinten la consulta i l'Escalat.
 import { nomDeLaPeca } from '../utils/pecaDefinicio'
 import { etiquetaCapa, etiquetaInstancia } from '../utils/capaInstancia'
-import { filesFitting, filesGrading, filesNotes, filesSizeSet, filesSizeSetConsolidat } from '../utils/taulesQ8'
+import { filesBase, filesFitting, filesGrading, filesNotes, filesSizeSet, filesSizeSetConsolidat, liniesBreakQ8 } from '../utils/taulesQ8'
+import { identitatMesura } from '../utils/identitatMesura'
 
 const PaperFlatEditor = lazy(() => import('./PaperFlatEditor'))
 
@@ -921,9 +923,15 @@ function buildTableCellPrimitives(obj) {
   // passar). Si no hi cap, parteix en línies i la fila creix. La font és monoespaiada, així
   // que comptar caràcters n'és una mesura exacta, no una estimació.
   const charW = fontPx * 0.6
+  // F4-QUATER — ELS SALTS DE LÍNIA EXPLÍCITS COMPTEN. La columna «Breaks» apila un tram per
+  // línia amb `\n` de debò (Konva els respecta a les dues bandes); si aquí es comptessin els
+  // caràcters de la cadena SENCERA, una cel·la de tres trams sortiria com una línia i mitja i
+  // la fila es pintaria massa baixa —el text s'escaparia per sota, que és el mateix mode de
+  // fallada que la R4 va tancar a la capçalera—. Es compta cada línia per separat i se sumen.
   const liniesQueOcupa = (text, i, ampleChar = charW) => {
     const cabenPerLinia = Math.max(1, Math.floor((cw[i] - 2 * T_PAD) / ampleChar))
-    return Math.max(1, Math.ceil(String(text ?? '').length / cabenPerLinia))
+    return String(text ?? '').split('\n')
+      .reduce((n, l) => n + Math.max(1, Math.ceil(l.length / cabenPerLinia)), 0) || 1
   }
   // ── Q8-bis/C1 · LA CAPÇALERA FINA DEL FULL DE FITTING ─────────────────────────────────────
   // La fila negra invertida se'n va. L'espec de coherència de la família documental és el full
@@ -3592,14 +3600,21 @@ export default function TechSheetEditor() {
 
     return () => {
       cancelled = true
-      // Si venia d'una tasca, deixa-la en Pausa; allibera sempre el lock del .ftt.
+      // Si venia d'una tasca, tanca-la-hi; allibera sempre el lock del .ftt.
       // T4 — si la sortida ha passat pel modal, la tasca JA té el seu estat (Done o Paused) i
-      // aquesta pausa cega en demanaria una altra: Done→Paused és il·legal i Paused→Paused
-      // també, o sigui un 400 per una feina ja feta. `tascaResolta` és el testimoni.
+      // demanar-ne un altre seria un 400 per una feina ja feta. `tascaResolta` és el testimoni.
+      //
+      // 🔑 J-bis · R1 AL DESMUNTATGE, I EN UNA SOLA PETICIÓ. Aquí hi havia una **pausa cega**:
+      // tancar la pestanya pausava la tasca encara que la sessió hagués estat mirar i marxar.
+      // No es pot arreglar encadenant dues crides —`keepalive` garanteix que surti la petició
+      // que ja s'ha llançat, no la que vindria després de resoldre-la, i en tancar la pestanya
+      // la segona no s'enviaria mai—, així que **decideix el servidor**: `pausa_si_cal` fa que
+      // la MATEIXA petició que abans pausava sempre ara pausi només si hi ha hagut escriptura, i
+      // si no, torni la tasca a l'estat d'entrada (`Pending` inclòs, J-bis/1).
       if (taskId && !tascaResolta.current) {
-        fetch(`${API}/api/v1/model-task-items/${taskId}/transition/`, {
+        fetch(`${API}/api/v1/model-tasks/${taskId}/sortir-sense-escriptura/`, {
           method: 'POST', headers: authHeaders,
-          body: JSON.stringify({ to_status: 'Paused' }), keepalive: true,
+          body: JSON.stringify({ pausa_si_cal: true }), keepalive: true,
         }).catch(() => {})
       }
       fetch(`${API}/api/v1/ftt-documents/${fttHeadId.current}/unlock/`, {
@@ -5237,11 +5252,45 @@ export default function TechSheetEditor() {
   // LA CAPA JA TÉ COLUMNA, o sigui que el nom del POM deixa de portar-la com a apèndix. Queda el
   // nom canònic més la INSTÀNCIA, que és el que distingeix dues germanes de la mateixa capa —la
   // mateixa composició que el full descarregable (`nom · inst`).
+  //
+  // 🚨 H-bis/4 (21/08) · LA IDENTITAT QUE S'IMPRIMEIX ÉS LA RESIDENT AL MODEL, I NO N'HI HA
+  // CAP SEGONA. Les cinc taules beuen de TRES payloads diferents —`base-measurements/`,
+  // `taula-mesures` i el grid del `PieceFitting`— i cadascun bateja la identitat de la mesura
+  // amb els camps que té a mà. Amb cada taula resolent el nom i el codi del SEU payload, la
+  // mateixa fila podia sortir batejada de dues maneres al mateix document; i a les taules que
+  // beuen del grid hi sortia sempre la del CATÀLEG, perquè aquell payload no serveix ni
+  // `nom_canonic_model` ni `client_alias` —o sigui que el BATEIG DEL MODEL, el que el tècnic
+  // escriu a la cel·la del nom de Mesures, no hi arribava mai (la regla d'or del 31/07,
+  // trencada justament a la superfície que s'imprimeix).
+  //
+  // MANA EL RESIDENT: `pomRows` és el `BaseMeasurement` VIU del model —`nom_fitxa`, àlies del
+  // client, bateig canònic i traduït— i és exactament la fila que la pantalla de Mesures pinta.
+  // Es busca per IDENTITAT SENCERA (pom · capa · instància · prenda), que és el que distingeix
+  // la sisa dreta de l'esquerra i la mare del Short; per `pom_id` pelat, dues germanes hi
+  // caurien a sobre i una s'imprimiria amb el nom de l'altra.
+  //
+  // Sense resident —una fila que ve d'un fitting antic i que el model ja no té— es cau als
+  // camps de la fila mateixa: el pitjor cas és el bateig d'abans, mai una columna muda.
+  const residentsQ8 = useMemo(() => {
+    const m = new Map()
+    for (const bm of pomRows || []) m.set(identitatMesura(bm), bm)
+    return m
+  }, [pomRows])
+  const residentQ8 = (fila) => residentsQ8.get(identitatMesura(fila)) || fila
   const nomPomQ8 = (fila) => {
-    const { canonic } = nomsDePom(fila)
-    const inst = etiquetaInstancia(fila.instancia, dicc)
+    const r = residentQ8(fila)
+    const { canonic } = nomsDePom(r)
+    // LA INSTÀNCIA VIU DINS DEL NOM (llei de Mesures, 05/08): paraula sencera i en anglès
+    // canònic, mai un sufix enganxat al codi. Es llegeix del resident, que és qui la té
+    // SEMBRADA; la de la fila hi fa de recanvi perquè totes dues surten de la mateixa clau.
+    const inst = etiquetaInstancia(r.instancia || fila.instancia, dicc)
     return `${canonic}${inst ? ` · ${inst}` : ''}`
   }
+  // H-bis/3 — LA NOMENCLATURA, EN COLUMNA PRÒPIA A LES CINC TAULES. Resolutor ÚNIC
+  // (`nomenclaturaDePom`: nom_fitxa → àlies del client → codi canònic → codi de la casa) i
+  // sobre el RESIDENT, per la mateixa raó que el nom: el codi que el tècnic veu a Mesures és
+  // el que la fitxa ha d'imprimir.
+  const codiPomQ8 = (fila) => nomenclaturaDePom(residentQ8(fila)) || nomenclaturaDePom(fila)
   const capaQ8 = (fila) => etiquetaCapa(fila.capa, dicc, 'en')
   // T4 — la DATA de la font de cada taula, en el format del document (dd/mm/aaaa, el mateix que
   // la capçalera de fitxa). Sense data no es pinta res: una data inventada en un document que va
@@ -5274,6 +5323,13 @@ export default function TechSheetEditor() {
     charMm: CHAR_MM_Q8, padMm: 4, minMm: 34, maxMm: 62,
   })
   const cellaPom = (fila) => ({ text: nomPomQ8(fila), wrap: true })
+  // L'AMPLADA DE LA COLUMNA DEL CODI, del corpus real i en UNA línia: un codi partit en dues
+  // deixa de servir per al que serveix —trobar la fila d'un cop d'ull— i els codis de la casa
+  // fan dos o tres caràcters. El sostre és per als àlies llargs d'algun client.
+  const ampladaCodiQ8 = (files) => ampladaPerTextos(files.map(codiPomQ8), {
+    charMm: CHAR_MM_Q8, padMm: 4, minMm: 14, maxMm: 30, linies: 1,
+  })
+  const cellaCodi = (fila) => ({ text: codiPomQ8(fila), wrap: true })
   // T3 — L'AMPLE QUE UNA TAULA DE TALLES NO POT PASSAR. Si al full d'ara ja hi cap, no es mou res;
   // si no, el sostre és l'A4 apaïsat i el que sobri es parteix per talles. Mai més amunt.
   const ampleUtilQ8 = () => Math.max(fmt.w - 2 * MARGE_GRUP, AMPLE_UTIL_MAX)
@@ -5302,6 +5358,126 @@ export default function TechSheetEditor() {
     if (v == null || Number(v) === 0) return { text: '—', centrat: true }
     const n = xifra(Math.abs(v))
     return { text: Number(v) > 0 ? `+${n}` : `−${n}`, centrat: true }
+  }
+  // ── F4-QUATER · LA COLUMNA «BREAKS» DE LA FITXA ────────────────────────────────────────────
+  //
+  // 🚨 AQUÍ HI HAVIA `Break` (14mm) + `B.Size` (18mm) I ES FONEN EN UNA. Eren les dues meitats
+  // d'un sol trencament, i des del tram F ja no sabien dir el que la regla diu: amb tres trams,
+  // quin dels tres és «el» Δ de la columna `Break`? La fitxa se n'havia inventat un apany —el
+  // primer tram partit entre les dues cel·les— i la consulta i l'Escalat se n'havien inventat
+  // dos de diferents. Ara les tres diuen la MATEIXA frase, i qui la fabrica és `fraseBreakQ8`,
+  // que és el vestit de paper de `fraseBreaks`.
+  //
+  // 🔑 **LA FUSIÓ ALLIBERA 6mm** (32 → 26), i no és un detall de maquetació: el repartiment en
+  // bandes d'aquesta taula paga 14mm per talla, i 6mm menys de columnes fixes és una talla més
+  // per banda tan bon punt el residu ho permet (amb `codi`/`nom` als seus mínims i l'A4
+  // apaïsat: 10 talles → 11). Amb noms de POM llargs el residu se l'endú el nom i el compte no
+  // canvia — l'espai es recupera igualment, però qui el cobra depèn del corpus.
+  //
+  // ⚠️ ELS 26mm SÓN UN PRESSUPOST MESURAT, no un número rodó: a 9pt monoespaiat la cel·la en
+  // cap 11 caràcters, i una línia de tram típica («M→XL +3.0», 9) hi entra sencera. L'amplada
+  // la mana la línia MÉS LLARGA, no la suma: per això apilar no costa mil·límetres.
+  //
+  // 🚨 I APILAR ÉS EL QUE MATA EL COMPTADOR. Aquesta cel·la deia `M→L +2,0 +1` —un tram i el
+  // NOMBRE dels que faltaven, amb la gramàtica exacta d'un Δ—, i és el que va fer llegir una
+  // fitxa congelada com si imprimís «regla nova amb corba vella». V. `liniesBreaks`.
+  const cellaBreaks = (f, talles) => {
+    const linies = liniesBreakQ8(f, talles, xifra)
+    if (!linies.length) return { text: '—', centrat: true }
+    // Els salts de línia són REALS (`\n`): Konva els respecta a les dues bandes —llenç viu i
+    // export— i `liniesQueOcupa` els compta, o sigui que la fila creix el que toca. `wrap` hi
+    // va perquè una línia que no hi cabés partís per paraula en lloc de perdre el final en
+    // silenci, que al paper que va al fabricant és la llei de sempre (R4/Q8).
+    return { text: linies.join('\n'), centrat: true, wrap: true }
+  }
+
+  // ── Q8e · TAULA DE MESURES DE TALLA BASE, PER PEÇA ──────────────────────────
+  //
+  // 🔑 LA TAULA QUE JA VA EXISTIR, TORNADA A NÉIXER SOBRE L'EIX DE LA PRENDA. La versió antiga
+  // (`insertTableBaseMeasures`, morta a `d15e198b`) cablava `garmentId: GARMENT_MARE` amb un
+  // comentari que ho admetia, i **aquell és exactament el motiu pel qual es va retirar**: era la
+  // mateixa taula sense l'eix de la peça. El que torna no és el codi d'aleshores, és la seva
+  // llei portada a la família Q8 —grups apilats per peça, capçaleres en anglès fix, fila de
+  // títol amb data, sòl de 8pt i paginació sense tallar files—.
+  //
+  // 🔑 «L'ÚLTIM FIT VÀLID» NO ÉS CAP CONSULTA A PART, i per això aquí no hi ha cap crida nova:
+  // la llei del domini —*l'última mesura escrita és la veritat, temporal i no d'origen*— ja està
+  // MATERIALITZADA a `BaseMeasurement.base_value_cm`, que `consolidate_base_from_fitting` escriu
+  // en tancar el fitting i en propagar. Llegir la base ÉS llegir l'últim fit vàlid.
+  //
+  // FONT ÚNICA I JA CARREGADA: `pomRows` és el `results` de `base-measurements/` que l'editor
+  // baixa al muntatge (`:3618`). No s'hi torna: dues lectures de la mateixa vora són dues
+  // veritats per a la mateixa cel·la el dia que una arribi abans que l'altra.
+  //
+  // 🚨 EL CAS BUIT NO ES PODA. Hi entren TOTES les mesures vives, inclosos els POM materialitzats
+  // sense xifra: *la cel·la buida en una fitxa impresa és on el tècnic anota a mà; podar les
+  // files en silenci seria decidir per ell què no li importa* (llei de la versió retirada, que
+  // es conserva sencera). La porta `baseMeasuresOk` ja garanteix que almenys una porti xifra.
+  //
+  // SENSE PARTICIÓ PER TALLES: aquesta taula té QUATRE columnes fixes i no creix amb el run, o
+  // sigui que `trossosDeTalles` no hi té res a repartir. El que sí que l'aplica és el sostre
+  // vertical, que és de `inserirGrupPaginat` i el comparteix amb les germanes.
+  //
+  // 🚨 H-bis/1 · LA COLUMNA DE TOLERÀNCIA ÉS REVOCADA (Agus, 21/08, sobre la captura del 1383).
+  // El brief d'H l'autoritzava i H la va construir (`cellaTol`, retirada amb aquest commit); la
+  // QA visual la treu. Les columnes són LAYER · POM · NOM · ‹talla base› i prou. Es deixa dit
+  // aquí perquè la tolerància SÍ que arriba resolta del backend (`_tol_vigent`) i qui llegeixi
+  // el payload la trobarà: no hi és perquè no la volem al paper, no perquè no la tinguem.
+  const insertTaulaBase = (garment) => {
+    if (!locked) return
+    const files = filesBase(pomRows)
+    if (!files.length) { flash(t('tech_sheet.flash_empty_table')); return }
+    // La talla surt del MODEL (`base_size_label`), la mateixa que el run declara: és la que
+    // encapçala la columna de xifres, perquè la columna que porta la xifra és qui declara de
+    // quina talla parla (llei T0, 31/07). Sense talla declarada, el rètol pelat.
+    const base = (model?.base_size_label || '').trim()
+    const grups = nomesLaPeca(grupsQ8(files), garment)
+    if (!grups.length) { flash(t('tech_sheet.flash_empty_table')); return }
+    const wPom = ampladaPomQ8(files)
+    const wCodi = ampladaCodiQ8(files)
+    const entrades = grups.map(g => ({
+      taula: {
+        id: uid(), type: 'table', layer: 'free', kind: 'q8_base',
+        garmentId: g.garment, titol: g.titol || '', unitat: unitatDeclarada,
+        // T4 — LA DATA D'AQUESTA TAULA ÉS LA DE L'ESCRIPTURA MÉS RECENT DEL GRUP, i no una
+        // data de document: el que la taula documenta és un estat consolidat que s'ha anat
+        // escrivint mesura a mesura (l'últim fitting tancat, l'última propagació, l'última
+        // correcció a mà). La més recent és la que diu de quan és el que hi ha imprès.
+        data: dataDoc(g.files.reduce((max, f) => (
+          f.updated_at && (!max || f.updated_at > max) ? f.updated_at : max), null)),
+        nomTaula: tEn('tech_sheet.q8_taula_base'),
+        columns: [
+          // 🚨 H-bis/2 · L'ORDRE ÉS LAYER · POM · NOM, I ÉS EL DE TOTA LA FAMÍLIA. El codi va
+          // ENTRE la capa i el nom, mai després: és el precedent del full descarregable
+          // (`# · LAYER · CODE · NAME`) que l'espec de Q8 ja citava, i és l'ordre en què es
+          // llegeix una fila de mesures —primer on és, després què és, després com se'n diu—.
+          // Aquesta taula la va néixer al revés (nom i, sense títol, el codi al darrere) i la
+          // QA d'Agus sobre el 1383 la inverteix.
+          { key: 'layer', label: tEn('tech_sheet.q8_col_layer'), width: 16 },
+          { key: 'pom', label: tEn('tech_sheet.q8_col_pom'), width: wCodi },
+          // I ARA SÍ QUE PORTA TÍTOL. La decisió del 31/07 —«la nomenclatura no s'etiqueta»—
+          // valia per a una columna MUDA al final de la taula, on el que hi havia sota
+          // s'explicava sol. Amb tres columnes d'identitat seguides, una sense capçalera enmig
+          // de dues que en tenen no és sobrietat: és no dir quina és quina.
+          { key: 'nom', label: tEn('tech_sheet.q8_col_name'), width: wPom },
+          // La columna de la base va MARCADA (`base: true`): el builder hi pinta la franja
+          // grisa, la mateixa que la taula d'escalat. Aquí no hi ha cap altra columna de
+          // xifres amb qui confondre-la, i justament per això la franja diu què s'hi mira.
+          { key: 'base', label: base || tEn('tech_sheet.q8_col_base'), width: 20, base: true },
+        ],
+        rows: g.files.map(f => [
+          capaQ8(f), cellaCodi(f), cellaPom(f), xifra(f.base),
+        ]),
+        style: { fontSize: 9, capcaleraFina: true, zebra: true },
+        snapshot: {
+          model_id: model.id, talla_base: base || null, garment: g.garment,
+          snapshot_at: new Date().toISOString(),
+        },
+      },
+    }))
+    const n = inserirGrupPaginat(entrades)
+    if (n) flash(t('tech_sheet.q8_flash_inserted', { count: n }))
+    setTablePicker(null)
   }
 
   // LA GRAELLA DE L'ÚLTIMA SESSIÓ TANCADA, en un sol lloc: la demanen les TRES taules que en
@@ -5335,6 +5511,7 @@ export default function TechSheetEditor() {
     if (!files.length) { flash(t('tech_sheet.flash_empty_table')); return }
     const grups = nomesLaPeca(grupsQ8(files), garment)
     const wPom = ampladaPomQ8(files)
+    const wCodi = ampladaCodiQ8(files)
     const snapshotComu = {
       model_id: model.id, fitting_session_id: sessioTancada.id,
       talla_base: base || null, snapshot_at: new Date().toISOString(),
@@ -5347,7 +5524,11 @@ export default function TechSheetEditor() {
         data: dataDoc(sessioTancada.data), nomTaula: tEn('tech_sheet.q8_taula_fitting'),
         columns: [
           { key: 'layer', label: tEn('tech_sheet.q8_col_layer'), width: 16 },
-          { key: 'pom', label: tEn('tech_sheet.q8_col_pom'), width: wPom },
+          // H-bis/3 — LA NOMENCLATURA HI FALTAVA. Aquesta taula va cap al fabricant amb les
+          // xifres amb què la prenda va arribar, i la fila s'hi ha de poder localitzar pel codi
+          // que el client fa servir als seus documents. Mateixa posició que a totes: LAYER · POM · NOM.
+          { key: 'pom', label: tEn('tech_sheet.q8_col_pom'), width: wCodi },
+          { key: 'nom', label: tEn('tech_sheet.q8_col_name'), width: wPom },
           // LA CAPÇALERA DE LA COLUMNA DE LA BASE ÉS L'ETIQUETA REAL DE LA TALLA (S, L…), no la
           // paraula «base»: és la mateixa llei que la T0 va fixar el 31/07 —la columna que porta
           // la xifra és qui declara de quina talla parla— i aquí encara mana més, perquè al
@@ -5359,7 +5540,7 @@ export default function TechSheetEditor() {
           { key: 'notes', label: tEn('tech_sheet.q8_col_notes'), width: 52 },
         ],
         rows: g.files.map(f => [
-          capaQ8(f), cellaPom(f), xifra(f.aprovada),
+          capaQ8(f), cellaCodi(f), cellaPom(f), xifra(f.aprovada),
           cellaActual(f.actual, f.aprovada), cellaDif(f.dif),
           // Els veredictes són DADA DE DOMINI (el que va imprès cap al fabricant): no es
           // tradueixen ni s'abrevien aquí — la casa els escriu sencers a la fitxa.
@@ -5411,9 +5592,12 @@ export default function TechSheetEditor() {
 
     const grups = nomesLaPeca(grupsQ8(files), garment)
     const wPom = ampladaPomQ8(files)
+    const wCodi = ampladaCodiQ8(files)
     // T3 — mateixa partició vertical que el size set, i pel mateix sostre: aquí les columnes
-    // fixes són sis (Layer · POM · Rule · Δ · Break · B. Size) i cada talla n'ocupa una.
-    const bandes = trossosDeTalles(talles.length, 16 + wPom + 18 + 14 + 14 + 18, 14, ampleUtilQ8())
+    // fixes són SET (Layer · POM · Name · Rule · Δ · Break · B. Size) i cada talla n'ocupa una.
+    // H-bis/3: la del codi hi entra amb la seva amplada real, o el repartidor comptaria una
+    // taula més estreta del que és i les talles no cabrien on diu que caben.
+    const bandes = trossosDeTalles(talles.length, 16 + wCodi + wPom + 18 + 14 + 26, 14, ampleUtilQ8())
     const entrades = grups.flatMap(g => bandes.map(([bi, bf], bandaIdx) => ({
       taula: {
         id: uid(), type: 'table', layer: 'free', kind: 'q8_grading',
@@ -5424,11 +5608,15 @@ export default function TechSheetEditor() {
         data: dataDoc(consolidat.dataVersio), nomTaula: tEn('tech_sheet.q8_taula_grading'),
         columns: [
           { key: 'layer', label: tEn('tech_sheet.q8_col_layer'), width: 16 },
-          { key: 'pom', label: tEn('tech_sheet.q8_col_pom'), width: wPom },
+          // 🚨 H-bis/3 — AQUESTA TAULA SORTIA SENSE CAP NOMENCLATURA. Una corba de graduació
+          // que va al fabricant sense el codi de la mesura obliga a creuar-la a mà amb una
+          // altra taula per saber de quina mesura parla cada fila.
+          { key: 'pom', label: tEn('tech_sheet.q8_col_pom'), width: wCodi },
+          { key: 'nom', label: tEn('tech_sheet.q8_col_name'), width: wPom },
           { key: 'rule', label: tEn('tech_sheet.q8_col_rule'), width: 18 },
           { key: 'delta', label: tEn('tech_sheet.q8_col_delta'), width: 14 },
-          { key: 'break', label: tEn('tech_sheet.q8_col_break'), width: 14 },
-          { key: 'breaksize', label: tEn('tech_sheet.q8_col_break_size'), width: 18 },
+          // F4-QUATER — `Break` (14) + `B.Size` (18) fosos en «Breaks» (26): v. `cellaBreaks`.
+          { key: 'breaks', label: tEn('tech_sheet.q8_col_breaks'), width: 26 },
           // La talla base va MARCADA al model (`base: true`): el builder hi pinta la franja de
           // realçat, igual que a la T1b. Les talles NO es tradueixen: són dades de domini.
           ...talles.slice(bi, bf).map(sl => (sl === base
@@ -5436,15 +5624,14 @@ export default function TechSheetEditor() {
             : { key: sl, label: sl, width: 14 })),
         ],
         rows: g.files.map(f => [
-          capaQ8(f), cellaPom(f),
+          capaQ8(f), cellaCodi(f), cellaPom(f),
           // El RÈGIM és dada de domini (LINEAR/STEP/FIXED): no es tradueix ni s'abreuja.
           { text: f.regla || '—', centrat: true },
-          cellaIncrement(f.delta), cellaIncrement(f.delta_break),
-          // 🔒 EL BREAK ES PRESENTA EN CONVENCIÓ DE DOCUMENT, i la dada NO es toca: la BD desa la
-          // PRIMERA talla del tram gran i el full del client escriu l'ÚLTIMA del tram petit, que
-          // és una posició de diferència dins del run. Sense run o sense traducció possible, «—»:
-          // una etiqueta desplaçada per error és indistingible d'una de correcta.
-          { text: aDocument(f.talla_break, talles) || '—', centrat: true },
+          cellaIncrement(f.delta),
+          // 🔑 EL RELLEU, EN UNA SOLA FRASE I EN CONVENCIÓ DE MOTOR. La volta ±1 d'`aDocument`
+          // ha mort d'aquesta taula amb la columna que la demanava: un rang amb els dos extrems
+          // dits («M→XL») no és ambigu i no necessita que ningú el tradueixi al full del client.
+          cellaBreaks(f, talles),
           ...talles.slice(bi, bf).map(sl => xifra(f.valors?.[sl]) || '–'),
         ]),
         style: { fontSize: 9, capcaleraFina: true, zebra: true },
@@ -5501,10 +5688,12 @@ export default function TechSheetEditor() {
 
     const grups = nomesLaPeca(grupsQ8(files), garment)
     const wPom = ampladaPomQ8(files)
+    const wCodi = ampladaCodiQ8(files)
     // T3 — LA PARTICIÓ VERTICAL. Amb dues columnes per talla el run de cinc torna a cabre en A4
     // vertical; el fallback només s'activa quan ni l'A4 apaïsat no hi arriba, i llavors parteix
     // per TALLA SENCERA (la teòrica i l'Actual d'una talla no se separen mai).
-    const bandes = trossosDeTalles(talles.length, 16 + wPom, 26, ampleUtilQ8())
+    // H-bis/3: l'ample fix creix amb la columna del codi, o el repartidor mentiria.
+    const bandes = trossosDeTalles(talles.length, 16 + wCodi + wPom, 26, ampleUtilQ8())
     const entrades = grups.flatMap(g => bandes.map(([bi, bf], bandaIdx) => ({
       taula: {
         id: uid(), type: 'table', layer: 'free', kind: 'q8_size_set',
@@ -5516,7 +5705,11 @@ export default function TechSheetEditor() {
         data: dataSizeSet, nomTaula: tEn('tech_sheet.q8_taula_sizeset'),
         columns: [
           { key: 'layer', label: tEn('tech_sheet.q8_col_layer'), width: 16 },
-          { key: 'pom', label: tEn('tech_sheet.q8_col_pom'), width: wPom },
+          // 🚨 H-bis/3 — I AQUESTA TAMBÉ SORTIA SENSE NOMENCLATURA, amb l'agreujant que és la
+          // més ampla de totes: creuar-la a mà amb una altra per identificar la fila era
+          // exactament el que la columna del codi estalvia.
+          { key: 'pom', label: tEn('tech_sheet.q8_col_pom'), width: wCodi },
+          { key: 'nom', label: tEn('tech_sheet.q8_col_name'), width: wPom },
           // T3 · DUES COLUMNES PER TALLA, NO TRES. La teòrica i com va ARRIBAR, i prou.
           ...talles.slice(bi, bf).flatMap(sl => [
             // La talla base porta la marca al MODEL: el builder hi pinta la franja de realçat, la
@@ -5530,7 +5723,7 @@ export default function TechSheetEditor() {
           ]),
         ],
         rows: g.files.map(f => [
-          capaQ8(f), cellaPom(f),
+          capaQ8(f), cellaCodi(f), cellaPom(f),
           ...talles.slice(bi, bf).flatMap(sl => {
             const c = f.celles?.[sl] || {}
             return [xifra(c.teorica) || '–', cellaActual(c.actual, c.teorica)]
@@ -5564,6 +5757,7 @@ export default function TechSheetEditor() {
 
     const grups = nomesLaPeca(grupsQ8(files), garment)
     const wPom = ampladaPomQ8(files)
+    const wCodi = ampladaCodiQ8(files)
     const entrades = grups.map(g => ({
       taula: {
         id: uid(), type: 'table', layer: 'free', kind: 'q8_notes',
@@ -5571,12 +5765,15 @@ export default function TechSheetEditor() {
         data: dataDoc(sessioTancada.data), nomTaula: tEn('tech_sheet.q8_taula_notes'),
         columns: [
           { key: 'layer', label: tEn('tech_sheet.q8_col_layer'), width: 16 },
-          { key: 'pom', label: tEn('tech_sheet.q8_col_pom'), width: wPom },
+          // H-bis/3 · LA MATEIXA CAPÇALERA D'IDENTITAT QUE LES ALTRES QUATRE. Una nota
+          // s'anota AL COSTAT de la mesura, i la mesura es diu amb el codi i el nom.
+          { key: 'pom', label: tEn('tech_sheet.q8_col_pom'), width: wCodi },
+          { key: 'nom', label: tEn('tech_sheet.q8_col_name'), width: wPom },
           { key: 'base', label: base || tEn('tech_sheet.q8_col_base'), width: 18 },
           { key: 'notes', label: tEn('tech_sheet.q8_col_notes'), width: 100 },
         ],
         rows: g.files.map(f => [
-          capaQ8(f), cellaPom(f), xifra(f.valors?.[base]?.teorica),
+          capaQ8(f), cellaCodi(f), cellaPom(f), xifra(f.valors?.[base]?.teorica),
           { text: f.nota, wrap: true },
         ]),
         style: { fontSize: 9, capcaleraFina: true, zebra: true },
@@ -5642,6 +5839,8 @@ export default function TechSheetEditor() {
     if (variant === 't2') { insertTableT2(); return }
     // Q8 — res a triar: la sessió és L'ÚLTIMA TANCADA, no una de la llista. Oferir-ne un
     // selector convidaria a compondre la fitxa amb un fitting que ja s'ha superat.
+    // Q8e — la base no demana res: la seva font ja és a `pomRows` des del muntatge.
+    if (variant === 'q8_base') { insertTaulaBase(garment); return }
     if (variant === 'q8_fitting') { insertTaulaFitting(garment); return }
     if (variant === 'q8_grading') { insertTaulaGrading(garment); return }
     if (variant === 'q8_size_set') { insertTaulaSizeSet(garment); return }
@@ -5866,12 +6065,14 @@ export default function TechSheetEditor() {
   // text lliure de l'import i pot partir una sola peça en zones («cos», «caputxa»); `garment`
   // és la prenda del model. Mateixa font (pomRows), cap crida nova, i cap ordre alterat.
   //
-  // ⚠️ DATAT 2026-08-10: avui això dona SEMPRE una sola branca (la mare) per dues raons
-  // independents —la comporta CHECK de T2 no deixa entrar cap altre valor a la columna, i el
-  // payload de `base-measurements/` encara NO serveix l'eix (ho farà quan existeixi
-  // `ModelGarment`, que és qui resol `garment.X or model.X` en un sol punt; T9 no ho anticipa).
-  // Re-verificar amb: `grep -rn "class ModelGarment" backend/`. El dia que la vora el porti,
-  // aquestes dues línies ja tenen l'arbre engegat sense tocar res més.
+  // ⚠️ LA NOTA DATADA DEL 10/08 DEIA QUE AIXÒ DONA SEMPRE UNA SOLA BRANCA «perquè el payload de
+  // `base-measurements/` encara NO serveix l'eix», I DES DE SET-2/F1 ÉS FALS: el payload el serveix
+  // (`pom/wizard_views.py:674`, `'garment': bm.garment`) i `ModelGarment` existeix
+  // (`models_app/models.py:1711`) — que és exactament la re-verificació que aquella nota
+  // demanava. Es corregeix aquí i no s'hi deixa: una nota datada i falsa sobre una FONT és el
+  // que fa néixer el brief equivocat de la sessió següent (li va passar a la taula Q8e).
+  // El nombre de branques el mana ara la DADA: amb totes les mesures a la mare en surt una, i
+  // amb una peça 02 materialitzada en surten dues, sense tocar res més.
   const grupsPom = agrupaPerGarment(pomRows)
   const arbrePom = calArbrePerGarment(grupsPom)
   // C5 — `pecesDelModel` (les prendes deduïdes de les files de POM) se n'ha anat amb la casella
@@ -5913,6 +6114,14 @@ export default function TechSheetEditor() {
   // TANCADA (una taula de fitting sense fitting no és incompleta, no existeix); escalat i size
   // set només volen que el model tingui mesures, perquè la seva font és la corba consolidada.
   const Q8_TAULES = [
+    // LA BASE VA PRIMERA perquè és el SUBSTRAT: les altres tres la pressuposen —el fitting hi
+    // compara, l'escalat hi arrenca la corba i el size set n'és la projecció—. Qui compon la
+    // fitxa la posa a sobre i les altres a sota, i l'ordre del panell hi ha de convidar.
+    // La seva porta és `baseMeasuresOk`, la mateixa que l'escalat i el size set i pel mateix
+    // motiu: no demana graduació (és justament la taula que no en porta), només que el model
+    // tingui almenys una mesura de talla base AMB xifra.
+    { k: 'q8_base', icon: 'ti-ruler', label: t('tech_sheet.q8_taula_base'),
+      ok: baseMeasuresOk, motiu: t('tech_sheet.lib_table_no_base_values') },
     { k: 'q8_fitting', icon: 'ti-ruler-2', label: t('tech_sheet.q8_taula_fitting'),
       ok: !!sessioTancada, motiu: t('tech_sheet.lib_table_no_closed_session') },
     { k: 'q8_grading', icon: 'ti-chart-grid-dots', label: t('tech_sheet.q8_taula_grading'),
@@ -7180,10 +7389,28 @@ export default function TechSheetEditor() {
   // navegués pel seu compte, es faria fora de la fitxa amb la tasca oberta i el temps corrent,
   // que és exactament el que aquest modal existeix per no deixar passar. Una sola porta, i el
   // que canvia és cap a on dona.
+  //
+  // J-bis · R1 — I EL PREDICAT QUE FALTAVA A AQUESTA PORTA: **sense escriptura, cap modal.**
+  //
+  // L'editor de fitxa era l'última eina que preguntava «Has acabat?» a qui havia entrat, mirat i
+  // marxat. La resta de superfícies ja tenien el guard des del tram J; aquesta va quedar fora
+  // perquè el fitxer estava reservat. El senyal és el mateix i no se n'inventa cap:
+  // `sessio_amb_escriptura` surt de `TimerEntrada.escriptura_at`, que estampa `batec_escriptura`
+  // —i per a la fitxa, `SUP_FITXA` (`ftt_document_views.py`)—. Mai `last_heartbeat`.
+  //
+  // Qui decideix és el SERVIDOR: aquí es demana la tornada i s'obeeix. Si diu que no ho ha
+  // revertit (ha arribat un autosave entremig, o el tram és d'un altre), es cau al modal de
+  // sempre — el seu veredicte mana sobre la foto del client.
   const sortirDeLaFitxa = (desti = `/models/${id}`) => {
     if (!taskId || acabant) { navigate(desti); return }
     modelTasks.get(taskId)
-      .then(({ data }) => setAcabant({ ...data, desti }))
+      .then(async ({ data }) => {
+        if (data?.status === 'InProgress' && data.sessio_amb_escriptura === false) {
+          const r = await modelTasks.sortirSenseEscriptura(taskId).catch(() => null)
+          if (r?.data?.revertit) { tascaResolta.current = true; navigate(desti); return }
+        }
+        setAcabant({ ...data, desti })
+      })
       .catch(() => navigate(desti))   // si no es pot llegir, no es reté ningú aquí
   }
 

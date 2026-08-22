@@ -10,6 +10,9 @@ import RunRestrictionEditor from "./RunRestrictionEditor"
 import { RunRestrictionTags } from "./RunRestrictionTags"
 import useAuthStore from "../store/auth"
 import { sizingProfiles, gradingRuleSets } from "../api/endpoints"
+// 🔒 La talla de break es PRESENTA en convenció de DOCUMENT, com a les altres cinc
+// superfícies que la pinten. Una que en fes servir només una menteix.
+import { aDocument } from "../utils/breakConvention"
 
 export function SizeSetDetail({ profileId, onClose, onRefresh }) {
   const { t } = useTranslation()
@@ -107,6 +110,8 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
   if (!profile) return null
 
   const sizes = profile.size_definitions || []
+  // El run en etiquetes, per traduir el break a convenció de DOCUMENT.
+  const runEtiquetes = sizes.map(x => x?.etiqueta ?? x).filter(Boolean)
   const rules = profile.grading_rules_all || profile.grading_rules_preview || []
 
   return (
@@ -296,13 +301,29 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
                             </button>
                           </div>
                         ) : (
-                          <span style={{ color: "var(--text-main)", fontWeight: 500 }}>+{format(rule.increment)}</span>
+                          /* FIX-A/PAS-4 — `rule.increment` ara ve d'`increment_base` (el delta
+                             que MANA) i pot ser null quan la regla no en té. Un `+—` és més
+                             honest que un `+0`, que semblaria una regla que no gradua — i la que
+                             no gradua és FIXED, que és una altra cosa. El Δ del TRENCAMENT hi va
+                             al costat: ensenyar mig delta d'una regla amb break és mentir a
+                             mitges. La talla surt en convenció de DOCUMENT, com a tot arreu. */
+                          <span style={{ color: "var(--text-main)", fontWeight: 500 }}>
+                            {rule.increment == null ? '—' : `+${format(rule.increment)}`}
+                            {rule.increment_break != null && (
+                              <span style={{ color: 'var(--text-soft)', fontWeight: 400 }}>
+                                {' '}· {t('size_library.col_break')} +{format(rule.increment_break)}
+                                {rule.talla_break_label
+                                  ? ` @${aDocument(rule.talla_break_label, runEtiquetes) || rule.talla_break_label}`
+                                  : ''}
+                              </span>
+                            )}
+                          </span>
                         )}
                       </td>
                       {profile.is_custom && !isEditing && (
                         <td style={{ padding: "5px 4px", textAlign: "center" }}>
                           <button
-                            onClick={() => handleEdit(rule.pom_codi, rule.increment)}
+                            onClick={() => handleEdit(rule.pom_codi, rule.increment ?? 0)}
                             style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: 'var(--fs-body)', padding: "0 4px" }}
                             title={t('size_library.edit_increment_title')}
                           >

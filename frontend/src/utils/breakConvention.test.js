@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { aDocument, aMotor, etiquetaRegla, etiquetesDelRun, opcionsDocument } from './breakConvention.js'
+import { aDocument, aMotor, etiquetesDelRun, opcionsDocument } from './breakConvention.js'
 
 const RUN = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL']
 
@@ -49,20 +49,6 @@ test('les opcions ofertes exclouen l\'última talla (no és representable)', () 
   assert.deepEqual(opcionsDocument([]), [])
 })
 
-test('l\'etiqueta compacta parla en convenció de document', () => {
-  assert.equal(
-    etiquetaRegla({ increment_base: 2, increment_break: 3, talla_break_label: 'S' }, RUN, 'trencament'),
-    '+2 · trencament XS +3')
-  assert.equal(
-    etiquetaRegla({ increment_base: 1, increment_break: null, talla_break_label: null }, RUN, 'trencament'),
-    '+1')
-})
-
-test('sense run traduïble, l\'etiqueta OMET el break en comptes de dir-lo malament', () => {
-  assert.equal(
-    etiquetaRegla({ increment_base: 2, increment_break: 3, talla_break_label: 'S' }, [], 'trencament'),
-    '+2')
-  assert.equal(
-    etiquetaRegla({ increment_base: null, increment_break: 3, talla_break_label: 'S' }, RUN, 'trencament'),
-    '')
-})
+// 🚨 F4-QUATER — ELS TESTS DE `etiquetaRegla` SE N'HAN ANAT amb la funció, a
+// `gradingRegime.test.js`. El que aquest banc guarda és NOMÉS la volta ±1 d'una talla sola, que
+// és l'única peça d'aquest fitxer que queda amb lector de producte.

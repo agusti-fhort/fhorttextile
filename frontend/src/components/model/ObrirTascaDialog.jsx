@@ -4,15 +4,15 @@ import { useTranslation } from 'react-i18next'
 import { overlayBase } from '../ui/overlay'
 import { selS } from '../ui/buttons'
 import {
-  CARA_ALBARANADA, CARA_CAP, CARA_CONFLICTE, CARA_LLIURADA,
+  CARA_ALBARANADA, CARA_CAP, CARA_CONFLICTE, CARA_FETA, CARA_LLIURADA,
 } from '../../utils/caraObrirTasca'
 
 /**
- * F2.1 · EL MODAL D'OBRIR TASCA — UNA peça, tres cares.
+ * F2.1 · EL MODAL D'OBRIR TASCA — UNA peça, quatre cares.
  *
- * Tres cares i no tres components a posta: el que canvia entre elles són el títol, la frase i les
- * opcions; el gest és el mateix («què vols fer amb aquesta tasca?»). Tres components voldria dir
- * tres llocs on la regla d'or es pot trencar per separat.
+ * Quatre cares i no quatre components a posta: el que canvia entre elles són el títol, la frase i
+ * les opcions; el gest és el mateix («què vols fer amb aquesta tasca?»). Quatre components voldria
+ * dir quatre llocs on la regla d'or es pot trencar per separat.
  *
  *   ⚠️ REGLA D'OR — aquest modal NO ES MUNTA en el cas normal. Qui decideix és
  *   `utils/caraObrirTasca` (pur i provat); si retorna CARA_CAP el consumidor obre directament i
@@ -22,7 +22,11 @@ import {
  * i les altres opcions sí (reassignar el rellotge d'algú, crear feina facturable). El defecte
  * d'un diàleg és el que passa quan algú prem Enter sense llegir.
  *
- * `onAccio(accio)` amb: 'consultar' | 'treballar' | 'ronda' | 'correccio'.
+ * J · R3 — LA QUARTA CARA: FETA. Una tasca `Done` que no és lliurable no té volta que obrir, i
+ * abans d'aquest tram tampoc tenia diàleg: queia a CARA_CAP i **entrar-hi a mirar la reobria**.
+ * Ara demana el gest, com les altres tres, i com les altres tres el defecte és consultar.
+ *
+ * `onAccio(accio)` amb: 'consultar' | 'treballar' | 'reobrir' | 'ronda' | 'correccio'.
  */
 export default function ObrirTascaDialog({ cara, tasca, rondaOberta, onAccio, onCancel }) {
   const { t } = useTranslation()
@@ -59,6 +63,16 @@ export default function ObrirTascaDialog({ cara, tasca, rondaOberta, onAccio, on
         { clau: 'correccio', etiqueta: t('obrir_tasca.lliurada_correccio'),
           nota: t('obrir_tasca.lliurada_correccio_nota') },
       ],
+    },
+    [CARA_FETA]: {
+      icona: 'ti-checkbox',
+      titol: t('obrir_tasca.feta_titol', { tasca: nomTasca }),
+      cos: t('obrir_tasca.feta_cos'),
+      opcions: [{
+        clau: 'reobrir',
+        etiqueta: t('obrir_tasca.feta_reobrir'),
+        nota: t('obrir_tasca.feta_reobrir_nota'),
+      }],
     },
     [CARA_ALBARANADA]: {
       icona: 'ti-file-invoice',

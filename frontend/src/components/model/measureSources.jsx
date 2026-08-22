@@ -7,7 +7,7 @@
 // sessió (lockRules) reusant el 3r argument de `regimeLeadCol`.
 
 import { pieceFittings, fittingSessions, baseMeasurements } from '../../api/endpoints'
-import { buildFittingGroups, buildFittingRows, makeFittingOnSave, regimeLeadCol } from './fittingGridAdapter'
+import { buildFittingGroups, buildFittingRows, makeFittingOnSave } from './fittingGridAdapter'
 import { identitatMesura } from '../../utils/identitatMesura'
 
 // Deriva pomRows + versionNumbers + baseLabel d'un `grid` (pieceFittings.get). Còpia fidel de la
@@ -119,9 +119,23 @@ export const fittingSource = {
     return baseMeasurements.update(bmId, { nom_fitxa: value || null })
   },
 
-  // Règim a la capçalera de fila. En mode sessió (lockRules) va READ-ONLY (3r arg true): els deltes
-  // s'editen a Escalat, no en presa. regimeLeadCol ja gestiona la branca de lectura.
-  buildLeadCols(raw, ctx) {
-    return [regimeLeadCol(ctx.t, () => {}, true, { sizeRun: ctx.sizeRun })]
+  // ── S45/G5 · LA COLUMNA RÈGIM NO ENTRA A LA GRAELLA DE FITTING ─────────────────────
+  // Hi anava en READ-ONLY (3r argument de `regimeLeadCol` a `true`: «en mode sessió els
+  // deltes s'editen a Escalat, no en presa»), i aquell `true` ja deia tot el que calia
+  // saber: era una columna que ocupava carril STICKY, no es podia tocar, i deia una dada
+  // que té dues cases pròpies —MESURES, on la regla s'AUTORA, i ESCALAT, on es veu amb el
+  // seu Δ i el seu break al costat. Aquí, enmig d'on es PREN una mesura, era soroll amb
+  // dret de pas fix, i el que hi ha a la dreta —FIT 4, FIT 5, FIT ACTUAL, veredicte i
+  // nota— és el que la modista mira.
+  //
+  // NOMÉS EN AQUEST MODE. `escalatRuleLeadCols` (Escalat) i les columnes de regla
+  // d'`EditableTable` (Mesures) no es toquen: allà la columna ÉS la feina. `regimeLeadCol`
+  // es queda sencer i exportat —Escalat el reusa— i cap lògica canvia: això és PRESENTACIÓ.
+  //
+  // 🔑 I ÉS AQUESTA LA GRAELLA DE FITTING QUE ES VEU, no la de `FittingDetail`: des de la
+  // dissolució (Sprint Y), una sessió VIVA redirigeix aquí (`FittingDetail.jsx:629`) i a
+  // aquella pàgina només hi queden les sessions SEGELLADES. Les dues han perdut la columna.
+  buildLeadCols() {
+    return []
   },
 }

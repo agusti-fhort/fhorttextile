@@ -8,8 +8,11 @@ import { clauRegla, filesDeLaPeca } from '../../utils/identitatMesura'
 import { useEstatDiccionari } from '../../utils/diccionariMesuresFont'
 import { useTraduccioPoms } from '../../utils/traduccioPomFont'
 import { useElements } from '../../utils/vocabulariDominiFont'
-import { aDocument, aMotor, opcionsDocument } from '../../utils/breakConvention'
 import { InfoTraduccio, AMPLADES } from '../EditableTable/EditableTable'
+import ColumnaBreaks from './EditorIntervals'
+import {
+  intervalsIncomplets, isDegenerateLinear, relleuLlegat, relleuResidual,
+} from '../../utils/gradingRegime'
 
 // LA GRADUACIÓ ÉS UNA SUPERFÍCIE PRÒPIA (P0.5d · Agus, 06/08, a pantalla).
 //
@@ -99,16 +102,18 @@ const acceptaDeltes = (logica) => logica === 'LINEAR' || !logica
 
 const buit = (v) => v === null || v === undefined || v === ''
 
-// Mirall EXACTE de `es_linear_degenerada` (backend `pom/grading_regime.py`): LINEAR amb delta 0 i
-// sense trencament no gradua res i el backend el rebutja amb 400 LINEAR_INCREMENT_ZERO. Es mira
-// aquí perquè la persona ho vegi a la fila i no en un toast després d'haver premut Gravar.
-function esLinearDegenerada(r) {
-  if (r.logica !== 'LINEAR') return false
-  const teBreak = !buit(r.talla_break_label)
-    || (!buit(r.increment_break) && Number(r.increment_break) !== 0)
-  if (teBreak) return false
-  return buit(r.increment_base) || Number(r.increment_base) === 0
-}
+// 🚨 AQUÍ HI HAVIA UNA TERCERA CÒPIA DEL PREDICAT (retirada el 21/08).
+//
+// `es_linear_degenerada` (backend) declara tenir UN mirall al front, i és `gradingRegime.js`.
+// Aquest fitxer en tenia un SEGON, transcrit a mà, que feia exactament el mateix — i per tant
+// era la còpia que un dia diria una altra cosa. La llei que la casa ja ha pagat dues vegades
+// (les amplades d'`EditableTable`, el fallback del llegat a DOS nodes del fix A) diu que dues
+// implementacions del mateix predicat es bifurquen el dia que algú en toca una: aquí n'hi
+// havia tres per a una sola llei.
+//
+// Ara la fila consulta `isDegenerateLinear` del punt únic. La llei, dita un sol cop:
+//     DEGENERADA ⟺ delta general == 0  I  cap interval amb delta ≠ 0
+//                  (la forma vella hi compta: un `increment_break` llegat ≠ 0 la salva)
 
 /** Text lliure → número o null. Accepta la coma decimal, que és com s'escriu aquí. */
 function num(v) {
@@ -137,6 +142,16 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
   // 🔴 EL MAP DE LA LLEI. Neix buit i només hi entra el que un gest humà canvia.
   // Map<pom_id, {logica?, increment_base?, increment_break?, talla_break_label?}>
   const [edicions, setEdicions] = useState(new Map())
+  // F4-BIS — L'ERROR DE LA PORTA D'INTERVALS, PER FILA. `Map<clauRegla, {codi, detall}>`. Va a
+  // part del `feedback` de peu perquè un `BREAKS_*` és de LA REGLA que el va provocar: amb el
+  // missatge només a la barra de baix, qui havia tocat sis files havia d'endevinar quina. El
+  // patró és el de la porta de `valors_step`, que retorna l'error al mateix control.
+  const [errBreaks, setErrBreaks] = useState(new Map())
+  // 🚨 ELS XIPS A MIG ESCRIURE, PER FILA. `Map<clauRegla, {complet}>`. La columna avisa quan en
+  // té un d'obert, i «Gravar» el barra: sense això, un xip complet però sense ✓ es perdia en
+  // silenci, i un de començat sobre una regla sense relleu desat feia saltar el guard de
+  // degenerada amb un missatge que a l'ull era fals (el xip amb el seu Δ era a la pantalla).
+  const [esborranys, setEsborranys] = useState(new Map())
 
   const carrega = useCallback(() => {
     if (!modelId) return
@@ -154,6 +169,11 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
   // lot. Copiar aquí una segona manera de demanar-ho seria el que la casa no vol.
   const traduccioDe = useTraduccioPoms(files.map(r => r.pom_id))
   const sizeRun = useMemo(() => data?.size_run ?? [], [data])
+  // TRAM F — el run que s'ofereix als INTERVALS és el del SISTEMA: és l'espai on el motor els
+  // resol (llei S24b) i on cau el final de tota regla d'1 break llegida com a interval. Si el
+  // payload encara no el porta (consumidor vell), es cau al del model i es diu al picker.
+  const runIntervals = useMemo(
+    () => (data?.run_sistema?.length ? data.run_sistema : sizeRun), [data, sizeRun])
 
   // El valor VIGENT d'un camp: l'edició si n'hi ha (encara que sigui null: esborrar és una
   // decisió), i si no, el que va arribar del servidor.
@@ -169,10 +189,19 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
     increment_base: valor(row, 'increment_base'),
     increment_break: valor(row, 'increment_break'),
     talla_break_label: valor(row, 'talla_break_label'),
+    // TRAM F — els intervals són part de la regla vigent: es validen i es desen amb la resta.
+    breaks: valor(row, 'breaks'),
   }), [valor])
 
   const canvia = useCallback((row, camp, v) => {
     setFeedback(null)
+    // Tocar la fila retira el seu error: el que es veia era el veredicte del payload ANTERIOR i
+    // deixar-lo posat mentre algú n'escriu un de nou és mentir sobre el que hi ha a pantalla.
+    setErrBreaks(prev => {
+      const clau = clauRegla(row)
+      if (!prev.has(clau)) return prev
+      const next = new Map(prev); next.delete(clau); return next
+    })
     setEdicions(prev => {
       const next = new Map(prev)
       const cur = { ...(next.get(clauRegla(row)) || {}) }
@@ -189,6 +218,27 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
     })
   }, [])
 
+  /**
+   * F4-BIS — ESCRIURE ELS INTERVALS D'UNA FILA, I RETIRAR LA FORMA VELLA SI N'HI HAVIA.
+   *
+   * 🚨 Una regla no pot quedar-se amb LES DUES FORMES. El motor ja sap què fer-ne (`breaks`
+   * mana, `grading_utils.intervals_de`), però `increment_break`/`talla_break_label` seguirien
+   * dient un trencament que ja no governa i que altres superfícies —la consulta, l'export, un
+   * import futur— encara llegeixen. El fòssil no és inofensiu: és una segona veritat.
+   *
+   * Per això, quan el relleu que es veia sortia NOMÉS de la forma vella (`relleuLlegat`) i
+   * algú l'edita, la mateixa crida envia els intervals I buida els dos camps llegats. Això és
+   * el que vol dir «editar-la escriu la forma nova»: no és una migració —cap fila que ningú
+   * toqui es mou— sinó la conseqüència d'un gest humà sobre aquella regla concreta.
+   */
+  const escriuBreaks = useCallback((row, regla, llista) => {
+    if (relleuLlegat(regla, runIntervals)) {
+      canvia(row, 'increment_break', null)
+      canvia(row, 'talla_break_label', null)
+    }
+    canvia(row, 'breaks', llista)
+  }, [canvia, runIntervals])
+
   // Les files que l'usuari ha tocat, i les que a més queden en LINEAR degenerada (que el backend
   // rebutjaria). Es compten per POM, que és la unitat de la regla.
   const reglesTocades = useMemo(() => [...edicions.entries()], [edicions])
@@ -196,7 +246,18 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
     const out = new Set()
     files.forEach(r => {
       if (!edicions.has(clauRegla(r))) return
-      if (esLinearDegenerada(reglaDe(r))) out.add(r.pom_id)
+      if (isDegenerateLinear(reglaDe(r))) out.add(r.pom_id)
+    })
+    return out
+  }, [files, edicions, reglaDe])
+  // TRAM F — les files amb un interval a MITGES. Es compten a part de les degenerades perquè
+  // el motiu és un altre i el missatge també: allà la regla no gradua, aquí encara no està
+  // dita. Les dues barren el Gravar, i les dues ho diuen a la fila.
+  const incompletes = useMemo(() => {
+    const out = new Set()
+    files.forEach(r => {
+      if (!edicions.has(clauRegla(r))) return
+      if (intervalsIncomplets(reglaDe(r))) out.add(r.pom_id)
     })
     return out
   }, [files, edicions, reglaDe])
@@ -206,13 +267,37 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
   // clau, o sigui que el que no s'envia no es toca.
   const grava = useCallback(async () => {
     if (!reglesTocades.length || gravant) return
+    // 🔑 PRIMER DE TOT: un xip obert. Va abans que els altres dos guards a posta — és el que
+    // la persona pot resoldre amb un clic, i és el que explica per què la regla que veu escrita
+    // a pantalla encara no consta enlloc. Dir-li «no gradua res» amb un +2 davant dels ulls era
+    // tècnicament cert i pràcticament una mentida.
+    if (esborranys.size) {
+      const noms = files.filter(r => esborranys.has(clauRegla(r)))
+        .map(r => r.pom_code).filter((v, i, a) => a.indexOf(v) === i)
+      setFeedback({ type: 'err',
+        text: `${t('grading.intervals.esborrany_obert')} (${noms.join(', ')})` })
+      return
+    }
     if (degenerades.size) {
-      setFeedback({ type: 'err', text: t('graduacio.superficie.err_linear_zero') })
+      // 🔑 EL MISSATGE DIU QUINES FILES. Un lot pot portar sis regles i el text genèric obligava
+      // a endevinar quina el barrava — i quan el que s'acabava d'editar era una ALTRA fila, la
+      // conclusió natural era que el guard es queixava de la que tenies a la mà. És el mateix
+      // criteri que ja regeix per als `BREAKS_*`: un error té adreça.
+      const noms = files.filter(r => degenerades.has(r.pom_id))
+        .map(r => r.pom_code).filter((v, i, a) => a.indexOf(v) === i)
+      setFeedback({ type: 'err',
+        text: `${t('graduacio.superficie.err_linear_zero')} (${noms.join(', ')})` })
+      return
+    }
+    if (incompletes.size) {
+      setFeedback({ type: 'err', text: t('grading.intervals.incomplet') })
       return
     }
     setGravant(true)
     setFeedback(null)
+    setErrBreaks(new Map())
     const fallits = []
+    const errsFila = new Map()
     for (const [clau] of reglesTocades) {
       const camps = { ...(edicions.get(clau) || {}) }
       const pomId = camps.__pom_id
@@ -223,6 +308,21 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
       if ('increment_base' in camps) payload.increment_base = num(camps.increment_base)
       if ('increment_break' in camps) payload.increment_break = num(camps.increment_break)
       if ('talla_break_label' in camps) payload.talla_break_label = camps.talla_break_label || null
+      // TRAM F — la llista SENCERA. La resta de camps van per presència de clau (i el que no
+      // s'envia no es toca), però un interval esborrat només es pot dir enviant la llista tal
+      // com ha quedat: `[]` vol dir «aquesta regla ja no en té cap», i el servidor el desa NULL.
+      if ('breaks' in camps) payload.breaks = camps.breaks || []
+      // 🔑 CANVIAR DE RÈGIM NO DEIXA FÒSSILS. Desar una regla com a FIXED (o ZERO) en retira
+      // el relleu: els intervals i els dos camps llegats. Sense això, tornar-la a LINEAR demà
+      // ressuscitaria un trencament que ningú ha escrit —i que la columna, per la regla del
+      // silenci, ni tan sols ensenyava mentre era FIXED: un fòssil invisible.
+      // ⚠️ MAI SOTA STEP: allà el relleu és LATENT per llei (PG-4b-3a, el pas STEP↔LINEAR
+      // no-destructiu). Un STEP està de pas; un FIXED és una destinació.
+      if (relleuResidual(reglaDe(files.find(r => clauRegla(r) === clau) || {}))) {
+        payload.breaks = []
+        payload.increment_break = null
+        payload.talla_break_label = null
+      }
       if (!Object.keys(payload).length) continue
       try {
         // SET-2/#12d — L'EIX HI VA. `set_pom_regim_view` resol per `(model, pom, garment)`
@@ -231,10 +331,17 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
         await models.setPomRule(modelId, pomId, { ...payload, garment })
       } catch (e) {
         const fila = files.find(r => clauRegla(r) === clau)
-        fallits.push(`${fila?.pom_code || pomId}: ${e?.response?.data?.detail || t('graduacio.superficie.err_generic')}`)
+        const cos = e?.response?.data || {}
+        // Els `BREAKS_*` tenen adreça: la columna de la fila. La resta segueix anant al peu,
+        // que és on van els errors que no són d'un control concret.
+        if (String(cos.codi || '').startsWith('BREAKS_')) {
+          errsFila.set(clau, { codi: cos.codi, detall: cos.detail || cos.detall || '' })
+        }
+        fallits.push(`${fila?.pom_code || pomId}: ${cos.detail || t('graduacio.superficie.err_generic')}`)
       }
     }
     setGravant(false)
+    setErrBreaks(errsFila)
     if (fallits.length) {
       setFeedback({ type: 'err', text: fallits.join(' · ') })
       return
@@ -243,11 +350,15 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
     setFeedback({ type: 'ok', text: t('graduacio.superficie.gravat', { count: reglesTocades.length }) })
     carrega()
     onGravat?.()
-  }, [reglesTocades, gravant, degenerades, edicions, modelId, files, t, carrega, onGravat])
+  }, [reglesTocades, gravant, degenerades, incompletes, esborranys, edicions, modelId, files, t,
+      carrega, onGravat])
 
   // ── Cel·les ────────────────────────────────────────────────────────────────────────────────
+  // S45/G2 — `center`, com la cel·la que substitueix mentre s'edita. Amb l'input a `right` i
+  // la cel·la a `center` la xifra SALTAVA en clicar-hi: la mateixa dada no pot canviar de lloc
+  // segons si s'està mirant o tocant.
   const inputStyle = (ko) => ({
-    width: '100%', boxSizing: 'border-box', textAlign: 'right',
+    width: '100%', boxSizing: 'border-box', textAlign: 'center',
     border: `0.5px solid ${ko ? 'var(--danger, #b3261e)' : 'var(--border)'}`,
     borderRadius: 4, padding: '2px 6px', fontSize: FS_VAL, font: 'inherit',
     fontVariantNumeric: 'tabular-nums', background: 'var(--white)', color: 'var(--text-main)',
@@ -267,27 +378,31 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
     // En tocar-la neix la seva (el #12d ho fa amb l'upsert per `(model, pom, garment)`), i
     // llavors ja no és heretada: per això el marcador cau amb `tocat`.
     const heretada = !tocat && row.regla_model?.heretat === true
-    const ko = degenerades.has(row.pom_id)
+    const ko = degenerades.has(row.pom_id) || incompletes.has(row.pom_id)
     const inst = etiquetaInstancia(row.instancia)
     // Mateixa regla que la consulta: la traducció només surt si NO repeteix el nom visible.
     const nomVisible = nomDe(row)
     const candidat = row.nom_traduit_model || row.nom_ca || traduccioDe(row.pom_id) || ''
     const traduit = candidat && candidat !== nomVisible ? candidat : ''
     const deltes = acceptaDeltes(regla.logica)
-    // D'ON VE EL QUE ES VEU. Això ho decidia `regla_origen` tot sol, i mentia: la regla del
-    // JOC (`pom.GradingRule`) no té camp `origen`, o sigui que quan el model gradua de debò pel
-    // joc arribava `null` i aquí es llegia «no és MANUAL... doncs del model». Just al revés.
+    // S45/G3 — AQUÍ VIVIA `delJoc`, EL CÀLCUL DE LA COLUMNA «VE DE», i es retira amb ella
+    // (`no-unused-vars` és ERROR en aquest repo). El que aquell càlcul sabia queda escrit
+    // perquè no s'hagi de tornar a descobrir si algun dia la columna torna:
     //
-    // Ara mana `regla_es_resident`, que diu de quina TAULA ha sortit la regla, i `origen` només
-    // desempata dins de les residents:
-    //   · no resident        → del JOC en directe (el model no té cap regla pròpia)
-    //   · resident + MANUAL  → del MODEL (algú l'ha escrita, aquí o a Gravar POM)
-    //   · resident + la resta→ del JOC (còpia materialitzada en assignar-lo)
-    const delJoc = !!regla.logica
-      && (row.regla_es_resident === false || (row.regla_es_resident && row.regla_origen !== 'MANUAL'))
+    //   Ho decidia `regla_origen` tot sol, i MENTIA: la regla del JOC (`pom.GradingRule`) no
+    //   té camp `origen`, o sigui que quan el model graduava de debò pel joc arribava `null` i
+    //   es llegia «no és MANUAL... doncs del model». Just al revés. La bona mana per
+    //   `regla_es_resident` —de quina TAULA ha sortit la regla— i `origen` només desempata
+    //   dins de les residents:
+    //     · no resident        → del JOC en directe (el model no té cap regla pròpia)
+    //     · resident + MANUAL  → del MODEL (algú l'ha escrita, aquí o a Gravar POM)
+    //     · resident + la resta→ del JOC (còpia materialitzada en assignar-lo)
+    //
+    //   const delJoc = !!regla.logica && (row.regla_es_resident === false
+    //     || (row.regla_es_resident && row.regla_origen !== 'MANUAL'))
     const regims = regimsAutorables.includes(row.logica) || !row.logica
       ? regimsAutorables : [...regimsAutorables, row.logica]
-    return (
+    const fila = (
       <tr key={row.id} title={heretada ? t('graduacio.superficie.regla_heretada') : undefined}
         style={{ background: tocat ? 'var(--fila-activa)' : 'transparent',
           color: heretada ? 'var(--text-soft)' : undefined }}>
@@ -316,20 +431,23 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
             {traduit && <InfoTraduccio text={traduit} />}
           </div>
         </td>
-        {/* EL VALOR DE TALLA BASE, COLUMNA PRÒPIA — el mateix carril que la consulta (`--sel`
-            acotat pels dos costats), en LECTURA: aquí no es canvien mesures, es decideix com
-            creixen. Anava enganxat al nom amb un `marginLeft`, i així les xifres no formaven
-            columna: no es podien llegir en vertical, que és com es mira una taula de mesures. */}
-        <td style={{ ...tdS, textAlign: 'right', background: 'var(--gold-pale)',
+        {/* EL VALOR DE TALLA BASE, COLUMNA PRÒPIA — el mateix carril que la consulta, en
+            LECTURA: aquí no es canvien mesures, es decideix com creixen. Anava enganxat al nom
+            amb un `marginLeft`, i així les xifres no formaven columna: no es podien llegir en
+            vertical, que és com es mira una taula de mesures.
+            S45/G1 — I EL FONS TORNA AL PATRÓ DE LA FAMÍLIA: `--sel`, no `--gold-pale`. El
+            comentari de dalt ja deia «(`--sel` acotat pels dos costats)» i el codi pintava
+            `--gold-pale`: la taula germana (`EditableTable:1388`) porta `--sel` i aquesta havia
+            pujat un graó pel seu compte. Dues taules que es miren de costat amb la MATEIXA
+            columna en dos tons diuen que la columna no és la mateixa, i sí que ho és.
+            S45/G2 — i els números van CENTRATS i amb `tabular-nums`, com tots els valors
+            numèrics de la superfície (v. la nota de criteri, amunt). */}
+        <td style={{ ...tdS, textAlign: 'center', background: 'var(--sel)',
                      borderLeft: '1px solid var(--border)', borderRight: '1px solid var(--border)',
                      fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
           {row.base_value_cm === null || row.base_value_cm === undefined
             ? <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>—</span>
             : row.base_value_cm}
-        </td>
-        {/* Procedència: què mira la persona quan es pregunta «d'on surt això». */}
-        <td style={{ ...tdS, fontSize: FS_HEAD, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-          {!regla.logica ? '' : delJoc ? t('graduacio.superficie.origen_joc') : t('graduacio.superficie.origen_model')}
         </td>
         <td style={tdS}>
           {/* El desplegable de règim ha de CABRE a l'amplada de la família (`AMPLADES.regim`):
@@ -353,30 +471,29 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
             title={deltes ? '' : t('graduacio.superficie.delta_na', { regim: regla.logica })}
             style={{ ...inputStyle(ko), opacity: deltes ? 1 : 0.4 }} />
         </td>
+        {/* F4-BIS — LA COLUMNA «BREAKS» OCUPA EL LLOC DE «Δ BREAK» + «TALLA BREAK». Les dues
+            columnes que hi havia aquí deien entre totes dues UN trencament, i en convencions
+            diferents; el xip en diu N i cadascun sencer. La talla de break en convenció de
+            DOCUMENT segueix vivint a la CONSULTA (`EditableTable`), que és de lectura: aquí,
+            que és d'autoria, tot parla en convenció de MOTOR i no hi ha res que ho contradigui
+            al costat. */}
         <td style={tdS}>
-          {/* Q2 — `size={4}`: un `<input>` amb `width:100%` conserva l'amplada INTRÍNSECA del
-              seu `size` per defecte (20 caràcters), i en una taula d'amplada de contingut és
-              aquesta la que mana: la columna del delta demanava 202px per a un «1.5», el doble
-              que a la consulta. Amb `size` curt, la columna la decideix el `minWidth` de la
-              capçalera, que és el de la família. */}
-          <input type="text" inputMode="decimal" size={4} disabled={!deltes}
-            value={buit(regla.increment_break) ? '' : regla.increment_break}
-            onChange={e => canvia(row, 'increment_break', e.target.value)}
-            title={deltes ? '' : t('graduacio.superficie.delta_na', { regim: regla.logica })}
-            style={{ ...inputStyle(ko), opacity: deltes ? 1 : 0.4 }} />
-        </td>
-        <td style={tdS}>
-          {/* CONVENCIÓ DE DOCUMENT a la vista, MOTOR a la dada (v. utils/breakConvention). */}
-          <select value={aDocument(regla.talla_break_label, sizeRun) || ''} disabled={!deltes}
-            onChange={e => canvia(row, 'talla_break_label', aMotor(e.target.value, sizeRun))}
-            style={{ ...inputStyle(ko), textAlign: 'left', cursor: deltes ? 'pointer' : 'default',
-                     opacity: deltes ? 1 : 0.4 }}>
-            <option value="">—</option>
-            {opcionsDocument(sizeRun).map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
+          <ColumnaBreaks rule={regla} run={runIntervals} readOnly={!deltes}
+            onEsborrany={estat => setEsborranys(prev => {
+              const clau = clauRegla(row)
+              if (!estat) {
+                if (!prev.has(clau)) return prev
+                const next = new Map(prev); next.delete(clau); return next
+              }
+              return new Map(prev).set(clau, estat)
+            })}
+            motiu={deltes ? '' : t('graduacio.superficie.delta_na', { regim: regla.logica })}
+            error={errBreaks.get(clauRegla(row)) || null}
+            onCanvi={llista => escriuBreaks(row, regla, llista)} />
         </td>
       </tr>
     )
+    return fila
   })
 
   // ── Capçalera de context ───────────────────────────────────────────────────────────────────
@@ -430,8 +547,10 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
               <thead>
                 <tr>
                   {/* ORDRE DE LA FAMÍLIA (Agus, 06/08): # · CAPA · POM · NOM · TALLA BASE ·
-                      VE DE · RÈGIM · Δ · Δ BREAK · TALLA BREAK. El valor va enganxat a la
-                      identitat i les regles tanquen la fila. */}
+                      RÈGIM · Δ · Δ BREAK · TALLA BREAK. El valor va enganxat a la identitat i
+                      les regles tanquen la fila. (S45/G3 — «VE DE» hi era entremig i s'ha
+                      retirat; la taula no va al 100% i per tant no cal repartir-ne l'amplada
+                      enlloc: simplement n'ocupa menys.) */}
                   {/* El `#` NO porta amplada, com a la consulta: s'encongeix al seu contingut. */}
                   <th style={thS}>#</th>
                   {/* El bloc d'IDENTITAT amb les amplades de la consulta (`width` + `minWidth`,
@@ -444,7 +563,7 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
                       nomena la columna i la talla va en cos gran, que és el que la fa trobar
                       sense llegir. Sense talla base declarada es queda el literal de sempre;
                       inventar-hi una «Talla base» prometria una talla que ningú ha dit. */}
-                  <th style={{ ...thS, minWidth: AMPLADES.base, textAlign: 'right', background: 'var(--gold-pale)',
+                  <th style={{ ...thS, minWidth: AMPLADES.base, textAlign: 'center', background: 'var(--sel)',
                                borderLeft: '1px solid var(--border)', borderRight: '1px solid var(--border)' }}>
                     {data?.base_size ? (
                       <>
@@ -458,21 +577,35 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
                       </>
                     ) : t('editable_table.col.base_value')}
                   </th>
-                  {/* «VE DE» és columna PRÒPIA d'aquesta pantalla (la consulta no la té): no hi ha
-                      cap amplada de la família a clonar-hi, i per això declara la seva. */}
-                  <th style={{ ...thS, minWidth: 90 }}>{t('graduacio.superficie.col_origen')}</th>
+                  {/* S45/G3 — «VE DE» RETIRADA. Era columna pròpia d'aquesta pantalla (la
+                      consulta no la té) i deia «del joc» / «del model» per a cada fila: una
+                      etiqueta que no canvia cap decisió —la regla es toca igual vingui d'on
+                      vingui— i que es menjava 90px del carril de la taula. Es retira per
+                      PRESENTACIÓ: `regla_origen` i `regla_es_resident` segueixen al payload
+                      (`models_app/views.py:2163-2164`), que és additiu i té altres lectors
+                      potencials; retirar-los seria un segon tram i una altra decisió.
+                      Els 90px que allibera se'n van al carril del NOM, que és on falten. */}
                   {/* Les QUATRE de la regla, amb les amplades de la consulta. Aquí són editables i
                       allà de lectura, però la columna ha de caure al mateix lloc: és la mateixa
                       taula mirada de dues maneres. */}
                   <th style={{ ...thS, minWidth: AMPLADES.regim, borderLeft: '1px solid var(--border)' }}>{t('fitting.grid.regime')}</th>
-                  <th style={{ ...thS, minWidth: AMPLADES.delta, textAlign: 'right' }}>{t('editable_table.col.delta')}</th>
-                  <th style={{ ...thS, minWidth: AMPLADES.delta_break, textAlign: 'right' }}>{t('editable_table.col.delta_break')}</th>
-                  <th style={{ ...thS, minWidth: AMPLADES.talla_break }}>{t('editable_table.col.talla_break')}</th>
+                  {/* S45/G2 — els Δ són VALORS NUMÈRICS i van centrats com la resta. */}
+                  <th style={{ ...thS, minWidth: AMPLADES.delta, textAlign: 'center' }}>{t('editable_table.col.delta')}</th>
+                  {/* F4-BIS — UNA COLUMNA EN LLOC DE DUES. «Δ break» i «Talla break» eren la
+                      meitat cadascuna d'un sol trencament i només en sabien dir un; «Breaks»
+                      en diu N i cadascun sencer. L'ⓘ que hi havia a la columna de la talla
+                      —deia en quina convenció es llegia— baixa aquí, perquè aquí és on ara es
+                      decideix: intervals en convenció de MOTOR, l'inici és la primera talla
+                      que creix amb el Δ nou. */}
+                  <th style={{ ...thS, minWidth: AMPLADES.breaks }}
+                      title={t('grading.intervals.col_help')}>
+                    {t('grading.intervals.col')}
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {filesDelContenidor.length === 0
-                  ? <tr><td colSpan={10} style={{ ...tdS, color: 'var(--text-muted)', padding: '16px 10px' }}>
+                  ? <tr><td colSpan={8} style={{ ...tdS, color: 'var(--text-muted)', padding: '16px 10px' }}>
                       {t(peca && !peca.es_mare ? 'graduacio.superficie.buit_peca' : 'graduacio.superficie.buit')}
                     </td></tr>
                   : cos(filesDelContenidor)}

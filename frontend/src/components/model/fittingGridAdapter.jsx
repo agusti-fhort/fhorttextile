@@ -12,9 +12,8 @@ import { useTranslation } from 'react-i18next'
 import { useEnumeracio } from '../../utils/vocabulariDominiFont'
 
 import { pieceFittingLines } from '../../api/endpoints'
-import { effectiveRegime } from '../../utils/gradingRegime'
+import { effectiveRegime, etiquetaRegla, liniesBreaks } from '../../utils/gradingRegime'
 import { formatDelta } from '../../utils/format'
-import { aDocument, etiquetaRegla } from '../../utils/breakConvention'
 import { clauDeFila } from '../../utils/identitatMesura'
 import { cellaEscalat } from '../../utils/cellaEscalat'
 
@@ -265,19 +264,22 @@ export function NotaFittingCell({ lineId, valor, onDesa }) {
   )
 }
 
-// Etiqueta compacta de regla (delta · trencament).
+// Etiqueta compacta de regla: el Δ general i el seu relleu (`+2 · M→XL +3`).
 //
-// 🔑 EL TRENCAMENT ES DIU EN CONVENCIÓ DE DOCUMENT (Agus, 10/08): la BD desa la primera talla
-// del tram gran i aquí es pinta l'ÚLTIMA DEL PETIT, que és com l'anomena el full del client.
-// La volta la fa `utils/breakConvention`, que és l'únic lloc de la casa on viu el ±1 — abans
-// aquesta funció era una còpia calcada de la de `CheckMeasureEditor` i totes dues pintaven
-// `talla_break_label` cru.
+// 🚨 F4-QUATER — EL RELLEU JA NO ES DIU EN CONVENCIÓ DE DOCUMENT. Des que la frase és d'INTERVAL
+// («M→XL +3», amb els dos extrems dits), la volta ±1 no hi pinta res: un rang no és ambigu, i
+// traduir-ne l'inici sense el final donaria una etiqueta que no casa ni amb la BD ni amb el
+// picker. `etiquetaRegla` viu ara a `utils/gradingRegime` —al costat d'`intervalsVisibles`, que
+// és qui sap llegir les dues formes de relleu i qui porta la REGLA DEL SILENCI— i és la mateixa
+// funció que alimenta el `title` de la columna «Breaks» d'aquesta mateixa graella.
 function regleLabel(row, t, sizeRun) {
   if (row.logica == null) return ''
   if (row.logica === 'STEP') return t('fitting.grid.rule_free')
   // LINEAR+0 sense break = FIXED: no té delta a ensenyar (§LLEI a utils/gradingRegime).
   if (effectiveRegime(row) === 'FIXED') return ''
-  return etiquetaRegla(row, sizeRun, t('fitting.grid.break'))
+  // El Δ va SENSE unitat, com sempre ha anat en aquesta etiqueta: és una xifra de regla al
+  // costat del règim, no una mesura, i la unitat la declara la graella sencera.
+  return etiquetaRegla(row, sizeRun)
 }
 
 // leadCol Règim del fitting (sticky): a diferència del check (lectura), aquí el règim és EDITABLE
@@ -346,7 +348,14 @@ export function regimeLeadCol(t, onRegimChange, readOnly = false, { compacte = f
 // `pom/identitat.py`, que tria el separador precisament per no col·lidir amb aquest).
 // E1/B3 — DUES columnes de lectura per talla, no una. La llei de què hi va a cadascuna viu a
 // `utils/cellaEscalat` (amb banc); aquí només es declaren les capçaleres.
-export function buildEscalatGroups(sizeLabels, baseLabel, t) {
+export function buildEscalatGroups(sizeLabels, baseLabel, t, opts = {}) {
+  // ── SUB-PESTANYA «VIGENT» · LA CORBA SOLA, SENSE COLUMNA DE PRESA ────────────────────────
+  // `nomesVigent` treu la columna activa («Fit actual») de cada talla i deixa una sola columna
+  // per talla: la teòrica. NO és una taula nova ni un segon adaptador — són les MATEIXES files
+  // (`buildEscalatRows`) i el mateix `MeasureGrid`; l'única diferència és que aquí no s'hi anota
+  // res, perquè el vigent no és una presa. Un segon component hauria estat la tercera manera de
+  // dibuixar la mateixa graella, i ja n'hem pagat el preu en altres pantalles.
+  const { nomesVigent = false } = opts
   return sizeLabels.map(s => ({
     key: s,
     label: s === baseLabel
@@ -364,8 +373,11 @@ export function buildEscalatGroups(sizeLabels, baseLabel, t) {
     // Per això el vermell segueix dient «la peça que ha arribat no fa el que esperàvem» i no
     // es torna vermell tot sol després d'una propagació.
     historyCols: [
-      { key: 'teorica', label: t('escalat.col_mesura') },
+      // Al «Vigent» la columna diu QUÈ és: la corba teòrica del model. A la Presa segueix sent
+      // «Mesura» —allà el seu sentit és «contra què s'ha mesurat»— i el rètol no es toca.
+      { key: 'teorica', label: t(nomesVigent ? 'escalat.col_vigent' : 'escalat.col_mesura') },
     ],
+    senseActiva: nomesVigent,
     activeLabel: t('fitting.grid.fit_current'),
     trailCols: [],
   }))
@@ -374,13 +386,23 @@ export function buildEscalatGroups(sizeLabels, baseLabel, t) {
 // `preses` = el mapa `{clau}:{talla} → {teoric, real, desviacio, estat}` que serveix
 // `fitting/model/<id>/presa/`. Buit (sense presa oberta) → la graella es comporta com abans
 // d'E1: teòrica = corba vigent i cap arribada. V. `utils/cellaEscalat`.
-export function buildEscalatRows(rows, sizeLabels, baseLabel, preses = {}) {
+export function buildEscalatRows(rows, sizeLabels, baseLabel, preses = {}, opts = {}) {
+  // TRAM E — `onDesaValorRegla(row, talla, valor)` obre la porta del valor vermell. És OPT-IN:
+  // qui no la passa (qualsevol altre muntatge d'aquesta graella) té la cel·la prestada en
+  // vermell i en LECTURA, exactament com fins ara. Obrir una escriptura al DOMINI des d'una
+  // graella ha de ser una decisió de qui la munta, mai un default.
+  const { onDesaValorRegla = null } = opts
   return (rows || []).map(row => {
     const cells = {}
+    const copiades = row.step_base_copiada || []
     for (const s of sizeLabels) {
       const v = s === baseLabel ? row.base_value_cm : (row.graded?.[s] ?? null)
       const lineId = `${row.clau || row.pom_id}:${s}`
-      cells[s] = cellaEscalat({ lineId, vigent: v, presa: preses[lineId] || null })
+      cells[s] = cellaEscalat({ lineId, vigent: v, presa: preses[lineId] || null,
+        // TRAM E — la marca per CEL·LA, no per fila: una regla STEP pot tenir valors per a unes
+        // talles i no per a d'altres, i la que no en té és la que s'ha de posar a mà.
+        baseCopiada: copiades.includes(s),
+        onDesaRegla: onDesaValorRegla ? (valor => onDesaValorRegla(row, s, valor)) : null })
     }
     return {
       // Nomenclatura client COHERENT amb Mesures: prevaler nom_fitxa (nom de model editable) sobre
@@ -400,6 +422,14 @@ export function buildEscalatRows(rows, sizeLabels, baseLabel, preses = {}) {
       nom_en: row.nom_en, nom_local: row.nom_ca,
       logica: row.logica, increment_base: row.increment_base,
       increment_break: row.increment_break, talla_break_label: row.talla_break_label,
+      // TRAM F — els intervals viatgen amb la fila, com la resta de la forma de la regla: la
+      // columna de trencament els ha de poder dir i el compacte els ha de poder compondre.
+      breaks: row.breaks || [],
+      // TRAM E — les talles d'aquesta fila que porten el valor de la talla base COPIAT perquè
+      // la regla STEP no en té valor. Ve DERIVADA del servidor amb el mateix predicat que el
+      // motor (`step_delta_acumulat`), mai calculada aquí: si el front se la tornés a inventar,
+      // la cel·la vermella i la cel·la copiada podrien deixar de ser la mateixa.
+      step_base_copiada: row.step_base_copiada || [],
       // FIX-4 — la BASE del POM viatja amb la fila: és el referent de la guarda de plausibilitat
       // (una cel·la de talla molt lluny de la base sembla un increment, no una mesura).
       base_value_cm: row.base_value_cm ?? null,
@@ -431,21 +461,35 @@ export function escalatRuleLeadCols(t, onRegimChange, readOnly = false, unit = '
         ? <span style={cap}>{formatDelta(row.increment_base, unit)}</span>
         : <span style={buit}>—</span>),
     },
+    // ── F4-QUATER · UNA SOLA COLUMNA «BREAKS», I UN TRAM PER LÍNIA ───────────────────────────
+    //
+    // 🚨 AQUÍ HI HAVIA `Δ break` (54px) + `Talla break` (56px), DUES MEITATS D'UN SOL
+    // TRENCAMENT, i des del tram F la parella ja no sabia dir el que la regla diu: amb intervals
+    // la columna del Δ es buidava i la de la TALLA canviava de veu per encabir-hi `S→L +3`. Una
+    // columna que a vegades diu una talla i a vegades una frase sencera no és una columna.
+    //
+    // 🚨 I LA PRIMERA VERSIÓ D'AQUESTA COLUMNA TAMPOC HO ERA. Concatenava amb sostre i
+    // comptador (`M→L +2,0 +1`): un COMPTADOR amb la gramàtica d'un Δ, indistingible del
+    // creixement d'un tram — v. `liniesBreaks`. Ara els trams van APILATS i no cal cap sostre:
+    // cada línia és més curta que la frase sencera i **la columna no reclama ni un píxel més**
+    // dels 110 (= 54+56) que ja tenien les dues velles. El que creix és l'alçada de la fila, que
+    // és espai que aquesta graella sí que té.
     {
-      key: 'delta_break', label: t('measuregrid.regla_delta_break'), width: 54,
-      render: (row) => (mostraDelta(row) && row.increment_break != null
-        ? <span style={cap}>{formatDelta(row.increment_break, unit)}</span>
-        : <span style={buit}>—</span>),
-    },
-    {
-      key: 'talla_break', label: t('measuregrid.regla_talla_break'), width: 56,
-      // Etiqueta de talla: DADA de domini (XS, 3XL) — no es tradueix ni porta signe. El que sí
-      // que se li fa és la volta de CONVENCIÓ: es pinta la del document, no la desada.
+      key: 'breaks', label: t('grading.intervals.col'), width: 110,
+      title: t('grading.intervals.col_help_lectura'),
       render: (row) => {
-        const doc = mostraDelta(row) ? aDocument(row.talla_break_label, sizeRun) : null
-        return doc
-          ? <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)' }}>{doc}</span>
-          : <span style={buit}>—</span>
+        // Sota un règim que no gradua no hi ha relleu a dir: és la mateixa porta que el Δ
+        // general, i `liniesBreaks` ja hi calla pel seu compte (regla del silenci).
+        const linies = mostraDelta(row)
+          ? liniesBreaks(row, sizeRun, { delta: v => formatDelta(v, unit) })
+          : []
+        if (!linies.length) return <span style={buit}>—</span>
+        return (
+          <span style={{ ...cap, display: 'inline-flex', flexDirection: 'column',
+                         gap: 1, whiteSpace: 'nowrap', lineHeight: 1.3 }}>
+            {linies.map(l => <span key={l}>{l}</span>)}
+          </span>
+        )
       },
     },
   ]

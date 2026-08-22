@@ -7,6 +7,12 @@ from .models import ModelTask, TimerEntrada, TaskTransition
 
 logger = logging.getLogger(__name__)
 
+#: J-bis · LA MARCA DEL CAMÍ DE CONSULTA, en una constant i no en un literal repartit. És el
+#: `auto` amb què surt del sistema una sortida sense escriptura, i alhora **la clau que obre
+#: l'única transició guardada de la màquina** (v. `ALLOWED` i `transition_task`). Escrit dues
+#: vegades, el dia que canviés només en canviaria una i el guard deixaria de tancar.
+AUTO_CONSULTA = 'consulta_sense_escriptura'
+
 # Transicions permeses (from -> {to})
 ALLOWED = {
     'Pending':    {'InProgress'},
@@ -14,7 +20,21 @@ ALLOWED = {
     # `test_stop_encadenat`): la màquina d'estats no es toca i el Stop sobre una tasca pausada
     # és play+stop ENCADENAT, dues transicions legals en un sol gest d'usuari.
     'Paused':     {'InProgress'},
-    'InProgress': {'Paused', 'Done'},
+    # 🔒 J-bis · `InProgress → Pending` HI ÉS, PERÒ NO ÉS UNA TRANSICIÓ HUMANA (decisió d'Agus).
+    #
+    # És **l'única entrada guardada d'aquesta taula**: ser-hi la fa POSSIBLE, no PERMESA. El
+    # guard viu a `transition_task` i exigeix les dues coses alhora —marca `auto=AUTO_CONSULTA`
+    # i tram SENSE escriptura—, o sigui que només la pot fer servir el camí de tornada d'una
+    # consulta. Qualsevol altre cridador —un botó, un gest, una rutina— rep el mateix
+    # `TransitionError` que rebia abans que existís.
+    #
+    # PER QUÈ CALIA. Sense ella, una tasca `Pending` on algú entrava a MIRAR i sortia sense tocar
+    # res quedava `Paused`: el Pla deia «pausada» d'una feina que **ningú no ha començat mai**, i
+    # `started_at` es quedava posat. La tornada de J era exacta per a `Paused` i mentidera per a
+    # `Pending`; ara ho és per a totes dues.
+    #
+    # ⚠️ LA MÀQUINA D'ESTATS HUMANA NO CANVIA: cap botó nou, cap gest nou, cap camí d'usuari nou.
+    'InProgress': {'Paused', 'Done', 'Pending'},
     'Done':       {'InProgress'},   # reobertura = rectificació
 }
 
@@ -26,8 +46,14 @@ def _open_timer(task, profile, origen=TimerEntrada.ORIGEN_MESURAT):
     # T3 — `origen` viatja des de la porta: un tram DECLARAT neix declarat, no es converteix
     # després. El default deixa tots els camins d'abans exactament com estaven.
     _close_open_timer(task)
+    # J — NEIX DECLARANT-SE JUTJABLE (`consulta=False`). No és el veredicte: és la marca que diu
+    # que aquest tram ha nascut sota el règim nou i que, per tant, al tancament se li POT
+    # preguntar si s'hi ha escrit. Els trams que ja eren oberts el dia del desplegament tenen
+    # `None` i no se'ls pregunta mai: van néixer sense la marca d'escriptura i condemnar-los per
+    # no tenir-la seria inventar-se que no s'hi va treballar.
     return TimerEntrada.objects.create(model_task=task, tecnic=profile,
-                                       inici=timezone.now(), actiu=True, origen=origen)
+                                       inici=timezone.now(), actiu=True, origen=origen,
+                                       consulta=False)
 
 
 def _close_open_timer(task):
@@ -38,7 +64,21 @@ def _close_open_timer(task):
         t.fi = now
         t.minuts = max(0, int((now - t.inici).total_seconds() // 60))
         t.actiu = False
-        t.save(update_fields=['fi', 'minuts', 'actiu'])
+        camps = ['fi', 'minuts', 'actiu']
+        # J · EL VEREDICTE, I ES DÓNA AQUÍ PERQUÈ ÉS QUAN JA ES POT DONAR. Durant el tram la
+        # pregunta encara no té resposta —qui no ha escrit ENCARA pot escriure—; al tancament sí.
+        #
+        # Només es jutja el que és jutjable (`consulta is False`, o sigui nascut sota el règim
+        # nou). `None` es queda `None`: és l'històric i els trams que el desplegament va enxampar
+        # oberts, i han de comptar exactament com sempre.
+        #
+        # ⚠️ EL CRITERI NO ÉS LA DURADA, i no pot ser-ho: «no hi ha hagut sessió» no vol dir «ha
+        # durat poc» (decisió d'Agus, `ModelSheet.jsx`). Un tram de dues hores mirant sense tocar
+        # res és una consulta, i un de dos minuts amb una mesura escrita és feina.
+        if t.consulta is False and t.escriptura_at is None:
+            t.consulta = True
+            camps.append('consulta')
+        t.save(update_fields=camps)
 
 
 def te_paret_albara(task):
@@ -249,6 +289,30 @@ def transition_task(task, to_status, profile, force=False, auto=None,
     if to_status not in ALLOWED.get(frm, set()):
         raise TransitionError(f'Transició no permesa: {frm} → {to_status}')
 
+    # ── J-bis · EL GUARD DE L'ÚNICA TRANSICIÓ NO-HUMANA ──────────────────────────────────────
+    #
+    # `InProgress → Pending` és a `ALLOWED` perquè el camí de tornada d'una consulta la
+    # necessita, i **només ell**. Les dues condicions es demanen ALHORA i cap de les dues és
+    # decorativa:
+    #
+    #   (a) `auto=AUTO_CONSULTA` — diu QUI la demana. La llei del log ja separa el gest del
+    #       tècnic (`auto` null) del que fa el sistema (slug); aquí aquell mateix camp és a més
+    #       la clau. Un gest humà no en porta cap, i per tant no pot passar per aquí ni per
+    #       error ni a posta.
+    #   (b) el tram obert **sense `escriptura_at`** — diu QUE ÉS VERITAT. La marca sola seria una
+    #       paraula: qualsevol cridador podria escriure-la. Això no es pot fingir des de fora,
+    #       perquè només `batec_escriptura` estampa aquell camp i només quan hi ha hagut
+    #       escriptura de debò.
+    #
+    # Sense les dues, el rebuig és **el mateix que abans que la transició existís**: qui la
+    # cridi des d'un botó veurà exactament l'error de sempre.
+    if frm == 'InProgress' and to_status == 'Pending':
+        if auto != AUTO_CONSULTA:
+            raise TransitionError(f'Transició no permesa: {frm} → {to_status}')
+        if TimerEntrada.objects.filter(model_task=task, fi__isnull=True, actiu=True,
+                                       escriptura_at__isnull=False).exists():
+            raise TransitionError(f'Transició no permesa: {frm} → {to_status}')
+
     # v2 — guard de reobertura: una tasca amb línia en albarà EMÈS (ISSUED/INVOICED) no es pot
     # reobrir (rectificació = extra nova que genera línia al proper albarà). DRAFT NO bloqueja
     # (encara es pot desfer esborrant el DRAFT). Limitat estrictament a Done→InProgress.
@@ -288,10 +352,16 @@ def transition_task(task, to_status, profile, force=False, auto=None,
             # Reobrir torna la tasca a oberta; conserva started_at, neteja finished_at
             task.finished_at = None
 
-    elif frm == 'InProgress' and to_status in ('Paused', 'Done'):
+    elif frm == 'InProgress' and to_status in ('Paused', 'Done', 'Pending'):
         _close_open_timer(task)
         if to_status == 'Done':
             task.finished_at = now
+        if to_status == 'Pending':
+            # «EXACTAMENT ON ERA» INCLOU EL `started_at`. Una `Pending` és, per definició, una
+            # feina que ningú no ha començat mai: `started_at` era `None` abans d'entrar-hi —el
+            # va posar aquesta mateixa entrada, tres línies més amunt— i deixar-l'hi faria una
+            # tasca «no començada» amb data d'inici. Es torna enrere sencer o no es torna.
+            task.started_at = None
 
     # Si entra una tasca sense assignee, l'assignem al tècnic que l'executa
     if to_status == 'InProgress' and task.assignee_id is None:

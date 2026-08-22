@@ -6,6 +6,10 @@ evita importar un mòdul de *views* des d'un altre (i els cicles que això compo
 """
 import logging
 
+# TRAM F — la forma dels intervals i la seva lectura viuen a `grading_regime`, que és el punt
+# únic del règim i no importa res d'aquí (cap cicle). El motor n'agafa els DOS lectors purs.
+from fhort.pom.grading_regime import delta_de_posicio, intervals_en_index
+
 logger = logging.getLogger(__name__)
 
 
@@ -77,12 +81,24 @@ def grading_rules_match(model_rules, canonical_rules):
     4 dimensions:
       1. mateix conjunt de pom_id (estricte)
       2. logica (literal)
-      3. increment (float(x or 0), tol 0.001)
+      3. **la FORMA CANÒNICA**: increment_base + increment_break + talla_break_label +
+         `breaks` (els intervals del TRAM F)
       4. valors_step (via _step_equal de mòdul)
 
-    NO compara increment_base/break directament (els canònics es deriven de logica+increment+
-    valors_step). Retorna (match: bool, divergencies: list[dict]) amb el primer eix divergent
-    per pom, {'pom_codi', 'detall'}, per construir l'advertència.
+    🚨 FIX-A/PAS-4 — LA DIMENSIÓ 3 ERA `increment`, I ERA UNA MENTIDA LATENT.
+    L'acta deia «NO compara increment_base/break directament (els canònics es deriven de
+    logica+increment+valors_step)», i això va deixar de ser cert el dia que les superfícies
+    d'edició van començar a escriure `increment_base` **sense** tocar `increment`: dues regles
+    amb el mateix llegat i breaks diferents es declaraven IGUALS. Al corpus de staging del 21/08
+    hi havia 14 files on els dos camps divergien —totes editades a mà—, o sigui que el cas no
+    era hipotètic.
+
+    Que això no hagi fet mal encara és perquè la funció **no té cap cridador viu** (només se la
+    cita en comentaris). Es corregeix igualment: una funció de comparació que menteix és pitjor
+    morta que viva, perquè el dia que algú la cridi ho farà confiant en el seu docstring.
+
+    Retorna (match: bool, divergencies: list[dict]) amb el primer eix divergent per pom,
+    {'pom_codi', 'detall'}, per construir l'advertència.
     """
     m_by = {r.pom_id: r for r in model_rules}
     c_by = {r.pom_id: r for r in canonical_rules}
@@ -105,9 +121,24 @@ def grading_rules_match(model_rules, canonical_rules):
         if (mr.logica or '') != (cr.logica or ''):
             divs.append({'pom_codi': _codi(mr), 'detall': f'lògica {mr.logica} ≠ {cr.logica}'})
             continue
-        # (3) increment
-        if abs(float(mr.increment or 0) - float(cr.increment or 0)) >= 0.001:
-            divs.append({'pom_codi': _codi(mr), 'detall': f'increment {mr.increment} ≠ {cr.increment}'})
+        # (3) la FORMA CANÒNICA — el que el motor aplica de debò (v. l'acta del docstring).
+        if not _num_eq(mr.increment_base, cr.increment_base):
+            divs.append({'pom_codi': _codi(mr),
+                         'detall': f'Δ base {mr.increment_base} ≠ {cr.increment_base}'})
+            continue
+        if not _num_eq(mr.increment_break, cr.increment_break):
+            divs.append({'pom_codi': _codi(mr),
+                         'detall': f'Δ break {mr.increment_break} ≠ {cr.increment_break}'})
+            continue
+        if _norm(mr.talla_break_label) != _norm(cr.talla_break_label):
+            divs.append({'pom_codi': _codi(mr),
+                         'detall': f'talla break {mr.talla_break_label} ≠ {cr.talla_break_label}'})
+            continue
+        # TRAM F — els INTERVALS entren a la dimensió 3 per FORMA (mateixos trams, mateixos
+        # deltes). Sense això, dues regles amb el mateix Δ base i relleus diferents es
+        # declararien iguals — la mateixa mentida latent que el PAS 4 va treure de sobre.
+        if not _breaks_equal(getattr(mr, 'breaks', None), getattr(cr, 'breaks', None)):
+            divs.append({'pom_codi': _codi(mr), 'detall': 'els intervals de break difereixen'})
             continue
         # (4) valors_step
         if not _step_equal(mr.valors_step, cr.valors_step):
@@ -754,6 +785,7 @@ def rule_to_spec(r):
         'logica': r.logica, 'increment': r.increment, 'valors_step': r.valors_step,
         'increment_base': r.increment_base, 'increment_break': r.increment_break,
         'talla_break_label': r.talla_break_label, 'talla_break_pos': r.talla_break_pos,
+        'breaks': getattr(r, 'breaks', None),      # TRAM F — la forma sencera, o no és la forma
     }
 
 
@@ -768,14 +800,32 @@ def _num_eq(a, b, tol=0.001):
         return False
 
 
+def _breaks_equal(a, b):
+    """Igualtat d'INTERVALS (TRAM F) per FORMA: mateixa llista, mateix ordre, etiquetes
+    normalitzades i deltes amb la tolerància dels deltes. Buit i `None` són el mateix estat
+    («aquesta regla no en porta»), com a `_step_equal` amb `valors_step`."""
+    la, lb = list(a or []), list(b or [])
+    if len(la) != len(lb):
+        return False
+    if not all(isinstance(x, dict) for x in la + lb):
+        return la == lb          # forma no llegible: no s'hi filosofa, es compara tal qual
+    clau = lambda d: (_norm(d.get('inici')), _norm(d.get('final')))   # noqa: E731
+    for x, y in zip(sorted(la, key=clau), sorted(lb, key=clau)):
+        if clau(x) != clau(y) or not _num_eq(x.get('delta'), y.get('delta')):
+            return False
+    return True
+
+
 def spec_forms_match(a, b):
     """Igualtat de la FORMA APLICABLE (la que aplica el motor: increment_base + increment_break
-    + talla_break_label). NO compara `increment` legacy (un contenidor curat el porta a 0 i
-    condueix per increment_base) ni la talla base (invariant al grading, com grading_rules_match).
-    Aquesta és la comparació-veritat per al CONFLICTE per-regla contenidor-vs-fitxa."""
+    + talla_break_label + els INTERVALS del TRAM F). NO compara `increment` legacy (un contenidor
+    curat el porta a 0 i condueix per increment_base) ni la talla base (invariant al grading, com
+    grading_rules_match). Aquesta és la comparació-veritat per al CONFLICTE per-regla
+    contenidor-vs-fitxa."""
     return (_num_eq(a.get('increment_base'), b.get('increment_base'))
             and _num_eq(a.get('increment_break'), b.get('increment_break'))
-            and _norm(a.get('talla_break_label')) == _norm(b.get('talla_break_label')))
+            and _norm(a.get('talla_break_label')) == _norm(b.get('talla_break_label'))
+            and _breaks_equal(a.get('breaks'), b.get('breaks')))
 
 
 def classifica_fitxa_vs_contenidor(specs, container):
@@ -989,6 +1039,23 @@ def deltes_a_absoluts(valors, base_label, run_ordenat):
 # vigent d'una cel·la sigui un no-op.
 # ─────────────────────────────────────────────────────────────────────────────
 
+class ReglaSenseDeltaError(ValueError):
+    """FIX-A/PAS-3 — una regla LINEAR/canònica sense `increment_base` NO té corba.
+
+    Fins al 21/08 aquest cas queia al camp LLEGAT `increment` (v. `increment_de_l_aresta`), i
+    això volia dir graduar amb el delta del JOC ANTIC: el camp el poblava la materialització i
+    cap superfície d'edició no el tocava mai, de manera que es fossilitzava. Una regla editada
+    a mà que es quedés sense `increment_base` —cosa que la pantalla de Graduació permet quan hi
+    ha break— propagava amb el número de fa mesos, amb 200 OK i sense cap rastre.
+
+    LA LLEI ARA ÉS LA D2, LA MATEIXA DE SEMPRE: una regla incompleta **no gradua, no emet**.
+    Mai un delta fantasma, mai un FIXED fabricat. L'excepció existeix perquè aquesta funció és
+    PURA i retorna un float: «absent» no s'hi pot dir amb un valor de retorn sense que el
+    cridador el confongui amb un delta de zero — que és, precisament, una corba plana inventada.
+    Qui la caça és `propaga_ancoratges`, que sí que sap dir «aquesta talla no té valor».
+    """
+
+
 def _break_idx_de(rule, run):
     """Posició de la talla de break dins `run`, o None si la regla no en té (o no hi és).
 
@@ -1003,6 +1070,74 @@ def _break_idx_de(rule, run):
     return norm.index(tn) if tn in norm else None
 
 
+def step_delta_acumulat(rule, run, base_idx, size_idx):
+    """STEP: suma SIGNADA dels deltes del camí base → talla, o quina etiqueta falta.
+
+    Retorna `(total, falta)`: amb `falta=None` el total és bo; amb `falta` informada (l'etiqueta
+    del camí que `valors_step` no cobreix) el total no vol dir res i el cridador decideix.
+
+    🔑 TRAM E — PUNT ÚNIC DE «AQUESTA TALLA NO TÉ VALOR STEP». El motor l'usa per saber què
+    emet i **el lector l'usa per saber què pinta en vermell**: la marca es DERIVA de la regla,
+    no s'emmagatzema enlloc (`GradedSpec` és sortida pura, i no té camp d'origen). Si els dos
+    costats tinguessin el seu predicat, el dia que un canviés la cel·la vermella i la cel·la
+    copiada deixarien de ser la mateixa — i ningú no ho veuria.
+
+    Funció PURA. `run` és el run del SISTEMA (llei S24b) i els índexs hi són posicions.
+    """
+    vs = getattr(rule, 'valors_step', None)
+    deltas = {_norm(k): v for k, v in vs.items()} if isinstance(vs, dict) else {}
+    if size_idx == base_idx:
+        return 0.0, None
+    if not run:
+        return None, None
+    if size_idx > base_idx:
+        cami, signe = range(base_idx + 1, size_idx + 1), 1.0
+    else:
+        cami, signe = range(size_idx, base_idx), -1.0
+    total = 0.0
+    for j in cami:
+        if j < 0 or j >= len(run):
+            return None, None
+        delta = deltas.get(_norm(run[j]))
+        if delta is None:
+            return None, run[j]
+        try:
+            total += float(delta)
+        except (TypeError, ValueError):
+            return None, run[j]
+    return signe * total, None
+
+
+def intervals_de(rule, run):
+    """El relleu d'una regla com a llista d'INTERVALS `[(i_ini, i_fi, delta)]` sobre `run`.
+
+    🔑 TRAM F — EL PUNT ÚNIC QUE DECIDEIX QUINA FORMA ES LLEGEIX, i n'hi ha exactament dues:
+
+      · **INTERVALS** (`rule.breaks`, la forma nova): llista ordenada de trams amb delta propi,
+        etiquetes en convenció de MOTOR i extrems INCLUSIUS.
+      · **1 BREAK** (`talla_break_label` + `increment_break`, la forma de tot el corpus viu): es
+        llegeix com **l'interval `[talla_break_label .. última talla del run]`**. No és una
+        interpretació: és el que el motor ja feia (`brk if exterior >= break_idx else ib`) dit
+        amb l'altra gramàtica, i està provat cel·la a cel·la contra el banc 1383 —105/105 al
+        camí de GradedSpec i 525/525 al de la presa— ABANS de canviar aquesta funció.
+        **L'etiqueta NO es desplaça**: la BD desa la primera talla del tram gran (convenció de
+        motor). Desplaçar-la aquí mouria 33 de les 105 cel·les del banc.
+
+    Els dos camps conviuen i no hi ha backfill. Si una regla porta les dues formes mana
+    `breaks`, que és la que algú ha escrit expressament amb la pantalla nova.
+    """
+    intervals = intervals_en_index(getattr(rule, 'breaks', None), run)
+    if intervals:
+        return intervals
+    brk_raw = getattr(rule, 'increment_break', None)
+    if brk_raw is None:
+        return []
+    break_idx = _break_idx_de(rule, run)
+    if break_idx is None:               # etiqueta forana o sense run: cap trencament (com sempre)
+        return []
+    return [(break_idx, len(run) - 1, float(brk_raw))]
+
+
 def increment_de_l_aresta(rule, run, base_idx, i, j):
     """Increment (cm, sempre POSITIU) de l'aresta entre dues talles VEÏNES del run.
 
@@ -1011,24 +1146,32 @@ def increment_de_l_aresta(rule, run, base_idx, i, j):
     BASE — l'origen de la regla — dins d'aquest mateix run.
 
     Règim canònic (`increment_base` poblat) → llei de l'extrem exterior (v. capçalera).
-    Legacy LINEAR pur (`increment_base` és None) → `increment` uniforme, sense break.
+
+    TRAM F — el relleu el diu `intervals_de` (1 break o N intervals; v. allà). Aquesta funció
+    només decideix QUIN EXTREM de l'aresta pregunta, i això no ha canviat: l'EXTERIOR.
+
+    🚨 FIX-A/PAS-3 — `increment_base` a NULL ALÇA, i abans queia al camp llegat.
+    Aquí hi havia `return float(rule.increment)`, i era **un dels dos** nodes que llegien el
+    llegat (l'altre és la branca LINEAR de `_apply_rule`). Els dos s'han retirat AL MATEIX
+    COMMIT i no es poden separar: aquest node el travessa `propaga_ancoratges` —la PRESA i la
+    derivació de base—, i l'altre el motor de propagació. Retirar-ne un de sol hauria fet dir
+    coses diferents a Escalat i a la presa sobre la MATEIXA regla, en silenci.
+    V. `ReglaSenseDeltaError` i `ops/qa/banc_paritat_1383.py` (bloc C, que ho vigila).
     """
     ib_raw = getattr(rule, 'increment_base', None)
-    if ib_raw is None:                          # LINEAR pur legacy: pas uniforme
-        inc_raw = getattr(rule, 'increment', None)
-        return float(inc_raw) if inc_raw is not None else 0.0
+    if ib_raw is None:
+        raise ReglaSenseDeltaError(
+            f"Regla del POM {getattr(rule, 'pom_id', '?')} sense `increment_base`: no té "
+            "corba. Cap valor derivat (llei D2 de cel·la absent).")
 
     ib = float(ib_raw)
-    brk_raw = getattr(rule, 'increment_break', None)
-    brk = float(brk_raw) if brk_raw is not None else ib
-
-    break_idx = _break_idx_de(rule, run)
-    if break_idx is None:                       # sense break → tot el relleu és uniforme
+    intervals = intervals_de(rule, run)
+    if not intervals:                           # sense trencament → tot el relleu és uniforme
         return ib
 
     aresta = min(i, j)                          # l'aresta viu entre `aresta` i `aresta + 1`
     exterior = aresta + 1 if aresta >= base_idx else aresta
-    return brk if exterior >= break_idx else ib
+    return delta_de_posicio(exterior, intervals, ib)
 
 
 def desnivell_entre_talles(rule, run, base_idx, origen_idx, desti_idx):
@@ -1089,17 +1232,28 @@ def propaga_ancoratges(rule, anchor_label, anchor_val, size_run, warnings=None, 
 
     anchor_val = float(anchor_val)
 
-    if (getattr(rule, 'increment_base', None) is None
-            and getattr(rule, 'increment', None) is None and warnings is not None):
-        warnings.append(
-            f"Regla sense delta definit (pom={getattr(rule, 'pom_id', None)}): "
-            f"propagació plana (delta 0) des de l'ancoratge {anchor_label}.")
-
+    # 🚨 FIX-A/PAS-3 — SENSE DELTA NO HI HA CORBA, I ARA ES DIU.
+    #
+    # Aquí hi havia un avís que només es donava quan `increment_base` **i** `increment` eren
+    # tots dos None, i que anunciava una «propagació plana (delta 0)». Amb el llegat viu, una
+    # regla amb `increment_base` a NULL i `increment` poblat no arribava mai a aquest avís:
+    # propagava, i ho feia amb el delta del joc antic. Ara `increment_de_l_aresta` alça, i el
+    # que en surt és el que la llei D2 mana des del primer dia: **cap valor**, per a cap talla.
+    #
+    # Es retorna el mateix diccionari de sempre amb tot a None —no s'hi propaga l'excepció—
+    # perquè els tres cridadors ja saben tractar un `None` per talla (`fitting/views.py` el
+    # salta, `models_app/views.py` el converteix en 400) i cap d'ells ha de créixer un `try`
+    # per una regla que és responsabilitat de qui l'ha desat, no seva.
     out = {}
-    for label in run:
-        t_idx = _idx(label)
-        out[label] = None if t_idx is None else anchor_val + desnivell_entre_talles(
-            rule, sistema, base_idx, anchor_idx, t_idx)
+    try:
+        for label in run:
+            t_idx = _idx(label)
+            out[label] = None if t_idx is None else anchor_val + desnivell_entre_talles(
+                rule, sistema, base_idx, anchor_idx, t_idx)
+    except ReglaSenseDeltaError as e:
+        if warnings is not None:
+            warnings.append(str(e))
+        return {lab: None for lab in run}
     return out
 
 

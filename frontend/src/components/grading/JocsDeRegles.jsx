@@ -7,8 +7,11 @@ import Xip from '../ui/Xip'
 import { useEixos } from './eixosFont'
 import { useGarmentGroups } from './garmentCatalog'
 import { useElements } from '../../utils/vocabulariDominiFont'
-import { isDegenerateLinear } from '../../utils/gradingRegime'
-import { aDocument, aMotor, etiquetesDelRun, opcionsDocument } from '../../utils/breakConvention'
+import {
+  isDegenerateLinear, intervalsIncomplets, relleuLlegat, relleuResidual,
+} from '../../utils/gradingRegime'
+import ColumnaBreaks from './EditorIntervals'
+import { etiquetesDelRun } from '../../utils/breakConvention'
 import useConfirmacioRuleset from '../model/useConfirmacioRuleset'
 
 // A3 · GRADING RULES — la LLISTA de jocs i la PANTALLA del joc amb dos tabs
@@ -302,12 +305,6 @@ function num(v) {
 const deltaLlegit = (r) => (r.increment_base !== null && r.increment_base !== undefined
   ? r.increment_base : r.increment)
 
-/** true si la regla té Δ break informat — l'única que pot rebre un trencament. */
-const potRebreBreak = (r) => {
-  const v = r.increment_break
-  return v !== null && v !== undefined && String(v) !== '' && Number(v) !== 0
-}
-
 /** El text del backend es pinta TAL QUAL: és qui sap el motiu. Només si no en diu cap, el genèric. */
 function missatgeError(e, generic) {
   const d = e?.response?.data
@@ -451,6 +448,13 @@ function Joc({ joc, run, runs, vocabularis, regimsAutorables, accions, onTanca, 
   // que un gest humà canvia. Sense això, «Gravar» hauria de decidir què ha canviat comparant, i
   // una comparació de decimals amb strings escriu files que ningú no ha tocat.
   const [edicions, setEdicions] = useState(new Map())
+  // F4-BIS — L'ERROR DE LA PORTA D'INTERVALS, PER REGLA. `Map<rule.id, {codi, detall}>`. Va a
+  // part del toast d'`onError` perquè un `BREAKS_*` és de LA REGLA que el va provocar: amb el
+  // missatge només al toast, qui havia tocat sis files havia d'endevinar quina.
+  const [errBreaks, setErrBreaks] = useState(new Map())
+  // 🚨 ELS XIPS A MIG ESCRIURE, PER REGLA (mateix criteri que «Graduació del model»): un xip
+  // obert no és a la regla, i gravar-lo en silenci el perdria.
+  const [esborranys, setEsborranys] = useState(new Map())
   // ⚠️ ESTAT INICIAL, NO SINCRONITZAT. El component es remunta amb `key={joc.id}` en canviar de
   // joc, i a partir d'aquí la còpia local mana: una recàrrega de la LLISTA (que passa cada cop
   // que es desa) no ha de poder trepitjar el que s'està editant en aquesta pantalla.
@@ -479,11 +483,39 @@ function Joc({ joc, run, runs, vocabularis, regimsAutorables, accions, onTanca, 
     return e && camp in e ? e[camp] : r[camp]
   }, [edicions])
 
-  const edita = (id, patch) => setEdicions(prev => {
-    const nou = new Map(prev)
-    nou.set(id, { ...(nou.get(id) || {}), ...patch })
-    return nou
-  })
+  const edita = (id, patch) => {
+    // Tocar la fila retira el seu error: el que es veia era el veredicte del payload ANTERIOR.
+    setErrBreaks(prev => {
+      if (!prev.has(id)) return prev
+      const next = new Map(prev); next.delete(id); return next
+    })
+    setEdicions(prev => {
+      const nou = new Map(prev)
+      nou.set(id, { ...(nou.get(id) || {}), ...patch })
+      return nou
+    })
+  }
+
+  /**
+   * F4-BIS — ESCRIURE ELS INTERVALS D'UNA REGLA, I RETIRAR LA FORMA VELLA SI N'HI HAVIA.
+   *
+   * 🚨 Una regla no pot quedar-se amb LES DUES FORMES. El motor sap què fer-ne (`breaks` mana,
+   * `grading_utils.intervals_de`), però `increment_break`/`talla_break_label` seguirien dient
+   * un trencament que ja no governa i que altres superfícies encara llegeixen: un fòssil que
+   * és, de fet, una segona veritat. Quan el relleu que es veia sortia NOMÉS de la forma vella,
+   * el mateix patch envia els intervals I buida els dos camps llegats.
+   *
+   * No és cap migració: cap regla que ningú toqui es mou. És la conseqüència d'un gest humà
+   * sobre aquesta regla concreta — que és el que vol dir «editar-la escriu la forma nova».
+   */
+  const escriuBreaks = (id, regla, llista) => {
+    const patch = { breaks: llista }
+    if (relleuLlegat(regla, etiquetesRun)) {
+      patch.increment_break = null
+      patch.talla_break_label = null
+    }
+    edita(id, patch)
+  }
 
   // 🚨 AQUÍ HI HAVIA L'ESCOPETA (retirada per ordre d'Agus, 10/08).
   //
@@ -503,12 +535,45 @@ function Joc({ joc, run, runs, vocabularis, regimsAutorables, accions, onTanca, 
 
   const gravaRegles = async () => {
     if (!edicions.size) return
+    // 🔑 PRIMER DE TOT: un xip obert. El que la persona pot resoldre amb un clic va abans que
+    // cap altre guard — i és el que explica per què el que veu escrit a pantalla no consta.
+    if (esborranys.size) {
+      const noms = regles.filter(r => esborranys.has(r.id)).map(r => r.pom_codi)
+      onError(`${t('grading.intervals.esborrany_obert')} (${noms.join(', ')})`)
+      return
+    }
+    // TRAM F — un interval a mitges (sense talla o sense Δ) el rebutjaria el backend amb 400.
+    // Es diu ABANS, i amb el nom de la fila, que és el que la persona busca.
+    const aMitges = regles.filter(r => intervalsIncomplets({ ...r, ...(edicions.get(r.id) || {}) }))
+    if (aMitges.length) {
+      onError(`${t('grading.intervals.incomplet')} (${aMitges.map(r => r.pom_codi).join(', ')})`)
+      return
+    }
     setGravant(true)
+    setErrBreaks(new Map())
     try {
       const desades = []
       for (const [id, patch] of edicions) {
-        const { data } = await gradingRules.update(id, patch)
-        desades.push(data)
+        try {
+          // 🔑 CANVIAR DE RÈGIM NO DEIXA FÒSSILS (mateix criteri que «Graduació del model»).
+          // Desar una regla com a FIXED/ZERO en retira el relleu; tornar-la a LINEAR demà ha de
+          // trobar la fila neta, no un trencament que ningú ha escrit i que la columna —per la
+          // regla del silenci— ni ensenyava. MAI sota STEP: allà el relleu és LATENT (PG-4b-3a).
+          const viva = { ...regles.find(r => r.id === id), ...patch }
+          const cos = relleuResidual(viva)
+            ? { ...patch, breaks: [], increment_break: null, talla_break_label: null }
+            : patch
+          const { data } = await gradingRules.update(id, cos)
+          desades.push(data)
+        } catch (e) {
+          // Els `BREAKS_*` tenen adreça: la columna d'aquella regla. La resta segueix al toast.
+          const cos = e?.response?.data || {}
+          if (String(cos.codi || '').startsWith('BREAKS_')) {
+            setErrBreaks(prev => new Map(prev).set(id, {
+              codi: cos.codi, detall: cos.breaks || cos.detail || cos.detall || '' }))
+          }
+          throw e
+        }
       }
       setRegles(prev => prev.map(r => desades.find(d => d.id === r.id) || r))
       setEdicions(new Map())
@@ -714,20 +779,22 @@ function Joc({ joc, run, runs, vocabularis, regimsAutorables, accions, onTanca, 
             <div style={{ overflowX: 'auto' }}>
               <table style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%',
                               fontSize: 'var(--fs-body)', tableLayout: 'fixed' }}>
+                {/* F4-BIS — SET COLUMNES, NO VUIT. «Δ break» (120) i «Talla break» (112) es
+                    fonen en «Breaks», que en pren els 232 sencers: els xips creixen en amplada
+                    amb els que la regla tingui, i és exactament el carril que ja hi havia. */}
                 <colgroup>
                   <col style={{ width: 44 }} /><col style={{ width: 152 }} /><col />
                   <col style={{ width: 168 }} /><col style={{ width: 112 }} />
-                  <col style={{ width: 120 }} /><col style={{ width: 112 }} /><col style={{ width: 52 }} />
+                  <col style={{ width: 232 }} /><col style={{ width: 52 }} />
                 </colgroup>
                 <thead>
                   <tr>
                     {[
                       ['#', 'left'], [t('grading.col.code'), 'left'], [t('grading.col.pom_name'), 'left'],
                       [t('grading.jocs.col_regime'), 'left'], [t('grading.jocs.col_delta'), 'right'],
-                      [t('grading.col.delta_break'), 'right'],
-                      // L'ÚNICA ⓘ de la taula, i va aquí perquè és aquí que es decideix: diu en
-                      // quina convenció es llegeix i s'escriu aquesta columna.
-                      [<>{t('grading.jocs.col_break_size')}<Info text={t('grading.jocs.break_size_help')} /></>, 'right'],
+                      // L'ÚNICA ⓘ de la taula, i segueix on es decideix: ara la convenció la
+                      // fixen els INTERVALS, i l'ⓘ diu què és un xip i què vol dir el seu inici.
+                      [<>{t('grading.intervals.col')}<Info text={t('grading.intervals.col_help')} /></>, 'left'],
                       ['', 'left'],
                     ].map(([txt, al], i) => (
                       <th key={i} style={{
@@ -739,7 +806,7 @@ function Joc({ joc, run, runs, vocabularis, regimsAutorables, accions, onTanca, 
                 </thead>
                 <tbody>
                   {!regles.length && (
-                    <tr><td colSpan={8} style={{ ...cx.td, padding: 24, textAlign: 'center',
+                    <tr><td colSpan={7} style={{ ...cx.td, padding: 24, textAlign: 'center',
                                                  ...cx.buit, lineHeight: 1.9 }}>
                       <b style={{ color: 'var(--text-soft)', display: 'block', fontSize: 'var(--fs-body)',
                                   fontStyle: 'normal' }}>
@@ -761,17 +828,10 @@ function Joc({ joc, run, runs, vocabularis, regimsAutorables, accions, onTanca, 
                     // —`null` inclòs—; només si no s'ha tocat es llegeix la dada.
                     const deltaVal = editada && 'increment_base' in editada
                       ? editada.increment_base : deltaLlegit(r)
-                    // LA TALLA DEL BREAK, PER FILA I EN CONVENCIÓ DE DOCUMENT. Només té sentit
-                    // si la fila té Δ break: un ancoratge sense increment no diu res.
-                    //
-                    // 🔑 EL QUE ES VEU I EL QUE ES DESA NO SÓN LA MATEIXA ETIQUETA. La BD desa la
-                    // primera talla del tram gran; aquí es pinta l'ÚLTIMA DEL PETIT, que és com
-                    // l'anomena el full del client. `aDocument`/`aMotor` (utils/breakConvention)
-                    // fan la volta i la desfan; cap dels dos sentits es fa a mà en aquest fitxer.
-                    const potBrk = potRebreBreak({ ...r, ...(editada || {}) })
-                    const breakDoc = aDocument(viu(r, 'talla_break_label'), etiquetesRun) || ''
-                    const opcionsBreak = [...new Set(
-                      [...opcionsDocument(etiquetesRun), breakDoc].filter(Boolean))]
+                    // F4-BIS — LA REGLA VIVA DE LA FILA (dada + edició a sobre). És el que la
+                    // columna «Breaks» llegeix per saber quins intervals DIU la regla, vinguin
+                    // de `breaks` o del break d'1 tram.
+                    const reglaViva = { ...r, ...(editada || {}) }
                     return (
                       // ⚠️ CONDUCTA AFEGIDA (llistada): la fila amb canvis PENDENTS DE DESAR porta
                       // un filet taronja. No fa servir `--sel`: `--sel` és «on soc» i el verd és
@@ -813,25 +873,23 @@ function Joc({ joc, run, runs, vocabularis, regimsAutorables, accions, onTanca, 
                                          fontVariantNumeric: 'tabular-nums' }}
                                 onChange={e => edita(r.id, { increment_base: num(e.target.value) })} />
                         </td>
-                        <td style={{ ...cx.td, textAlign: 'right' }}>
-                          <Camp inputMode="decimal" aria-label={t('grading.col.delta_break')}
-                                value={valorCamp(viu(r, 'increment_break'))} placeholder="—"
-                                style={{ width: 76, textAlign: 'right', fontWeight: 600, padding: '4px 8px',
-                                         fontVariantNumeric: 'tabular-nums' }}
-                                onChange={e => edita(r.id, { increment_break: num(e.target.value) })} />
-                        </td>
-                        {/* LA TALLA DE TRENCAMENT S'EDITA AQUÍ, i només aquí (Agus, 10/08). */}
-                        <td style={{ ...cx.td, textAlign: 'right' }}>
-                          <select value={breakDoc} disabled={!potBrk}
-                                  aria-label={t('grading.jocs.col_break_size')}
-                                  title={potBrk ? undefined : t('grading.jocs.break_size_needs_delta')}
-                                  onChange={e => edita(r.id, {
-                                    talla_break_label: aMotor(e.target.value, etiquetesRun) })}
-                                  style={{ ...cx.selr, fontVariantNumeric: 'tabular-nums',
-                                           ...(potBrk ? null : off) }}>
-                            <option value="">—</option>
-                            {opcionsBreak.map(o => <option key={o} value={o}>{o}</option>)}
-                          </select>
+                        {/* F4-BIS — «BREAKS» EN LLOC DE «Δ BREAK» + «TALLA BREAK». El
+                            trencament d'aquest joc es diu sencer i es diu N vegades. Mateix
+                            component i mateixa gramàtica que a «Graduació del model»: una
+                            columna que es llegeix igual a les dues superfícies d'autoria. */}
+                        <td style={cx.td}>
+                          <ColumnaBreaks rule={reglaViva} run={etiquetesRun}
+                            readOnly={logica !== 'LINEAR'}
+                            motiu={logica === 'LINEAR' ? '' : t('grading.intervals.nomes_linear')}
+                            error={errBreaks.get(r.id) || null}
+                            onEsborrany={estat => setEsborranys(prev => {
+                              if (!estat) {
+                                if (!prev.has(r.id)) return prev
+                                const next = new Map(prev); next.delete(r.id); return next
+                              }
+                              return new Map(prev).set(r.id, estat)
+                            })}
+                            onCanvi={llista => escriuBreaks(r.id, reglaViva, llista)} />
                         </td>
                         <td style={cx.td}>
                           <Boto variant="ter" onClick={() => treuRegla(r)}
@@ -951,7 +1009,13 @@ export default function JocsDeRegles({ onImportar }) {
     try {
       const out = []
       for (let page = 1; ; page++) {
-        const { data } = await gradingRuleSets.list({ page_size: 200, page })
+        // S45/C — `include_inactive: 1` EXPLÍCIT: aquesta és la pantalla on es JUBILA i
+        // es reviu un joc, i una llista que amagués els jubilats faria la jubilació un camí
+        // de sentit únic. El defecte del ViewSet és net (els pickers no els ofereixen); qui
+        // els ha de gestionar els demana.
+        const { data } = await gradingRuleSets.list({
+          page_size: 200, page, include_inactive: 1,
+        })
         out.push(...(data?.results ?? (Array.isArray(data) ? data : [])))
         if (!data?.next) break
       }

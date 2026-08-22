@@ -1,4 +1,4 @@
-// Q8/B4 — LES FILES DE LES TRES TAULES DE LA FITXA: fitting · grading · size set.
+// Q8/B4 — LES FILES DE LES TAULES DE LA FITXA: base · fitting · grading · size set.
 //
 // Això és el CONSTRUCTOR DE DADES i prou —el mateix repartiment de feina que `taulaPresaPerTalla`
 // declara al seu capçal—. Aquí no hi ha cap `type: 'table'`, cap amplada en mm, cap idioma de
@@ -15,10 +15,15 @@
 //                   (`logica`/`increment_base`/`increment_break`/`talla_break_label`), els valors
 //                   per talla (`graded` + `base_value_cm`) i l'eix de la prenda (`garment`).
 //                   `graded-table/` NO serveix `garment` i faria caure totes les files a la mare.
+//   Q8e base     → `GET /models/<id>/base-measurements/`, que és el payload que l'editor JA té
+//                   carregat (`pomRows`) i que porta la base consolidada, la tolerància vigent i
+//                   l'eix de la prenda. ⚠️ La frase de dues línies més amunt és de `graded-table/`
+//                   i NOMÉS d'ell: `base-measurements/` sí que serveix `garment` (des de SET-2/F1).
 //
 // Les files que en surten porten `garment`, o sigui que `agrupaPerGarment`/`grupsDelFull` les
 // saben repartir per peça sense cap adaptador pel mig.
 
+import { liniesBreaks } from './gradingRegime.js'
 import { identitatMesura } from './identitatMesura.js'
 import { construeixTaulaPresaPerTalla } from './taulaPresaPerTalla.js'
 
@@ -185,6 +190,55 @@ export function filesNotes(grid) {
 }
 
 /**
+ * Q8b · EL RELLEU D'UNA FILA, UNA LÍNIA PER TRAM, per a la columna «Breaks» de la fitxa.
+ *
+ * 🚨 F4-QUATER — AIXÒ ERA `resumBreakQ8` I TORNAVA `{delta, etiqueta, mes}` PER A DUES COLUMNES
+ * (`Break` + `B.Size`). Les dues eren les meitats d'un sol trencament i, com a la consulta i a
+ * l'Escalat, deixaven de saber dir el que la regla diu tan bon punt hi havia més d'un tram. I
+ * eren, a més, la TERCERA transcripció a mà del mateix concepte: aquesta se n'inventava una
+ * gramàtica pròpia (etiqueta i Δ a cel·les separades), l'Escalat una altra i la consulta una
+ * tercera. Ara les tres criden `fraseBreaks` i la fitxa no decideix res pel seu compte.
+ *
+ * 🔑 EL BESSÓ ÉS DECLARAT, NO TRANSCRIT: aquesta funció no reimplementa res, només posa el
+ * vestit de la fitxa (la unitat i el pressupost de mil·límetres) sobre el formatador comú. Era
+ * exactament la lliçó que l'ordre demanava no tornar a pagar.
+ *
+ * 🚨 **JA NO HI HA SOSTRE NI COMPTADOR.** Això tornava `max: 1` —el primer tram lletrejat i un
+ * `+N` amb els que quedaven— i era el defecte que va fer llegir una fitxa CONGELADA com si fos
+ * incoherent: v. `gradingRegime.liniesBreaks`. Apilats no costa mil·límetres d'AMPLADA (cada
+ * línia és més curta que la frase sencera, i l'amplada la mana la línia més llarga); el que
+ * creix és l'ALÇADA de la fila, i això la fitxa ja ho sap fer fila a fila (C2).
+ *
+ * ⚠️ I EL RUN HI ÉS OBLIGATORI: sense ell el relleu LLEGAT no es pot derivar i `fraseBreaks`
+ * calla (com el motor). És el mateix run que la taula fa servir per a les columnes de talla.
+ *
+ * 🚨 **I ELS NOMS DELS CAMPS ES TRADUEIXEN A MÀ, MAI PER ANALOGIA.** Una fila de `filesGrading`
+ * NO és una fila de regla: aquest constructor rebateja `logica`→`regla`, `increment_base`→
+ * `delta`, `increment_break`→`delta_break` i `talla_break_label`→`talla_break` (només `breaks`
+ * conserva el nom). Passar la fila crua a `fraseBreaks` compilaria, passaria el build i
+ * **buidaria de relleu tota la fitxa en silenci** —cap `increment_break`, cap interval llegat—,
+ * que és exactament el mode de fallada d'H-bis: dos constructors germans de fonts diferents no
+ * comparteixen camps perquè s'assemblin. La correspondència es declara aquí, a la vista.
+ *
+ * @param {object} fila     una fila de `filesGrading`
+ * @param {string[]} talles el run del model, en ordre
+ * @param {(v:any)=>string} xifra  el formatador de mesura de la fitxa (unitat inclosa)
+ * @returns {string[]} `['M→L +2.0', 'XL +1.0']` — llista buida quan la regla no trenca enlloc
+ */
+export function liniesBreakQ8(fila, talles, xifra) {
+  const regla = {
+    logica: fila?.regla || 'LINEAR',
+    increment_base: fila?.delta,
+    increment_break: fila?.delta_break,
+    talla_break_label: fila?.talla_break,
+    breaks: fila?.breaks,
+  }
+  return liniesBreaks(regla, talles, {
+    delta: v => (Number(v) < 0 ? `−${xifra(Math.abs(v))}` : `+${xifra(Math.abs(v))}`),
+  })
+}
+
+/**
  * Q8b · LA TAULA DE GRADING — règim + corba, per mesura i per talla.
  *
  * El VALOR d'una talla es resol amb el mateix criteri que la pantalla d'Escalat
@@ -207,14 +261,99 @@ export function filesGrading(rows, talles, base) {
     codi: r.pom_code || r.abbreviation || '',
     nom_en: r.nom_en || '', nom_local: r.nom_ca || '',
     nom_fitxa: r.nom_fitxa || null,
+    // H-bis/4 — ELS CAMPS CRUS DE LA NOMENCLATURA, per al cas en què la fila no tingui
+    // resident al model (v. `residentQ8` a la pàgina, que és qui mana). `taula-mesures` els
+    // bateja amb noms propis —`client_code` és l'ÀLIES del client i `pom_code` és el codi de
+    // la casa—: la traducció es fa aquí, que és la frontera del payload, i mai al resolutor.
+    // La lliçó d'H segueix vigent: aquestes claus s'han comprovat al payload d'AQUEST endpoint,
+    // no copiades del constructor germà.
+    client_alias: r.client_code || null,
+    codi_client: r.pom_code || '',
+    pom_abbreviation: r.abbreviation || '',
     nom_canonic_model: r.nom_canonic_model || '', nom_traduit_model: r.nom_traduit_model || '',
     is_key: !!r.is_key,
     regla: r.logica || '',
     delta: r.increment_base ?? null,
     delta_break: r.increment_break ?? null,
     talla_break: r.talla_break_label || null,
+    // TRAM F — ELS INTERVALS, CRUS, com tota la resta d'aquest constructor. Les seves etiquetes
+    // van en convenció de MOTOR i **no es tradueixen mai** (a diferència de `talla_break`, que
+    // sí que fa la volta just abans de pintar): `inici` és la primera talla que creix amb el Δ
+    // nou, que és el que la BD desa i el que el picker de la pantalla ofereix. Amb un sol break
+    // les dues convencions es diuen diferent; amb intervals només n'hi ha una, i és aquesta.
+    breaks: Array.isArray(r.breaks) ? r.breaks : [],
     valors: Object.fromEntries((talles || []).map(s => [
       s, s === base ? (r.base_value_cm ?? null) : (r.graded?.[s] ?? null),
     ])),
+  }))
+}
+
+/**
+ * Q8e · LA TAULA DE MESURES DE TALLA BASE — la base sola, sense graduació.
+ *
+ * 🔑 QUÈ ÉS «L'ÚLTIM FIT VÀLID», i per què NO és una consulta a part. La llei del domini és que
+ * *l'última mesura escrita és la veritat* —temporal, no d'origen—, i està MATERIALITZADA a
+ * `BaseMeasurement.base_value_cm`: `consolidate_base_from_fitting` (`fitting/services.py:669`)
+ * hi escriu la darrera línia VÀLIDA en tancar el fitting (`close_piece_fitting`) i en propagar
+ * (`models_app/views.py:3090`, amb `origen='FITTED'`). Un model sense cap fitting tancat porta
+ * la base que la talla base va confirmar. Per tant **la taula només ha de llegir la base**: anar
+ * a buscar «l'últim fit» a un històric seria una segona veritat per a la mateixa cel·la, i el dia
+ * que les dues no coincidissin no hi hauria manera de dir quina menteix.
+ *
+ * FONT ÚNICA: `GET /models/<id>/base-measurements/` (`pom/wizard_views.py:572`), que és el
+ * MATEIX payload que l'editor ja té carregat a `pomRows` des del muntatge. Cap crida nova.
+ *
+ * ⚠️ LA DIAGNOSI DEIA QUE AQUESTA FONT NO SERVIA NI L'EIX NI LA TOLERÀNCIA, I SÓN DUES COSES
+ * FALSES, cadascuna per un motiu diferent —i totes dues comprovades al COS de la vista, no al
+ * seu voltant—:
+ *   · `garment` hi és des de SET-2/F1 (`wizard_views.py:674`). La frase «no serveix garment» era
+ *     de `graded-table/` (v. el capçal d'aquest fitxer) i es va traslladar d'endpoint.
+ *   · `tol_minus`/`tol_plus` hi són i **ja arriben RESOLTS** (`:697-698`, `_tol_vigent`): la de la
+ *     mesura mana, la del catàleg és el pla B i el 0.6 de la casa és l'últim recurs. Qui va dir
+ *     que no hi eren mirava `BaseMeasurementSerializer` (`models_app/serializers.py:432`), que és
+ *     el ViewSet del router —un ALTRE endpoint— i que a més els diu `tolerancia_minus/plus`.
+ *     Cap serializer no s'ha hagut de tocar.
+ *
+ * FILES: TOTES les mesures vives, **inclosos els POM sense xifra**. És la llei de la versió
+ * retirada i es conserva sencera: *la cel·la buida en una fitxa impresa és on el tècnic anota a
+ * mà; podar les files en silenci seria decidir per ell què no li importa.*
+ *
+ * @param {Array} bms  `results` de `base-measurements/` (l'estat `pomRows` de l'editor)
+ */
+export function filesBase(bms) {
+  return (bms || []).map(bm => ({
+    identitat: identitatMesura(bm),
+    pom_id: bm.pom_id,
+    capa: bm.capa || '', instancia: bm.instancia || '', garment: bm.garment || '',
+    // ELS DOS NOMS LLARGS, amb les mateixes claus que `filesGrading` emet, perquè `nomsDePom`
+    // resolgui el bateig del model igual a totes dues taules (regla d'or 31/07).
+    //
+    // 🚨 I `nom_client` AMB ELLS, que `filesGrading` no arrossega i aquí NO és opcional. Un POM
+    // tenant-only —sense `pom_global`— no té ni `nom_en` ni `nom_ca`: el catàleg d'un client
+    // importat el bateja NOMÉS a `POMMaster.nom_client`, i és l'últim graó de la cadena de
+    // `nomsDePom`. Sense passar-lo, `canonic` sortia CADENA BUIDA i la columna POM naixia muda
+    // per a un model sencer —mesurat al banc 1383, on les 21 files són exactament aquest cas—.
+    // Que la taula d'escalat no el necessiti no vol dir que no calgui: aquella beu de
+    // `taula-mesures`, que resol els noms d'una altra manera.
+    nom_en: bm.nom_en || '', nom_local: bm.nom_ca || '', nom_client: bm.nom_client || '',
+    nom_canonic_model: bm.nom_canonic_model || '', nom_traduit_model: bm.nom_traduit_model || '',
+    // I LA NOMENCLATURA CURTA, que aquesta taula sí que pinta en columna pròpia: es passen els
+    // camps CRUS que `nomenclaturaDePom` sap encadenar (nom_fitxa → àlies del client → codi
+    // canònic → codi de la casa), mai una cadena ja resolta aquí. El resolutor és d'aquell mòdul.
+    nom_fitxa: bm.nom_fitxa || null,
+    client_alias: bm.client_alias || null,
+    pom_code_global: bm.pom_code_global || '',
+    codi_client: bm.codi_client || '',
+    pom_abbreviation: bm.pom_abbreviation || '',
+    is_key: !!bm.pom_is_key,
+    base: bm.base_value_cm ?? null,
+    // 🚨 H-bis/1 — LA TOLERÀNCIA NO HI ÉS, i no és un oblit: Agus va REVOCAR la columna el
+    // 21/08 sobre la captura del 1383, i amb la columna se'n va la dada. `base-measurements/`
+    // la serveix ja resolta (`tol_minus`/`tol_plus`, `_tol_vigent`) i qui la vulgui la té a un
+    // camp de distància; el que no ha de quedar és un camp que ningú no pinta fent de promesa
+    // que la taula la porta.
+    // La data d'escriptura de CADA fila: la de la taula és la més recent del grup, que és
+    // exactament el que la llei temporal declara com a veritat vigent. La tria la fa la pàgina.
+    updated_at: bm.updated_at || null,
   }))
 }

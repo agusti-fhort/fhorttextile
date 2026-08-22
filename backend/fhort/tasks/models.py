@@ -30,6 +30,41 @@ class TimerEntrada(models.Model):
     ORIGEN_DECLARAT = 'declarat'
     ORIGEN_CHOICES = [(ORIGEN_MESURAT, 'Mesurat'), (ORIGEN_DECLARAT, 'Declarat')]
     origen = models.CharField(max_length=10, choices=ORIGEN_CHOICES, default=ORIGEN_MESURAT)
+    # ── J · CONSULTA ≠ TREBALL. Dos camps, i fan feines DIFERENTS ────────────────────────────
+    #
+    # 🔑 LA MARCA PRIMERA, LA INFERÈNCIA DARRERE — el patró de `presa_at`
+    # (`fitting/esdeveniments.py`): el gest es marca explícitament, i l'absència de marca vol dir
+    # «nascut abans que el camp existís», no «no ha passat».
+    #
+    # `escriptura_at` = **quan es va escriure per última vegada en AQUEST tram**. L'estampa
+    # `services_batec.batec_escriptura`, que és l'únic lloc del sistema que sap que hi ha hagut
+    # feina real i no només una pestanya oberta.
+    #
+    # 🚨 I NO ÉS `last_heartbeat`, encara que s'escriguin junts. Aquell camp té **dos emissors i
+    # un sol significat possible** —el guard hi diu «sóc davant la pantalla» i l'escriptura hi diu
+    # «he escrit»—, i per tant no pot respondre la pregunta de la qual depèn tot això. La nota de
+    # sobre demana que qui n'afegeixi un tercer escrigui allà mateix: això ho fa, i el que hi
+    # afegeix aquí NO és un segon batec sinó el que `last_heartbeat` ja no podia distingir.
+    escriptura_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text='Última ESCRIPTURA de dades dins del tram (batec_escriptura). null = cap.')
+    # `consulta` = el VEREDICTE, i es tanca al tancament del tram: «en aquest tram no s'hi ha
+    # escrit res». Un tram de consulta no és temps de feina i queda fora de `TRAMS_SANS`
+    # (`services_i`), que és el punt únic del qual pengen Welford, albarà, consum i tots els
+    # agregadors visibles.
+    #
+    # 🚨 TRES ESTATS, I EL TERCER ÉS EL QUE FA QUE AIXÒ SIGUI SEGUR:
+    #   · `None` — **no jutjat**. Tot l'històric, i també els trams que estaven OBERTS el dia del
+    #     desplegament: van néixer sense la marca i no se'ls pot preguntar si s'hi va escriure.
+    #     Compten exactament com sempre. Cap fila existent canvia de valor.
+    #   · `False` — nascut sota el règim nou (l'estampa `_open_timer`) i encara no jutjat.
+    #   · `True` — tancat sense cap escriptura. Fora dels agregadors.
+    # Sense el `None` la migració hauria convertit TOT l'històric en consultes i hauria reescrit
+    # el Welford, l'albarà i el consum de cop.
+    consulta = models.BooleanField(
+        null=True, default=None,
+        help_text='True = tram tancat sense cap escriptura (consulta). '
+                  'null = nascut abans del camp: no jutjat, compta com sempre.')
 
     class Meta:
         verbose_name = 'Entrada de timer'

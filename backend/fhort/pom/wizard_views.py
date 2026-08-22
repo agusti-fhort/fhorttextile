@@ -626,6 +626,7 @@ def base_measurements_view(request, model_id):
                 'increment_base': r.increment_base,
                 'increment_break': r.increment_break,
                 'talla_break_label': r.talla_break_label or '',
+                'breaks': r.breaks or [],           # TRAM F — el relleu sencer
                 'origen': r.origen,
             }
             for r in ModelGradingRule.objects.filter(model_id=model_id, actiu=True)
@@ -697,17 +698,26 @@ def base_measurements_view(request, model_id):
             'tol_minus': _tol_vigent(bm.tolerancia_minus, bm.pom.tolerancia_default_minus),
             'tol_plus': _tol_vigent(bm.tolerancia_plus, bm.pom.tolerancia_default_plus),
             'notes': bm.notes or '',
+            # QUAN es va escriure aquesta base, i és la peça que faltava per poder DATAR la
+            # taula de mesures base de la fitxa tècnica. La llei del domini és que l'última
+            # mesura escrita és la veritat —temporal, no d'origen—: `base_value_cm` ja porta
+            # l'últim fit vàlid (`consolidate_base_from_fitting`), i sense saber de QUAN és,
+            # la fila de títol de la fitxa hauria d'anar muda o amb una data inventada, que en
+            # un document que va al fabricant és pitjor. Camp del model (`auto_now`), servit
+            # des del mateix `bms`: ZERO queries de més, cap camp existent tocat.
+            'updated_at': bm.updated_at.isoformat() if bm.updated_at else None,
             'nom_fitxa': bm.nom_fitxa or '',
             'origen': bm.origen or '',
             # F3 — secció d'origen ('01.- DRESS', 'Bodice:'…). '' quan el document no en
             # tenia. La fitxa tècnica la fa servir per partir la taula en una per peça.
             'seccio': bm.seccio or '',
-            # SET-2/T9 (2026-08-10) — aquest payload servirà l'eix de la PEÇA quan existeixi
-            # `ModelGarment`, i no abans: la resolució `garment.X or model.X` viu en UN SOL
-            # punt (D5) i aquesta és una de les vores on s'ha de veure. Servir aquí un eco cru
-            # de la columna `garment` faria dos orígens per al mateix camp a la mateixa vora.
-            # T9 no l'anticipa (per això no hi ha cap clau `garment`): l'editor de fitxa deriva
-            # les branques de les dades que ja rep, i avui totes són de la peça mare.
+            # ⚠️ AQUÍ HI DEIA «per això no hi ha cap clau `garment`» (SET-2/T9, 10/08) I FA
+            # TEMPS QUE ÉS FALS: la clau hi és, trenta línies més amunt (`'garment': bm.garment`),
+            # posada per SET-2/F1 quan es va obrir el camí d'escriure mesures per peça. Es
+            # corregeix i no s'hi deixa: aquest comentari, llegit per sobre, va fer concloure a
+            # una diagnosi que aquesta font no servia l'eix —i per poc no fa néixer un endpoint
+            # nou per a la taula de mesures base de la fitxa (Q8e). Un comentari datat no descriu
+            # el codi d'avui: el COS de la funció, sí.
             'pom_abbreviation': bm.pom.pom_global.abbreviation if bm.pom.pom_global_id else '',
             'pom_code_global': bm.pom.pom_global.codi if bm.pom.pom_global_id else '',
             'pom_is_key': bool(bm.pom.pom_global.is_key) if bm.pom.pom_global_id else False,
@@ -734,6 +744,21 @@ def create_tenant_pom_view(request):
       codi_client, nom_client, categoria_id,
       descripcio (optional), notes (optional)
     }
+
+    ── S45/D · AQUESTA ÉS LA PORTA DEL CATÀLEG PELAT ────────────────────────────────────
+    Fins ara existia i **no la cridava ningú** (`endpoints.js:254`, `poms.crearTenant`, zero
+    cridadors). El POMBrowser —645 POMs, cercador, assignar, treure, KEY, reordenar— no tenia
+    cap botó de crear, i l'única alta de POM del producte era la del MODEL
+    (`create_model_pom_view`, via `EditableTable`), que exigeix `modelId`.
+
+    LES DUES PORTES NO FAN EL MATEIX, I ÉS DELIBERAT:
+      · `pom-propi/<model>` neix amb `CustomerPOMAlias` (existeix PER A UN CLIENT), amb
+        `pendent_revisio=True` i `origen_import='model:<codi>'`: l'ha creat un tècnic amb un
+        model al davant i el catàleg encara no l'ha beneït.
+      · AQUESTA neix SOLA al catàleg del tenant: sense àlies, sense GTI, sense sembra, sense
+        `pom_global`. Vincular-la a un ítem és el flux ASSIGN que el POMBrowser ja té, i
+        promoure-la a canònica és feina de backoffice. Un POM del catàleg no és un POM
+        «pendent»: és el que hi ha, i per això NO neix `pendent_revisio`.
     """
     code = request.data.get('codi_client', '').strip()
     name = request.data.get('nom_client', '').strip()
@@ -745,7 +770,14 @@ def create_tenant_pom_view(request):
     try:
         from fhort.pom.models import POMMaster
 
-        if POMMaster.objects.filter(codi_client=code).exists():
+        # 🚨 S45/D — LA COMPROVACIÓ ANAVA EN MINÚSCULES I MAJÚSCULES, I LA CONSTRAINT NO.
+        # El predicat era `filter(codi_client=code)` (exacte) i la unicitat de la BD és
+        # CASE-INSENSITIVE (`uniq_pommaster_codi_client_ci`, `pom/models.py:421`). Amb «CF»
+        # al catàleg, crear «cf» passava aquest `if`, petava contra la constraint, queia a
+        # l'`except Exception` de sota i sortia per la finestra com un **500 amb el text cru
+        # del driver**. El guard ha de mirar el que mira la BD o no és un guard: és un 500
+        # amb passos previs.
+        if POMMaster.objects.filter(codi_client__iexact=code).exists():
             return Response({'error': f'Ja existeix un POM amb codi {code}'}, status=400)
 
         pom = POMMaster.objects.create(
@@ -753,6 +785,11 @@ def create_tenant_pom_view(request):
             nom_client=name,
             categoria_id=categoria_id,
             notes=request.data.get('notes', ''),
+            # Sense `pom_global`: catàleg de TENANT. El pont amb els 290 `POMGlobal` de
+            # `public` és una decisió de la casa, no un efecte secundari d'aquest formulari.
+            # La traça diu d'on ve, com a la resta d'altes de catàleg (l'import hi posa el
+            # token de sessió; el model, `model:<codi>`).
+            origen_import='cataleg',
             actiu=True,
         )
 

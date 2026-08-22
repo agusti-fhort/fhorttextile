@@ -8,6 +8,21 @@ Aquests tests ataquen `_apply_rule` directament amb el referent que li prepara
 d'aquest. Purs, sense BD.
 
 Referència: DIAGNOSI_ORDRE_RUN_MODEL_2026-07-22.md (cas real: model 166, run 'XS·S·L·XXS·M').
+
+⚠️ FIX-A/PAS-1c (2026-08-21) — AQUEST FITXER TENIA TRES PROVES DEL RÈGIM «LINEAR CLÀSSIC»
+(`increment=3` sense `increment_base`), que és el camp LLEGAT. El motor hi queia per fallback;
+des del FIX A ja no, i una regla sense delta base no gradua (llei D2 de cel·la absent).
+
+Les tres no s'esborren: **la geometria que protegien —el SIGNE i la DISTÀNCIA en espai de
+sistema— és la raó de ser del fitxer i no ha canviat gens**. Passen al camp canònic, que és on
+totes tres tenien ja la seva bessona (`test_linear_canonic_identic`,
+`test_linear_compta_DOS_passos_de_S_a_L`). El règim llegat, retirat, té ara prova PRÒPIA a
+`ReglaIncompletaTest`: ha de dir que NO gradua.
+
+🚨 I una lliçó que val la pena deixar escrita. `test_linear_identic` **no va petar** amb el fix:
+comparava dues taules i totes dues van passar a estar plenes de `None` alhora. Un test
+d'IGUALTAT no veu una retirada — igual que el golden que mesurava models inexistents i donava
+un md5 perfectament estable. Ara compara i, a més, **exigeix que hi hagi xifres**.
 """
 from types import SimpleNamespace
 
@@ -47,8 +62,12 @@ class RobustesaALOrdreTest(SimpleTestCase):
     CANONIC = ['XXS', 'XS', 'S', 'M', 'L']
 
     def test_linear_identic(self):
-        rule = _rule(logica='LINEAR', increment=3)
-        self.assertEqual(_taula(rule, self.DESORDENAT), _taula(rule, self.CANONIC))
+        rule = _rule(logica='LINEAR', increment_base=3)
+        taula = _taula(rule, self.DESORDENAT)
+        # 🚨 LA GUARDA CONTRA EL BUIT: sense això, dues taules totes a `None` són «idèntiques»
+        # i el test dona verd sobre un motor que no gradua res. V. la nota de la capçalera.
+        self.assertTrue(all(v is not None for v in taula.values()), taula)
+        self.assertEqual(taula, _taula(rule, self.CANONIC))
 
     def test_linear_canonic_identic(self):
         rule = _rule(logica='LINEAR', increment_base=3)
@@ -61,12 +80,14 @@ class RobustesaALOrdreTest(SimpleTestCase):
 
     def test_step_identic(self):
         rule = _rule(logica='STEP', valors_step={'XXS': 2, 'XS': 2, 'M': 3, 'L': 3})
-        self.assertEqual(_taula(rule, self.DESORDENAT), _taula(rule, self.CANONIC))
+        taula = _taula(rule, self.DESORDENAT)
+        self.assertTrue(all(v is not None for v in taula.values()), taula)   # v. la capçalera
+        self.assertEqual(taula, _taula(rule, self.CANONIC))
 
     def test_el_signe_ja_no_s_inverteix(self):
         """El símptoma concret de la diagnosi: amb el run apendat, la XXS graduava 106 (com
         si fos DUES talles per SOBRE de la base) en comptes de 94."""
-        rule = _rule(logica='LINEAR', increment=3)
+        rule = _rule(logica='LINEAR', increment_base=3)
         taula = _taula(rule, self.DESORDENAT)
         self.assertEqual(taula['XXS'], 94.0)
         self.assertEqual(taula['M'], 103.0)
@@ -93,8 +114,10 @@ class RunNoContiguTest(SimpleTestCase):
         taula = _taula(rule, self.RUN)
         self.assertEqual(taula, {'XS': 97.0, 'S': 100.0, 'L': 106.0})
 
-    def test_linear_classic_compta_DOS_passos(self):
-        rule = _rule(logica='LINEAR', increment=3)
+    def test_linear_compta_DOS_passos_tambe_amb_break_avall(self):
+        """La bessona de sobre amb el relleu a l'altra banda: la distància no depèn del break."""
+        rule = _rule(logica='LINEAR', increment_base=3, increment_break=3,
+                     talla_break_label='XS')
         self.assertEqual(_taula(rule, self.RUN)['L'], 106.0)
 
     def test_break_a_la_talla_que_el_model_NO_fabrica(self):
@@ -109,15 +132,25 @@ class RunNoContiguTest(SimpleTestCase):
 
     def test_step_necessita_el_delta_de_la_talla_TRAVESSADA(self):
         """CRITERI DOCUMENTAT (S24b): el camí es recorre sobre les talles del SISTEMA, i per
-        tant STEP necessita el delta de la M encara que el model no la fabriqui. Sense
-        aquest delta la cel·la queda ABSENT (None) — mai a zero ni col·lapsada: és la
-        mateixa llei D2 de cel·la absent que ja regia aquí."""
+        tant STEP necessita el delta de la M encara que el model no la fabriqui.
+
+        🚨 QUÈ PASSA QUAN FALTA — CONTRACTE CANVIAT PEL TRAM E (Agus, 2026-08-21). Aquí
+        s'asseria `None` (cel·la absent, llei D2). Ara la cel·la surt amb **el valor de la talla
+        base**, marcada en vermell a la superfície i apuntada a la llista de treball manual. El
+        que aquest test protegeix segueix intacte i és l'altra meitat: **el motor no col·lapsa
+        el camí ni el gradua sense el delta que li falta** —106.0 (el resultat amb la M
+        informada) segueix sent el número prohibit— i el warning segueix nomenant la M, que és
+        la talla que s'ha d'anar a buscar."""
         rule = _rule(logica='STEP', valors_step={'XS': 2, 'L': 3})   # falta la M
         warnings = []
-        val, _ = _apply_rule(rule, BASE_VAL, 2, 4, 2, size_run=SISTEMA, warnings=warnings)
-        self.assertIsNone(val)
+        marques = []
+        val, _ = _apply_rule(rule, BASE_VAL, 2, 4, 2, size_run=SISTEMA, warnings=warnings,
+                             marques=marques)
+        self.assertEqual(val, BASE_VAL)
+        self.assertNotEqual(val, 106.0, 'no pot col·lapsar el camí ni inventar el delta que falta')
         self.assertEqual(len(warnings), 1)
         self.assertIn('M', warnings[0])
+        self.assertEqual(marques, [{'pom_id': 1, 'pom_codi': 1, 'talla': 'L', 'falta': 'M'}])
 
     def test_step_amb_el_delta_de_la_talla_travessada_SI_calcula(self):
         rule = _rule(logica='STEP', valors_step={'XS': 2, 'M': 3, 'L': 3})
@@ -174,3 +207,37 @@ class EscalaDelModelTest(SimpleTestCase):
         run, _, pos, _ = escala_del_model(self._model('2XL·S·L', 'S'))
         self.assertEqual(run, ['S', 'L', '2XL'])
         self.assertEqual(pos('2XL'), 6)
+
+
+class ReglaIncompletaTest(SimpleTestCase):
+    """FIX-A/PAS-3 — EL RÈGIM QUE S'HA RETIRAT, amb prova pròpia.
+
+    El «LINEAR clàssic» (`increment` sol, sense `increment_base`) era el camp LLEGAT: el poblava
+    la materialització des del joc i cap superfície d'edició no el tocava, o sigui que es
+    fossilitzava. Graduar-hi volia dir graduar amb el delta del joc del dia que la regla va
+    néixer. Ara no gradua: llei D2 de cel·la absent, la mateixa que ja regia la regla que no
+    existeix i el STEP sense valors.
+
+    Aquests tres tests són el que queda d'aquell règim, i han de dir que NO hi és.
+    """
+
+    RUN = ['XS', 'S', 'L']
+
+    def test_el_llegat_sol_NO_gradua(self):
+        taula = _taula(_rule(logica='LINEAR', increment=3), self.RUN)
+        self.assertEqual(set(taula.values()), {None}, taula)
+
+    def test_i_ho_diu_amb_un_avis_que_nomena_el_camp(self):
+        avisos = []
+        val, gt = _apply_rule(_rule(logica='LINEAR', increment=3), BASE_VAL, 1, 3, 2,
+                              size_run=SISTEMA, warnings=avisos)
+        self.assertIsNone(val)
+        self.assertEqual(gt, 'LINEAR')
+        self.assertIn('increment_base', avisos[0])
+
+    def test_amb_delta_base_el_llegat_no_pinta_res(self):
+        """El control: `increment` divergent no mou ni una xifra quan hi ha forma canònica.
+        És la garantia que el backfill del PAS 2 no podia canviar cap cel·la."""
+        amb = _rule(logica='LINEAR', increment=99, increment_base=3)
+        sense = _rule(logica='LINEAR', increment=None, increment_base=3)
+        self.assertEqual(_taula(amb, self.RUN), _taula(sense, self.RUN))

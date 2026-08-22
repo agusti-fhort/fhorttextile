@@ -100,7 +100,14 @@ class Command(BaseCommand):
                 rule_set=rs, pom=pm,
                 defaults={
                     'logica': logica,
-                    'increment': increment,
+                    # FIX-A/PAS-1b — LA FORMA CANÒNICA, que és la que el motor llegeix.
+                    # Aquest seed poblava NOMÉS `increment`, i des que el motor va deixar de
+                    # caure-hi (PAS 3) les regles que en sortien no graduaven: `_apply_rule`
+                    # les tracta com a incompletes i no n'emet cap cel·la. Era una de les DUES
+                    # aixetes que quedaven obertes, i el cens de lectors no la podia veure
+                    # perquè no llegeix: ESCRIU.
+                    'increment_base': increment,
+                    'increment': increment,      # mirall del llegat, com la resta de sembres
                     'talla_base': base_def,
                     'actiu': True,
                 },

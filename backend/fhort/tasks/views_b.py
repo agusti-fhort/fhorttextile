@@ -22,7 +22,7 @@ from .serializers_b import (TaskTypeSerializer, ModelTaskSerializer,
                             GarmentTypeItemSerializer, TaskTimeEstimateSerializer,
                             CustomerSerializer)
 from .services_c import (transition_task, traspassa_tram, TransitionError,
-                         rectification_count)
+                         rectification_count, te_paret_albara, AUTO_CONSULTA)
 from .services_d import (advance_phase_gate, advance_phases_chain, regress_phase,
                          model_ready_for_gate, GateError)
 from .services_e import (request_production, set_production_status,
@@ -582,6 +582,41 @@ def open_model_task_view(request, model_id):
                                         status='Pending', origen='prevista',
                                         estimated_minutes=est)
         created = True
+    # ── J · R3 · ENTRAR NO ENDÚ NI REOBRE ────────────────────────────────────────────────────
+    #
+    # Aquesta porta feia DUES coses per la mera entrada, totes dues en silenci i totes dues
+    # irreversibles al log:
+    #   · una tasca `Done` es REOBRIA (`ALLOWED` permet `Done → InProgress` perquè la
+    #     rectificació existeix com a acte), amb tram nou i rellotge reiniciat;
+    #   · una tasca `InProgress` d'un ALTRE tècnic es feia SEVA (`traspassa_tram` + `assignee`).
+    #     Això no és pausar-la: és PRENDRE-LA. «Pausada conserva la mà» parla de l'estat, i aquí
+    #     el que canviava de mans era la feina.
+    #
+    # Cap de les dues és dolenta: totes dues són gestos LEGÍTIMS i es conserven senceres. El que
+    # no poden ser és **l'efecte secundari de mirar**. Ara cada una exigeix que qui entra ho digui
+    # (`reobrir` / `handoff`), que és el que `PLA_DE_TREBALL §6` ja demanava per al relleu —*el
+    # sistema em pregunta si la reassigno, i la reassignació és condició obligada per entrar-hi*—
+    # i el que la capçalera de `services_batec` ja aplicava a l'escriptura: *reobrir és un acte
+    # humà, no l'efecte d'un PATCH*. Aquí és: **ni l'efecte d'una mirada**.
+    #
+    # 🔑 LA MÀQUINA D'ESTATS NO ES TOCA. `transition_task` i `traspassa_tram` fan exactament el
+    # mateix que ahir; J governa QUAN es criden, no què fan. Sense el gest, la resposta és un 409
+    # amb codi —no un 403— perquè no és una manca de permís: és una decisió que ningú no ha pres
+    # encara, i el client ha de poder oferir-la (consultar o fer el gest).
+    #
+    # L'ORDRE DE PRECEDÈNCIA és el mateix que `caraObrirTasca` ja aplica al front i que
+    # `batec_escriptura` ja aplica a l'escriptura: **l'albarà mana sobre tota la resta**. Una
+    # tasca albaranada ha de dir que ho està, i no «ja està feta»: són dues converses diferents
+    # i la segona amaga la primera.
+    gestos = request.data or {}
+    if task.status == 'Done' and not gestos.get('reobrir'):
+        if te_paret_albara(task):
+            return Response({'error': 'No es pot reobrir una tasca ja albaranada (albarà emès).',
+                             'code': 'tasca_albaranada'}, status=http_status.HTTP_409_CONFLICT)
+        return Response({'error': 'Aquesta tasca ja està feta: reobrir-la és un gest conscient.',
+                         'code': 'tasca_feta', 'task_id': task.id, 'status': task.status},
+                        status=http_status.HTTP_409_CONFLICT)
+
     # 2. En curs (reusa transition_task) o claim si ja és En curs d'un altre.
     started = False   # C4d — True només si aquesta crida fa l'INICI real (Pending→InProgress)
     if task.status != 'InProgress':
@@ -595,6 +630,17 @@ def open_model_task_view(request, model_id):
             if getattr(e, 'code', None):
                 cos['code'] = e.code
             return Response(cos, status=http_status.HTTP_409_CONFLICT)
+    elif task.assignee_id != profile.id and not gestos.get('handoff'):
+        # J · R3 — EL RELLEU EXIGEIX EL GEST, i el 409 porta QUI la té perquè el client pugui
+        # preguntar-ho amb nom i cognoms en comptes d'un «algú altre hi treballa».
+        obert = (task.timers.filter(fi__isnull=True, actiu=True)
+                 .select_related('tecnic').order_by('-inici').first())
+        return Response({'error': "Aquesta tasca la té un altre tècnic: endur-se-la és un gest conscient.",
+                         'code': 'tasca_dun_altre', 'task_id': task.id, 'status': task.status,
+                         'obert_per': obert.tecnic_id if obert else task.assignee_id,
+                         'obert_per_nom': (obert.tecnic.nom_complet if obert
+                                           else getattr(task.assignee, 'nom_complet', None))},
+                        status=http_status.HTTP_409_CONFLICT)
     elif task.assignee_id != profile.id:
         # F1.5 · D-7 — HANDOFF CONSCIENT. Abans això reassignava i prou: el tram de l'anterior
         # quedava OBERT i seguia imputant-li temps a ell mentre el nou hi treballava sense
@@ -652,6 +698,105 @@ def open_model_task_view(request, model_id):
 
 class _CloseGates(HasCapability):
     required_capability = CLOSE_GATES
+
+
+@api_view(['POST'])
+@permission_classes([_ExecuteTasks])
+def sortir_sense_escriptura_view(request, pk):
+    """POST /api/v1/model-tasks/<pk>/sortir-sense-escriptura/
+
+    J · R1 — **SENSE ESCRIPTURA, CAP MODAL.** En sortir d'una superfície de treball sense haver
+    escrit res, la tasca torna en silenci: no s'ha fet feina, i no hi ha res a decidir.
+
+    Fins ara sortir sempre preguntava «Has acabat?» —una decisió que porta a albarà— encara que
+    la sessió hagués estat mirar i marxar. La decisió d'Agus escrita a `ModelSheet.jsx` prohibia
+    resoldre-ho per DURADA («no hi ha hagut sessió» no vol dir «ha durat poc»), i tenia raó: el
+    predicat no és quant, és **si s'hi ha escrit**. Aquesta vista és aquell predicat, i la resposta
+    la dona `TimerEntrada.escriptura_at`, que estampa `batec_escriptura` i només ell.
+
+    🔑 LA MÀQUINA D'ESTATS NO ES TOCA. La tornada és **una sola transició LEGAL**
+    (`InProgress → Paused`), la mateixa que el modal ja fa, per la mateixa porta i amb les
+    mateixes regles. L'única diferència és que va MARCADA `auto='consulta_sense_escriptura'`:
+    la llei del log diu que `auto` null és un gest del tècnic i un slug és el sistema, i aquí el
+    tècnic no ha decidit pausar res — ha sortit d'una pantalla on no havia tocat res.
+
+    I el tram que es tanca queda marcat `consulta=True` per `_close_open_timer` (R2), o sigui que
+    aquests minuts no entren ni al temps del model ni al Welford. Les dues meitats de J es tanquen
+    amb el mateix gest, i per força: són la mateixa sessió.
+
+    ✅ J-bis — «TORNA EXACTAMENT ON ERA» JA ES COMPLEIX TAMBÉ PER A `Pending` (decisió d'Agus).
+    `ALLOWED` té ara `InProgress → Pending` com a **única entrada guardada**: existeix per a
+    aquest camí i el guard de `transition_task` exigeix marca `auto=AUTO_CONSULTA` **i** tram
+    sense escriptura, o sigui que cap gest humà hi pot passar. L'estat d'entrada surt del LOG
+    (`TaskTransition`), no d'una memòria del client, i per tant val per a totes les portes.
+
+    Retorna `{revertit, status, motiu}`. `revertit=False` vol dir «hi ha hagut escriptura (o no hi
+    ha tram meu obert)»: qui crida ha de seguir amb el modal de sempre.
+
+    ── J-bis · `pausa_si_cal` — LA SORTIDA QUE NO POT ENCADENAR DUES CRIDES ──────────────────
+    Amb `{'pausa_si_cal': true}`, una sessió AMB escriptura es pausa aquí mateix en comptes de
+    tornar `revertit:false` i esperar que el client decideixi.
+
+    Existeix per al DESMUNTATGE (tancar la pestanya, navegar fora): allà el client no pot
+    encadenar res —`keepalive` garanteix que surti la petició que ja ha llançat, no la que
+    vindria després de resoldre-la— i el que hi havia era una **pausa cega**, que pausava
+    igualment una sessió on no s'havia tocat res. Amb el flag, la MATEIXA petició que abans
+    pausava sempre ara pausa només si toca, i si no, torna la tasca on era.
+
+    ⚠️ NOMÉS per a sortides que ja pausaven soles. La sortida DELIBERADA no l'ha de passar: allà
+    la persona ha de poder triar `Done`, i decidir-ho per ella seria treure-li la decisió que el
+    modal existeix per fer.
+    """
+    profile = getattr(request.user, 'profile', None)
+    if profile is None:
+        return Response({'error': 'Usuari sense perfil.', 'code': 'no_profile'},
+                        status=http_status.HTTP_403_FORBIDDEN)
+    try:
+        task = ModelTask.objects.get(pk=pk)
+    except ModelTask.DoesNotExist:
+        return Response({'error': 'Tasca no trobada.'}, status=http_status.HTTP_404_NOT_FOUND)
+
+    if task.status != 'InProgress':
+        # Ja no hi ha res obert: sortir és sortir. Mateixa llei que la sortida del front.
+        return Response({'revertit': False, 'status': task.status, 'motiu': 'no_en_curs'})
+
+    # EL MEU TRAM I NOMÉS EL MEU. Si el tram obert és d'un altre (relleu a mitges), el seu
+    # rellotge és seu i aquesta sortida no hi pot decidir res — la mateixa llei que el batec.
+    tram = task.timers.filter(tecnic=profile, fi__isnull=True, actiu=True).first()
+    if tram is None:
+        return Response({'revertit': False, 'status': task.status, 'motiu': 'sense_tram_meu'})
+    if tram.escriptura_at is not None:
+        # J-bis — el desmuntatge no pot encadenar: si demana la pausa, es fa aquí. `auto` null:
+        # això sí que és la pausa de sempre d'una sessió amb feina, i no un moviment del sistema.
+        if (request.data or {}).get('pausa_si_cal'):
+            transition_task(task, 'Paused', profile)
+            task.refresh_from_db()
+            return Response({'revertit': False, 'pausada': True, 'status': task.status,
+                             'motiu': 'amb_escriptura'})
+        return Response({'revertit': False, 'status': task.status, 'motiu': 'amb_escriptura'})
+
+    # ── J-bis · A QUIN ESTAT ES TORNA, i d'on se sap ─────────────────────────────────────────
+    #
+    # A L'ESTAT D'ENTRADA, i el sap **el LOG**: l'última transició cap a `InProgress` d'aquesta
+    # tasca porta el `from_status` amb què hi vam entrar. No cal cap camp nou ni cap memòria al
+    # client, i funciona per a TOTES les portes d'entrada —el menú, la URL amb `?task_id=`, el
+    # Pla de treball—, que és justament el que un estat recordat al front no aconseguiria.
+    #
+    # `TaskTransition` és append-only i aquesta lectura és la seva: el registre ja és la font de
+    # veritat de per on ha passat una tasca, i preguntar-li-ho és més barat i més cert que
+    # desar-ho una segona vegada.
+    #
+    # Sense cap transició registrada (dades velles, o una tasca posada `InProgress` per una via
+    # que no hi va escriure) es cau a `Paused`, que és el comportament d'abans d'aquesta peça:
+    # no saber d'on venies no pot impedir que surtis.
+    entrada = (task.transitions.filter(to_status='InProgress')
+               .order_by('-id').values_list('from_status', flat=True).first())
+    desti = 'Pending' if entrada == 'Pending' else 'Paused'
+
+    transition_task(task, desti, profile, auto=AUTO_CONSULTA)
+    task.refresh_from_db()
+    return Response({'revertit': True, 'status': task.status, 'motiu': 'sense_escriptura',
+                     'estat_entrada': entrada})
 
 
 @api_view(['POST'])
