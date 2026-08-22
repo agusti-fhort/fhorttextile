@@ -235,3 +235,108 @@ class PanyP2ExtendPomCatalogTest(TenantTestCase):
         from django.core.management.base import CommandError
         with self.assertRaises(CommandError):
             call_command('extend_pom_catalog', stdout=StringIO())
+
+
+class PanyP3JocRebatejatTest(TenantTestCase):
+    """P3 · un joc REBATEJAT no en fabrica un SEGON.
+
+    🚨 EL CAS DEL CENS. El lookup del joc era `nom='BRW-CATALEG-v3'` i el rebateig a «GRADING
+    BROWNIE 2026» ja és a la BD de PROD. Un `update_or_create` per aquell nom no el trobava:
+    en creava un de nou, buit, al costat del viu, i tot seguit hi sembrava les 142 regles. Dos
+    jocs amb el mateix contingut i cap manera de saber quin mana.
+
+    Llei S44: **la clau d'idempotència d'una sembra no pot ser un camp que la migració mateixa
+    rebateja.** El fallback és la llista de noms coneguts (+ `codi_sistema`); no trobar-ne cap
+    és una RESPOSTA i s'aborta.
+
+    El full de càlcul es fabrica aquí (dues files) en comptes de llegir el
+    `BROWNIE_CATALEG_POM_v3.xlsx` de 25 KB: el que es mesura és QUIN joc rep les regles, no el
+    parser del full.
+    """
+
+    @classmethod
+    def setup_tenant(cls, tenant):
+        tenant.nom = 'Test Panys P3'
+        tenant.tipologia = 'MARCA'
+        tenant.codi_tenant = 'TP3'
+        return tenant
+
+    def setUp(self):
+        from fhort.pom.models import CustomerPOMAlias, SizeDefinition, SizeSystem
+        from fhort.tasks.models import Customer
+
+        self.brw = Customer.objects.create(codi='BRW', nom='Brownie')
+        self.ss = SizeSystem.objects.create(codi='ALPHA_EU_W', nom='Alpha EU W')
+        for i, et in enumerate(['XXS', 'XS', 'S', 'M', 'L']):
+            SizeDefinition.objects.create(size_system=self.ss, etiqueta=et, ordre=i)
+        pom = POMMaster.objects.create(codi_client='A', nom_client='Chest')
+        CustomerPOMAlias.objects.create(customer=self.brw, pom=pom, client_code='A')
+        self.xlsx = self._full()
+
+    def _full(self):
+        """Un CATALEG mínim: capçalera + una cota que gradua 1 cm per talla."""
+        import openpyxl
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = 'CATALEG'
+        ws.append(['codi', 'nom', '-', 'logica', 'd1', 'd2', 'd3', 'd4'])
+        ws.append(['A', 'Chest', '', 'LINEAR', 1, 1, 1, 1])
+        ruta = os.path.join(tempfile.mkdtemp(prefix='cataleg_test_'), 'CATALEG.xlsx')
+        wb.save(ruta)
+        return ruta
+
+    def _joc(self, nom, codi_sistema='BRW-CATALEG-v3'):
+        from fhort.pom.models import GradingRuleSet
+        return GradingRuleSet.objects.create(
+            nom=nom, customer=self.brw, size_system=self.ss, codi_sistema=codi_sistema,
+            origen=GradingRuleSet.ORIGEN_CLIENT_RUN, actiu=True)
+
+    def _run(self, **extra):
+        out = StringIO()
+        call_command('seed_brownie_ruleset', schema=self.tenant.schema_name, xlsx=self.xlsx,
+                     no_dry_run=True, stdout=out, **extra)
+        return out.getvalue()
+
+    # ── (a) el cas del cens, ara bloquejat ───────────────────────────────────────────────
+    def test_un_joc_rebatejat_no_en_fabrica_un_segon(self):
+        from fhort.pom.models import GradingRuleSet
+        viu = self._joc('GRADING BROWNIE 2026')
+
+        sortida = self._run()
+
+        self.assertEqual(GradingRuleSet.objects.count(), 1)          # cap segon joc
+        self.assertEqual(viu.regles.count(), 1)                      # les regles van AL VIU
+        self.assertIn('GRADING BROWNIE 2026', sortida)
+
+    def test_el_joc_es_retroba_pel_codi_sistema(self):
+        """El rebateig de PROD va deixar el nom antic al `codi_sistema`: és la segona xarxa,
+        per si el nom viu no és a la llista."""
+        from fhort.pom.models import GradingRuleSet
+        viu = self._joc('UN NOM QUE NINGÚ NO HA PREVIST')
+
+        self._run()
+
+        self.assertEqual(GradingRuleSet.objects.count(), 1)
+        self.assertEqual(viu.regles.count(), 1)
+
+    # ── sense cap coincidència: ABORTA, mai un joc en silenci ────────────────────────────
+    def test_sense_cap_nom_conegut_aborta_i_no_crea_res(self):
+        from django.core.management.base import CommandError
+        from fhort.pom.models import GradingRuleSet
+        self._joc('UN ALTRE JOC', codi_sistema='CAP-RELACIO')
+
+        with self.assertRaises(CommandError) as cm:
+            self._run()
+
+        self.assertIn('NOMS_DEL_JOC', str(cm.exception))
+        self.assertEqual(GradingRuleSet.objects.count(), 1)   # el que ja hi havia, i prou
+
+    # ── (b) el camí legítim: crear-lo, però dient-ho ─────────────────────────────────────
+    def test_create_ruleset_explicit_el_crea(self):
+        from fhort.pom.models import GradingRuleSet
+
+        sortida = self._run(create_ruleset=True)
+
+        rs = GradingRuleSet.objects.get(nom='BRW-CATALEG-v3')
+        self.assertEqual(rs.regles.count(), 1)
+        self.assertIn('CREAT', sortida)

@@ -21,6 +21,11 @@ denunciava. Es dedueix, no es transcriu.
 
 Idempotent (`update_or_create` per rule_set+pom). --dry-run per defecte.
 
+🔒 PANY P3 (22/08): el JOC es resol per la llista `NOMS_DEL_JOC` (+ `codi_sistema`), mai per un
+literal. El rebateig a «GRADING BROWNIE 2026» feia que el lookup per `nom='BRW-CATALEG-v3'` no
+el trobés i en fabriqués un SEGON amb 142 regles. Sense cap coincidència s'ABORTA; crear-lo
+exigeix `--create-ruleset`.
+
     python manage.py seed_brownie_ruleset                # DRY-RUN
     python manage.py seed_brownie_ruleset --no-dry-run   # escriu
 """
@@ -40,6 +45,32 @@ CUSTOMER_CODI = 'BRW'
 TENANT = 'fhort'
 SIZE_SYSTEM = 'ALPHA_EU_W'
 NOM = 'BRW-CATALEG-v3'
+
+#: 🔒 PANY P3 (TREN DE PANYS, 22/08) — ELS NOMS CONEGUTS DEL MATEIX JOC, en ordre.
+#:
+#: 🚨 EL CAS. A PROD el joc es va REBATEJAR a «GRADING BROWNIE 2026» i el nom antic va quedar
+#: al `codi_sistema`. Amb el lookup per `nom='BRW-CATALEG-v3'`, un `update_or_create` no el
+#: trobava i en fabricava un SEGON, buit, al costat del viu — i tot seguit hi sembrava les 142
+#: regles. Dos jocs amb el mateix contingut i cap manera de saber quin mana.
+#:
+#: Llei S44 (`DECISIONS_snapshot_2026-08-22.md`): **la clau d'idempotència d'una sembra no pot
+#: ser un camp que la migració mateixa rebateja.** Mentre el `nom` sigui la clau, la llista de
+#: noms coneguts (+ el `codi_sistema` de reserva) és el fallback, i no trobar-ne cap és una
+#: RESPOSTA: s'ABORTA. Crear-lo, només amb `--create-ruleset` explícit.
+NOMS_DEL_JOC = ('GRADING BROWNIE 2026', 'BRW-CATALEG-v3')
+
+
+def resol_el_joc(customer, noms=NOMS_DEL_JOC):
+    """El `GradingRuleSet` d'aquest client que respon a QUALSEVOL dels noms coneguts, o `None`.
+
+    Primer pels `nom`, en ordre de preferència; després pel `codi_sistema`, que és on el
+    rebateig va deixar el nom antic. `None` vol dir ABORTAR, mai crear-ne un en silenci.
+    """
+    for nom in noms:
+        rs = GradingRuleSet.objects.filter(nom=nom, customer=customer).first()
+        if rs is not None:
+            return rs
+    return GradingRuleSet.objects.filter(codi_sistema__in=noms, customer=customer).first()
 
 
 def forma_de_la_regla(deltas: list, run: list[str]) -> dict | None:
@@ -96,6 +127,10 @@ class Command(BaseCommand):
         parser.add_argument('--no-dry-run', action='store_true')
         parser.add_argument('--schema', default=TENANT)
         parser.add_argument('--xlsx', default=str(XLSX))
+        parser.add_argument('--create-ruleset', action='store_true',
+                            help='Crea el joc si cap dels noms coneguts (NOMS_DEL_JOC) el troba. '
+                                 'Sense el flag, no trobar-lo ATURA la sembra: crear-lo a cegues '
+                                 'en fabricaria un SEGON al costat del viu si s\'ha rebatejat.')
 
     def handle(self, *args, **opts):
         dry = not opts['no_dry_run']
@@ -128,13 +163,26 @@ class Command(BaseCommand):
                 raise CommandError(f'SizeSystem {SIZE_SYSTEM} sense talles.')
             base, run = talles[0], [t.etiqueta for t in talles]
 
-            rs, rs_creat = GradingRuleSet.objects.update_or_create(
-                nom=NOM, customer=brw,
-                defaults={'size_system': ss, 'origen': GradingRuleSet.ORIGEN_CLIENT_RUN,
-                          'actiu': True, 'codi_sistema': NOM},
-            )
+            # 🔒 EL PANY P3: el joc es RESOL pels noms coneguts, no per un literal que la BD
+            # ja ha rebatejat. I si no en surt cap, s'atura: mai un segon joc en silenci.
+            rs = resol_el_joc(brw)
+            rs_creat = False
+            if rs is None:
+                if not opts['create_ruleset']:
+                    raise CommandError(
+                        f'Cap GradingRuleSet de {CUSTOMER_CODI} amb cap dels noms coneguts '
+                        f'{list(NOMS_DEL_JOC)} (ni per `nom` ni per `codi_sistema`). NO se\'n '
+                        f'crea cap: si el joc viu amb un altre nom, crear-lo aquí en fabricaria '
+                        f'un SEGON amb {len(files)} regles al costat del bo. Afegeix el nom viu '
+                        f'a NOMS_DEL_JOC, o passa --create-ruleset si de debò no existeix.')
+                rs = GradingRuleSet.objects.create(
+                    nom=NOM, customer=brw, size_system=ss,
+                    origen=GradingRuleSet.ORIGEN_CLIENT_RUN, actiu=True, codi_sistema=NOM)
+                rs_creat = True
+            # Un joc que ja existeix NO es reescriu (ni `origen`, ni `actiu`, ni `size_system`):
+            # la sembra hi posa REGLES, no li redefineix la identitat.
             self.stdout.write(f'  ruleset {rs.id} · {"CREAT" if rs_creat else "ja existia"} '
-                              f'· run {run} · base {base.etiqueta!r}\n')
+                              f'({rs.nom!r}) · run {run} · base {base.etiqueta!r}\n')
 
             al = {a.client_code: a for a in
                   CustomerPOMAlias.objects.filter(customer=brw).select_related('pom')}
