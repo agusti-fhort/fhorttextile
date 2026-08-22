@@ -1823,12 +1823,20 @@ class SizingProfile(models.Model):
 
     class Meta:
         ordering = ['target__display_order', 'garment_type__nom_client']
-        # CAT2.3 (2026-08-07) · el deute §7.4.2, tancat. Les 5 files que la violaven es van
-        # esborrar a `0070` amb la decisió d'Agus (539 es queda del grup A; 288 del grup B).
-        # ⚠️ Conseqüència assumida: una VERSIÓ (`parent_profile`) del mateix àmbit ja no és
-        # possible sense canviar `customer` — el cas del 510 era exactament aquest.
-        unique_together = [('target', 'garment_type', 'construction', 'fit_type',
-                            'size_system', 'customer')]
+        # ⛔ SENSE `unique_together`, i és una decisió de domini, no un descuit (D4, 19/08/2026).
+        #
+        # CAT2.3 n'hi havia posat una sobre `CLAU_NATURAL`, amb el deute §7.4.2 donat per
+        # tancat. El cens de PROD la va tombar: a `los`, la família NEWBORN té TRES lleis de
+        # graduació (`LOS New Born Knit — Tops` · `— Onepieces` · `— Bottoms`) per a cadascun
+        # dels tres targets (GIRL · BOY · UNISEX), i totes tres comparteixen `CLAU_NATURAL`
+        # perquè l'eix que les separa és la MENA DE PEÇA. Amb la clau posada, aquell catàleg
+        # no pot existir; i els seus rulesets no són bessons (45 · 48 · 31 regles), o sigui
+        # que «esborrar-ne els duplicats» hauria estat perdre graduació real.
+        #
+        # 📌 DEUTE G6 — el disseny bo és afegir `garment_type_item` a `CLAU_NATURAL` i llavors
+        # sí tornar-hi. Fins llavors la proliferació la frena `clean()` (blocar els NOUS), que
+        # és una porta de formulari, no una llei de BD: deixa viure el que el domini justifica
+        # i atura el que no. V. `pom/migrations/0070_cat23_sizingprofile_unicitat.py`.
 
     #: Els camps que fan que dos perfils siguin EL MATEIX àmbit.
     CLAU_NATURAL = ('target_id', 'garment_type_id', 'construction_id',
