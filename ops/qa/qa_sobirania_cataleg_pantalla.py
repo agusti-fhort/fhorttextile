@@ -50,6 +50,12 @@ BASE = 'https://staging.fhorttextile.tech'
 #: que ha canviat»: un cop de vista a la fitxa no ho pot dir).
 PATCHES = []
 
+#: El rol que `/me/` declara. La segona passada el baixa a `technician` per comprovar que els
+#: botons d'escriptura DESAPAREIXEN: des del 22/08 les quatre escriptures d'aquesta pantalla
+#: demanen CONFIGURE al servidor, i una porta que es veu oberta i torna 403 és pitjor que una
+#: porta que no hi és. Llista d'un element perquè `_stub` la llegeixi per referència.
+ROL = ['admin']
+
 
 def pom(pk, codi_client, nom_client, *, global_codi=None, com=None, categoria=1):
     """Una fila de `/api/v1/poms/` amb la forma EXACTA de `POMMasterSerializer`.
@@ -136,8 +142,9 @@ def _stub(path):
     if '/translate/pom/' in path:
         return {'traduccions': {}}
     if '/me/' in path or '/perfil/' in path:
-        return {'id': 1, 'username': 'qa', 'rol_nom': 'admin',
-                'capabilities': ['configure', 'execute_tasks']}
+        return {'id': 1, 'username': 'qa', 'rol_nom': ROL[0],
+                'capabilities': (['configure', 'execute_tasks'] if ROL[0] == 'admin'
+                                 else ['execute_tasks'])}
     return {'count': 0, 'results': [], 'next': None, 'previous': None}
 
 
@@ -264,6 +271,20 @@ def main():
         prova('i editant-lo NO surt l\'avís de separació (no té de què separar-se)',
               'SEPARA' not in cos3.upper(), cos3[:300])
         page.screenshot(path=str(OUT / 'sobirania_edicio_propi.png'), full_page=True)
+
+        # ── 🔴 LA SEGONA PASSADA: UN TÈCNIC NO VEU LES PORTES ─────────────────────────
+        ROL[0] = 'technician'
+        page.goto(f'{BASE}/poms', wait_until='networkidle', timeout=45000)
+        page.wait_for_timeout(1200)
+        fila_sd2 = page.locator('button:has-text("Sisa davantera QA")').first
+        fila_sd2.click()
+        page.wait_for_timeout(500)
+        for etiqueta in ('Editar', 'Esborrar', 'Desactivar', 'Nou POM'):
+            prova(f'un tècnic NO veu «{etiqueta}»',
+                  page.locator(f'button:has-text("{etiqueta}")').count() == 0)
+        prova('…però SÍ que llegeix la fitxa sencera',
+              'Shoulder point' in page.locator('div[style*="grid"] > div').nth(1).inner_text())
+        page.screenshot(path=str(OUT / 'sobirania_tecnic.png'), full_page=True)
 
         browser.close()
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { poms, pomCategories, customerAliases } from '../../api/endpoints'
+import useAuthStore from '../../store/auth'
 import { useTraduccioPoms } from '../../utils/traduccioPomFont'
 import { useEstatVocabulari, codisDe } from '../../utils/vocabulariDominiFont'
 import { InfoTraduccio } from '../EditableTable/EditableTable'
@@ -307,6 +308,13 @@ export default function POMCataleg() {
   // Llei d'Agus (08/08): cap enumeració de domini es declara al frontend. Els codis van CRUS
   // —són dades de domini, com LINEAR/STEP— i per això no passen per `t()`.
   const { voc: vocDomini, error: vocError } = useEstatVocabulari()
+  // 🔴 QUI POT ESCRIURE AL CATÀLEG. Des del 22/08 les quatre escriptures d'aquesta pantalla
+  // —crear, editar, activar/desactivar i esborrar— demanen CONFIGURE al servidor. Sense
+  // aquesta línia, un tècnic seguiria veient els quatre botons i cada clic li tornaria un 403:
+  // una porta que es veu oberta i no ho és és pitjor que una porta que no hi és. Mateix
+  // patró que `CatalegPecesItem`, `Products` i la resta de pantalles gated de la casa.
+  const me = useAuthStore(s => s.user)
+  const potEscriure = !!me?.capabilities?.includes('configure')
 
   const carrega = useCallback(() => {
     setCarregant(true); setError(null)
@@ -516,6 +524,7 @@ export default function POMCataleg() {
             {/* S45/D — LA PORTA D'ALTA, a la capçalera de la LLISTA i no en un menú: el moment
                 en què algú descobreix que la mesura no hi és és, exactament, el moment en què
                 la busca — i la cerca és tres píxels més amunt. */}
+            {potEscriure && (
             <button type="button" onClick={() => setCrearObert(v => !v)} disabled={ocupat}
               style={{
                 marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -527,7 +536,7 @@ export default function POMCataleg() {
               }}>
               <i className="ti ti-plus" aria-hidden="true" />
               {t('poms.cat.create_new')}
-            </button>
+            </button>)}
           </div>
           {crearObert && (
             <FormulariPomNou cats={cats} ocupat={ocupat} t={t}
@@ -776,16 +785,18 @@ export default function POMCataleg() {
 
               <div style={cx.ffoot}>
                 {!editant && (<>
-                  <button type="button" style={btn()} onClick={obreEdicio} disabled={ocupat}>
-                    {t('poms.cat.act_edit')}
-                  </button>
-                  <button type="button" style={btn('ter')} onClick={desactiva} disabled={ocupat}>
-                    {sel.actiu ? t('poms.cat.act_deactivate') : t('poms.cat.act_reactivate')}
-                  </button>
-                  <button type="button" style={btn('dang')} onClick={esborra}
-                          disabled={ocupat || !us || !us.pot_esborrar}>
-                    {t('poms.cat.act_delete')}
-                  </button>
+                  {potEscriure && (<>
+                    <button type="button" style={btn()} onClick={obreEdicio} disabled={ocupat}>
+                      {t('poms.cat.act_edit')}
+                    </button>
+                    <button type="button" style={btn('ter')} onClick={desactiva} disabled={ocupat}>
+                      {sel.actiu ? t('poms.cat.act_deactivate') : t('poms.cat.act_reactivate')}
+                    </button>
+                    <button type="button" style={btn('dang')} onClick={esborra}
+                            disabled={ocupat || !us || !us.pot_esborrar}>
+                      {t('poms.cat.act_delete')}
+                    </button>
+                  </>)}
                   {/* La nota diu SEMPRE el motiu, la redacta el backend (és qui sap el recompte). */}
                   <span style={cx.note}>{us ? us.motiu : t('poms.cat.usage_loading')}</span>
                 </>)}
