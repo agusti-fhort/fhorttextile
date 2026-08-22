@@ -5,6 +5,22 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 
+from fhort.accounts.capabilities import HasCapability, CONFIGURE
+
+
+class _Configure(HasCapability):
+    """🔒 PANY P4 (TREN DE PANYS, 22/08) — la porta de catàleg d'aquest mòdul.
+
+    `setup-from-excel/` vivia amb `IsAuthenticated` pelat i reescriu `POMCategory`, `Target` i
+    `POMGlobal` des d'un Excel pujat: qualsevol usuari autenticat del tenant —un tècnic que
+    només ha d'executar tasques— podia rebatejar el vocabulari sencer del catàleg amb un
+    fitxer. La resta d'operacions de catàleg ja demanen CONFIGURE; aquesta se n'havia quedat
+    fora, i el cens del 22/08 la va trobar.
+    """
+    required_capability = CONFIGURE
+    message = ('Cal la capacitat CONFIGURE per sembrar el catàleg del tenant des d\'un Excel '
+               '(reescriu famílies de POM, targets i el catàleg global).')
+
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -77,12 +93,14 @@ def onboarding_status_view(request):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([_Configure])
 def setup_tenant_from_excel_view(request):
     """
     POST /api/v1/onboarding/setup-from-excel/
     Multipart: file (Excel Master Data Reference v2)
     Run the full seed from the Excel file.
+
+    🔒 Gated CONFIGURE (pany P4): escriu catàleg, i el catàleg és configuració.
     """
     file_obj = request.FILES.get('file')
     if not file_obj:

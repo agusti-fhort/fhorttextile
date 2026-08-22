@@ -340,3 +340,70 @@ class PanyP3JocRebatejatTest(TenantTestCase):
         rs = GradingRuleSet.objects.get(nom='BRW-CATALEG-v3')
         self.assertEqual(rs.regles.count(), 1)
         self.assertIn('CREAT', sortida)
+
+
+class PanyP4SetupFromExcelTest(TenantTestCase):
+    """P4 · `POST /api/v1/onboarding/setup-from-excel/` demana CONFIGURE.
+
+    🚨 EL CAS DEL CENS. L'endpoint vivia amb `IsAuthenticated` PELAT i fa `update_or_create` de
+    `POMCategory`, `Target` i `POMGlobal` des d'un Excel pujat. Un tècnic —el rol més bàsic,
+    el que només executa tasques— podia rebatejar el vocabulari sencer del catàleg del tenant
+    amb un fitxer. La resta d'operacions de catàleg ja demanen CONFIGURE des del 22/08;
+    aquesta se n'havia quedat fora.
+
+    Aquest tram NO toca la lògica interna de l'endpoint: només qui hi pot entrar.
+
+    🚨 Les dues trampes conegudes de la casa hi valen igual: el perfil ja el crea un signal
+    (s'ADOPTA amb `get_or_create`) i `user.profile` CACHEJA (cal rellegir l'usuari), i el
+    client ha d'apuntar al DOMINI DEL TENANT o el urlconf de `public` torna un 404.
+    """
+
+    URL = '/api/v1/onboarding/setup-from-excel/'
+
+    @classmethod
+    def setup_tenant(cls, tenant):
+        tenant.nom = 'Test Panys P4'
+        tenant.tipologia = 'MARCA'
+        tenant.codi_tenant = 'TP4'
+        return tenant
+
+    def setUp(self):
+        self.tecnic = self._usuari('tecnic_tp4', 'technician')
+        self.admin = self._usuari('admin_tp4', 'admin')
+
+    def _usuari(self, username, rol):
+        from django.contrib.auth import get_user_model
+        from fhort.accounts.models import UserProfile
+        user = get_user_model().objects.create_user(username, password='x')
+        perfil, _ = UserProfile.objects.get_or_create(
+            user=user, defaults={'nom_complet': username, 'rol_nom': rol})
+        perfil.rol_nom = rol
+        perfil.save(update_fields=['rol_nom'])
+        return get_user_model().objects.get(pk=user.pk)   # el cau de `user.profile` mataria el test
+
+    def _client(self, user):
+        from rest_framework.test import APIClient
+        c = APIClient(HTTP_HOST=self.get_test_tenant_domain())
+        c.force_authenticate(user=user)
+        return c
+
+    # ── (a) el cas del cens, ara bloquejat ───────────────────────────────────────────────
+    def test_un_tecnic_no_pot_sembrar_el_cataleg_des_d_un_excel(self):
+        r = self._client(self.tecnic).post(self.URL, {}, format='multipart')
+
+        self.assertEqual(r.status_code, 403, r.data)
+        self.assertIn('CONFIGURE', str(r.data))          # missatge clar, no el genèric de DRF
+
+    def test_un_anonim_tampoc(self):
+        from rest_framework.test import APIClient
+        r = APIClient(HTTP_HOST=self.get_test_tenant_domain()).post(self.URL, {}, format='multipart')
+        self.assertIn(r.status_code, (401, 403), r.status_code)
+
+    # ── (b) el camí legítim segueix verd ─────────────────────────────────────────────────
+    def test_qui_te_CONFIGURE_passa_la_porta(self):
+        """Passar la porta i topar amb el 400 de «cal adjuntar l'Excel» és la prova que el
+        gating no s'ha menjat el camí bo: el 403 hauria arribat abans."""
+        r = self._client(self.admin).post(self.URL, {}, format='multipart')
+
+        self.assertEqual(r.status_code, 400, r.data)
+        self.assertIn('error', r.data)
