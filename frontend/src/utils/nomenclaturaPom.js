@@ -9,17 +9,22 @@
 //   2. `client_alias` — com anomena la mesura el CLIENT del model (`CustomerPOMAlias`, resolt
 //      al servidor per `pom/nomenclatura.py`). Brownie diu "A" on el catàleg de la casa diu
 //      "CH", i el document que el tècnic té al davant diu "A".
-//   3. `pom_code_global` — el codi CANÒNIC del sector. Ja no és nomenclatura de ningú en
-//      particular, però és cert i és estable.
-//   4. `codi_client` — el codi del catàleg de la casa. Hi és perquè la promesa és que la
-//      columna NO SURT MAI BUIDA: un POM tenant-only (sense `pom_global`) no té codi canònic,
-//      i una fila de mesures sense nom no es pot llegir ni anotar a mà en un fitting
-//      presencial. És l'últim recurs, no el segon.
+//   3. `codi_client` — el codi del catàleg de la CASA (el tenant). És el que la patronista
+//      escriu i el que la pantalla del catàleg ensenya.
+//   4. `pom_code_global` — el codi CANÒNIC del sector. Ja no és nomenclatura de ningú en
+//      particular: és l'ÚLTIM recurs, per a un POM que ningú no ha batejat encara.
 //
-// ⚠️ Hi ha superfícies que encara porten una còpia EN LÍNIA amb un ordre diferent
-// (`cotaLabelDe` a TechSheetEditor.jsx posa `codi_client` per davant del canònic; la taula de
-// fitting T1a fa servir `pom_abbreviation`). Convergir-les és un fix a part i EN CURS; aquest
-// mòdul és la casa on han d'acabar. Cap consumidor nou hauria de tornar a escriure la cadena.
+// 🚨 EL 3 I EL 4 ESTAVEN AL REVÉS FINS AL 22/08, i és el defecte que l'Agus va veure: la
+// fitxa d'un client imprimia «LOSPOM-548» —un codi del catàleg global— on el seu catàleg diu
+// una altra cosa. La llei d'Agus és **ÀLIES DEL CLIENT > TENANT > GLOBAL**: la nomenclatura
+// PENJA DEL CLIENT, i el global no és nomenclatura de ningú.
+//
+// La promesa segueix intacta i és per això que el global es queda a la cadena: la columna NO
+// SURT MAI BUIDA. El que canvia és quin dels dos codis certs surt primer.
+//
+// ⚠️ `cotaLabelDe` (TechSheetEditor.jsx) portava una còpia EN LÍNIA amb aquest MATEIX ordre
+// —el correcte— i ara delega aquí. La taula de fitting T1a fa servir `pom_abbreviation`, que
+// el resolutor accepta com a sinònim. Cap consumidor nou hauria de tornar a escriure la cadena.
 //
 // TOLERÀNCIA DE CLAUS: les quatre taules de paper es nodreixen de payloads diferents i cada un
 // bateja el mateix concepte amb un nom propi (`abbreviation` a graded-table, `pom_abbreviation`
@@ -29,10 +34,10 @@ export function nomenclaturaDePom(bm) {
   if (!bm) return ''
   return bm.nom_fitxa
     || bm.client_alias
-    || bm.pom_code_global
     || bm.codi_client
     || bm.pom_abbreviation || bm.abbreviation   // sinònims del codi curt segons el payload
     || bm.pom_code || bm.codi
+    || bm.pom_code_global                       // el CANÒNIC, l'últim: no és de ningú
     || ''
 }
 
@@ -54,7 +59,13 @@ export function nomenclaturaDePom(bm) {
 // primera és soroll, i cada taula ho resolia pel seu compte.
 export function nomsDePom(bm) {
   if (!bm) return { canonic: '', local: '' }
+  // Mateixa llei que el codi (22/08): el nom de la CASA (`nom_client`) va per davant del
+  // codi canònic. `nom_en`/`nom_ca` ja arriben RESOLTS del backend des del mateix dia —el
+  // resolutor de `pom/nomenclatura.py` hi fa caure `nom_client` quan el tenant no té global—,
+  // i per això `nom_client` es queda darrere seu: aquí és la xarxa dels payloads que encara
+  // no hi passen, no una segona cadena.
   const local = bm.nom_traduit_model || bm.nom_ca || bm.nom_local || bm.nom_client || ''
-  const canonic = bm.nom_canonic_model || bm.nom_en || local || bm.pom_code_global || ''
+  const canonic = bm.nom_canonic_model || bm.nom_en || bm.nom_client || local
+    || bm.pom_code_global || ''
   return { canonic, local: local && local !== canonic ? local : '' }
 }
