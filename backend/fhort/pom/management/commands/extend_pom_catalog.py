@@ -4,6 +4,10 @@ Sprint Excel-Map · PAS 1 — extend the global POM catalog with 10 new POMs.
 NON-DESTRUCTIVE and idempotent: uses update_or_create per codi (no .delete()).
 The existing 106 POMGlobal / POMMaster / 365 GarmentPOMMap are left untouched.
 
+🔒 SOBIRANIA (22/08): un POMMaster que el tenant ha separat del catàleg global
+(`separat_de_global`) NO es toca — es REPORTA i es deixa com és. Sense aquest pany,
+una re-execució revertia en silenci la reparació feta a PROD.
+
 Because `pom` lives in both SHARED and TENANT apps, pom_pomglobal exists in BOTH
 the public schema and each tenant schema. The app resolves POMGlobal from the
 tenant copy (POMMaster.pom_global FK), so we write the new POMGlobal to public
@@ -187,11 +191,25 @@ class Command(BaseCommand):
                 cat_by_codi = {c.codi: c for c in POMCategory.objects.filter(actiu=True)}
                 pm_created = pm_updated = 0
                 cat_missing = set()
+                sobirans = []
                 for row in NEW_POMS:
                     pg = POMGlobal.objects.get(codi=row['codi'])
                     cat = cat_by_codi.get(row['categoria'])
                     if cat is None:
                         cat_missing.add(row['categoria'])
+                    # 🚨 EL PANY DE SOBIRANIA (22/08). Aquest `update_or_create` reescrivia
+                    # `codi_client`, `nom_client`, `actiu`, `categoria` i `notes` a cada
+                    # correguda: era «idempotent» respecte del catàleg global i DESTRUCTIU
+                    # respecte del tenant. Un POM que el tenant ha fet seu —rebatejat,
+                    # recategoritzat, o separat del global— tornava al text del canònic i
+                    # ningú se n'assabentava.
+                    #
+                    # La marca de sobirania es busca pel CODI del global, no pel FK: la
+                    # separació justament el desfà, i mirar `pom_global=pg` no en trobaria cap.
+                    sobira = POMMaster.objects.filter(separat_de_global=pg.codi).first()
+                    if sobira is not None:
+                        sobirans.append(f'{pg.codi} → {sobira.codi_client} (pk={sobira.pk})')
+                        continue
                     _, was_created = POMMaster.objects.update_or_create(
                         pom_global=pg,
                         defaults={
@@ -205,6 +223,14 @@ class Command(BaseCommand):
                     pm_created += int(was_created); pm_updated += int(not was_created)
             self.stdout.write(f'  [{tenant}] POMMaster — creats: {pm_created}, actualitzats: {pm_updated}, '
                               f'total ara: {POMMaster.objects.count()}')
+            # REPORTA I NO TOCA: un conflicte de sobirania no és un error de l'importador,
+            # és una decisió del tenant que aquest procés ha de respectar i FER VISIBLE. Un
+            # upsert silenciós seria pitjor que una fallada.
+            if sobirans:
+                self.stdout.write(self.style.WARNING(
+                    f'  🔒 {len(sobirans)} POM sobirans del tenant, NO tocats:'))
+                for l in sobirans:
+                    self.stdout.write(f'       {l}')
             if cat_missing:
                 self.stdout.write(self.style.WARNING(
                     f'  Categories sense POMCategory match al tenant: {sorted(cat_missing)}'))

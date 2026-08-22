@@ -112,6 +112,13 @@ class Command(BaseCommand):
 
     # ── resolució de POM (llei de resolució) ─────────────────────────────────
     def _resolve_pom(self, key):
+        """El POM del destí que correspon a aquesta clau natural, o None.
+
+        🔒 SOBIRANIA (22/08): la branca del codi GLOBAL filtra per `pom_global__codi`, que és
+        exactament el lligam que la separació DESFÀ. Un POM sobirà no hi cau —el seu
+        `pom_global` és NULL— i només es pot retrobar pel `codi_client`, que és el camí pel
+        qual el pany de `_load_pom_masters` el veurà i el respectarà.
+        """
         if not key:
             return None
         codi_global = key.get('pom_global')
@@ -252,6 +259,18 @@ class Command(BaseCommand):
             # lookup per la mateixa llei de resolució (evita duplicar sobre bootstrap)
             existing = self._resolve_pom(r['key'])
             if existing:
+                # 🚨 EL PANY DE SOBIRANIA (22/08). Aquest upsert escrivia `pom_global`,
+                # `codi_client`, `nom_client` i `actiu` sobre un POM que el tenant potser ja
+                # ha fet seu — i, com que és idempotent «per disseny», una segona correguda
+                # del paquet REVERTIRIA en silenci la reparació feta a PROD. El paquet mana
+                # sobre l'ESTAT, mai sobre una DECISIÓ del tenant.
+                if existing.separat_de_global:
+                    self._warn(
+                        f"POMMaster {existing.codi_client} (pk={existing.pk}): SOBIRÀ del tenant "
+                        f"—separat de {existing.separat_de_global}—; el paquet porta "
+                        f"{r['pom_global'] or r['codi_client']} → NO TOCAT")
+                    s.add('unchanged')
+                    continue
                 lookup = {'pk': existing.pk}
             elif r['pom_global']:
                 lookup = {'pom_global__codi': r['pom_global'], 'codi_client': r['codi_client']}
