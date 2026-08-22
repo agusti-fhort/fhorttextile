@@ -62,9 +62,23 @@ class PortaCatalegTest(TenantTestCase):
         return c
 
     # ── ① pom_global no és escrivible ────────────────────────────────────────────────
-    def test_pom_global_es_de_LECTURA(self):
-        self.assertIn('pom_global', POMMasterWriteSerializer.Meta.read_only_fields)
-        self.assertIn('separat_de_global', POMMasterWriteSerializer.Meta.read_only_fields)
+    def test_pom_global_NO_ES_NI_CAMP(self):
+        """Més fort que «read-only»: no existeix a l'entrada, i DRF ignora el que no és camp."""
+        camps = POMMasterWriteSerializer().fields
+        self.assertNotIn('pom_global', camps)
+        self.assertNotIn('separat_de_global', camps)
+        self.assertNotIn('separat_at', camps)
+
+    def test_el_com_es_mesura_SI_es_escrivible(self):
+        """🚨 El primer intent heretava de `POMMasterSerializer`, on aquests nou camps són
+        `SerializerMethodField` —read-only sempre—: el formulari els hauria enviat, DRF els
+        hauria descartat sense piular, i la pantalla hauria desat amb 200 OK sense que passés
+        res. Es MESURA amb `fields`, no es dedueix de la llista d'escrivibles."""
+        camps = POMMasterWriteSerializer().fields
+        for c in ('unitat', 'start_point', 'end_point', 'reference_point', 'scope',
+                  'orientation', 'state', 'line', 'body_section'):
+            self.assertIn(c, camps, c)
+            self.assertFalse(camps[c].read_only, f'{c} ha tornat a ser read-only')
 
     def test_un_PATCH_no_pot_re_enganxar_el_global(self):
         r = self._client(self.admin).patch(
@@ -138,11 +152,14 @@ class PortaCatalegTest(TenantTestCase):
 
     # ── la resposta segueix dient el mateix ────────────────────────────────────────
     def test_la_forma_de_la_resposta_no_canvia(self):
+        """La resposta d'un PATCH és, camp per camp, la d'un GET: és el que la pantalla
+        recarrega, i amb el codi i el «com es mesura» ja RESOLTS."""
         c = self._client(self.admin)
-        abans = set(c.get(f'/api/v1/poms/{self.lligat.id}/').data.keys())
-        despres = set(c.patch(f'/api/v1/poms/{self.lligat.id}/',
-                              {'nom_client': 'X'}, format='json').data.keys())
-        self.assertEqual(abans, despres)
+        abans = set(c.get(f'/api/v1/poms/{self.propi.id}/').data.keys())
+        r = c.patch(f'/api/v1/poms/{self.propi.id}/', {'nom_client': 'X'}, format='json')
+        self.assertEqual(abans, set(r.data.keys()))
+        self.assertEqual(r.data['pom_code'], self.propi.codi_client)   # resolt, no cru
+        self.assertEqual(r.data['name_en'], 'X')
 
     def test_el_vocabulari_del_com_es_mesura_te_UNA_font(self):
         """Va a `/api/v1/vocabulari/`, que existeix precisament perquè el front no se'ls

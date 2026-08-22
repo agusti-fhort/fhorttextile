@@ -198,7 +198,7 @@ _POM_ESCRIVIBLES = (
 ) + COM_ES_MESURA
 
 
-class POMMasterWriteSerializer(POMMasterSerializer):
+class POMMasterWriteSerializer(serializers.ModelSerializer):
     """🔴 L'ESCRIPTURA DEL CATÀLEG DE POMs, amb camps EXPLÍCITS i la separació al mig.
 
     `POMMasterViewSet` era un `ModelViewSet` PELAT: `IsAuthenticated`, `fields='__all__'` i
@@ -214,35 +214,47 @@ class POMMasterWriteSerializer(POMMasterSerializer):
       · `actiu`, `notes` — administrar-lo (i per això NO separen: arxivar no és redefinir);
       · `tolerancia_default_*`, `pendent_revisio` — ja hi eren i segueixen.
 
-    Tot el que no és aquí és de LECTURA, `pom_global` el primer. La forma de la resposta no
-    canvia gens: hereta de `POMMasterSerializer` i per tant segueix emetent els 21 camps del
-    global i els resolts.
+    `Meta.fields` és la llista TANCADA: el que no hi és no és camp, i DRF l'ignora en silenci a
+    l'entrada. `pom_global` no hi és, i per tant no hi ha manera de dir-lo.
 
-    🚨 I AQUÍ ÉS ON PASSA LA SEPARACIÓ. Si el POM està lligat al global i el PATCH toca un camp
-    de `CAMPS_QUE_SEPAREN`, el `update` separa PRIMER (copiant-hi el que en penjava) i escriu
-    DESPRÉS: així el valor nou no es perd i el que no s'ha tocat es conserva del global. Un
-    ordre invers deixaria el camp editat trepitjat per la còpia.
+    🚨 **NO HEREDA DE `POMMasterSerializer`, I ÉS UNA CORRECCIÓ.** El primer intent sí que en
+    heretava «per no repetir la forma», i allà els nou camps del «com es mesura» estan declarats
+    com a `SerializerMethodField` —perquè la LECTURA ha de passar per la cascada— i un
+    `SerializerMethodField` **és read-only sempre**. Resultat: el formulari d'edició hauria
+    enviat `start_point`, `scope` i companyia, DRF els hauria descartat sense piular, i la
+    pantalla hauria desat amb **200 OK sense que passés res** — el mode de fallada exacte que
+    aquesta casa ja ha pagat dues vegades (`increment` a `GradingRuleSerializer`, i el motiu del
+    seu `validate`). Mesurat amb `serializer().fields`, no deduït.
+
+    La LECTURA es delega a `POMMasterSerializer` (`to_representation`): la resposta d'un PATCH
+    és, camp per camp, la d'un GET —amb el codi, els noms i el «com es mesura» resolts—, que és
+    el que la pantalla recarrega.
     """
 
-    ESCRIVIBLES = _POM_ESCRIVIBLES
-
-    class Meta(POMMasterSerializer.Meta):
+    class Meta:
         model = POMMaster
-        fields = '__all__'
-        #: Tot el que no és `_POM_ESCRIVIBLES` queda en lectura. Es deriva de la llista de camps
-        #: del model perquè una columna NOVA neixi READ-ONLY: el defecte contrari —que neixi
-        #: escrivible per API sense que ningú ho hagi decidit— és el que aquest sprint tanca.
-        read_only_fields = tuple(
-            f.name for f in POMMaster._meta.get_fields()
-            if getattr(f, 'concrete', False) and f.name not in _POM_ESCRIVIBLES
-        )
+        fields = _POM_ESCRIVIBLES
+
+    #: El mateix validador que la porta de lectura: el codi és ÚNIC AL CATÀLEG i les majúscules
+    #: no el distingeixen, dit amb un 400 i no amb l'`IntegrityError` de la constraint
+    #: d'expressió (que DRF no tradueix sol).
+    validate_codi_client = POMMasterSerializer.validate_codi_client
 
     def update(self, instance, validated_data):
-        toca_identitat = any(c in validated_data for c in CAMPS_QUE_SEPAREN)
-        if instance.pom_global_id and toca_identitat:
+        """🚨 SEPARAR PRIMER, ESCRIURE DESPRÉS.
+
+        Si el POM està lligat al global i el PATCH toca un camp de `CAMPS_QUE_SEPAREN`, la
+        separació copia el que penjava del global ABANS que el valor nou entri. L'ordre invers
+        deixaria el camp editat trepitjat per la còpia — i `separa_del_global` només omple els
+        buits, o sigui que el símptoma seria un desat que es perd només de vegades.
+        """
+        if instance.pom_global_id and any(c in validated_data for c in CAMPS_QUE_SEPAREN):
             separa_del_global(instance)
             instance.save()
         return super().update(instance, validated_data)
+
+    def to_representation(self, instance):
+        return POMMasterSerializer(instance, context=self.context).data
 
 
 class SizeDefinitionSerializer(serializers.ModelSerializer):
