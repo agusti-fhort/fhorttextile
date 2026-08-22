@@ -190,6 +190,11 @@ class BootstrapAdditiveTest(TenantTestCase):
         with schema_context(self.dest_schema):
             self.assertEqual(POMCategory.objects.get(codi='C1').nom_ca, 'Del origen')
 
+    def test_els_dos_flags_alhora_es_contradiuen(self):
+        with self.assertRaises(CommandError) as cm:
+            self._run(additive=True, overwrite=True)
+        self.assertIn('es contradiuen', str(cm.exception))
+
     def test_un_desti_verge_no_troba_la_guarda(self):
         """El camí del botó del backoffice: tenant acabat de provisionar, catàleg buit → la
         guarda no salta i la sembra corre sencera, create-only."""

@@ -431,7 +431,12 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         schema, source, dry = options['schema'], options['source'], options['dry_run']
-        # 🔒 PANY P5 — el defecte és CREATE-ONLY; sobreescriure exigeix dir-ho.
+        # 🔒 PANY P5 — el defecte és CREATE-ONLY; sobreescriure exigeix dir-ho. Els dos flags
+        # alhora no és una declaració: és una contradicció, i es diu en comptes de resoldre-la
+        # per precedència (qui escrivís `--additive --overwrite` esperant create-only, en
+        # rebria l'oposat i el destí sobreescrit).
+        if options['additive'] and options['overwrite']:
+            raise CommandError('--additive i --overwrite es contradiuen: tria un dels dos.')
         additive = not options['overwrite']
         if schema == 'public':
             raise CommandError("El schema 'public' no és un tenant.")
