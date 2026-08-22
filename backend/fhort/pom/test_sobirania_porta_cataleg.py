@@ -35,14 +35,8 @@ class PortaCatalegTest(TenantTestCase):
         return tenant
 
     def setUp(self):
-        U = get_user_model()
-        self.admin = U.objects.create_user(username='admin_tpt', password='x')
-        self.tecnic = U.objects.create_user(username='tecnic_tpt', password='x')
-        # `UserProfile` s'ADOPTA quan un signal ja l'ha creat (llei de la sembra S45).
-        for user, rol in ((self.admin, 'admin'), (self.tecnic, 'technician')):
-            perfil, _ = UserProfile.objects.get_or_create(user=user)
-            perfil.rol_nom = rol
-            perfil.save()
+        self.admin = self._usuari('admin_tpt', 'admin')
+        self.tecnic = self._usuari('tecnic_tpt', 'technician')
 
         self.cat = POMCategory.objects.create(codi='CAT_TPT', nom_ca='Tors', nom_en='Upper body')
         self.pg = POMGlobal.objects.create(
@@ -56,8 +50,33 @@ class PortaCatalegTest(TenantTestCase):
         self.propi = POMMaster.objects.create(
             codi_client='ZZ', nom_client='Mesura pròpia', actiu=True)
 
+    def _usuari(self, username, rol):
+        """Usuari amb rol, RELLEGIT de la BD.
+
+        🚨 DUES TRAMPES CONEGUDES, i totes dues fan el mateix vermell (403 on toca 200):
+          · el signal `post_save(User)` JA crea el perfil → s'ADOPTA amb `get_or_create`, mai
+            es crea a pèl (llei de la sembra S45);
+          · `user.profile` CACHEJA. `get_capabilities` llegeix d'aquell cau, i sense rellegir
+            l'usuari el rol nou no hi arriba mai: l'admin es queda amb el rol per defecte i
+            l'escriptura li torna 403 com si el gating fos massa dur.
+        """
+        user = get_user_model().objects.create_user(username, password='x')
+        perfil, _ = UserProfile.objects.get_or_create(
+            user=user, defaults={'nom_complet': username, 'rol_nom': rol})
+        perfil.rol_nom = rol
+        perfil.save(update_fields=['rol_nom'])
+        return get_user_model().objects.get(pk=user.pk)
+
     def _client(self, user):
-        c = APIClient()
+        """Un client que apunta al DOMINI DEL TENANT.
+
+        🚨 Sense `HTTP_HOST`, `TenantMainMiddleware` resol el schema PUBLIC i `/api/v1/poms/`
+        torna un **404** —no un 403, ni un 500: un 404— perquè el urlconf de `public` no té
+        aquesta ruta. Un test que hi caigués donaria vermell parlant d'una porta que ni tan
+        sols ha arribat a tocar, i el 404 s'assembla prou a «l'endpoint no hi és» com per
+        enviar la diagnosi a l'altra banda del mapa (és el que va passar la primera vegada).
+        """
+        c = APIClient(HTTP_HOST=self.get_test_tenant_domain())
         c.force_authenticate(user=user)
         return c
 
