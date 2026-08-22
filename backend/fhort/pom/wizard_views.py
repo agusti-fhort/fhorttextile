@@ -949,29 +949,28 @@ def create_model_pom_view(request, model_id):
     }, status=201)
 
 
-@api_view(['PATCH'])
-@permission_classes([IsAuthenticated])
-def edit_pom_nomenclature_view(request, pom_id):
-    """
-    PATCH /api/v1/poms/{id}/nomenclatura/
-    Edit a tenant POM's codi_client and nom_client.
-    """
-    try:
-        from fhort.pom.models import POMMaster
-        pom = POMMaster.objects.get(pk=pom_id)
-
-        if 'codi_client' in request.data:
-            pom.codi_client = request.data['codi_client'].strip()
-        if 'nom_client' in request.data:
-            pom.nom_client = request.data['nom_client'].strip()
-        pom.save(update_fields=['codi_client', 'nom_client'])
-
-        return Response({
-            'id': pom.id,
-            'codi_client': pom.codi_client,
-            'nom_client': pom.nom_client,
-        })
-    except POMMaster.DoesNotExist:
-        return Response({'error': 'POM no trobat'}, status=404)
-    except Exception as e:
-        return Response({'error': str(e)}, status=500)
+# ─────────────────────────────────────────────────────────────────────────────
+# 🪦 RETIRAT (22/08) — `PATCH /api/v1/poms/<id>/nomenclatura/`
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# Editava `codi_client` i `nom_client` d'un POM del catàleg. **Cap cridador**: zero
+# ocurrències a `frontend/`, `frontend-backoffice/` i `ops/`. I no era només mort, era
+# perillós — feia les tres coses que aquest sprint tanca, totes tres alhora:
+#
+#   ① CAP VALIDACIÓ D'UNICITAT. `codi_client` té una constraint d'EXPRESSIÓ
+#     (`uniq_pommaster_codi_client_ci`, `models.py:439`) que DRF no tradueix sol. Aquesta
+#     vista desava a pèl → `IntegrityError` → `except Exception` → **500 amb el text cru del
+#     driver**. `POMMasterSerializer.validate_codi_client` ja fa exactament aquesta
+#     comprovació i respon un 400 que diu quin POM ocupa el codi.
+#   ② CAP GATING. `IsAuthenticated` per rebatejar el catàleg de la casa.
+#   ③ CAP SEPARACIÓ. Rebatejava un POM lligat al global sense fer-lo sobirà: la mateixa
+#     porta del darrere que el `ModelViewSet` pelat.
+#
+# PER QUÈ RETIRAR-LA i no «fer-la passar pel camí validat»: fer-l'hi passar hauria estat
+# escriure una segona façana de `PATCH /api/v1/poms/<id>/` amb un altre nom d'URL i un altre
+# contracte de resposta. És la sisena ocurrència del patró que aquest sprint tanca, i la
+# manera de no repetir-la és que en quedi UNA. Qui vulgui rebatejar un POM ho fa pel ViewSet,
+# que ara valida, gateja i separa.
+#
+# La NOMENCLATURA DEL CLIENT —que és el que aquest nom d'URL prometia i mai no va fer— viu on
+# ha de viure: `CustomerPOMAlias`, amb la seva biblioteca i el seu endpoint.

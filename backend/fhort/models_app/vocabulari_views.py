@@ -98,7 +98,7 @@ from fhort.commerce.models import (DeliveryNote, DeliveryNoteLine, Product, Quot
 from fhort.fitting.models import FittingSession, PieceFittingLine
 from fhort.fitting.services import SEALED_SESSION_ESTATS
 from fhort.models_app.models import Model
-from fhort.pom.models import CustomerPOMAlias, GradingRule
+from fhort.pom.models import CustomerPOMAlias, GradingRule, POMGlobal
 from fhort.tasks.models import Customer, ModelTask, Supplier, TaskType
 from fhort.tenants.federation_service import ESTATS_LOCALS_ENCARREC
 from fhort.tenants.models import TenantLink
@@ -154,6 +154,8 @@ def vocabulari_domini_view(request):
 
     → FASE A: {regims_graduacio, fases_model, estats_model, fases_tasca,
                estats_sessio_fitting, veredictes_fitting}
+      SOBIRANIA POM (22/08): {unitats_pom, scopes_pom, orientacions_pom, estats_pom,
+               linies_pom, seccions_cos_pom}
       PART B · lot tècnic: {temporades}
       PART B · lot comercial: {estats_oferta, estats_comanda, estats_albara, estats_encarrec,
                tipus_encarrec, origens_encarrec, tipus_linia_albara, natures_producte,
@@ -197,6 +199,25 @@ def vocabulari_domini_view(request):
         # FASE A · el veredicte de la modista (D-31.21). Codis crus: van en anglès a totes les
         # llengües perquè són el que el full imprès porta cap al fabricant.
         'veredictes_fitting': _llista(PieceFittingLine.DECISIO_CHOICES),
+
+        # ══ SOBIRANIA DEL POM (22/08) · EL «COM ES MESURA» ═══════════════════════════════
+        # Els sis vocabularis tancats que descriuen com es pren una mesura. Entren ara perquè
+        # el tram 3 els ha fet INFORMABLES AL TENANT (`POMMaster` els porta, buits, amb els
+        # mateixos `choices` que `POMGlobal`) i la pantalla del catàleg els ha d'oferir com a
+        # llistes per poder-los editar.
+        #
+        # Aquí i no a un endpoint propi de `pom/`, que és el que hi havia mig escrit: aquest
+        # mòdul EXISTEIX perquè el front se'ls escrivia a mà i derivaven, i publicar-los per
+        # una segona porta hauria estat la mateixa falta amb un altre nom.
+        #
+        # Codis CRUS a totes les llengües: són dades de domini, com LINEAR/STEP o els codis
+        # POM, i el full imprès els porta així cap al fabricant.
+        'unitats_pom': _llista(POMGlobal.UNITAT_CHOICES),
+        'scopes_pom': _llista(POMGlobal.SCOPE_CHOICES),
+        'orientacions_pom': _llista(POMGlobal.ORIENTATION_CHOICES),
+        'estats_pom': _llista(POMGlobal.STATE_CHOICES),
+        'linies_pom': _llista(POMGlobal.LINE_CHOICES),
+        'seccions_cos_pom': _llista(POMGlobal.BODY_SECTION_CHOICES),
 
         # ══ PART B · LOT COMERCIAL ═══════════════════════════════════════════════════════
         # Entren ara perquè les SEVES pantalles passen conformitat ara (§ «partició per fase»

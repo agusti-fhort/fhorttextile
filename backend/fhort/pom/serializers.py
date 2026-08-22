@@ -4,7 +4,9 @@ from rest_framework import serializers, status
 from rest_framework.exceptions import APIException
 
 from .size_labels import _tipus_de_les_etiquetes
-from .nomenclatura import abreviatura_de, categoria_de, codi_de, noms_de
+from .nomenclatura import (CAMPS_QUE_SEPAREN, COM_ES_MESURA, abreviatura_de,
+                           categoria_de, codi_de, com_es_mesura_de, noms_de,
+                           separa_del_global)
 from .grading_regime import valida_breaks
 
 from .models import (
@@ -74,20 +76,28 @@ class POMMasterSerializer(serializers.ModelSerializer):
     applies_woven = serializers.BooleanField(source='pom_global.applies_woven', read_only=True, allow_null=True)
     applies_knit = serializers.BooleanField(source='pom_global.applies_knit', read_only=True, allow_null=True)
     applies_swim = serializers.BooleanField(source='pom_global.applies_swim', read_only=True, allow_null=True)
-    start_point = serializers.CharField(source='pom_global.start_point', read_only=True, allow_null=True)
-    end_point = serializers.CharField(source='pom_global.end_point', read_only=True, allow_null=True)
-    reference_point = serializers.CharField(source='pom_global.reference_point', read_only=True, allow_null=True)
-    scope = serializers.CharField(source='pom_global.scope', read_only=True, allow_null=True)
-    orientation = serializers.CharField(source='pom_global.orientation', read_only=True, allow_null=True)
-    state = serializers.CharField(source='pom_global.state', read_only=True, allow_null=True)
-    line = serializers.CharField(source='pom_global.line', read_only=True, allow_null=True)
-    body_section = serializers.CharField(source='pom_global.body_section', read_only=True, allow_null=True)
+    # 🚨 ELS NOU CAMPS DEL «COM ES MESURA» PASSEN PER LA CASCADA (22/08). Fins al tram 3 només
+    # vivien a `POMGlobal` i aquí es llegien d'allà en directe; ara també viuen al tenant, i
+    # el que ha de sortir és el que MANA: el del tenant si l'ha informat, el del global si no
+    # (`nomenclatura.com_es_mesura_de`). Deixar-los apuntant al global hauria fet que la
+    # pantalla d'edició del catàleg desés un valor i seguís ensenyant l'altre — el mateix
+    # mode de fallada que aquest sprint tanca, per la porta de darrere.
+    #
+    # `unitat` és més avall, amb la resta de camps que segueixen sent del global.
+    start_point = serializers.SerializerMethodField()
+    end_point = serializers.SerializerMethodField()
+    reference_point = serializers.SerializerMethodField()
+    scope = serializers.SerializerMethodField()
+    orientation = serializers.SerializerMethodField()
+    state = serializers.SerializerMethodField()
+    line = serializers.SerializerMethodField()
+    body_section = serializers.SerializerMethodField()
     tol_prod_cm = serializers.DecimalField(source='pom_global.tol_prod_cm',
                                            max_digits=5, decimal_places=2, read_only=True, allow_null=True)
     tol_samp_cm = serializers.DecimalField(source='pom_global.tol_samp_cm',
                                            max_digits=5, decimal_places=2, read_only=True, allow_null=True)
     iso_ref = serializers.CharField(source='pom_global.iso_ref', read_only=True, allow_null=True)
-    unitat = serializers.CharField(source='pom_global.unitat', read_only=True, allow_null=True)
+    unitat = serializers.SerializerMethodField()
     descripcio_en = serializers.CharField(source='pom_global.descripcio_en', read_only=True, allow_null=True)
     descripcio_ca = serializers.CharField(source='pom_global.descripcio_ca', read_only=True, allow_null=True)
     body_measure_iso_codi = serializers.CharField(
@@ -101,6 +111,40 @@ class POMMasterSerializer(serializers.ModelSerializer):
     # de `pom/nomenclatura.py` (llei d'Agus: ÀLIES > TENANT > GLOBAL). El catàleg no té
     # context de client —és de la casa, no d'un client—, i per això no hi passa cap àlies:
     # la cadena hi comença al tenant. La FORMA de la resposta no canvia; el VALOR, sí.
+    #: La cascada és pura i barata (nou `getattr` sobre objectes ja carregats amb
+    #: `select_related`): es crida per camp i prou. Memoritzar-la per fila demanaria una clau
+    #: d'identitat de l'objecte, i `id()` es reutilitza després d'un GC — un cau que pot
+    #: servir els camps d'una ALTRA fila és molt pitjor que nou diccionaris petits.
+    def _com(self, obj):
+        return com_es_mesura_de(obj)
+
+    def get_unitat(self, obj):
+        return self._com(obj)['unitat']
+
+    def get_start_point(self, obj):
+        return self._com(obj)['start_point']
+
+    def get_end_point(self, obj):
+        return self._com(obj)['end_point']
+
+    def get_reference_point(self, obj):
+        return self._com(obj)['reference_point']
+
+    def get_scope(self, obj):
+        return self._com(obj)['scope']
+
+    def get_orientation(self, obj):
+        return self._com(obj)['orientation']
+
+    def get_state(self, obj):
+        return self._com(obj)['state']
+
+    def get_line(self, obj):
+        return self._com(obj)['line']
+
+    def get_body_section(self, obj):
+        return self._com(obj)['body_section']
+
     def get_pom_code(self, obj):
         return codi_de(obj)
 
@@ -143,6 +187,62 @@ class POMMasterSerializer(serializers.ModelSerializer):
     class Meta:
         model = POMMaster
         fields = '__all__'
+
+
+#: ELS CAMPS QUE L'API POT ESCRIURE AL CATÀLEG DE POMs. Viu a nivell de mòdul —i no dins
+#: de la classe— perquè el `Meta` de sota l'ha de veure des d'una comprensió, i el cos d'una
+#: classe no és un àmbit tancat per als seus fills.
+_POM_ESCRIVIBLES = (
+    'codi_client', 'nom_client', 'categoria', 'actiu', 'notes', 'pendent_revisio',
+    'tolerancia_default_minus', 'tolerancia_default_plus',
+) + COM_ES_MESURA
+
+
+class POMMasterWriteSerializer(POMMasterSerializer):
+    """🔴 L'ESCRIPTURA DEL CATÀLEG DE POMs, amb camps EXPLÍCITS i la separació al mig.
+
+    `POMMasterViewSet` era un `ModelViewSet` PELAT: `IsAuthenticated`, `fields='__all__'` i
+    **`pom_global` ESCRIVIBLE per API**. O sigui que qualsevol usuari autenticat podia, amb un
+    PATCH, re-enganxar un POM del tenant a qualsevol fila del catàleg global —o desenganxar-l'hi—
+    sense passar per cap decisió ni deixar cap traça. La separació és una LLEI del domini
+    (copy-on-write), no un camp de formulari.
+
+    Què s'hi pot escriure i per què només això:
+      · `codi_client`, `nom_client`, `categoria` — la identitat al catàleg de la casa;
+      · `unitat` i el bloc «com es mesura» — el que el tram 3 va fer informable al tenant, i
+        que és exactament el que feia impossible «complementar la informació d'un POM propi»;
+      · `actiu`, `notes` — administrar-lo (i per això NO separen: arxivar no és redefinir);
+      · `tolerancia_default_*`, `pendent_revisio` — ja hi eren i segueixen.
+
+    Tot el que no és aquí és de LECTURA, `pom_global` el primer. La forma de la resposta no
+    canvia gens: hereta de `POMMasterSerializer` i per tant segueix emetent els 21 camps del
+    global i els resolts.
+
+    🚨 I AQUÍ ÉS ON PASSA LA SEPARACIÓ. Si el POM està lligat al global i el PATCH toca un camp
+    de `CAMPS_QUE_SEPAREN`, el `update` separa PRIMER (copiant-hi el que en penjava) i escriu
+    DESPRÉS: així el valor nou no es perd i el que no s'ha tocat es conserva del global. Un
+    ordre invers deixaria el camp editat trepitjat per la còpia.
+    """
+
+    ESCRIVIBLES = _POM_ESCRIVIBLES
+
+    class Meta(POMMasterSerializer.Meta):
+        model = POMMaster
+        fields = '__all__'
+        #: Tot el que no és `_POM_ESCRIVIBLES` queda en lectura. Es deriva de la llista de camps
+        #: del model perquè una columna NOVA neixi READ-ONLY: el defecte contrari —que neixi
+        #: escrivible per API sense que ningú ho hagi decidit— és el que aquest sprint tanca.
+        read_only_fields = tuple(
+            f.name for f in POMMaster._meta.get_fields()
+            if getattr(f, 'concrete', False) and f.name not in _POM_ESCRIVIBLES
+        )
+
+    def update(self, instance, validated_data):
+        toca_identitat = any(c in validated_data for c in CAMPS_QUE_SEPAREN)
+        if instance.pom_global_id and toca_identitat:
+            separa_del_global(instance)
+            instance.save()
+        return super().update(instance, validated_data)
 
 
 class SizeDefinitionSerializer(serializers.ModelSerializer):
