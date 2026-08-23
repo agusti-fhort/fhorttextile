@@ -39,7 +39,12 @@ POSICIONS = [
     ('left',           'L',  'Left',            'Esquerra',           'Izquierda'),
     ('right',          'R',  'Right',           'Dreta',              'Derecha'),
     ('top',            'T',  'Top',             'Superior',           'Superior'),
-    ('bottom',         'B',  'Bottom',          'Inferior',           'Inferior'),
+    # 🚨 `BM`, NO `B` (Agus, 22-23/08): el sufix `B` és de `back`, la cara posterior del segon
+    # eix de posició. Dos sufixos iguals dins de l'eix farien que `BB` volgués dir dues coses.
+    # La migració germana és `pom/0079_bottom_sufix_bm` i les DUES BANDES van juntes: sense
+    # aquesta línia, la propera passada d'aquesta sembra tornaria a posar `B` (lliçó de
+    # `0060_extended_net`).
+    ('bottom',         'BM', 'Bottom',          'Inferior',           'Inferior'),
     # CF/CB NO es tradueixen: són acrònims del sector, com HPS. Escriure'ls «Centre
     # davant» a la fitxa catalana els faria irreconeixibles per al fabricant.
     ('cf',             'CF', 'CF',              'CF',                 'CF'),
