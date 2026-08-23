@@ -70,6 +70,42 @@ class POMGlobal(models.Model):
     )
     # End Sprint S1
 
+    # ── SEMBRA v5 (2026-08-23) · les quatre columnes del catàleg que no tenien on anar ──────
+    # El full `CATALEG_SISTEMA_POM_v5_COMPLET_r2.xlsx` porta, per a cada POM, l'ordre dins de
+    # la família i tres classificacions que fins avui es reportaven i es perdien (la sembra v4
+    # ja ho va deixar escrit el 09/08: «tres columnes del corpus no tenen destí a l'esquema»).
+    # Pre-tren autoritzat per Agus el 23/08: ADDITIVES i amb el default buit, o sigui que cap
+    # fila canvia de valor i cap lector canvia de resposta fins que la sembra les ompli.
+    #
+    # 🔑 **ELS VALORS SÓN ELS LITERALS DEL FULL, i les `choices` només els declaren.** No es
+    # transliteren a codis (`AMPLADA`, `COL_LOCACIO`…) perquè el vocabulari **és** el del
+    # document: qualsevol traducció seria una taula de conversió més per mantenir, i el que
+    # han de llegir igual els dos entorns són els mateixos bytes del mateix arxiu.
+    REGIM_CHOICES = [
+        ('Amplada', 'Amplada'), ('Llarg', 'Llarg'),
+        ('Col·locació', 'Col·locació'), ('Fix', 'Fix'),
+    ]
+    ANCORATGE_CHOICES = [
+        ('Cota', 'Cota'), ('Caiguda', 'Caiguda'),
+        ('Component', 'Component'), ('Tirada', 'Tirada'),
+    ]
+
+    #: Ordre del POM DINS de la família (columna `Pos.`). 0 = el full no ho diu.
+    display_order = models.PositiveSmallIntegerField(default=0)
+    #: Què fa aquesta mesura: una amplada, un llarg, una col·locació o una cota fixa.
+    regim = models.CharField(max_length=20, choices=REGIM_CHOICES, blank=True, default='')
+    #: De què penja: d'una cota, d'una caiguda, d'un component o d'una tirada.
+    ancoratge = models.CharField(max_length=20, choices=ANCORATGE_CHOICES, blank=True,
+                                 default='')
+    #: 🔑 `capa_defecte`, i NO `capa`: la capa és de la PERTINENÇA (`GarmentPOMMap.capa`,
+    #: slug de `MeasurementLayer`) i el catàleg no la pot decidir — només la PROPOSA. Un camp
+    #: dit `capa` en un POM global es llegiria com «la capa d'aquesta mesura», que és fals.
+    capa_defecte = models.CharField(
+        max_length=20, blank=True, default='',
+        help_text='Capa que el catàleg PROPOSA (slug de pom.MeasurementLayer). Buit = cap '
+                  'proposta; la capa real la decideix la pertinença.')
+    # ── Fi SEMBRA v5 ──────────────────────────────────────────────────────────────────────
+
     class Meta:
         verbose_name = 'POM global'
         verbose_name_plural = 'POMs globals'
