@@ -5,7 +5,8 @@
 // El que fixa, que és tot el que la peça promet:
 //   1 · el DEFECTE és «actius» i la llista de treball deixa de portar l'arxiu a sobre;
 //   2 · els RECOMPTES són de la llista sencera i NO ballen amb la cerca;
-//   3 · la CERCA actua dins del tab actiu;
+//   3 · la CERCA actua dins del tab… i la CREUADA diu quantes n'hi ha a l'altre costat —la
+//       guarda perquè ningú re-creï un POM que viu a l'arxiu;
 //   4 · al tab «Tots», els inactius van DARRERE dins de cada família.
 
 import assert from 'node:assert/strict'
@@ -73,13 +74,32 @@ test('la cerca actua DINS del tab actiu', () => {
   assert.deepEqual(tria(LLISTA, { tab: TAB_TOTS, q: 'waist' }).files.map(p => p.id), [2, 4])
 })
 
+test('🚨 LA CREUADA: la cerca diu quantes n\'hi ha a l\'ALTRE costat', () => {
+  assert.deepEqual(tria(LLISTA, { tab: TAB_ACTIUS, q: 'waist' }).creuada,
+    { tab: TAB_INACTIUS, n: 1 })
+  assert.deepEqual(tria(LLISTA, { tab: TAB_INACTIUS, q: 'waist' }).creuada,
+    { tab: TAB_ACTIUS, n: 1 })
+})
 
+test('la creuada calla quan no hi ha res a dir', () => {
+  assert.equal(tria(LLISTA, { tab: TAB_ACTIUS }).creuada, null, 'sense text de cerca')
+  assert.equal(tria(LLISTA, { tab: TAB_ACTIUS, q: 'chest' }).creuada, null, 'sense res a l\'arxiu')
+  assert.equal(tria(LLISTA, { tab: TAB_TOTS, q: 'waist' }).creuada, null, '«Tots» ja les veu totes')
+})
 
+test('la creuada troba l\'arxiu encara que el tab actiu no doni CAP resultat', () => {
+  // El cas de la Montse: busca al catàleg viu, no hi és, i el duplicat 522 comença aquí.
+  const r = tria(LLISTA, { tab: TAB_ACTIUS, q: 'arxiu' })
+  assert.equal(r.files.length, 0)
+  assert.deepEqual(r.creuada, { tab: TAB_INACTIUS, n: 1 })
+})
 
 
 
 test('la cerca sense resultats no menteix', () => {
-  assert.deepEqual(tria(LLISTA, { tab: TAB_TOTS, q: 'zzzzz' }).files, [])
+  const r = tria(LLISTA, { tab: TAB_TOTS, q: 'zzzzz' })
+  assert.deepEqual(r.files, [])
+  assert.equal(r.creuada, null)
 })
 
 test('dins d\'una família, els inactius van DARRERE i la resta conserva l\'ordre', () => {

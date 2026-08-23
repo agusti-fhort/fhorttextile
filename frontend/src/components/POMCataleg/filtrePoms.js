@@ -56,9 +56,28 @@ export function recomptes(llista) {
   return { [TAB_ACTIUS]: actius, [TAB_INACTIUS]: files.length - actius, [TAB_TOTS]: files.length }
 }
 
-/** LA TRIA: tab → cerca. Torna les files que la llista ha de pintar. */
+/**
+ * LA TRIA: tab → cerca.
+ *
+ * Torna també `creuada` — les coincidències que la mateixa cerca té A L'ALTRE COSTAT.
+ *
+ * 🔑 **LA CREUADA ÉS EL MOTIU DE FONS DEL TRAM**, no un extra: sense ella, buscar «waist» dins
+ * d'Actius i no trobar-lo convida a crear-ne un de nou quan potser viu a l'arxiu — i llavors el
+ * catàleg té el duplicat 522. Es pot donar amb XIFRA EXACTA perquè la llista és sencera (v. la
+ * capçalera); si algun dia es pagina, aquest número ha de venir del servidor o convertir-se en
+ * un enllaç sense xifra.
+ */
 export function tria(llista, { tab = TAB_ACTIUS, q = '' } = {}) {
-  return { files: delTab(llista, tab).filter(p => casa(p, q)) }
+  const files = delTab(llista, tab).filter(p => casa(p, q))
+
+  const altre = tab === TAB_ACTIUS ? TAB_INACTIUS : tab === TAB_INACTIUS ? TAB_ACTIUS : null
+  // Sense text de cerca no hi ha res a creuar: el tab del costat ja diu quants n'hi ha al seu
+  // badge, i repetir-ho aquí sota seria soroll.
+  const nCreuada = (altre && String(q || '').trim())
+    ? delTab(llista, altre).filter(p => casa(p, q)).length
+    : 0
+
+  return { files, creuada: nCreuada ? { tab: altre, n: nCreuada } : null }
 }
 
 /**

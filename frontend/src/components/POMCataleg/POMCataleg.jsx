@@ -6,7 +6,9 @@ import { useTraduccioPoms } from '../../utils/traduccioPomFont'
 import { useEstatVocabulari, codisDe } from '../../utils/vocabulariDominiFont'
 import { InfoTraduccio } from '../EditableTable/EditableTable'
 import SubTabs from '../ui/SubTabs'
-import { TABS, TAB_ACTIUS, inactiusDarrere, recomptes, tria } from './filtrePoms.js'
+import {
+  TABS, TAB_ACTIUS, TAB_INACTIUS, inactiusDarrere, recomptes, tria,
+} from './filtrePoms.js'
 
 // Segueix la paginació de DRF fins al final. `page_size: 1000` era un SOSTRE: amb un catàleg més
 // gran, la pantalla n'hauria pintat 1000 i el comptador n'hauria dit 1000, sense que res
@@ -395,7 +397,7 @@ export default function POMCataleg() {
   // LA TRIA VIU FORA DEL COMPONENT (`filtrePoms.js`) i és la que els tests exerceixen: tab →
   // cerca → pendents, més el recompte de la CREUADA (què troba aquesta mateixa cerca a l'altre
   // costat). Aquí només se'n pinta el resultat.
-  const { files: filtrats } = useMemo(() => tria(llista, { tab, q }), [llista, tab, q])
+  const { files: filtrats, creuada } = useMemo(() => tria(llista, { tab, q }), [llista, tab, q])
   // Els recomptes dels tabs són de la llista SENCERA i no els toca la cerca: el badge diu què
   // hi ha al catàleg, no què queda del filtre d'ara.
   const comptes = useMemo(() => recomptes(llista), [llista])
@@ -598,6 +600,27 @@ export default function POMCataleg() {
                 ))}
               </div>
             ))}
+            {/* ── LA CREUADA · LA GUARDA ANTI-DUPLICATS (Agus, 23/08) ────────────────────
+                🚨 EL MOTIU DE FONS DEL TRAM, i no un extra. Buscar «waist» dins d'Actius, no
+                trobar-lo i crear-lo és com neix el duplicat 522: el POM viu a l'arxiu i ningú
+                ho ha dit. Aquesta línia ho diu, amb XIFRA EXACTA —la llista és sencera al
+                client (v. `filtrePoms`)— i porta al tab del costat SENSE perdre la cerca.
+                Va SOTA els resultats i en to discret: informa, no interromp. */}
+            {!carregant && creuada && (
+              <button type="button" onClick={() => setTab(creuada.tab)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6, width: '100%', textAlign: 'left',
+                  padding: '10px 16px', border: 0, borderTopWidth: 1, borderTopStyle: 'solid',
+                  borderTopColor: 'var(--line-soft)', background: 'transparent',
+                  color: 'var(--text-soft)', fontFamily: 'inherit', fontSize: 'var(--fs-label)',
+                  cursor: 'pointer',
+                }}>
+                <i className="ti ti-arrow-right" aria-hidden="true" style={{ fontSize: 13 }} />
+                {t(creuada.tab === TAB_INACTIUS
+                  ? 'poms.cat.creuada_inactius' : 'poms.cat.creuada_actius',
+                { count: creuada.n })}
+              </button>
+            )}
           </div>
         </div>
 
