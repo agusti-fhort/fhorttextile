@@ -129,3 +129,20 @@ test('sense llista no peta res', () => {
   assert.deepEqual(tria(null).files, [])
   assert.deepEqual(inactiusDarrere(undefined), [])
 })
+
+// ── EL TAB NO PERSISTEIX (llei de la casa: localStorage rejected) ─────────────────────────
+// Aquesta és una prova ESTRUCTURAL i es diu clarament: sense navegador no es pot recarregar
+// una pantalla, i el que sí que es pot mesurar és que **no hi ha cap magatzem on desar-lo**.
+// El defecte «Actius» ja el prova el primer test d'aquest fitxer; això n'és l'altra meitat i,
+// sobretot, és la xarxa per al dia que algú «millori» la pantalla recordant l'última tria.
+test('la pantalla no desa el tab enlloc', async () => {
+  const { readFile } = await import('node:fs/promises')
+  const brut = await readFile(new URL('./POMCataleg.jsx', import.meta.url), 'utf8')
+  // Els COMENTARIS fora abans de mirar: el fitxer explica per què no hi ha `localStorage`, i
+  // una prova que caigués per la seva pròpia explicació seria una prova que no mesura res
+  // (hi va caure al primer intent).
+  const font = brut.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+  for (const magatzem of ['localStorage', 'sessionStorage', 'document.cookie']) {
+    assert.equal(font.includes(magatzem), false, `${magatzem} a POMCataleg`)
+  }
+})
