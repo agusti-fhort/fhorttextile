@@ -400,7 +400,7 @@ class S7FinestraTest(BancV5):
         BaseMeasurement.objects.create(model=m, pom=orfe, base_value_cm=70)
         # La MARE té una resident (i només per a `cobert`) → el contenidor és lletra morta…
         ModelGradingRule.objects.create(model=m, pom=cobert, garment='', logica='FIXED',
-                                        talla_base=base, actiu=True)
+                                        actiu=True)
         # …encara que el joc cobreixi també l'altre POM.
         GradingRule.objects.create(rule_set=joc, pom=orfe, talla_base=base, logica='FIXED',
                                    actiu=True)
