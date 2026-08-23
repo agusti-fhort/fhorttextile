@@ -32,7 +32,8 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django_tenants.utils import schema_context
 
-from fhort.pom.management.commands.seed_brownie_ruleset import forma_de_la_regla
+from fhort.pom.management.commands.seed_brownie_ruleset import (NOMS_DEL_JOC, forma_de_la_regla,
+                                                                resol_el_joc)
 from fhort.pom.models import (CustomerPOMAlias, GradingRule, GradingRuleSet, POMCategory,
                               POMMaster, SizeSystem)
 from fhort.tasks.models import Customer
@@ -41,6 +42,8 @@ CORPUS = Path('/var/www/ftt-staging/ops/sembra_v4')
 TENANT = 'fhort'
 CUSTOMER_CODI = 'BRW'
 SIZE_SYSTEM = 'ALPHA_EU_W'
+#: El nom CANÒNIC del joc. La resolució en viu NO passa per aquí: va per `NOMS_DEL_JOC`
+#: (pany P3), perquè aquest nom és exactament el que el rebateig de PROD ja no fa servir.
 RULESET = 'BRW-CATALEG-v3'
 DELTES = ('d_xxs_xs', 'd_xs_s', 'd_s_m', 'd_m_l')
 
@@ -83,12 +86,18 @@ class Command(BaseCommand):
             if not talles:
                 raise CommandError(f'SizeSystem {SIZE_SYSTEM} sense talles.')
             base, run = talles[0], [t.etiqueta for t in talles]
-            rs = GradingRuleSet.objects.filter(nom=RULESET, customer=brw).first()
+            # 🔒 PANY P3 (22/08): el joc es resol per la llista de noms coneguts, no pel
+            # literal `RULESET` —que la BD de PROD ja ha rebatejat a «GRADING BROWNIE 2026».
+            # Aquesta comanda no en crea cap en cap cas: si no el troba, ATURA.
+            rs = resol_el_joc(brw)
             if not rs:
-                raise CommandError(f'GradingRuleSet {RULESET!r} de {CUSTOMER_CODI} no existeix.')
+                raise CommandError(
+                    f'Cap GradingRuleSet de {CUSTOMER_CODI} amb cap dels noms coneguts '
+                    f'{list(NOMS_DEL_JOC)} (ni per `nom` ni per `codi_sistema`). La sembra no '
+                    f'en crea cap: afegeix el nom viu a NOMS_DEL_JOC.')
             if rs.regles.exists():
-                raise CommandError(f'{RULESET} ja té {rs.regles.count()} regles.')
-            self.stdout.write(f'  ruleset {rs.id} {RULESET} · run {run} · base {base.etiqueta!r}\n')
+                raise CommandError(f'{rs.nom!r} (pk={rs.id}) ja té {rs.regles.count()} regles.')
+            self.stdout.write(f'  ruleset {rs.id} {rs.nom!r} · run {run} · base {base.etiqueta!r}\n')
 
             # ── PAS 1 · categories + catàleg canònic ──────────────────────────────────
             # La `seccio` és el rètol de la família; el `🆕` és anotació del full (marca les

@@ -3637,7 +3637,16 @@
       "create_submit": "Crear POM",
       "create_saving": "Creant…",
       "create_cancel": "Cancel·lar",
-      "create_error": "No s’ha pogut crear el POM."
+      "create_error": "No s’ha pogut crear el POM.",
+      "act_edit": "Editar",
+      "edit_save": "Desar canvis",
+      "edit_saving": "Desant…",
+      "edit_unset": "— sense definir —",
+      "edit_will_detach": "Aquest POM està lligat al catàleg global. En desar, se’n SEPARA i passa a ser del teu catàleg: es conserva tot el que en venia i el catàleg global no es toca.",
+      "edit_vocab_error": "No s’han pogut carregar els vocabularis; les llistes queden inactives.",
+      "f_orientation": "Orientació",
+      "f_state": "Estat de la peça",
+      "f_line": "Traçat"
     }
   },
   "size_map_screen_config": "Configuració",

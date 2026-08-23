@@ -254,20 +254,18 @@ def grading_rules_with_units_view(request, rule_set_id):
 
         tenant_unit = get_tenant_unit(request)
 
+        # FONT ÚNICA (22/08) — tres helpers en línia que feien guanyar el GLOBAL. La cadena
+        # viu a `pom/nomenclatura.py` (ÀLIES > TENANT > GLOBAL) i és la mateixa a tot arreu.
+        from fhort.pom.nomenclatura import codi_de, noms_de
+
         def _pom_codi(p):
-            if p.pom_global_id:
-                return p.pom_global.codi
-            return p.codi_client or ''
+            return codi_de(p)
 
         def _pom_name_en(p):
-            if p.pom_global_id and p.pom_global.nom_en:
-                return p.pom_global.nom_en
-            return p.nom_client
+            return noms_de(p)['nom_en']
 
         def _pom_name_ca(p):
-            if p.pom_global_id and p.pom_global.nom_ca:
-                return p.pom_global.nom_ca
-            return p.nom_client
+            return noms_de(p)['nom_ca']
 
         data = [{
             'pom_id': r.pom_id,

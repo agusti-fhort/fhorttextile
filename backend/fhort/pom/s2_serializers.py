@@ -4,6 +4,7 @@ fhort/pom/s2_serializers.py — Sprint S2 serializers
 from rest_framework import serializers
 
 from fhort.accounts.capabilities import PodaEconomicaMixin
+from fhort.pom.nomenclatura import codi_de, noms_de
 
 
 class TargetSerializer(serializers.Serializer):
@@ -121,19 +122,12 @@ class GradingRuleLightSerializer(serializers.Serializer):
     def get_increment(self, obj):
         return float(obj.increment_base) if obj.increment_base is not None else None
 
+    # FONT ÚNICA (22/08) — la cadena viu a `pom/nomenclatura.py` (ÀLIES > TENANT > GLOBAL).
     def get_pom_codi(self, obj):
-        if not obj.pom_id:
-            return ''
-        if getattr(obj.pom, 'pom_global_id', None):
-            return obj.pom.pom_global.codi
-        return getattr(obj.pom, 'codi_client', '') or ''
+        return codi_de(obj.pom) if obj.pom_id else ''
 
     def get_pom_nom_en(self, obj):
-        if not obj.pom_id:
-            return ''
-        if getattr(obj.pom, 'pom_global_id', None):
-            return obj.pom.pom_global.nom_en
-        return getattr(obj.pom, 'nom_client', '') or ''
+        return noms_de(obj.pom)['nom_en'] if obj.pom_id else ''
 
 
 class SizingProfileSerializer(serializers.Serializer):

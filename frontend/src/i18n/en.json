@@ -3637,7 +3637,16 @@
       "create_submit": "Create POM",
       "create_saving": "Creating…",
       "create_cancel": "Cancel",
-      "create_error": "Could not create the POM."
+      "create_error": "Could not create the POM.",
+      "act_edit": "Edit",
+      "edit_save": "Save changes",
+      "edit_saving": "Saving…",
+      "edit_unset": "— not set —",
+      "edit_will_detach": "This POM is linked to the global catalogue. On save it DETACHES and becomes yours: everything it inherited is kept, and the global catalogue is left untouched.",
+      "edit_vocab_error": "Vocabularies could not be loaded; the lists stay disabled.",
+      "f_orientation": "Orientation",
+      "f_state": "Garment state",
+      "f_line": "Line"
     }
   },
   "size_map_screen_config": "Configuration",

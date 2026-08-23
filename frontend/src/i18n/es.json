@@ -3637,7 +3637,16 @@
       "create_submit": "Crear POM",
       "create_saving": "Creando…",
       "create_cancel": "Cancelar",
-      "create_error": "No se ha podido crear el POM."
+      "create_error": "No se ha podido crear el POM.",
+      "act_edit": "Editar",
+      "edit_save": "Guardar cambios",
+      "edit_saving": "Guardando…",
+      "edit_unset": "— sin definir —",
+      "edit_will_detach": "Este POM está vinculado al catálogo global. Al guardar se SEPARA y pasa a ser de tu catálogo: se conserva todo lo que venía de él y el catálogo global no se toca.",
+      "edit_vocab_error": "No se han podido cargar los vocabularios; las listas quedan inactivas.",
+      "f_orientation": "Orientación",
+      "f_state": "Estado de la prenda",
+      "f_line": "Trazado"
     }
   },
   "size_map_screen_config": "Configuración",

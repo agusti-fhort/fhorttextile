@@ -16,7 +16,16 @@ direcció contrària. NO va a `backoffice`: és app SHARED (public) i no ha de c
 detall del catàleg d'un tenant (llei DUES FACTURACIONS SEPARADES / fronteres d'app).
 
 LLEIS QUE APLICA
-- **Idempotent-additiva.** `update_or_create` per clau natural. MAI `delete`.
+- **CREATE-ONLY per defecte** (🔒 pany P5, TREN DE PANYS 22/08). Crear el que falta, sí;
+  reescriure el que el destí ja té, només amb `--overwrite` explícit. Fins al 22/08 el
+  defecte era el contrari: `bootstrap_tenant <destí>` sense `--additive` SOBREESCRIVIA les
+  famílies de POM i el catàleg del destí amb els de l'origen (`--from`, default `fhort`), i
+  el botó del backoffice acceptava qualsevol destí. `--additive` es conserva i vol dir el
+  mateix que abans; ara, a més, és la manera de DECLARAR que el destí ja és poblat.
+- **Guarda de destí.** Si el destí ja té `POMMaster` o `POMCategory` propis i no s'ha
+  declarat res (`--additive` o `--overwrite`), s'ATURA amb el recompte del que trepitjaria.
+  Un tenant amb catàleg propi no és un tenant que neix.
+- **Idempotent-additiva.** Clau natural sempre. MAI `delete`.
 - **Remapeig de FK per clau natural entre schemes**, mai per pk: els pks difereixen entre
   schemes. Es manté un mapa `pk_origen → pk_destí` per model (patró `load_map_inline`, no
   `clone_model_for_qa`, que reusa FK per valor i només val intra-schema).
@@ -202,9 +211,17 @@ class Command(BaseCommand):
                                  'seleccionats (+ dependències). Sense --profile: tot el catàleg.')
         parser.add_argument('--additive', action='store_true',
                             help='Materialització ESTRICTAMENT additiva: crea el que falta i NO '
-                                 'toca mai el que ja existeix (get_or_create). Per a un destí '
-                                 'poblat. Si el destí ja és actiu, no en tanca l\'onboarding ni '
+                                 'toca mai el que ja existeix. És el MODE PER DEFECTE des del '
+                                 'pany P5; passar-lo explícitament és, a més, la manera de '
+                                 'declarar que ja saps que el destí és poblat (v. la guarda de '
+                                 'destí). Si el destí ja és actiu, no en tanca l\'onboarding ni '
                                  'en regenera la Template.')
+        parser.add_argument('--overwrite', action='store_true',
+                            help='SOBREESCRIU el destí amb l\'origen (`update_or_create`): el '
+                                 'comportament que fins al 22/08 era el defecte silenciós. '
+                                 'Reescriu famílies de POM, catàleg i grading del destí. Exigit '
+                                 'explícitament: cap sembra reescriu una nomenclatura aliena '
+                                 'sense que algú ho hagi dit.')
 
     # ------------------------------------------------------------------ utils
 
@@ -414,7 +431,13 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         schema, source, dry = options['schema'], options['source'], options['dry_run']
-        additive = options['additive']
+        # 🔒 PANY P5 — el defecte és CREATE-ONLY; sobreescriure exigeix dir-ho. Els dos flags
+        # alhora no és una declaració: és una contradicció, i es diu en comptes de resoldre-la
+        # per precedència (qui escrivís `--additive --overwrite` esperant create-only, en
+        # rebria l'oposat i el destí sobreescrit).
+        if options['additive'] and options['overwrite']:
+            raise CommandError('--additive i --overwrite es contradiuen: tria un dels dos.')
+        additive = not options['overwrite']
         if schema == 'public':
             raise CommandError("El schema 'public' no és un tenant.")
         if schema == source:
@@ -427,8 +450,9 @@ class Command(BaseCommand):
         if not TenantModel.objects.filter(schema_name=source).exists():
             raise CommandError(f"Tenant origen '{source}' no existeix.")
 
-        # --additive contra un destí ja actiu: no se'n toca ni l'onboarding ni la Template
-        # (són passos de tenant-verge). Es captura ABANS de qualsevol mutació de l'estat.
+        # Mode create-only (el defecte des del pany P5) contra un destí ja actiu: no se'n toca
+        # ni l'onboarding ni la Template (són passos de tenant-verge). Es captura ABANS de
+        # qualsevol mutació de l'estat.
         skip_onboarding = additive and client.estat == 'actiu'
 
         # ---- F3 P-FREE-SEED: selecció per perfil (blocs + gate de grading) -----
@@ -463,8 +487,35 @@ class Command(BaseCommand):
                 source_filters[GradingRuleSet] = {'origen': GradingRuleSet.ORIGEN_CANONICAL}
                 source_filters[GradingRule] = {'rule_set__origen': GradingRuleSet.ORIGEN_CANONICAL}
 
+        # ---- 🔒 PANY P5: LA GUARDA DE DESTÍ ------------------------------------
+        # Un tenant que ja té catàleg propi no és un tenant que neix. Abans d'escriure res,
+        # es compta QUÈ hi ha al destí i quantes d'aquestes files l'origen trepitjaria (clau
+        # natural coincident), i s'exigeix que algú DECLARI què vol. Només es miren els
+        # models que aquesta correguda copiaria de debò (`--profile` pot deixar-los fora).
+        if not (options['additive'] or options['overwrite']):
+            from fhort.pom.models import POMCategory, POMMaster
+            vigilats = [(m, camp) for m, camp in ((POMCategory, 'codi'), (POMMaster, 'codi_client'))
+                        if selected_models is None or m.__name__ in selected_models]
+            with schema_context(source):
+                origen_codis = {m: set(m.objects.values_list(camp, flat=True))
+                                for m, camp in vigilats}
+            propis, xoc = {}, {}
+            with schema_context(schema):
+                for m, camp in vigilats:
+                    propis[m] = m.objects.count()
+                    xoc[m] = m.objects.filter(**{f'{camp}__in': origen_codis[m]}).count()
+            if any(propis.values()):
+                detall = ' · '.join(f'{m.__name__}: {propis[m]} propis, {xoc[m]} que '
+                                    f'{source} trepitjaria' for m, _ in vigilats)
+                raise CommandError(
+                    f"El destí '{schema}' ja té catàleg propi ({detall}). `bootstrap_tenant` "
+                    f"és per a un tenant que NEIX: declara què vols. --additive crea el que "
+                    f"falti i no toca res del que ja hi ha; --overwrite el reescriu amb el de "
+                    f"'{source}'. (--dry-run enumera peça a peça.)")
+
         self.stdout.write(f"\n{'[DRY-RUN] ' if dry else ''}bootstrap_tenant: "
-                          f"{source} → {schema} ({client.codi_tenant}){prof_label}\n")
+                          f"{source} → {schema} ({client.codi_tenant}){prof_label}"
+                          f"{'' if additive else ' · ⚠️ --overwrite'}\n")
 
         spec = [row for row in _spec()
                 if selected_models is None or row[0].__name__ in selected_models]

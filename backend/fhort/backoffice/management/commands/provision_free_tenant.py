@@ -5,8 +5,12 @@ F3 P-FREE-SEED (B3) — orquestra la sembra automàtica d'un tenant Free.
     manage.py provision_free_tenant <schema> [--profile <id>] [--email <email>]
 
 QUÈ FA, en ordre:
-  1. bootstrap_tenant <schema> --profile <default_free>  (sembra el catàleg del perfil;
-     en acabar verd, JA tanca onboarding → actiu, DC-6).
+  1. bootstrap_tenant <schema> --profile <default_free> --additive  (sembra el catàleg del
+     perfil; en acabar verd, JA tanca onboarding → actiu, DC-6).
+     🔒 `--additive` és EXPLÍCIT des del pany P5 (22/08) encara que ara sigui el defecte:
+     declara que el destí pot estar poblat i, per tant, la guarda de destí no atura una
+     RE-EXECUCIÓ després d'una sembra a mitges (una peça saltada commiteja i després peta).
+     Sense el flag, el segon intent moriria a la guarda i el tenant es quedaria a mig sembrar.
   2. create_tenant_admin <schema> --email <email_facturacio>  (el primer admin, perquè
      el Free sigui autònom).
 Cada pas escriu al Registre d'activitat (backoffice.BackofficeActionLog). Èxit → tenant
@@ -66,7 +70,7 @@ class Command(BaseCommand):
 
         # 1) Bootstrap del catàleg segons el perfil.
         try:
-            call_command('bootstrap_tenant', schema, '--profile', str(profile.pk))
+            call_command('bootstrap_tenant', schema, '--profile', str(profile.pk), '--additive')
             _log(schema, 'client.seed.bootstrap', True,
                  {'profile': profile.nom, 'profile_id': profile.pk})
         except Exception as e:

@@ -40,6 +40,7 @@ from .serializers import (
     ItemBaseSetSerializer,
     POMCategorySerializer,
     POMMasterSerializer,
+    POMMasterWriteSerializer,
     SizeDefinitionSerializer,
     SizeSystemSerializer,
 )
@@ -52,6 +53,20 @@ class _ConfigureWrite(HasCapability):
 
 
 class POMMasterViewSet(viewsets.ModelViewSet):
+    """El catàleg de POMs del tenant. Lectura oberta, ESCRIPTURA GATED (22/08).
+
+    🔴 QUÈ ERA ABANS I PER QUÈ CALIA TANCAR-HO. Un `ModelViewSet` PELAT: `IsAuthenticated` per
+    a tot, `fields='__all__'` i **`pom_global` escrivible per API**. La conseqüència no era
+    teòrica: qualsevol usuari autenticat —un tècnic, el rol més bàsic— podia amb un sol PATCH
+    re-enganxar un POM a qualsevol fila del catàleg global, o desenganxar-l'hi, sense passar
+    per cap decisió i sense deixar traça. I això és, exactament, el defecte que aquest sprint
+    tanca vist per l'altra cara: la nomenclatura d'un POM canviava de sobirà per accident.
+
+    Ara escriu qui pot CONFIGURAR, com la resta d'escriptures de catàleg (`SizeSystemViewSet`,
+    `SizeDefinitionViewSet`), i pel serializer d'escriptura, que declara els camps un per un.
+    La LECTURA no es toca: la pantalla del catàleg i les cinc que en beuen segueixen igual.
+    """
+
     permission_classes = [IsAuthenticated]
     serializer_class = POMMasterSerializer
     queryset = POMMaster.objects.select_related(
@@ -61,6 +76,16 @@ class POMMasterViewSet(viewsets.ModelViewSet):
     search_fields = ['codi_client', 'nom_client']
     ordering_fields = ['codi_client', 'nom_client']
     ordering = ['codi_client']
+
+    def get_permissions(self):
+        if self.action in ('create', 'update', 'partial_update', 'destroy'):
+            return [_ConfigureWrite()]
+        return [IsAuthenticated()]
+
+    def get_serializer_class(self):
+        if self.action in ('create', 'update', 'partial_update'):
+            return POMMasterWriteSerializer
+        return POMMasterSerializer
 
 
 class SizeSystemViewSet(viewsets.ModelViewSet):

@@ -415,6 +415,54 @@ class POMMaster(models.Model):
         help_text="Referència del model/fitxa des d'on s'ha creat aquest POM",
     )
 
+    # ═══ SOBIRANIA DEL POM (22/08) ═══════════════════════════════════════════════════════
+    #
+    # 🚨 LA DECISIÓ D'AGUS: **en editar qualsevol camp propi d'un POM lligat al global, el POM
+    # ES SEPARA i passa a ser del tenant.** Mateixa llei que el model que reescriu la regla
+    # sembrada: qui toca una dada n'assumeix la propietat, i el catàleg global —que és de la
+    # casa global i el comparteixen tots els tenants— no es toca MAI.
+    #
+    # La separació és COPY-ON-WRITE (`nomenclatura.separa_del_global`): abans de posar
+    # `pom_global` a NULL, els valors que venien del global es COPIEN aquí, perquè separar-se
+    # no pot voler dir perdre informació.
+    #
+    # 🚨 PER QUÈ CAL UNA MARCA I NO N'HI HA PROU AMB `pom_global IS NULL`. Un POM nascut al
+    # tenant (els 144 de `fhort`, els que crea `poms/crear-tenant/`) TAMBÉ té `pom_global` a
+    # NULL: els dos estats són indistingibles per la columna del FK. Sense marca, els
+    # importadors —que resolen per `pom_global.codi`— no poden dir «aquest ja no és teu» i
+    # el tornarien a enganxar, revertint en silenci la reparació feta a PROD.
+    separat_de_global = models.CharField(
+        max_length=80, blank=True, default='',
+        verbose_name='Separat del global',
+        help_text="Codi del POMGlobal del qual aquest POM es va separar (buit = mai lligat). "
+                  "Marca de SOBIRANIA: els importadors no hi poden tornar a enganxar el global.",
+    )
+    separat_at = models.DateTimeField(null=True, blank=True, verbose_name='Data de separació')
+
+    # ── EL «COM ES MESURA», INFORMABLE AL TENANT (22/08) ─────────────────────────────────
+    #
+    # Aquests camps només vivien a `POMGlobal`, i per això «complementar la informació d'un
+    # POM propi» era literalment impossible: la pantalla del catàleg els pintava com a «no
+    # lligat» i no hi havia on escriure'ls. Ara existeixen aquí, BUITS per defecte i additius:
+    # cap lector canvia de valor fins que algú els ompli, i el global segueix sent la font
+    # mentre el POM hi estigui lligat (la cascada la resol `com_es_mesura_de`).
+    #
+    # Mateixos `choices` que `POMGlobal` a posta: són el mateix vocabulari, i dues llistes
+    # divergents serien la sisena ocurrència del patró que aquest sprint tanca.
+    unitat = models.CharField(
+        max_length=4, choices=POMGlobal.UNITAT_CHOICES, blank=True, default='',
+        help_text="Buit = la del global si n'hi ha, cm si no.")
+    start_point = models.CharField(max_length=120, blank=True, default='')
+    end_point = models.CharField(max_length=120, blank=True, default='')
+    reference_point = models.CharField(max_length=200, blank=True, default='')
+    scope = models.CharField(max_length=20, choices=POMGlobal.SCOPE_CHOICES, blank=True, default='')
+    orientation = models.CharField(
+        max_length=20, choices=POMGlobal.ORIENTATION_CHOICES, blank=True, default='')
+    state = models.CharField(max_length=20, choices=POMGlobal.STATE_CHOICES, blank=True, default='')
+    line = models.CharField(max_length=20, choices=POMGlobal.LINE_CHOICES, blank=True, default='')
+    body_section = models.CharField(
+        max_length=20, choices=POMGlobal.BODY_SECTION_CHOICES, blank=True, default='')
+
     class Meta:
         verbose_name = 'POM (tenant)'
         verbose_name_plural = 'POMs (tenant)'
@@ -450,21 +498,25 @@ class POMMaster(models.Model):
     # ── Alias properties for the sprint3/4 code ────────────────────────────
     # Resolve TECH_DEBT.md #2. Read-only — they do not work in the ORM (.filter/order_by).
     # For the ORM, use the natural FKs: pom__categoria__display_order, pom__pom_global__nom_ca.
+    # 🚨 FONT ÚNICA (22/08) — aquestes tres propietats es CONTRADEIEN entre elles: `pom_code`
+    # feia guanyar el TENANT i `name_cat`/`name_en` feien guanyar el GLOBAL, o sigui que una
+    # mateixa fila sortia amb el codi de la casa i el nom del catàleg canònic. Ara les tres
+    # deleguen al resolutor de `pom/nomenclatura.py`, que aplica la llei d'Agus
+    # (ÀLIES > TENANT > GLOBAL) per a tothom. Import local: `nomenclatura` importa `models`.
     @property
     def pom_code(self):
-        return self.codi_client or (self.pom_global.codi if self.pom_global_id else '')
+        from .nomenclatura import codi_de
+        return codi_de(self)
 
     @property
     def name_cat(self):
-        if self.pom_global_id and self.pom_global.nom_ca:
-            return self.pom_global.nom_ca
-        return self.nom_client
+        from .nomenclatura import noms_de
+        return noms_de(self)['nom_ca']
 
     @property
     def name_en(self):
-        if self.pom_global_id and self.pom_global.nom_en:
-            return self.pom_global.nom_en
-        return self.nom_client
+        from .nomenclatura import noms_de
+        return noms_de(self)['nom_en']
 
     @property
     def display_order(self):

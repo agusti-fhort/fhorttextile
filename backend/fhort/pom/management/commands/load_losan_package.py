@@ -6,6 +6,9 @@ Dry-run per defecte (fa rollback); `--apply` per escriure de debò.
 
 Llei operativa (gate FASE A/B):
   - El paquet MANA sobre l'estat (actualitza camps en col·lisió) però MAI fa delete.
+  - 🔒 PANY P1 (22/08): ...i MAI sobre la NOMENCLATURA del destí. Un POMMaster que ja existeix
+    conserva `codi_client`, `nom_client`, `pom_global` i `categoria`; només
+    `--overwrite-nomenclature` els reescriu, i llavors el recompte ho fa CONSTAR fila a fila.
   - Create-if-missing sobre EXACTAMENT les mateixes claus naturals que fa servir `bootstrap_tenant`,
     per conviure amb el que el bootstrap ja hagi posat.
   - R4: el tenant porta un self-Customer codi=LOS; cap mode tenant-native al motor.
@@ -36,6 +39,18 @@ from fhort.models_app.ftt_models import DocumentTemplate
 
 CUSTOMER_CODI = 'LOS'
 
+#: 🔒 PANY P1 (TREN DE PANYS, 22/08) — els camps d'un `POMMaster` QUE JA EXISTEIX al destí que
+#: una càrrega de paquet no pot reescriure: la NOMENCLATURA del tenant (`codi_client`,
+#: `nom_client`), el LLIGAM amb el catàleg global (`pom_global`) i la FAMÍLIA (`categoria`).
+#: Crear el que falta, sí; rebatejar el que el tenant ja té, només amb
+#: `--overwrite-nomenclature`, i deixant-ne constància camp a camp.
+#:
+#: Per què el pany de sobirania (22/08) no hi arribava: aquell només veu els POMs marcats amb
+#: `separat_de_global`. Un POM que el tenant ha rebatejat —o que algú va desenganxar del global
+#: sense deixar la marca— hi és invisible, i aquest upsert li tornava el text i el `pom_global`
+#: del paquet a cada correguda, en silenci i sense fallar mai.
+NOMENCLATURA_POM = ('pom_global', 'codi_client', 'nom_client', 'categoria')
+
 
 class _Rollback(Exception):
     pass
@@ -62,6 +77,11 @@ class Command(BaseCommand):
         parser.add_argument('--package-dir', default=None, help='Directori del paquet.')
         parser.add_argument('--apply', action='store_true', help='Escriu de debò (default dry-run).')
         parser.add_argument('--verbose', action='store_true')
+        parser.add_argument('--overwrite-nomenclature', action='store_true',
+                            help='Deixa que el paquet REESCRIGUI la nomenclatura, el lligam amb '
+                                 'el global i la família dels POMMaster que ja existeixen al '
+                                 'destí. Sense el flag es crea el que falta i no es rebateja res '
+                                 '(pany P1); amb el flag, el que toqui es reporta camp a camp.')
 
     # ── util ────────────────────────────────────────────────────────────────
     def _load(self, name):
@@ -110,8 +130,32 @@ class Command(BaseCommand):
     def _warn(self, msg):
         self.warnings.append(msg)
 
+    def _poda_nomenclatura(self, obj, defaults):
+        """Els `defaults` d'una ACTUALITZACIÓ, sense els camps de `NOMENCLATURA_POM` que
+        canviarien (pany P1). Retorna `(defaults, [text del que canviaria])`.
+
+        Amb `--overwrite-nomenclature` no es poda res, però el detall es retorna igual: que la
+        sobreescriptura CONSTI és l'altra meitat del pany.
+        """
+        tocats = [k for k in NOMENCLATURA_POM
+                  if k in defaults and getattr(obj, k) != defaults[k]]
+        if not tocats:
+            return defaults, []
+        detall = [f'{obj.codi_client} (pk={obj.pk}) {k}: {getattr(obj, k)!r} → {defaults[k]!r}'
+                  for k in tocats]
+        if self.overwrite_nomenclature:
+            return defaults, detall
+        return {k: v for k, v in defaults.items() if k not in tocats}, detall
+
     # ── resolució de POM (llei de resolució) ─────────────────────────────────
     def _resolve_pom(self, key):
+        """El POM del destí que correspon a aquesta clau natural, o None.
+
+        🔒 SOBIRANIA (22/08): la branca del codi GLOBAL filtra per `pom_global__codi`, que és
+        exactament el lligam que la separació DESFÀ. Un POM sobirà no hi cau —el seu
+        `pom_global` és NULL— i només es pot retrobar pel `codi_client`, que és el camí pel
+        qual el pany de `_load_pom_masters` el veurà i el respectarà.
+        """
         if not key:
             return None
         codi_global = key.get('pom_global')
@@ -153,7 +197,9 @@ class Command(BaseCommand):
         target = opts['schema_target']
         self.apply = opts['apply']
         self.verbose = opts['verbose']
+        self.overwrite_nomenclature = opts['overwrite_nomenclature']
         self.warnings = []
+        self.nomenclatura = []
         self.pkg = opts['package_dir'] or os.path.join(
             os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))),
             'pom', 'seed_data', 'losan_package')
@@ -182,6 +228,18 @@ class Command(BaseCommand):
                 self.stdout.write(f'    - {w}')
             if len(self.warnings) > 40:
                 self.stdout.write(f'    … +{len(self.warnings) - 40} més')
+        # 🔒 PANY P1 — el recompte del que el paquet HAURIA rebatejat (o ha rebatejat, amb el
+        # flag). Un upsert de nomenclatura que no es veu és pitjor que una fallada.
+        if self.nomenclatura:
+            cap = ('🔓 nomenclatura REESCRITA (--overwrite-nomenclature)'
+                   if self.overwrite_nomenclature
+                   else '🔒 nomenclatura PROTEGIDA (pany P1; cal --overwrite-nomenclature)')
+            self.stdout.write(self.style.WARNING(
+                f'  {cap}: {len(self.nomenclatura)} camp(s) de POMMaster ja existents'))
+            for l in self.nomenclatura[:40]:
+                self.stdout.write(f'    - {l}')
+            if len(self.nomenclatura) > 40:
+                self.stdout.write(f'    … +{len(self.nomenclatura) - 40} més')
         total_c = sum(s.created for s in report.values())
         total_u = sum(s.updated for s in report.values())
         self.stdout.write(self.style.SUCCESS(
@@ -252,15 +310,33 @@ class Command(BaseCommand):
             # lookup per la mateixa llei de resolució (evita duplicar sobre bootstrap)
             existing = self._resolve_pom(r['key'])
             if existing:
+                # 🚨 EL PANY DE SOBIRANIA (22/08). Aquest upsert escrivia `pom_global`,
+                # `codi_client`, `nom_client` i `actiu` sobre un POM que el tenant potser ja
+                # ha fet seu — i, com que és idempotent «per disseny», una segona correguda
+                # del paquet REVERTIRIA en silenci la reparació feta a PROD. El paquet mana
+                # sobre l'ESTAT, mai sobre una DECISIÓ del tenant.
+                if existing.separat_de_global:
+                    self._warn(
+                        f"POMMaster {existing.codi_client} (pk={existing.pk}): SOBIRÀ del tenant "
+                        f"—separat de {existing.separat_de_global}—; el paquet porta "
+                        f"{r['pom_global'] or r['codi_client']} → NO TOCAT")
+                    s.add('unchanged')
+                    continue
                 lookup = {'pk': existing.pk}
             elif r['pom_global']:
                 lookup = {'pom_global__codi': r['pom_global'], 'codi_client': r['codi_client']}
-                if not POMMaster.objects.filter(**lookup).exists():
+                existing = POMMaster.objects.filter(**lookup).first()
+                if existing is None:
                     lookup = None  # forçar create amb codi_client
             else:
                 lookup = None
             if lookup:
-                self._upsert(POMMaster, lookup, {**defaults, 'codi_client': r['codi_client']}, s)
+                # 🔒 PANY P1: el paquet mana sobre l'ESTAT, mai sobre com el tenant ANOMENA el
+                # que ja té ni sobre a quin global ho LLIGA. Crear, sí; rebatejar, no.
+                d, detall = self._poda_nomenclatura(
+                    existing, {**defaults, 'codi_client': r['codi_client']})
+                self.nomenclatura.extend(detall)
+                self._upsert(POMMaster, lookup, d, s)
             else:
                 obj = POMMaster(codi_client=r['codi_client'], **defaults)
                 obj.save()

@@ -44,13 +44,14 @@ try:
         suggested_poms_view,
         search_poms_view,
         create_tenant_pom_view,
-        edit_pom_nomenclature_view,
     )
     _sprint7_pom_paths = [
         path('poms/suggerits/',    suggested_poms_view),
         path('poms/cerca/',        search_poms_view),
         path('poms/crear-tenant/', create_tenant_pom_view),
-        path('poms/<int:pom_id>/nomenclatura/', edit_pom_nomenclature_view),
+        # `poms/<id>/nomenclatura/` RETIRAT el 22/08 (orfe, sense validació ni gating; el
+        # motiu sencer és al lloc on vivia, a `wizard_views.py`). Rebatejar un POM és
+        # `PATCH /api/v1/poms/<id>/`.
     ]
 except Exception:
     _sprint7_pom_paths = []
