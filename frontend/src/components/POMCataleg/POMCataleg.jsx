@@ -694,13 +694,28 @@ export default function POMCataleg() {
               <div style={{ padding: '0 16px 14px', maxHeight: 560, overflowY: 'auto' }}>
                 <section style={cx.sec}>
                   <div style={cx.secH}>{t('poms.cat.sec_identity')}</div>
-                  {/* El NOM LOCAL ja no té fila pròpia: el catàleg va en anglès i la traducció
-                      viu darrere la ⓘ del nom canònic (maqueta v3, mateix patró a llista i fitxa). */}
+                  {/* A LA LLISTA el nom local segueix darrere la ⓘ (maqueta v3). A LA FITXA,
+                      des del tancament de la sembra v5 (Agus, 23/08), el català i el castellà
+                      del catàleg tenen FILA PRÒPIA: la fitxa és on es va a mirar la identitat
+                      sencera d'un POM, i una traducció que només es veu passant el ratolí per
+                      sobre d'una icona no és consultable. La ⓘ del nom canònic es queda: és la
+                      que serveix quan la casa no té nom local i cal demanar-lo.
+                      Les dues files només surten si hi ha què ensenyar — un POM no lligat no
+                      té traduccions i tres files buides seguides no diuen res (REGLA DEL
+                      SILENCI, tram F4-bis). */}
                   {!editant && (<>
                     <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_name_en')}</span>
                       <span>{sel.name_en || sel.nom_client}
                         <InfoLocal nom={sel.name_cat !== sel.name_en ? sel.name_cat : null}
                           traduccio={traduccioDe(sel.id)} /></span></div>
+                    {sel.name_cat && sel.name_cat !== sel.name_en && (
+                      <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_name_ca')}</span>
+                        <span>{sel.name_cat}</span></div>
+                    )}
+                    {sel.name_es && (
+                      <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_name_es')}</span>
+                        <span>{sel.name_es}</span></div>
+                    )}
                     <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_nomenclature')}</span>
                       <span>{sel.abbreviation || sel.codi_client}</span></div>
                     <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_family')}</span>

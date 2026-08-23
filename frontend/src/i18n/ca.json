@@ -3605,6 +3605,8 @@
       "f_instances": "Instàncies",
       "f_layers": "Capes",
       "f_name_en": "Nom canònic EN",
+      "f_name_ca": "Nom en català",
+      "f_name_es": "Nom en castellà",
       "f_name_local": "Nom local",
       "f_nomenclature": "Nomenclatura",
       "f_reference": "Referència",

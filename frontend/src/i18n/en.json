@@ -3605,6 +3605,8 @@
       "f_instances": "Instances",
       "f_layers": "Layers",
       "f_name_en": "Canonical name EN",
+      "f_name_ca": "Catalan name",
+      "f_name_es": "Spanish name",
       "f_name_local": "Local name",
       "f_nomenclature": "Nomenclature",
       "f_reference": "Reference",
