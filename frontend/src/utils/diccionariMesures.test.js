@@ -16,6 +16,7 @@ import { test } from 'node:test'
 import {
   COMPLEMENTARIA, dimensionsDe, eixPrincipal, nomEnIdioma,
   eixDe, filaInstancia, tramsInstancia, composaInstancia, codiProposat, codiBase,
+  subeixDe, clauExclusio, xoquen,
 } from './diccionariMesures.js'
 
 // Els eixos NO són constants del front: són el que el diccionari declara. Aquí es fixen amb el
@@ -31,13 +32,23 @@ const D = {
     { clau: EIX_POSICIO, nom_en: 'Position', nom_ca: 'Posició', nom_es: 'Posición' },
     { clau: EIX_ESTAT, nom_en: 'State', nom_ca: 'Estat', nom_es: 'Estado' },
   ],
+  // ELS SUB-EIXOS DE LA POSICIÓ, EN ORDRE DE COMPOSICIÓ (22-23/08): cara abans que lateral.
+  // No és el `display_order` —aquell diu en quin ordre s'ofereixen els xips— i no s'hi ha de
+  // fer coincidir: `back`+`left` proposa `BL` i els xips surten Left · Right · Front · Back.
+  subeixos: ['CARA', 'LATERAL'],
   instancies: {
     [EIX_POSICIO]: [
-      { slug: 'left', sufix: 'L', display_order: 1 }, { slug: 'right', sufix: 'R', display_order: 2 },
-      { slug: 'top', sufix: 'T', display_order: 3 }, { slug: 'bottom', sufix: 'B', display_order: 4 },
-      { slug: 'cf', sufix: 'CF', display_order: 5 }, { slug: 'cb', sufix: 'CB', display_order: 6 },
-      { slug: 'side', sufix: 'S', display_order: 7 },
-      { slug: 'waistband_seam', sufix: '', display_order: 8 },
+      { slug: 'left', sufix: 'L', subeix: 'LATERAL', display_order: 1 },
+      { slug: 'right', sufix: 'R', subeix: 'LATERAL', display_order: 2 },
+      { slug: 'top', sufix: 'T', subeix: '', display_order: 3 },
+      // `BM`, no `B`: `B` és de `back` des del 22-23/08 (`pom/0079_bottom_sufix_bm`).
+      { slug: 'bottom', sufix: 'BM', subeix: '', display_order: 4 },
+      { slug: 'cf', sufix: 'CF', subeix: '', display_order: 5 },
+      { slug: 'cb', sufix: 'CB', subeix: '', display_order: 6 },
+      { slug: 'side', sufix: 'S', subeix: '', display_order: 7 },
+      { slug: 'waistband_seam', sufix: '', subeix: '', display_order: 8 },
+      { slug: 'front', sufix: 'F', subeix: 'CARA', display_order: 9 },
+      { slug: 'back', sufix: 'B', subeix: 'CARA', display_order: 10 },
     ],
     [EIX_ESTAT]: [
       { slug: 'relaxed', sufix: '', display_order: 1 },
@@ -136,9 +147,10 @@ test('sense diccionari no s\'inventa res', () => {
 test('un grup de columnes per EIX, amb TOTES les opcions de l\'eix i en el seu ordre', () => {
   const dims = dimensionsDe(D)
   assert.deepEqual(dims.map(d => d.clau), [EIX_POSICIO, EIX_ESTAT])
-  // VUIT posicions, no les dues de la demostració de la maqueta.
+  // DEU posicions —les vuit de sempre i les dues CARES (22-23/08)—, no les dues de la
+  // demostració de la maqueta.
   assert.deepEqual(dims[0].opcions.map(o => o.slug),
-    ['left', 'right', 'top', 'bottom', 'cf', 'cb', 'side', 'waistband_seam'])
+    ['left', 'right', 'top', 'bottom', 'cf', 'cb', 'side', 'waistband_seam', 'front', 'back'])
   assert.deepEqual(dims[1].opcions.map(o => o.slug), ['relaxed', 'extended'])
 })
 
@@ -182,4 +194,74 @@ test('el nom de la columna el posa el diccionari, en l\'idioma de qui llegeix', 
   assert.equal(nomEnIdioma(posicio, 'ca-ES'), 'Posició')
   // Un idioma que la fila no porta cau a l'anglès abans que a res buit.
   assert.equal(nomEnIdioma({ nom_en: 'Position' }, 'de'), 'Position')
+})
+
+// ── ELS DOS EIXOS DE LA POSICIÓ (Agus, 22-23/08) ────────────────────────────────────────────
+// CARA (front · back) i LATERAL (left · right). Dins d'un, excloents; entre ells, combinables.
+// Les posicions que no en declaren cap segueixen sent excloents amb tot el seu eix.
+
+test('el sub-eix el diu el diccionari, no aquest fitxer', () => {
+  assert.equal(subeixDe(D, 'back'), 'CARA')
+  assert.equal(subeixDe(D, 'left'), 'LATERAL')
+  assert.equal(subeixDe(D, 'top'), '')
+  assert.equal(subeixDe(D, 'relaxed'), '')
+  assert.equal(subeixDe(D, 'sleeve'), '')      // desconegut: no s'inventa
+  assert.equal(subeixDe(null, 'back'), '')     // sense diccionari, tampoc
+})
+
+test('la clau d\'exclusió és el sub-eix quan n\'hi ha, i l\'eix quan no', () => {
+  assert.equal(clauExclusio(D, 'left'), `${EIX_POSICIO}/LATERAL`)
+  assert.equal(clauExclusio(D, 'back'), `${EIX_POSICIO}/CARA`)
+  assert.equal(clauExclusio(D, 'top'), EIX_POSICIO)
+  assert.equal(clauExclusio(D, 'relaxed'), EIX_ESTAT)
+  assert.equal(clauExclusio(D, 'sleeve'), null)
+})
+
+test('quines etiquetes xoquen: el mirall exacte del backend', () => {
+  // mateix sub-eix → xoquen
+  assert.equal(xoquen(D, 'left', 'right'), true)
+  assert.equal(xoquen(D, 'front', 'back'), true)
+  // sub-eixos diferents del mateix eix → conviuen (el cas nou)
+  assert.equal(xoquen(D, 'back', 'left'), false)
+  assert.equal(xoquen(D, 'front', 'right'), false)
+  // sense sub-eix → excloent amb tot el seu eix (el comportament de sempre)
+  assert.equal(xoquen(D, 'top', 'left'), true)
+  assert.equal(xoquen(D, 'top', 'bottom'), true)
+  assert.equal(xoquen(D, 'cf', 'back'), true)
+  // eixos diferents → conviuen
+  assert.equal(xoquen(D, 'left', 'relaxed'), false)
+  // desconegut → no es jutja
+  assert.equal(xoquen(D, 'sleeve', 'left'), false)
+})
+
+test('el slug compost posa la CARA abans que el LATERAL, tant se val l\'ordre del clic', () => {
+  assert.equal(composaInstancia(D, ['left', 'back']), 'back-left')
+  assert.equal(composaInstancia(D, ['back', 'left']), 'back-left')
+  // i els dos eixos grans segueixen manant per sobre: posició abans que estat
+  assert.equal(composaInstancia(D, ['relaxed', 'left', 'back']), 'back-left-relaxed')
+})
+
+test('el sufix compost és CARA + LATERAL (FL · FR · BL · BR), no l\'ordre del clic', () => {
+  assert.equal(codiProposat(D, 'CH', ['front']), 'CHF')
+  assert.equal(codiProposat(D, 'CH', ['back']), 'CHB')
+  assert.equal(codiProposat(D, 'CH', ['left']), 'CHL')
+  assert.equal(codiProposat(D, 'CH', ['right']), 'CHR')
+  assert.equal(codiProposat(D, 'CH', ['front', 'left']), 'CHFL')
+  assert.equal(codiProposat(D, 'CH', ['left', 'front']), 'CHFL')   // ← el clic no mana
+  assert.equal(codiProposat(D, 'CH', ['front', 'right']), 'CHFR')
+  assert.equal(codiProposat(D, 'CH', ['back', 'left']), 'CHBL')
+  assert.equal(codiProposat(D, 'CH', ['left', 'back']), 'CHBL')
+  assert.equal(codiProposat(D, 'CH', ['back', 'right']), 'CHBR')
+})
+
+test('el codi base es recupera d\'un sufix compost, en qualsevol ordre de trams', () => {
+  assert.equal(codiBase(D, 'CHBL', ['back', 'left']), 'CH')
+  assert.equal(codiBase(D, 'CHBL', ['left', 'back']), 'CH')
+  // i amb un estat pel mig, que no compon sufix
+  assert.equal(codiBase(D, 'CHBL', ['back', 'left', 'relaxed']), 'CH')
+})
+
+test('`bottom` proposa BM: `B` ja només vol dir `back`', () => {
+  assert.equal(codiProposat(D, 'CH', ['bottom']), 'CHBM')
+  assert.equal(codiProposat(D, 'CH', ['back']), 'CHB')
 })

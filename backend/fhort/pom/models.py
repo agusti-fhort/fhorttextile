@@ -310,6 +310,82 @@ class MeasurementInstance(models.Model):
     #: es fa un cop no té res a qualificar (v. `sufixIdentitat`, que hi torna `''`).
     SLUG_UNICA = ''
 
+    # ═══ ELS DOS EIXOS DE LA POSICIÓ (Agus, 22-23/08) ══════════════════════════════════════
+    #
+    # 🚨 LA POSICIÓ NO ÉS UNA LLISTA D'OPCIONS EXCLOENTS: en són DUES. Una mesura pot ser «la
+    # de l'esquena, banda esquerra» —CARA i LATERAL alhora—, i no pot ser «esquerra i dreta»
+    # ni «davant i darrere». Dins d'un sub-eix, excloents; entre sub-eixos, combinables.
+    #
+    # ⚠️ **L'ORDRE D'AQUESTA TUPLA ÉS L'ORDRE DEL SUFIX**, no el de presentació: CARA primer i
+    # LATERAL després (`BL`, mai `LB`; `FR`, mai `RF`). El `display_order` de les files diu
+    # una altra cosa —en quin ordre s'OFEREIXEN els xips (Left · Right · Front · Back)— i les
+    # dues coses no han de coincidir: el codi que va al fabricant es llegeix cara-i-banda, i
+    # els xips s'ofereixen pel que es fa servir cada dia.
+    #
+    # ⚠️ PER QUÈ UNA CONSTANT I NO UNA COLUMNA. El sub-eix no és una dada que un tenant pugui
+    # informar: és la GEOMETRIA de la peça —que left i right són la mateixa pregunta— i és la
+    # mateixa a tot arreu. Una columna la faria editable per schema i el dia que dos schemes
+    # discrepessin, la mateixa germana tindria dos codis. El que SÍ que viatja és la
+    # publicació: `GET /api/v1/mesures/diccionari/` l'emet, i el front no se la reescriu.
+    SUBEIX_CARA = 'CARA'
+    SUBEIX_LATERAL = 'LATERAL'
+    SUBEIXOS = (
+        (SUBEIX_CARA, ('front', 'back')),
+        (SUBEIX_LATERAL, ('left', 'right')),
+    )
+
+    @classmethod
+    def subeix_de(cls, slug):
+        """El sub-eix d'un slug simple, o `''` si no en té cap de declarat.
+
+        Sense sub-eix (`top`, `cf`, `side`, `waistband_seam`…) la posició es comporta com fins
+        avui: EXCLOENT amb tota la resta de l'eix. Només les quatre declarades es creuen.
+        """
+        for clau, slugs in cls.SUBEIXOS:
+            if slug in slugs:
+                return clau
+        return ''
+
+    @classmethod
+    def error_de_combinacio(cls, valor, separador='-'):
+        """El motiu pel qual aquesta instància composta és il·legal, o `''` si és bona.
+
+        LA REGLA, EN UNA FRASE: **fins a UNA etiqueta per eix**, i a la POSICIÓ fins a una per
+        SUB-EIX —amb una excepció que conserva el comportament d'abans: una posició SENSE
+        sub-eix declarat no es combina amb cap altra posició.
+
+        Torna un missatge i no un booleà perquè qui el crida el pinta tal qual: la persona ha
+        de llegir QUINES dues etiquetes es barallen, no «valor invàlid».
+
+        El vocabulari que el diccionari no conté NO es jutja (un tenant pot crear-se la seva
+        instància, i un slug desconegut no diu de quin eix és): es deixa passar, com ja fa el
+        front, que el pinta cru en comptes de fer-lo desaparèixer.
+        """
+        trams = [t for t in str(valor or '').split(separador) if t]
+        if len(trams) < 2:
+            return ''
+        files = {r.slug: r for r in cls.objects.filter(slug__in=trams)}
+        per_eix = {}
+        for t in trams:
+            fila = files.get(t)
+            if fila is not None:
+                per_eix.setdefault(fila.eix, []).append(t)
+        for eix, slugs in per_eix.items():
+            if len(slugs) < 2:
+                continue
+            subeixos = [cls.subeix_de(s) for s in slugs]
+            nom_eix = cls.EIX_NOMS.get(eix, {}).get('nom_ca', eix)
+            sense = [s for s, sx in zip(slugs, subeixos) if not sx]
+            if sense:
+                return (f'«{sense[0]}» no es combina amb cap altra etiqueta de la mateixa '
+                        f'columna ({nom_eix}): {" + ".join(slugs)}.')
+            if len(set(subeixos)) != len(subeixos):
+                repetit = next(sx for sx in subeixos if subeixos.count(sx) > 1)
+                iguals = [s for s, sx in zip(slugs, subeixos) if sx == repetit]
+                return (f'«{iguals[0]}» i «{iguals[1]}» són del mateix eix de {nom_eix.lower()} '
+                        f'({repetit}): una mesura no pot ser totes dues.')
+        return ''
+
     slug = models.SlugField(max_length=30, unique=True)
     nom_en = models.CharField(max_length=120)
     nom_ca = models.CharField(max_length=120)

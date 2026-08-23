@@ -23,8 +23,8 @@ import { useTranslation } from 'react-i18next'
 
 import Modal from '../ui/Modal'
 import { etiquetaCapa, etiquetaInstancia } from '../../utils/capaInstancia'
-import { dimensionsDe, nomEnIdioma } from '../../utils/diccionariMesures'
-import { aplicaCombinacio, tramsPerEix, triaTram } from './instanciaTria.js'
+import { clauExclusio, dimensionsDe, nomEnIdioma } from '../../utils/diccionariMesures'
+import { aplicaCombinacio, tramsPerEix, triaAlModal, triaTram } from './instanciaTria.js'
 
 const pindolaS = (encesa) => ({
   font: 'inherit', fontSize: 'var(--fs-label)', borderRadius: 999, padding: '2px 10px',
@@ -67,14 +67,10 @@ function ModalCombinacio({ valor, dicc, onTanca, onAplica }) {
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {d.opcions.map(o => (
-              <Pindola key={o.slug} slug={o.slug} dicc={dicc} encesa={tria[d.clau] === o.slug}
+              <Pindola key={o.slug} slug={o.slug} dicc={dicc}
+                encesa={tria[clauExclusio(dicc, o.slug)] === o.slug}
                 tip={etiquetaInstancia(o.slug, dicc)}
-                onTria={s => setTria(prev => {
-                  const n = { ...prev }
-                  if (n[d.clau] === s) delete n[d.clau]
-                  else n[d.clau] = s
-                  return n
-                })} />
+                onTria={s => setTria(prev => triaAlModal(dicc, prev, s))} />
             ))}
           </div>
         </div>
@@ -144,13 +140,18 @@ export default function ColumnatIdentitat({ valor = '', capa = '', dicc, onTria,
                                      borderLeft: (k || (capes.length && onCapa)) ? grupS.borderLeft : 'none' }}>
             <div style={retolS}>{nomEnIdioma(d, i18n.language)}</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-              {d.opcions.map(o => (
-                <Pindola key={o.slug} slug={o.slug} dicc={dicc} encesa={actuals[d.clau] === o.slug}
-                  tip={actuals[d.clau] === o.slug
-                    ? t('instancia.tip_treu', { nom: etiquetaInstancia(o.slug, dicc) })
-                    : t('instancia.tip_aquesta', { nom: etiquetaInstancia(o.slug, dicc) })}
-                  onTria={s => onTria(triaTram(dicc, valor, s))} />
-              ))}
+              {d.opcions.map(o => {
+                // L'estat es mira pel BLOC D'EXCLUSIÓ de CADA píndola i no pel de la columna:
+                // a la posició n'hi ha dos (cara i lateral) i cadascun s'encén i s'apaga sol.
+                const encesa = actuals[clauExclusio(dicc, o.slug)] === o.slug
+                return (
+                  <Pindola key={o.slug} slug={o.slug} dicc={dicc} encesa={encesa}
+                    tip={encesa
+                      ? t('instancia.tip_treu', { nom: etiquetaInstancia(o.slug, dicc) })
+                      : t('instancia.tip_aquesta', { nom: etiquetaInstancia(o.slug, dicc) })}
+                    onTria={s => onTria(triaTram(dicc, valor, s))} />
+                )
+              })}
             </div>
           </div>
         ))}

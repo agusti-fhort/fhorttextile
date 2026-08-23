@@ -19,8 +19,12 @@
 // exactament el que hi ha a la BD, no una invenció.
 //
 // ⚠️ EL DICCIONARI D'INSTÀNCIES JA EXISTEIX. El va crear `b631b12d` (F2 · D-31.26) i té DOS EIXOS:
-// POSICIÓ (left · right · top · bottom · cf · cb · side · waistband_seam) i ESTAT (relaxed ·
-// extended). Els deu slugs són a `INSTANCIES`, aquí sota, i els seus literals a i18n.
+// POSICIÓ (left · right · top · bottom · cf · cb · side · waistband_seam · front · back) i ESTAT
+// (relaxed · extended). Els seus literals són a `NOM_INSTANCIA`, aquí sota.
+//
+// ⚠️ I LA POSICIÓ, DES DEL 22-23/08, EN TÉ DOS DE SEUS: CARA (front · back) i LATERAL (left ·
+// right). Aquí NO hi ha res d'això —això és estructura, i l'estructura la mana el backend
+// (`subeix` a cada fila del diccionari)—: aquí només hi ha com es diuen.
 //
 // ⚠️ QUÈ ES DUPLICA I QUÈ NO. Aquí hi ha els SLUGS i els seus literals, perquè una etiqueta s'ha
 // de poder pintar abans que cap petició torni i ha de canviar en canviar d'idioma. L'ESTRUCTURA
@@ -59,6 +63,10 @@
 export const NOM_INSTANCIA = {
   left: 'Left', right: 'Right', top: 'Top', bottom: 'Bottom',
   cf: 'CF', cb: 'CB', side: 'Side seam', waistband_seam: 'Waistband seam',
+  // Les dues CARES (Agus, 22-23/08): el segon eix de la posició. Van aquí perquè aquest mapa és
+  // el MIRALL de la sembra i etiqueta la fila abans que el diccionari arribi; sense elles, una
+  // germana de l'esquena es llegiria «Back» crua només per casualitat de la majúscula.
+  front: 'Front', back: 'Back',
   // `extended` va NET (Agus, 06/08): «stretched» i «stretched out» són aquest mateix estat, no
   // un sinònim que calgui arrossegar al nom. Aquest mapa és el MIRALL de la sembra i la sembra ja
   // diu 'Extended' — i, a diferència del camí del diccionari, aquest NO passa per `curta()`: si

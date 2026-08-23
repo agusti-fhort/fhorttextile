@@ -526,6 +526,14 @@ class BaseMeasurementSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({'instancia': (
                     'Aquesta mesura ja té una fila en aquesta capa, instància i peça.'
                 )})
+        # 🔒 ELS DOS EIXOS DE LA POSICIÓ (22-23/08): fins a UNA etiqueta per eix, i a la posició
+        # fins a una per sub-eix. `left-back` és una germana legítima; `left-right` i
+        # `front-back` no ho són. Va abans de la invariant del nom perquè és més fonamental: un
+        # slug impossible no millora perquè algú el bategi.
+        from fhort.pom.models import MeasurementInstance
+        mal = MeasurementInstance.error_de_combinacio(camps['instancia'])
+        if mal:
+            raise serializers.ValidationError({'instancia': mal})
         # `models_app_basemeasurement_instancia_exigeix_nom`: amb instància, el nom és obligatori.
         nom = attrs.get('nom_fitxa', getattr(inst, 'nom_fitxa', '') or '')
         if camps['instancia'] and not (nom or '').strip():

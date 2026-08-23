@@ -39,13 +39,26 @@ POSICIONS = [
     ('left',           'L',  'Left',            'Esquerra',           'Izquierda'),
     ('right',          'R',  'Right',           'Dreta',              'Derecha'),
     ('top',            'T',  'Top',             'Superior',           'Superior'),
-    ('bottom',         'B',  'Bottom',          'Inferior',           'Inferior'),
+    # 🚨 `BM`, NO `B` (Agus, 22-23/08): el sufix `B` és de `back`, la cara posterior del segon
+    # eix de posició. Dos sufixos iguals dins de l'eix farien que `BB` volgués dir dues coses.
+    # La migració germana és `pom/0079_bottom_sufix_bm` i les DUES BANDES van juntes: sense
+    # aquesta línia, la propera passada d'aquesta sembra tornaria a posar `B` (lliçó de
+    # `0060_extended_net`).
+    ('bottom',         'BM', 'Bottom',          'Inferior',           'Inferior'),
     # CF/CB NO es tradueixen: són acrònims del sector, com HPS. Escriure'ls «Centre
     # davant» a la fitxa catalana els faria irreconeixibles per al fabricant.
     ('cf',             'CF', 'CF',              'CF',                 'CF'),
     ('cb',             'CB', 'CB',              'CB',                 'CB'),
     ('side',           'S',  'Side seam',       'Costura lateral',    'Costura lateral'),
     ('waistband_seam', '',   'Waistband seam',  'Costura de cinturilla', 'Costura de pretina'),
+    # ── LES DUES CARES (Agus, 22-23/08) ────────────────────────────────────────────────────
+    # El SEGON eix de la posició. `left`+`back` és una germana legítima; `front`+`back`, no
+    # (v. `MeasurementInstance.SUBEIXOS`). Van AL FINAL i no darrere de `right` a posta: moure
+    # el `display_order` dels sis de sobre reescriuria files que aquest tram no ha de tocar, i
+    # l'ordre de presentació no és el que decideix quins xips surten a la fila.
+    # Migració germana: `pom/0080_posicions_front_back`.
+    ('front',          'F',  'Front',           'Front',              'Front'),
+    ('back',           'B',  'Back',            'Back',               'Back'),
 ]
 
 ESTATS = [
