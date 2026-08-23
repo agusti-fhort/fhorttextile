@@ -609,6 +609,18 @@ export default function POMCataleg() {
                       <InfoLocal nom={p.name_cat !== p.name_en ? p.name_cat : null}
                         traduccio={traduccioDe(p.id)} />
                     </span>
+                    {/* D4 · LA FILA INACTIVA ES VEU QUE HO ÉS. L'opacitat sola no diu QUÈ
+                        passa —una fila pàl·lida es pot llegir com «deshabilitada», «carregant»
+                        o «no seleccionable»—, i al tab «Tots» conviu amb les vives. El badge és
+                        EL DE LA FITXA, amb els seus tokens i la seva clau: cap color nou, cap
+                        text nou. Als tabs «Actius» no en surt cap, que és el que ha de passar. */}
+                    {!p.actiu && (
+                      <span style={{
+                        ...cx.badge, flex: 'none',
+                        background: 'var(--bg-page)', color: 'var(--text-soft)',
+                        border: '1px solid var(--line)',
+                      }}>{t('poms.cat.badge_off')}</span>
+                    )}
                     {(p.abbreviation || p.codi_client) && (
                       <span style={cx.ab}>{p.abbreviation || p.codi_client}</span>)}
                   </button>
