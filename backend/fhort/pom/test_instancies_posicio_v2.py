@@ -98,3 +98,42 @@ class SufixBottomTest(_Base):
         """El `apps` d'una migració de dades: aquí n'hi ha prou amb el registre real."""
         from django.apps import apps
         return apps
+
+
+class CaresFrontBackTest(_Base):
+    """D1b · les dues cares existeixen, amb sufix propi, i entrar-hi dues vegades no duplica."""
+
+    def setUp(self):
+        self.sembra()
+
+    def test_les_dues_cares_hi_son_amb_el_seu_sufix(self):
+        self.assertEqual(self.sufix('front'), 'F')
+        self.assertEqual(self.sufix('back'), 'B')
+
+    def test_son_de_l_eix_posicio(self):
+        for slug in ('front', 'back'):
+            self.assertEqual(I.objects.get(slug=slug).eix, I.EIX_POSICIO, slug)
+
+    def test_el_sufix_B_ja_no_es_de_bottom(self):
+        """🚨 LA RAÓ DEL TRAM: `B` ha de dir «back» i només «back»."""
+        self.assertEqual(self.sufix('bottom'), 'BM')
+        self.assertEqual(
+            list(I.objects.filter(eix=I.EIX_POSICIO, sufix='B').values_list('slug', flat=True)),
+            ['back'])
+
+    def test_la_migracio_es_idempotent_per_slug(self):
+        m = _migracio('0080_posicions_front_back')
+        from django.apps import apps
+        m.endavant(apps, None)
+        m.endavant(apps, None)
+        self.assertEqual(I.objects.filter(slug__in=['front', 'back']).count(), 2)
+
+    def test_la_guarda_atura_si_el_sufix_B_encara_es_d_una_altra_posicio(self):
+        """Sense el rebateig de `bottom`, crear `back` deixaria dos `B` a l'eix: s'atura."""
+        from django.apps import apps
+        I.objects.filter(slug__in=['front', 'back']).delete()
+        I.objects.filter(slug='bottom').update(sufix='B')      # l'estat d'abans de 0079
+        with self.assertRaises(RuntimeError) as cm:
+            _migracio('0080_posicions_front_back').endavant(apps, None)
+        self.assertIn('0079', str(cm.exception))
+        self.assertFalse(I.objects.filter(slug='back').exists())   # i no n'ha creat cap

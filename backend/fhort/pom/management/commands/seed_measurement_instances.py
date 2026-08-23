@@ -51,6 +51,14 @@ POSICIONS = [
     ('cb',             'CB', 'CB',              'CB',                 'CB'),
     ('side',           'S',  'Side seam',       'Costura lateral',    'Costura lateral'),
     ('waistband_seam', '',   'Waistband seam',  'Costura de cinturilla', 'Costura de pretina'),
+    # ── LES DUES CARES (Agus, 22-23/08) ────────────────────────────────────────────────────
+    # El SEGON eix de la posició. `left`+`back` és una germana legítima; `front`+`back`, no
+    # (v. `MeasurementInstance.SUBEIXOS`). Van AL FINAL i no darrere de `right` a posta: moure
+    # el `display_order` dels sis de sobre reescriuria files que aquest tram no ha de tocar, i
+    # l'ordre de presentació no és el que decideix quins xips surten a la fila.
+    # Migració germana: `pom/0080_posicions_front_back`.
+    ('front',          'F',  'Front',           'Front',              'Front'),
+    ('back',           'B',  'Back',            'Back',               'Back'),
 ]
 
 ESTATS = [
