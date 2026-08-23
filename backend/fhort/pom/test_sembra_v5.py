@@ -382,9 +382,37 @@ class S7FinestraTest(BancV5):
         m.refresh_from_db()
         self.assertIsNone(m.grading_rule_set_id)
 
+    def test_amb_RESIDENTS_A_LA_MARE_el_contenidor_ja_es_lletra_morta(self):
+        """⚖️ C7: el motor només llegeix el contenidor si la MARE no té cap resident. Amb
+        residents a la mare, un POM que el joc cobreix i les residents no **ja és una cel·la
+        absent avui**, i tallar la FK no la crea. El predicat evident —«el joc el cobreix i
+        les residents no»— aturava la finestra dels 25 models de PROD per aquest cas."""
+        from fhort.models_app.models import BaseMeasurement, ModelGradingRule
+        from fhort.pom.models import SizeDefinition, SizeSystem
+        ss = SizeSystem.objects.create(codi='QA-S7-SS2', nom='QA')
+        base = SizeDefinition.objects.create(size_system=ss, etiqueta='M', ordre=1)
+        joc = self._joc('GRADING BROWNIE 2026')
+        m = self._model_amb_fk(joc)
+        self.sembra_globals()
+        cobert = POMMaster.objects.create(codi_client='E', nom_client='Espatlla', actiu=True)
+        orfe = POMMaster.objects.create(codi_client='B', nom_client='Cintura', actiu=True)
+        BaseMeasurement.objects.create(model=m, pom=cobert, base_value_cm=40)
+        BaseMeasurement.objects.create(model=m, pom=orfe, base_value_cm=70)
+        # La MARE té una resident (i només per a `cobert`) → el contenidor és lletra morta…
+        ModelGradingRule.objects.create(model=m, pom=cobert, garment='', logica='FIXED',
+                                        talla_base=base, actiu=True)
+        # …encara que el joc cobreixi també l'altre POM.
+        GradingRule.objects.create(rule_set=joc, pom=orfe, talla_base=base, logica='FIXED',
+                                   actiu=True)
+        sortida = self.finestra(1, 0, '--talla-fk-sense-condemna')
+        m.refresh_from_db()
+        self.assertIsNone(m.grading_rule_set_id)
+        self.assertIn('absents ABANS de la finestra', sortida)
+
     def test_una_FK_que_NO_es_inerta_ATURA_LA_FINESTRA_SENCERA(self):
-        """🚨 El número del brief es RE-MESURA. Si el contenidor cobreix una cel·la que cap
-        resident no cobreix, tallar-lo la perdria: no es talla res i no s'arxiva res."""
+        """🚨 El número del brief es RE-MESURA. Amb la mare SENSE residents el contenidor és
+        la seva llei, i si cobreix una cel·la que cap resident no cobreix, tallar-lo la
+        perdria: no es talla res i no s'arxiva res."""
         from fhort.models_app.models import BaseMeasurement
         from fhort.pom.models import SizeDefinition, SizeSystem
         ss = SizeSystem.objects.create(codi='QA-S7-SS', nom='QA')

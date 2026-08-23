@@ -57,7 +57,7 @@ class Command(ComandaV5):
     def corre(self, opts):
         from fhort.models_app.models import BaseMeasurement, Model, ModelGradingRule
 
-        tallats = inerts = perillosos = arxivats = ja_inactius = 0
+        tallats = inerts = perillosos = arxivats = ja_inactius = preexistents = 0
         with self.transacciona(opts['schema']):
             jocs = list(GradingRuleSet.objects.order_by('pk'))
             self.guarda('GradingRuleSet al tenant', len(jocs))
@@ -94,9 +94,25 @@ class Command(ComandaV5):
                 contenidor = set(GradingRule.objects
                                  .filter(rule_set_id=m.grading_rule_set_id, actiu=True)
                                  .values_list('pom_id', flat=True))
-                nomes_contenidor = {
-                    (pid, g) for (pid, g) in mesurats
-                    if pid in contenidor and (pid, g) not in resident and pid not in mares}
+
+                def coberta(pid, g):
+                    """La cel·la que quedaria després de tallar: regla pròpia, o de la mare."""
+                    return (pid, g) in resident or pid in mares
+
+                if mares:
+                    # ⚖️ C7: amb residents a la mare, el motor NO llegeix el contenidor. No hi
+                    # ha res a perdre; el que no cobreixin les residents ja és absent avui.
+                    nomes_contenidor = set()
+                    absents = {(pid, g) for (pid, g) in mesurats if not coberta(pid, g)}
+                    if absents:
+                        preexistents += len(absents)
+                        self.excepcio(
+                            f'ℹ️ model {m.pk} {m.codi_intern!r}: {len(absents)} cel·les '
+                            'absents ABANS de la finestra (la mare té residents, o sigui que '
+                            'el contenidor ja era lletra morta). No les crea el tall.')
+                else:
+                    nomes_contenidor = {(pid, g) for (pid, g) in mesurats
+                                        if pid in contenidor and not coberta(pid, g)}
                 if nomes_contenidor:
                     perillosos += 1
                     self.excepcio(
@@ -120,6 +136,8 @@ class Command(ComandaV5):
                     'ATURA sencera. En dry-run segueix per poder llegir la resta del cens.')
 
             self.guarda('models amb FK de graduació tallada', tallats)
+            self.guarda('cel·les absents PREEXISTENTS (no les crea el tall)',
+                        preexistents)
 
             # ── (b) els jocs condemnats ───────────────────────────────────────────────────
             for j in condemnats:
