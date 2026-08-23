@@ -4,7 +4,7 @@
 **Brief:** `OPS/SEMBRA_V5` · **Substrat:** `CENS_CATALEG_V5_STAGING.md` (22/08) ·
 `TREN_PANYS_2026-08-22.md` · `INSTANCIES_POSICIO_V2_2026-08-23.md` ·
 `POMS_TABS_ACTIUS_2026-08-23.md`
-**12 commits. Cap push. Cap migració. CAP escriptura a `ftt_staging`.**
+**17 commits. Cap push. Cap migració. CAP escriptura a `ftt_staging`.**
 
 > **PORTA D'ARRENCADA — OBERTA.** `origin/dev == dev` (res a fer amb el `git pull`) i les dues
 > actes hi són: `25e4f648` (instàncies v2) i `665bfa0e` (tabs). Llegides totes dues abans de
@@ -140,6 +140,10 @@ que `ops/sembra_v4/` + `sembra_cataleg_v4.py`— i el codi compartit, a `fhort/p
 | `40550072` | **el banc** — 32 tests |
 | `1df234fd` | les actes de la FASE A i de la FASE B |
 | `311873b2` | **fix S7** — el predicat de la cobertura és el de C7, i no l'evident (v. sota) |
+| `98b8c2b9` | fix — un `--espera` mal escrit es canta i no s'empassa |
+| `bd8928e4` | fix S3 — el missatge de l'homònim **mesura** el nom abans d'afirmar que difereix |
+| `0674e55e` | les actes, al dia amb el fix d'S7 i amb la finestra ja assajada |
+| `c34be2a8` | fix — el fixture del cas C7 al banc |
 
 ## El corpus, i per què es verifica abans de llegir
 
@@ -194,9 +198,13 @@ d'arxiu** — mor amb l'arxiu, no aquí.
 | Control | Resultat |
 |---|---|
 | `manage.py check` | **net** (0 issues), abans de cada commit |
-| `fhort.pom.test_sembra_v5` | **33 tests · OK** |
-| `fhort.pom` (l'app del tram, gate proporcional) | v. sota |
+| `fhort.pom.test_sembra_v5` | **33 tests · OK** · 291 s |
+| **`fhort.pom`** (l'app del tram — el gate proporcional) | **521 tests · OK** · 2 474 s |
 | `npm run build` | **NO s'ha fet, a posta** |
+
+> **La primera correguda de l'app va donar 520/521**, i l'única fila vermella era **el fixture
+> del meu test nou** (`ModelGradingRule` no té `talla_base`: la talla base la porta la regla de
+> CATÀLEG, no la resident). Corregit a `c34be2a8` i re-corregut sencer: **521 · OK**.
 
 **El build és desplegament, i aquest tren no toca frontend.** És la mateixa lectura que el tren
 de panys del 22/08 va deixar escrita («aquest tren no toca frontend, i els gates també són
