@@ -13,7 +13,8 @@ import Feedback from '../components/ui/Feedback'
 import Badge from '../components/ui/Badge'
 import PageMenu from '../components/ui/PageMenu'
 import TaulaLlista from '../components/ui/TaulaLlista'
-import { BotoEsborrar, EstatBuit, camp, buit, forceBarra } from '../components/llista/ChromLlista'
+import { BotoEditar, BotoEsborrar, BotoIcona, EstatBuit, camp, buit, forceBarra } from '../components/llista/ChromLlista'
+import { errorDeResposta, esborranyDe, hiHaCanvis, payloadDe } from '../utils/edicioAlies'
 import { ClassificacioBadge } from '../components/commercial/estats'
 import { StatusBadge } from './Quotes'
 import { OrderStatusBadge } from './Orders'
@@ -324,6 +325,50 @@ function TecnicTab({ customer, canEdit, t, navigate, notify }) {
   }
 
   // Mapa un àlies pendent (pom=null) al POM canònic que el tècnic tria a la mateixa fila.
+  // ── L'EDICIÓ EN LÍNIA D'UN ÀLIES (23/08) ────────────────────────────────────────────────
+  //
+  // Inline i no modal: el que s'edita són tres textos i un POM, i la fila del costat és el
+  // context que fa entendre què s'està canviant. Un modal el taparia.
+  //
+  // La regla de QUÈ s'envia viu a `utils/edicioAlies.js` i es prova amb `node --test`: aquí
+  // només hi ha l'estat de la pantalla i el que es pinta.
+  const [editantId, setEditantId] = useState(null)
+  const [esborrany, setEsborrany] = useState(null)
+  const [errFila, setErrFila] = useState('')
+  const [desant, setDesant] = useState(false)
+
+  const comencaEdicio = (a) => {
+    setEditantId(a.id)
+    setEsborrany({ ...esborranyDe(a), pomLabel: a.pom_codi || a.pom_code_global || '' })
+    setErrFila('')
+  }
+  const cancellaEdicio = () => { setEditantId(null); setEsborrany(null); setErrFila('') }
+
+  const desaEdicio = (a) => {
+    const cos = payloadDe(esborrany, a)
+    // Sense canvis, desar és tancar: ni petició, ni «desat» que no ha desat res.
+    if (!Object.keys(cos).length) { cancellaEdicio(); return }
+    setDesant(true)
+    setErrFila('')
+    customerAliases.update(a.id, cos)
+      .then(() => loadAliases())
+      .then(() => {
+        cancellaEdicio()
+        notify({ type: 'ok', text: t('clients.alias_saved') })
+      })
+      // L'ERROR ES QUEDA A LA FILA i no puja al toast: el que ha fallat és aquesta fila, i
+      // l'esborrany es conserva perquè qui ho arregli no hagi de tornar-ho a escriure.
+      .catch(err => setErrFila(errorDeResposta(err, t('clients.error'))))
+      .finally(() => setDesant(false))
+  }
+
+  // Esc cancel·la · Enter desa. Al teclat de la fila i no a la finestra: una tecla capturada
+  // globalment tancaria l'edició des de qualsevol racó de la pantalla.
+  const teclesEdicio = (a) => (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); cancellaEdicio() }
+    if (e.key === 'Enter') { e.preventDefault(); if (!desant) desaEdicio(a) }
+  }
+
   const mapAlias = (a, pm) => {
     customerAliases.update(a.id, { pom: pm.id, pendent_revisio: false })
       .then(() => loadAliases())
@@ -349,13 +394,52 @@ function TecnicTab({ customer, canEdit, t, navigate, notify }) {
   const pila = { whiteSpace: 'normal' }
 
   const aliasCols = [
+    // 🔒 EL CODI NO S'EDITA i la fila ho diu quan s'està editant: canviar-lo no és editar
+    // l'àlies, és esborrar-ne un i crear-ne un altre (el matcher hi busca a les importacions).
+    // El `title` ho explica en lloc de deixar que algú ho descobreixi provant-ho.
     { key: 'client_code', label: t('clients.alias_code'), min: 100, max: 130,
-      estil: { fontWeight: 600 }, titol: r => r.client_code,
-      render: r => r.client_code },
+      estil: { fontWeight: 600 },
+      titol: r => (r.id === editantId ? t('clients.alias_code_locked') : r.client_code),
+      render: r => (r.id === editantId
+        ? <span style={{ color: 'var(--text-soft)' }}>{r.client_code}
+          <i className="ti ti-lock" aria-hidden="true"
+            style={{ fontSize: 12, marginLeft: 5, verticalAlign: 'middle' }} /></span>
+        : r.client_code) },
     // Descripció: EN a dalt (canònica), local a sota amb el codi d'idioma (mateixa convenció que
     // el pas 2 del wizard, DictionaryWizard.jsx:177-182). Els escriu el diccionari; abans la
     // columna llegia el camp obsolet i sortia '—' per a TOTS els àlies del wizard (QA-S8 · D4b).
     { key: 'description_en', label: t('clients.alias_desc'), min: 200, max: 320, estil: pila, render: r => {
+      if (r.id === editantId) {
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}
+            onKeyDown={teclesEdicio(r)}>
+            <input value={esborrany.description_en} autoFocus
+              onChange={e => setEsborrany(v => ({ ...v, description_en: e.target.value }))}
+              placeholder={t('clients.alias_desc_en')} aria-label={t('clients.alias_desc_en')}
+              style={{ ...camp, padding: '5px 8px', width: '100%' }} />
+            <div style={{ display: 'flex', gap: 4 }}>
+              <input value={esborrany.description_local}
+                onChange={e => setEsborrany(v => ({ ...v, description_local: e.target.value }))}
+                placeholder={t('clients.alias_desc_local')}
+                aria-label={t('clients.alias_desc_local')}
+                style={{ ...camp, padding: '5px 8px', flex: 1 }} />
+              {/* L'idioma és el codi de dues lletres que la columna ja pinta entre claudàtors:
+                  s'edita al costat del text que qualifica i no en una columna pròpia. */}
+              <input value={esborrany.language} maxLength={2}
+                onChange={e => setEsborrany(v => ({ ...v, language: e.target.value.toLowerCase() }))}
+                placeholder={t('clients.alias_lang')} aria-label={t('clients.alias_lang')}
+                style={{ ...camp, padding: '5px 8px', width: 52, textAlign: 'center' }} />
+            </div>
+            {/* L'ERROR DEL SERVIDOR, A LA FILA. No un toast: el toast se'n va i no diu de quina
+                fila parlava. */}
+            {errFila && (
+              <div role="alert" style={{
+                fontSize: 'var(--fs-caption)', color: 'var(--err)', lineHeight: 1.3,
+              }}>{errFila}</div>
+            )}
+          </div>
+        )
+      }
       const en = r.description_en || legacyDesc(r)
       const local = r.description_local
       if (!en && !local) return <span style={{ color: 'var(--text-soft)' }}>—</span>
@@ -376,6 +460,21 @@ function TecnicTab({ customer, canEdit, t, navigate, notify }) {
     // Sense POM (pom=null): és vocabulari del client PENDENT DE MAPAR (QA-S8-R1) — es pot mapar
     // des de la mateixa fila amb el cercador de POM.
     { key: 'pom', label: t('clients.alias_pom'), min: 160, max: 240, estil: pila, render: r => {
+      if (r.id === editantId) {
+        // EL MATEIX CERCADOR QUE EL FORMULARI D'ALTA (`PomPicker`), i no un select: el catàleg
+        // té 165 POMs i un desplegable pla no és consultable.
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {esborrany.pomLabel && (
+              <div style={{ fontFamily: MONO, fontWeight: 600, color: 'var(--gold)' }}>
+                {esborrany.pomLabel}</div>
+            )}
+            <PomPicker t={t} label={t('clients.alias_pom_change')}
+              onPick={pm => setEsborrany(v => ({
+                ...v, pom: pm.id, pomLabel: pm.codi_client }))} />
+          </div>
+        )
+      }
       if (!r.pom) {
         return canEdit
           ? <PomPicker t={t} onPick={pm => mapAlias(r, pm)} label={t('clients.alias_pendent_map')} />
@@ -398,13 +497,39 @@ function TecnicTab({ customer, canEdit, t, navigate, notify }) {
       <div style={{ lineHeight: 1.3 }}>
         <ClassificacioBadge>{t(`clients.origen_${r.origen}`)}</ClassificacioBadge>
         {r.creat_at && <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', marginTop: 3 }}>{r.creat_at.slice(0, 10)}</div>}
+        {/* L'ORIGEN ES QUEDA I L'EDICIÓ S'HI SUMA. Un àlies d'IMPORT que algú ha corregit
+            segueix sent d'IMPORT —l'origen diu D'ON VE— i a sota hi diu que s'ha tocat i
+            quan. Reescriure el badge a «Manual» perdria la provinença, que és per al que la
+            columna serveix. */}
+        {r.editat_at && (
+          <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-faint)', marginTop: 2 }}>
+            <i className="ti ti-pencil" aria-hidden="true"
+              style={{ fontSize: 11, marginRight: 3 }} />
+            {t('clients.alias_edited', { date: r.editat_at.slice(0, 10) })}
+          </div>
+        )}
       </div>
     ) },
     // §8e · la paperera de fila de la casa: 26×26, icona 14, VORA només al hover i mai vermella
     // plena en repòs (§5.5). Abans portava la vora d'error sempre encesa a cada fila.
-    ...(canEdit ? [{ key: '_a', amplada: 36, render: r => (
-      <BotoEsborrar onClick={() => removeAlias(r)} title={t('clients.delete')} />
-    ) }] : []),
+    // El llapis va ABANS de la paperera: d'esquerra a dreta, de menys a més irreversible.
+    // Editant, els dos gestos són desar i cancel·lar — i la paperera desapareix, perquè
+    // esborrar el que estàs editant no és un gest que aquesta pantalla hagi d'oferir.
+    ...(canEdit ? [{ key: '_a', amplada: 68, render: r => (r.id === editantId ? (
+      <span style={{ display: 'inline-flex', gap: 2 }} onKeyDown={teclesEdicio(r)}>
+        <BotoIcona onClick={() => desaEdicio(r)} icona="ti-check" to="var(--ok)"
+          title={t('clients.alias_save')} disabled={desant || !hiHaCanvis(esborrany, r)} />
+        <BotoIcona onClick={cancellaEdicio} icona="ti-x" to="var(--text-soft)"
+          title={t('clients.alias_cancel')} disabled={desant} />
+      </span>
+    ) : (
+      <span style={{ display: 'inline-flex', gap: 2 }}>
+        <BotoEditar onClick={() => comencaEdicio(r)} title={t('clients.alias_edit')}
+          disabled={editantId != null} />
+        <BotoEsborrar onClick={() => removeAlias(r)} title={t('clients.delete')}
+          disabled={editantId != null} />
+      </span>
+    )) }] : []),
   ]
 
   const nPoms = new Set(aliases.map(a => a.pom)).size
