@@ -19,7 +19,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { aplicaCombinacio, tramsPerEix, triaTram } from './instanciaTria.js'
+import { aplicaCombinacio, tramsPerEix, triaAlModal, triaTram } from './instanciaTria.js'
 
 const DICC = {
   eixos: [{ clau: 'POSICIO', nom_ca: 'Posició' }, { clau: 'ESTAT', nom_ca: 'Estat' }],
@@ -77,4 +77,74 @@ test('tramsPerEix diu quina píndola va encesa a cada grup', () => {
   assert.deepEqual(tramsPerEix(DICC, 'left-relaxed'), { POSICIO: 'left', ESTAT: 'relaxed' })
   assert.deepEqual(tramsPerEix(DICC, 'bottom'), { POSICIO: 'bottom' })
   assert.deepEqual(tramsPerEix(DICC, ''), {})
+})
+
+// ── 5 · ELS DOS EIXOS DE LA POSICIÓ (Agus, 22-23/08) ──────────────────────────
+// CARA (front · back) i LATERAL (left · right): dins d'un, excloents; entre ells, combinables.
+// El diccionari de dalt NO porta `subeix` a posta —és el que emet un backend anterior a aquest
+// tram— i per això els nou tests de sobre segueixen valent: sense sub-eixos, tot es comporta
+// com sempre. Aquest d'aquí sota és el diccionari d'ARA.
+const DICC2 = {
+  ...DICC,
+  subeixos: ['CARA', 'LATERAL'],
+  instancies: {
+    POSICIO: [
+      { slug: 'left', subeix: 'LATERAL', display_order: 1 },
+      { slug: 'right', subeix: 'LATERAL', display_order: 2 },
+      { slug: 'top', subeix: '', display_order: 3 },
+      { slug: 'bottom', subeix: '', display_order: 4 },
+      { slug: 'front', subeix: 'CARA', display_order: 9 },
+      { slug: 'back', subeix: 'CARA', display_order: 10 },
+    ],
+    ESTAT: DICC.instancies.ESTAT,
+  },
+}
+
+test('seleccionar Left desmarca Right, i Front desmarca Back', () => {
+  assert.equal(triaTram(DICC2, 'left', 'right'), 'right')
+  assert.equal(triaTram(DICC2, 'front', 'back'), 'back')
+})
+
+test('🚨 LES CREUADES CONVIUEN: Left + Back és una germana legítima', () => {
+  assert.equal(triaTram(DICC2, 'left', 'back'), 'back-left')
+  assert.equal(triaTram(DICC2, 'back', 'left'), 'back-left')
+  assert.equal(triaTram(DICC2, 'front', 'right'), 'front-right')
+})
+
+test('dins d\'una combinada, cada eix es canvia sol', () => {
+  assert.equal(triaTram(DICC2, 'back-left', 'right'), 'back-right')   // canvia la banda
+  assert.equal(triaTram(DICC2, 'back-left', 'front'), 'front-left')   // canvia la cara
+})
+
+test('prémer la píndola encesa d\'una combinada només l\'apaga a ella', () => {
+  assert.equal(triaTram(DICC2, 'back-left', 'left'), 'back')
+  assert.equal(triaTram(DICC2, 'back-left', 'back'), 'left')
+})
+
+test('una posició SENSE sub-eix segueix sent excloent amb tot el seu eix', () => {
+  assert.equal(triaTram(DICC2, 'back-left', 'top'), 'top')      // `top` se les endú totes dues
+  assert.equal(triaTram(DICC2, 'top', 'left'), 'left')          // i marxa quan n'entra una
+})
+
+test('l\'estat segueix creuant-se amb la posició sencera', () => {
+  assert.equal(triaTram(DICC2, 'back-left', 'relaxed'), 'back-left-relaxed')
+  assert.equal(triaTram(DICC2, 'back-left-relaxed', 'right'), 'back-right-relaxed')
+})
+
+test('tramsPerEix indexa pel bloc d\'exclusió, no per l\'eix', () => {
+  assert.deepEqual(tramsPerEix(DICC2, 'back-left'),
+    { 'POSICIO/CARA': 'back', 'POSICIO/LATERAL': 'left' })
+  assert.deepEqual(tramsPerEix(DICC2, 'top'), { POSICIO: 'top' })
+})
+
+test('el modal ＋ segueix la mateixa llei que la fila', () => {
+  assert.deepEqual(triaAlModal(DICC2, { 'POSICIO/LATERAL': 'left' }, 'back'),
+    { 'POSICIO/LATERAL': 'left', 'POSICIO/CARA': 'back' })
+  assert.deepEqual(triaAlModal(DICC2, { 'POSICIO/LATERAL': 'left' }, 'right'),
+    { 'POSICIO/LATERAL': 'right' })
+  assert.deepEqual(triaAlModal(DICC2, { 'POSICIO/CARA': 'back', 'POSICIO/LATERAL': 'left' }, 'top'),
+    { POSICIO: 'top' })
+  assert.deepEqual(triaAlModal(DICC2, { 'POSICIO/CARA': 'back' }, 'back'), {})
+  assert.equal(aplicaCombinacio(DICC2, { 'POSICIO/CARA': 'back', 'POSICIO/LATERAL': 'left' }),
+    'back-left')
 })
