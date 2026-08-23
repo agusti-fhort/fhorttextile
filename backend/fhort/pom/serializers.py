@@ -71,6 +71,9 @@ class POMMasterSerializer(serializers.ModelSerializer):
     pom_code = serializers.SerializerMethodField()
     name_en = serializers.SerializerMethodField()
     name_cat = serializers.SerializerMethodField()
+    # SEMBRA v5 (23/08) — el CASTELLÀ del catàleg. Hi entra ara perquè fins avui no existia
+    # enlloc: `POMGlobal.nom_es` era buit a les 125 files velles i el v5 el porta a les 165.
+    name_es = serializers.SerializerMethodField()
     abbreviation = serializers.SerializerMethodField()
     categoria_nom = serializers.SerializerMethodField()
     applies_woven = serializers.BooleanField(source='pom_global.applies_woven', read_only=True, allow_null=True)
@@ -153,6 +156,9 @@ class POMMasterSerializer(serializers.ModelSerializer):
 
     def get_name_cat(self, obj):
         return noms_de(obj)['nom_ca']
+
+    def get_name_es(self, obj):
+        return noms_de(obj)['nom_es']
 
     def get_abbreviation(self, obj):
         return abreviatura_de(obj)
@@ -659,6 +665,9 @@ class GarmentPOMMapSerializer(serializers.ModelSerializer):
     pom_code = serializers.SerializerMethodField()
     name_en = serializers.SerializerMethodField()
     name_cat = serializers.SerializerMethodField()
+    # SEMBRA v5 (23/08) — el CASTELLÀ del catàleg. Hi entra ara perquè fins avui no existia
+    # enlloc: `POMGlobal.nom_es` era buit a les 125 files velles i el v5 el porta a les 165.
+    name_es = serializers.SerializerMethodField()
     abbreviation = serializers.SerializerMethodField()
     categoria = serializers.SerializerMethodField()
     applies_woven = serializers.BooleanField(source='pom.pom_global.applies_woven', read_only=True)
@@ -757,6 +766,9 @@ class _POMDisplayMixin(serializers.Serializer):
     pom_code = serializers.SerializerMethodField()
     name_en = serializers.SerializerMethodField()
     name_cat = serializers.SerializerMethodField()
+    # SEMBRA v5 (23/08) — el CASTELLÀ del catàleg. Hi entra ara perquè fins avui no existia
+    # enlloc: `POMGlobal.nom_es` era buit a les 125 files velles i el v5 el porta a les 165.
+    name_es = serializers.SerializerMethodField()
     abbreviation = serializers.SerializerMethodField()
     categoria = serializers.SerializerMethodField()
     unitat = serializers.CharField(source='pom.pom_global.unitat', read_only=True)

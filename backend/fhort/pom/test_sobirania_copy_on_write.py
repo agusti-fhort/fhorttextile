@@ -23,6 +23,10 @@ class _Global:
     codi = 'LOSPOM-548'
     nom_en = 'FRONT ARMHOLE'
     nom_ca = 'SISA DAVANTERA'
+    #: Sembra v5 (23/08): el castellà del catàleg. El lector el llegeix amb `getattr`, o sigui
+    #: que sense aquesta línia el banc seguiria verd — i seria un banc que ja no s'assembla al
+    #: model que diu imitar.
+    nom_es = 'SISA DELANTERA'
     abbreviation = 'FR AH'
     unitat = 'cm'
     start_point = 'Shoulder point'

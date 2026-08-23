@@ -22,10 +22,11 @@ from fhort.pom.nomenclatura import (abreviatura_de, categoria_de, codi_de, noms_
 
 class _Global:
     def __init__(self, codi='LOSPOM-548', nom_en='FRONT ARMHOLE', nom_ca='SISA DAVANTERA',
-                 abbreviation='FR AH', categoria='Upper body'):
+                 abbreviation='FR AH', categoria='Upper body', nom_es='SISA DELANTERA'):
         self.codi = codi
         self.nom_en = nom_en
         self.nom_ca = nom_ca
+        self.nom_es = nom_es
         self.abbreviation = abbreviation
         self.categoria = categoria
 
