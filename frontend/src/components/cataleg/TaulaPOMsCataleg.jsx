@@ -4,7 +4,8 @@ import { garmentTypeItems, garmentPomMaps, poms } from '../../api/endpoints'
 import { useEstatDiccionari } from '../../utils/diccionariMesuresFont'
 import { useTraduccioPoms } from '../../utils/traduccioPomFont'
 import { InfoTraduccio } from '../EditableTable/EditableTable'
-import { dimensionsDe, composaInstancia, tramsInstancia } from '../../utils/diccionariMesures'
+import { dimensionsDe, tramsInstancia } from '../../utils/diccionariMesures'
+import { triaTram } from '../instancia/instanciaTria.js'
 import { etiquetaCapa, etiquetaInstancia } from '../../utils/capaInstancia'
 
 // U2/R1 · LA GERMANA DE PRESENTACIÓ · «Talles i POMs» del catàleg de peces.
@@ -24,7 +25,7 @@ import { etiquetaCapa, etiquetaInstancia } from '../../utils/capaInstancia'
 // Tot el VOCABULARI, que ja vivia en mòduls purs de sprints anteriors — no ha calgut extreure
 // res, només consumir-los:
 //   · `utils/capaInstancia` → etiquetaCapa · etiquetaInstancia (les capes, del diccionari)
-//   · `utils/diccionariMesures` → dimensionsDe · composaInstancia
+//   · `utils/diccionariMesures` → dimensionsDe · `components/instancia/instanciaTria` → triaTram
 //   · `utils/diccionariMesuresFont` → useEstatDiccionari (les capes i instàncies REALS de la BD)
 // Així les paraules d'aquesta taula i les de la del model surten del mateix lloc: si la Montse
 // sembra una instància nova, apareix a totes dues sense tocar codi.
@@ -319,13 +320,11 @@ function Fila({ r, i, t, lang, dicc, dims, capes, refValor, onTecla, onCapa, onI
   // llegeix: quan repeteix el canònic és un forat, i el forat l'omple la traducció.
   const nomLocal = (r.nom_ca && r.nom_ca !== r.nom ? r.nom_ca : '') || traduccio
   const trams = tramsInstancia(dicc, r.instancia)
-  const commuta = (slug) => {
-    // Dins d'un eix les opcions són excloents: triar «right» treu «left», no les suma.
-    const eix = dims.find(d => d.opcions.some(o => o.slug === slug))
-    const altres = trams.filter(x => !eix?.opcions.some(o => o.slug === x))
-    const nous = trams.includes(slug) ? altres : [...altres, slug]
-    onInstancia(composaInstancia(dicc, nous) || '')
-  }
+  // La commutació passa per la PORTA ÚNICA (`triaTram`), no per una regla escrita aquí. La que
+  // hi havia deia «dins d'un eix, excloents» i era certa fins al 22-23/08: des que la posició té
+  // dos sub-eixos (cara i lateral), qui decideix què desmarca què és el diccionari — i tenir-ho
+  // en dos llocs voldria dir que aquesta pantalla i la del model discrepessin el dia que canviï.
+  const commuta = (slug) => onInstancia(triaTram(dicc, r.instancia, slug) || '')
 
   return (
     <tr>

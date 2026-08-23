@@ -15,7 +15,9 @@ import {
   dimensionsDe, eixPrincipal, nomEnIdioma, COMPLEMENTARIA, eixDe,
   tramsInstancia, composaInstancia,
   codiProposat, codiBase,
+  clauExclusio, subeixDe, xoquen,
 } from '../../utils/diccionariMesures'
+import { triaAlModal } from '../instancia/instanciaTria.js'
 import { useEstatDiccionari } from '../../utils/diccionariMesuresFont'
 import { useTraduccioPoms } from '../../utils/traduccioPomFont'
 import AvisDiccionari from '../ui/AvisDiccionari'
@@ -563,13 +565,19 @@ export default function EditableTable({
   // sigui `top` té l'eix POSICIÓ ocupat encara que ni «Esquerra» ni «Dreta» hi surtin enceses, i
   // el tooltip ho ha de dir amb el nom real (el diccionari en té vuit, i aquí només n'hi caben
   // dues; la resta viuen al modal `＋`).
-  const dimState = (row, eix) => {
+  //
+  // ⚠️ LA CLAU ÉS LA D'EXCLUSIÓ, NO L'EIX (22-23/08). La posició en té dos —CARA i LATERAL— i
+  // `back` i `left` són dues píndoles enceses del MATEIX eix que han de poder conviure. Amb la
+  // clau per eix, «l'esquena» hauria deixat «l'esquerra» com a repartida i el gest s'hauria
+  // deshabilitat sol. Les posicions sense sub-eix conserven la clau de l'eix i, per tant, el
+  // comportament de sempre.
+  const dimState = (row, clau) => {
     const meus = tramsInstancia(dicc, row.instancia)
-    const mine = meus.find(s => eixDe(dicc, s) === eix) || null
+    const mine = meus.find(s => clauExclusio(dicc, s) === clau) || null
     const capa = row.capa || 'exterior'
     const repartida = localRows.some(x =>
       x.pom_id === row.pom_id && (x.capa || 'exterior') === capa &&
-      tramsInstancia(dicc, x.instancia).some(s => eixDe(dicc, s) === eix))
+      tramsInstancia(dicc, x.instancia).some(s => clauExclusio(dicc, s) === clau))
     return { mine, repartida }
   }
 
@@ -592,9 +600,10 @@ export default function EditableTable({
   // la mateixa germana, i la clau única de la BD no perdona això.
   const aplicaInstancia = (row, trams, ambComplementaria) => {
     if (!dicc || !trams.length) return
-    const eixosTocats = new Set(trams.map(s => eixDe(dicc, s)).filter(Boolean))
+    // Del que la fila ja portava es conserva tot el que POT CONVIURE amb els trams triats
+    // (`xoquen`): partir per la cara no ha de perdre la banda que la fila ja deia.
     const meus = tramsInstancia(dicc, row.instancia)
-    const altres = meus.filter(s => !eixosTocats.has(eixDe(dicc, s)))
+    const altres = meus.filter(s => !trams.some(t => xoquen(dicc, t, s) || t === s))
     // El codi base és el que quedava abans que cap sufix s'hi enganxés: re-partir `AHL` ha de
     // donar `AHL`/`AHR` i no `AHLL`.
     const base = codiBase(dicc, row.nom_fitxa || row.client_code || row.pom_code || '', meus)
@@ -685,27 +694,28 @@ export default function EditableTable({
   }, [desfent])
 
   const teValor = (r) => r.base_value_cm != null && r.base_value_cm !== ''
-  const trasDe = (r, eix) => tramsInstancia(dicc, r.instancia).filter(s => eixDe(dicc, s) !== eix)
-  const clauResta = (r, eix) => [...trasDe(r, eix)].sort().join('|')
+  const trasDe = (r, clau) =>
+    tramsInstancia(dicc, r.instancia).filter(s => clauExclusio(dicc, s) !== clau)
+  const clauResta = (r, clau) => [...trasDe(r, clau)].sort().join('|')
 
   // LES GERMANES QUE VAN NÉIXER D'AQUESTA PARTICIÓ: mateixa família (POM + capa), amb un tram
   // d'aquest eix, i amb LA RESTA D'EIXOS IGUAL que la fila premuda. L'última condició importa el
   // dia que una família estigui partida per dos eixos: desfent la POSICIÓ de `left-relaxed` s'ha
   // de retirar `right-relaxed`, i no `left-extended`, que és una altra mesura.
-  const germanesDeLEix = (row, eix) => {
+  const germanesDeLEix = (row, clau) => {
     const capa = row.capa || 'exterior'
-    const resta = clauResta(row, eix)
+    const resta = clauResta(row, clau)
     return localRows.filter(x => x.id !== row.id
       && x.pom_id === row.pom_id && (x.capa || 'exterior') === capa
-      && tramsInstancia(dicc, x.instancia).some(s => eixDe(dicc, s) === eix)
-      && clauResta(x, eix) === resta)
+      && tramsInstancia(dicc, x.instancia).some(s => clauExclusio(dicc, s) === clau)
+      && clauResta(x, clau) === resta)
   }
 
   // La identitat de la fila SENSE aquest eix: el slug es recompon amb els trams que queden i el
   // codi torna al seu base (`AHL` → `AH`), pel mateix camí que el va compondre.
-  const identitatSenseEix = (row, eix) => {
+  const identitatSenseEix = (row, clau) => {
     const meus = tramsInstancia(dicc, row.instancia)
-    const resta = meus.filter(s => eixDe(dicc, s) !== eix)
+    const resta = meus.filter(s => clauExclusio(dicc, s) !== clau)
     const base = codiBase(dicc, row.nom_fitxa || row.client_code || row.pom_code || '', meus)
     return {
       instancia: composaInstancia(dicc, resta),
@@ -1371,26 +1381,33 @@ function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, o
           dins, totes les opcions d'aquella dimensió pel seu ordre de presentació. Amb el
           diccionari encara en vol no hi ha cap columna: la taula no espera cap GET per pintar-se
           i les columnes apareixen quan el vocabulari arriba. */}
-      {/* LES PÍNDOLES SÓN LES DUES PRIMERES DE CADA EIX; la resta, pel `＋` (Agus, 06/08).
-          La posició té VUIT opcions al diccionari i totes vuit a la fila feien una cel·la
-          il·legible per oferir sempre les dues que es fan servir cada dia (Left · Right).
-          CRITERI: **les dues primeres per `display_order` del diccionari** — no hi ha cap slug
-          escrit al codi. Avui l'ordre del catàleg dona left(1) · right(2), que és exactament el
-          que la decisió demana; si el catàleg reordena, la fila el segueix sense tocar res.
-          Cap opció es perd: el modal del `＋` recorre TOTS els eixos amb TOTES les opcions, i a
-          més és l'únic lloc que pot creuar-los (`left` i `relaxed` alhora). */}
+      {/* LES PÍNDOLES DE LA FILA SÓN LES DEL SEU EIX QUE DECLAREN SUB-EIX; la resta, pel `＋`.
+          A la posició, avui, això dona QUATRE: Left · Right · Front · Back (Agus, 22-23/08) —
+          les dues preguntes que es fan cada dia, i les úniques que es poden creuar entre elles.
+          Les altres sis (top, bottom, cf, cb, side, waistband_seam) no tenen sub-eix i viuen al
+          modal, com fins ara.
+          CRITERI: **el que el diccionari declara**, no cap slug escrit al codi. Un eix sense cap
+          sub-eix (l'ESTAT) cau al criteri anterior —les dues primeres per `display_order`— i per
+          tant es comporta exactament com abans (Relaxed · Extended).
+          Cap opció es perd: el modal del `＋` recorre TOTS els eixos amb TOTES les opcions. */}
       {!readOnly && dims.map((d, k) => {
-        const st = dimState(row, d.clau)
-        const visibles = d.opcions.slice(0, 2)
+        const ambSubeix = d.opcions.filter(o => subeixDe(dicc, o.slug))
+        const visibles = ambSubeix.length ? ambSubeix : d.opcions.slice(0, 2)
         return (
           <td key={d.clau} style={{ ...tdS, textAlign: 'center', padding: '4px 8px',
                                     borderLeft: k === 0 ? '1px solid var(--border)' : '0.5px solid var(--border)' }}>
-            {/* Q1 — LA MATEIXA PÍNDOLA, ELS DOS SENTITS: encesa desfà, apagada parteix. */}
-            {visibles.map(o => (
-              <PindolaInstancia key={o.slug} fila={o}
-                encesa={st.mine === o.slug} repartida={st.repartida} altra={st.mine} dicc={dicc}
-                onTria={() => (st.mine === o.slug ? onDesfa(row, d.clau) : onParteix(row, o.slug))} />
-            ))}
+            {/* Q1 — LA MATEIXA PÍNDOLA, ELS DOS SENTITS: encesa desfà, apagada parteix.
+                L'estat es mira pel BLOC D'EXCLUSIÓ de CADA píndola i no pel de la columna: dins
+                d'aquesta cel·la n'hi ha dos (cara i lateral) i cadascun s'encén i s'apaga sol. */}
+            {visibles.map(o => {
+              const clau = clauExclusio(dicc, o.slug)
+              const st = dimState(row, clau)
+              return (
+                <PindolaInstancia key={o.slug} fila={o}
+                  encesa={st.mine === o.slug} repartida={st.repartida} altra={st.mine} dicc={dicc}
+                  onTria={() => (st.mine === o.slug ? onDesfa(row, clau) : onParteix(row, o.slug))} />
+              )
+            })}
           </td>
         )
       })}
@@ -1551,8 +1568,9 @@ function PindolaInstancia({ fila, dicc, encesa, repartida, altra, onTria }) {
 // Les posicions que no tenen parella (`side`, `waistband_seam`) ni tan sols ofereixen la casella.
 function ModalPosicions({ mare, dicc, existents, onCancel, onAplica }) {
   const { t, i18n } = useTranslation()
-  // La tria és PER EIX: `{POSICIO: 'left', ESTAT: 'relaxed'}`. Un estat per eix i no dos camps
-  // amb nom propi, perquè els eixos els compta el diccionari.
+  // La tria és PER BLOC D'EXCLUSIÓ: `{'POSICIO/LATERAL': 'left', ESTAT: 'relaxed'}`. Un estat per
+  // bloc i no camps amb nom propi, perquè els blocs els compta el diccionari — i des del 22-23/08
+  // la posició en té dos (cara i lateral), que és el que fa possible «l'esquena esquerra».
   const [tria, setTria] = useState({})
   const [ambComp, setAmbComp] = useState(true)
 
@@ -1571,7 +1589,7 @@ function ModalPosicions({ mare, dicc, existents, onCancel, onAplica }) {
   // L'ordre dels trams és el dels EIXOS (posició abans que estat), que és el mateix que
   // `composaInstancia` fa servir per compondre el slug: així la proposta de codi que es llegeix
   // aquí és exactament la que s'escriurà.
-  const trams = dims.map(d => tria[d.clau]).filter(Boolean)
+  const trams = Object.values(tria).filter(Boolean)
 
   const preses = new Set(existents.map(r => r.instancia || ''))
   // Una combinació ja presa no s'ofereix: crear-la no faria res, escriuria damunt de la fila que
@@ -1628,8 +1646,8 @@ function ModalPosicions({ mare, dicc, existents, onCancel, onAplica }) {
               {nomEnIdioma(d, i18n.language)}
             </p>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
-              {d.opcions.map(f => xip(tria[d.clau] === f.slug,
-                () => setTria(prev => ({ ...prev, [d.clau]: prev[d.clau] === f.slug ? '' : f.slug })),
+              {d.opcions.map(f => xip(tria[clauExclusio(dicc, f.slug)] === f.slug,
+                () => setTria(prev => triaAlModal(dicc, prev, f.slug)),
                 f.slug, etiquetaInstancia(f.slug, dicc), false))}
             </div>
           </div>
