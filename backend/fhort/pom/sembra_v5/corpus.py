@@ -9,10 +9,10 @@
 mateixos bytes**. Un `r2` retocat a mà en un dels dos entorns donaria dos catàlegs diferents
 amb totes les comandes en verd, i el delta diria «divergeixen» sense poder dir per què.
 
-🚨 **QUATRE COLUMNES DEL FULL NO TENEN DESTÍ A L'ESQUEMA** (v. `COLUMNES_SENSE_DESTI`). No
-s'inventa cap camp i no s'aboquen a `notes`: és la mateixa decisió que ja es va prendre a la
-sembra v4 (`REPORT_SEMBRA_V4_2026-08-09.md` §3) i el brief la torna a manar («PARAR i reportar
-el forat. No inventar schema»). Cada comanda que en toca alguna ho diu al seu report.
+✅ **LES QUATRE COLUMNES QUE NO TENIEN DESTÍ JA EN TENEN** (`Pos.`, `Règim`, `Ancoratge`,
+`Capa`): pre-tren `pom/0081`, autoritzat per Agus el 23/08 arran del report de la FASE B. Del
+forat original només hi queden `FONT DEF.` i `Origen`, que són **provenença del document** i no
+dada del POM — i segueixen sense abocar-se enlloc. Cada comanda que en toca alguna ho diu al seu report.
 """
 import hashlib
 from decimal import Decimal
@@ -34,15 +34,10 @@ CAMINS = (_ARREL / 'docs' / 'ordres' / NOM_XLSX,      # staging: el repo
 N_POMS, N_FAMILIES, N_ALIES = 165, 14, 105
 N_POMS_ACTIUS, N_POMS_INACTIUS = 161, 4
 
-#: 🚨 Columnes del full que NO tenen camp al model, i on aniran el dia que Agus n'autoritzi la
-#: migració. Es reporten a cada correguda perquè el forat no es pugui oblidar en silenci.
+#: Columnes del full que segueixen sense camp al model. Es reporten a cada correguda perquè el
+#: forat no es pugui oblidar en silenci. Les quatre que hi havia fins al 23/08 ja tenen destí
+#: (pre-tren `pom/0081`); les dues que queden són **provenença del document**, no dada del POM.
 COLUMNES_SENSE_DESTI = {
-    'Pos.': "ordre del POM dins la família — `POMGlobal` no té `display_order` "
-            "(`POMCategory` sí, però és de la FAMÍLIA, no del POM)",
-    'Règim': "Amplada · Llarg · Col·locació · Fix — cap camp a `POMGlobal` ni a `POMMaster`",
-    'Ancoratge': "Cota · Caiguda · Component · Tirada — cap camp",
-    'Capa': "exterior · fornitura · folre — la capa és de la PERTINENÇA "
-            "(`GarmentPOMMap.capa`, slug de `MeasurementLayer`), no del catàleg",
     'FONT DEF.': "provenença de la definició (Master v2 · redactat · evident) — `iso_ref` és "
                  "per a la ISO 8559-1 i `notes` és del patronista: no s'hi aboca",
     'Origen': "Brownie v4 · complement PROD · proposta nova — documentació del full",
@@ -137,6 +132,15 @@ def carrega(explicit=None):
         p['tol_prod_cm'] = _decimal(p['tol_prod_cm'])
         p['tol_samp_cm'] = _decimal(p['tol_samp_cm'])
         p['actiu'] = (p['estat'] == 'ACTIU')
+        # Les quatre del pre-tren `pom/0081` són NOT NULL amb default buit: una cel·la buida
+        # del full ha d'arribar BUIDA, no `None`. El full en té quatre files (`S2`, `S3`, `S4`
+        # i `Z7`) i és una absència legítima: vol dir «el catàleg no ho diu», que és
+        # exactament el que el default buit significa.
+        # ⚠️ NO són els 4 contorns @girth —aquells sí que declaren règim i ancoratge—: són dues
+        # xifres de 4 que no tenen res a veure, i confondre-les era fàcil.
+        for camp in ('regim', 'ancoratge', 'capa'):
+            p[camp] = p[camp] or ''
+        p['posicio'] = int(p['posicio']) if p['posicio'] not in (None, '') else 0
 
     # ── Les guardes del corpus. Cap d'aquestes xifres és decorativa ────────────────────────
     _guarda('POMs al full CATALEG', len(poms), N_POMS)

@@ -61,6 +61,16 @@ class BancV5(TenantTestCase):
     def sembra_globals(self):
         crida('sembra_cataleg_sistema', '--schema', self.schema, '--no-dry-run')
 
+    def pom_lligable(self, codi='E'):
+        """Un POM del tenant que compleix LES DUES coincidències: codi del full i nom del v5.
+
+        Des de la decisió 2 d'Agus (23/08) el codi sol no lliga: el fixture ha de portar
+        **el nom que el v5 li dona**, o el POM es queda —correctament— sense canònic.
+        """
+        sistema = self.mapa[codi]
+        nom = next(p['nom_en'] for p in self.poms if p['codi'] == sistema)
+        return POMMaster.objects.create(codi_client=codi, nom_client=nom, actiu=True)
+
 
 # ── El corpus ─────────────────────────────────────────────────────────────────────────────
 class CorpusTest(TenantTestCase):
@@ -82,10 +92,10 @@ class CorpusTest(TenantTestCase):
                 corpus.carrega(str(fals))
             self.assertIn('HASH NO COINCIDENT', str(e.exception))
 
-    def test_les_columnes_sense_desti_estan_declarades(self):
-        """El forat d'esquema no es pot oblidar en silenci: viu al codi, no a l'acta."""
-        for col in ('Pos.', 'Règim', 'Ancoratge', 'Capa'):
-            self.assertIn(col, corpus.COLUMNES_SENSE_DESTI)
+    def test_el_forat_declarat_es_el_que_queda__ni_mes_ni_menys(self):
+        """El forat d'esquema viu al codi i no a l'acta. Des del pre-tren `pom/0081` (23/08)
+        les quatre que hi havia ja tenen camp, i el que queda és PROVENENÇA del document."""
+        self.assertEqual(set(corpus.COLUMNES_SENSE_DESTI), {'FONT DEF.', 'Origen'})
 
 
 # ── S1 ────────────────────────────────────────────────────────────────────────────────────
@@ -153,6 +163,22 @@ class S2CatalegTest(BancV5):
         self.assertEqual(pg.tol_prod_cm, fila['tol_prod_cm'])
         self.assertEqual(pg.tol_samp_cm, fila['tol_samp_cm'])
 
+    def test_les_quatre_columnes_del_pre_tren_hi_entren(self):
+        """El forat que la FASE B va reportar, tancat: `pom/0081` i S2 les escriu."""
+        self.sembra_globals()
+        fila = next(p for p in self.poms if p['codi'] == 'E')
+        pg = POMGlobal.objects.get(codi='E')
+        self.assertEqual(pg.display_order, fila['posicio'])
+        self.assertEqual(pg.regim, fila['regim'])
+        self.assertEqual(pg.ancoratge, fila['ancoratge'])
+        self.assertEqual(pg.capa_defecte, fila['capa'])
+        # I les quatre files que el full deixa en blanc (`S2`, `S3`, `S4`, `Z7` — que NO són
+        # els contorns @girth, per molt que també siguin quatre) hi arriben BUIDES, no `None`.
+        blanc = POMGlobal.objects.get(codi='S2')
+        self.assertEqual((blanc.regim, blanc.ancoratge, blanc.capa_defecte), ('', '', ''))
+        # I els 4 @girth sí que porten règim, que és el que el full en diu.
+        self.assertTrue(POMGlobal.objects.get(codi='A1').regim)
+
     def test_un_camp_editat_a_ma_NO_es_reescriu(self):
         self.sembra_globals()
         pg = POMGlobal.objects.get(codi='E')
@@ -177,8 +203,9 @@ class S3LligamTest(BancV5):
     def setUp(self):
         super().setUp()
         self.sembra_globals()
-        # Un POM de casa amb el codi de Brownie 'E' (que el r2 mapa al sistema 'E').
-        self.pom = POMMaster.objects.create(codi_client='E', nom_client='Espatlla', actiu=True)
+        # Un POM de casa amb el codi de Brownie 'E' i el nom que el v5 li dona: les DUES
+        # coincidències que la decisió 2 exigeix.
+        self.pom = self.pom_lligable('E')
 
     def test_lliga_pel_mapa_del_r2(self):
         crida('lliga_fhort_al_sistema', '--schema', self.schema, '--no-dry-run')
@@ -204,12 +231,37 @@ class S3LligamTest(BancV5):
         self.assertEqual(self.pom.pom_global_id, altre.id)
         self.assertIn('NO es mou', sortida)
 
+    def test_el_full_el_mapa_pero_el_NOM_divergeix__no_es_lliga(self):
+        """🚨 Decisió 2 d'Agus (23/08): mai lligar per codi sol. Als dos entorns, 16 dels 105
+        codis que el full mapa apunten a un POM que es diu una altra cosa."""
+        altre = POMMaster.objects.create(codi_client='N', nom_client='Motive placement',
+                                         actiu=True)
+        self.assertIn('N', self.mapa)
+        sortida = crida('lliga_fhort_al_sistema', '--schema', self.schema, '--no-dry-run')
+        altre.refresh_from_db()
+        self.assertIsNone(altre.pom_global_id)
+        self.assertIn('es diuen coses diferents', sortida)
+        self.assertIn('el codi sol no basta', sortida)
+
+    def test_el_codi_PROPI_amb_el_NOM_igual_SI_que_lliga(self):
+        """L'altra cara: codi + nom és la condició, i quan totes dues es compleixen el POM es
+        lliga encara que el full no el mapi."""
+        codi = next(c for c in {p['codi'] for p in self.poms} if c not in self.mapa)
+        nom = next(p['nom_en'] for p in self.poms if p['codi'] == codi)
+        propi = POMMaster.objects.create(codi_client=codi, nom_client=nom.upper(), actiu=True)
+        sortida = crida('lliga_fhort_al_sistema', '--schema', self.schema, '--no-dry-run')
+        propi.refresh_from_db()
+        self.assertEqual(propi.pom_global.codi, codi)
+        self.assertIn('lligats pel CODI PROPI + nom: 1', sortida)
+
     def test_un_codi_HOMONIM_no_es_lliga_per_coincidencia(self):
         """🚨 El parany mesurat el 23/08: el `M` del tenant és «Leg opening» i el del v5,
         «Neck width». Mateixa lletra, mesura diferent."""
         homonim = POMMaster.objects.create(
             codi_client='M', nom_client='Leg opening', actiu=True)
         self.assertNotIn('M', self.mapa)
+        self.assertNotEqual('Leg opening',
+                            next(p['nom_en'] for p in self.poms if p['codi'] == 'M'))
         sortida = crida('lliga_fhort_al_sistema', '--schema', self.schema, '--no-dry-run')
         homonim.refresh_from_db()
         self.assertIsNone(homonim.pom_global_id)
@@ -236,7 +288,7 @@ class S4AliesTest(BancV5):
         super().setUp()
         self.sembra_globals()
         self.client_brw = Customer.objects.create(codi='BRW', nom='Brownie')
-        self.pom = POMMaster.objects.create(codi_client='E', nom_client='Espatlla', actiu=True)
+        self.pom = self.pom_lligable('E')
         crida('lliga_fhort_al_sistema', '--schema', self.schema, '--no-dry-run')
 
     def test_crea_lalies_del_full(self):
@@ -267,8 +319,9 @@ class S5RemapTest(BancV5):
         super().setUp()
         self.sembra_globals()
         self.vella = POMCategory.objects.create(codi='ZVELLA', nom_ca='La família vella')
-        self.pom = POMMaster.objects.create(codi_client='E', nom_client='Espatlla',
-                                            actiu=True, categoria=self.vella)
+        self.pom = self.pom_lligable('E')
+        self.pom.categoria = self.vella
+        self.pom.save(update_fields=['categoria'])
         crida('lliga_fhort_al_sistema', '--schema', self.schema, '--no-dry-run')
 
     def remapa(self, cat_esborrades=0):
@@ -394,8 +447,8 @@ class S7FinestraTest(BancV5):
         joc = self._joc('GRADING BROWNIE 2026')
         m = self._model_amb_fk(joc)
         self.sembra_globals()
-        cobert = POMMaster.objects.create(codi_client='E', nom_client='Espatlla', actiu=True)
-        orfe = POMMaster.objects.create(codi_client='B', nom_client='Cintura', actiu=True)
+        cobert = self.pom_lligable('E')
+        orfe = self.pom_lligable('B')
         BaseMeasurement.objects.create(model=m, pom=cobert, base_value_cm=40)
         BaseMeasurement.objects.create(model=m, pom=orfe, base_value_cm=70)
         # La MARE té una resident (i només per a `cobert`) → el contenidor és lletra morta…
@@ -421,7 +474,7 @@ class S7FinestraTest(BancV5):
         condemnat = self._joc('UN JOC VELL')
         m = self._model_amb_fk(joc)
         self.sembra_globals()
-        pom = POMMaster.objects.create(codi_client='E', nom_client='Espatlla', actiu=True)
+        pom = self.pom_lligable('E')
         BaseMeasurement.objects.create(model=m, pom=pom, base_value_cm=40)
         GradingRule.objects.create(rule_set=joc, pom=pom, talla_base=base,
                                    logica='FIXED', actiu=True)
@@ -441,7 +494,7 @@ class LleiGirthTest(BancV5):
         """⚖️ «cap comanda crea NI CREARÀ regles de graduació sobre una instància @girth». El
         tram sencer no en crea CAP, ni de @girth ni de cap altra: la prova és el recompte."""
         Customer.objects.create(codi='BRW', nom='Brownie')
-        POMMaster.objects.create(codi_client='E', nom_client='Espatlla', actiu=True)
+        self.pom_lligable('E')
         abans = GradingRule.objects.count()
         crida('sembra_families_sistema', '--no-dry-run')
         self.sembra_globals()

@@ -52,15 +52,25 @@ motor n'entén (llei del 22/07: LINEAR amb delta 0 i sense break ÉS FIXED).
   · `empremta_globals_<tenant>.csv`  una fila per `POMGlobal` del schema, per `codi`
   · `empremta_<tenant>.json`         els hashes: un per bloc i un de global
 
-## El gate
+## El gate — **`hash_sembra`, i no `hash_global`** (llei d'Agus, 23/08, decisió 6)
 
     # staging i PROD, EL MATEIX FITXER SENSE CAP CANVI
     PGOPTIONS='...' venv/bin/python ../ops/sembra_v5/empremta.py --out /tmp/emp_staging
     PGOPTIONS='...' venv/bin/python ../ops/sembra_v5/empremta.py --out /tmp/emp_prod
     diff -r /tmp/emp_staging /tmp/emp_prod
 
-`hash_global` igual → els dos catàlegs diuen el mateix. Diferent → el `diff` diu quina fila i
-quin camp, i llavors es repara LA CAUSA (quina comanda no va fer el que havia de fer), mai el
+🔑 **EL GATE ÉS `hash_sembra` = `globals` + `families`**, que és **el que la sembra ESCRIU**.
+`hash_global` hi segueix, i segueix sent útil per veure si un entorn ha canviat entre dues
+mirades, però **no pot ser el gate**: hi entra tot el `POMMaster` de cada tenant, i staging i
+PROD **arrencaven de catàlegs diferents** (144 files vs 521). Exigir-los iguals seria exigir
+que dos entorns amb històries diferents tinguessin la mateixa història.
+
+⚠️ **I l'empremta NO VEU LA FINESTRA (S7).** `Model.grading_rule_set` i `GradingRuleSet.actiu`
+no són catàleg i no entren a cap bloc: que la finestra s'ha fet es verifica **amb el report
+d'S7**, no amb cap hash.
+
+Hashos iguals → els dos catàlegs diuen el mateix. Diferents → el `diff` diu quina fila i quin
+camp, i llavors es repara LA CAUSA (quina comanda no va fer el que havia de fer), mai el
 símptoma.
 """
 import argparse
@@ -90,7 +100,10 @@ COLS_REGLA = ('joc', 'pom_codi', 'regim', 'logica', 'talla_base', 'increment_bas
 COLS_FAMILIA = ('codi', 'nom_en', 'nom_ca', 'display_order', 'actiu')
 COLS_GLOBAL = ('codi', 'nom_en', 'nom_ca', 'nom_es', 'categoria', 'unitat', 'actiu', 'scope',
                'body_section', 'start_point', 'end_point', 'reference_point', 'tol_prod_cm',
-               'tol_samp_cm')
+               'tol_samp_cm',
+               # Les quatre del pre-tren `pom/0081` (23/08). Van AL FINAL, com mana la v1 per
+               # als camps nous: l'ordre de les columnes entra al hash de fila.
+               'display_order', 'regim', 'ancoratge', 'capa_defecte')
 
 
 def _norm(v):
@@ -217,6 +230,9 @@ def main():
         hashes[nom] = _hash_bloc(files)
 
     global_h = hashlib.sha256(''.join(hashes[n] for n in sorted(hashes)).encode()).hexdigest()
+    # 🔑 EL GATE: només el que la sembra escriu (decisió 6 d'Agus, 23/08).
+    sembra_h = hashlib.sha256(
+        (hashes['families'] + hashes['globals']).encode()).hexdigest()
     regles = blocs['regles'][1]
     resum = {
         'versio': 2,
@@ -225,6 +241,7 @@ def main():
         'jocs': sorted({f['joc'] for f in regles if f['joc']}),
         'regles_amb_breaks': sum(1 for f in regles if f['breaks']),
         'hash': hashes,
+        'hash_sembra': sembra_h,
         'hash_global': global_h,
         'columnes': {'poms': list(COLS_POM), 'regles': list(COLS_REGLA),
                      'families': list(COLS_FAMILIA), 'globals': list(COLS_GLOBAL)},
@@ -238,7 +255,8 @@ def main():
         print(f'  {nom:<10} {len(files):>5}   hash {hashes[nom][:32]}…')
     print(f'  jocs ................. {resum["jocs"]}')
     print(f'  regles amb `breaks` .. {resum["regles_amb_breaks"]}')
-    print(f'  HASH GLOBAL .......... {global_h}')
+    print(f'  HASH SEMBRA (EL GATE)  {sembra_h}')
+    print(f'  hash global (context)  {global_h}')
     print(f'\n  {a.out}/')
     return 0
 

@@ -21,9 +21,10 @@ mans humanes des de la sembra anterior.
 `C2` hip, `D11` leg opening): entren al catàleg com a vocabulari i **sense cap regla de
 graduació**. Aquesta comanda no crea ni toca cap `GradingRule` — cap del tram no ho fa.
 
-🚨 **QUATRE COLUMNES DEL FULL NO TENEN CAMP AL MODEL** (`Pos.`, `Règim`, `Ancoratge`, `Capa`, i
-també `FONT DEF.` i `Origen`). No s'inventa schema i no s'aboquen a `notes`: es reporten a cada
-correguda. V. `sembra_v5/corpus.COLUMNES_SENSE_DESTI`.
+✅ **LES QUATRE COLUMNES DEL FORAT JA S'ESCRIUEN** (`Pos.` → `display_order`, `Règim`,
+`Ancoratge`, `Capa` → `capa_defecte`), gràcies al pre-tren `pom/0081` que Agus va autoritzar el
+23/08. Del forat només hi queden `FONT DEF.` i `Origen` —provenença del document, no dada del
+POM—, que es reporten a cada correguda i no s'aboquen enlloc.
 
     manage.py sembra_cataleg_sistema --schema public --schema fhort                # DRY-RUN
     manage.py sembra_cataleg_sistema --schema public --schema fhort --no-dry-run   # escriu
@@ -41,6 +42,10 @@ CAMPS = (
     ('body_section', 'body_section'),
     ('tol_prod_cm', 'tol_prod_cm'), ('tol_samp_cm', 'tol_samp_cm'),
     ('notes', 'nota'),
+    # Les quatre del pre-tren `pom/0081` (23/08). `Capa` va a `capa_defecte`: el catàleg
+    # PROPOSA la capa, no la decideix (la decideix la pertinença).
+    ('display_order', 'posicio'), ('regim', 'regim'), ('ancoratge', 'ancoratge'),
+    ('capa_defecte', 'capa'),
 )
 
 
