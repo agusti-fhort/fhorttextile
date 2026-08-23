@@ -8,35 +8,51 @@ i pròpia** — fora de `ftt_staging` i de tota zona intocable.
 > **AQUEST ÉS EL GATE HUMÀ.** El brief diu: *«El report de l'assaig és el gate humà: Agus el
 > llegeix ABANS de la fase C.»* Aquí hi ha què faria cada comanda a PROD, mesurat sobre les
 > dades de PROD. **La FASE C (staging real) i la FASE D (PROD) NO s'han executat.**
+>
+> **L'assaig ha servit per al que serveix un assaig:** ha trobat **un defecte del meu propi
+> codi** (§①) que hauria aturat la finestra a PROD sense motiu, i ha posat xifres a tres coses
+> que el brief donava per sabudes.
 
 ---
 
-# 🚨 EL QUE ATURA LA SEQÜÈNCIA (tres decisions d'Agus)
+# 🚨 EL QUE QUEDA OBERT (dues decisions d'Agus, i una troballa)
 
-## ① S7 **ATURA sencera**: el model 173 perdria 11 cel·les si se li talla la FK
+## ① Els 25 models **SÓN inerts** — i el camí per saber-ho passa per un defecte meu
 
-El brief dona *«els 25 models de C7-bis (=0 mesurat)»*. **Els 25 models hi són** —la xifra és
-exacta— però la cobertura **re-mesurada avui** ja no és la del cens del 22/08:
+**Confirmat: els 25 models de C7-bis es poden tallar sense perdre cap cel·la.** La xifra del
+brief és exacta. Però el primer mesurament deia el contrari, i val la pena que consti per què.
 
+El predicat evident —«el contenidor cobreix aquest POM i cap resident no ho fa»— **no és el del
+motor**. `pom/services.py:929-948` només llegeix el contenidor **si la PEÇA MARE no té cap
+resident**:
+
+```python
+te_residents_la_mare = any(garment == '' for (pom_id, garment) in out)
+if not te_residents_la_mare and model.grading_rule_set_id:   # ← només aquí entra el joc
 ```
-model 173 · BRW-FW26-0011 · client BRW · joc «EU Woven Woman Regular» (pk 75)
-  22 POMs mesurats · 61 regles residents · 77 regles al contenidor
-  11 POMs que NOMÉS el contenidor cobreix:
-     M-M79 «TOTAL LENGTH» · EK1-ANTIC · EK2-ANTIC · S «Front armhole along seam» ·
-     S2 «Back armhole along seam» · J2 «WIDE STRETCHED CUFF» · F «Centre front length
-     from HPS» · V «RUFFLE HEIGHT» · 0 «SLIT» · G1-ANTIC «Bottom hem height» ·
-     D1 «1/2 bottom width stretched out»
-```
 
-Tallar-li la FK deixaria aquests 11 POMs a **cel·la absent**. Per això la comanda **no talla
-cap dels 25 i no arxiva cap joc**: el brief mana abortar si algun surt >0, i surt.
+I **els 25 models de PROD tenen residents a la mare, tots** (de 19 a 142 cada un). O sigui que
+per als 25 el contenidor **ja és lletra morta des del 12/08**, i tallar-ne la FK no pot perdre
+res. Amb el predicat evident, la finestra **s'aturava sencera** per un model amb 61 residents a
+la mare. Corregit a `311873b2`, amb el cas al banc.
 
-> 🔑 **I fixa-t'hi:** dos dels 11 són **`S` i `S2`**, els mateixos que S6 ve a reactivar. El
-> model 173 els mesura i els gradua **des del contenidor** perquè el catàleg els tenia morts.
+### 🚩 El que sí que surt, i és una troballa: **88 cel·les absents que ja hi són**
 
-**Les tres sortides, i totes són d'Agus:** (a) donar-li residents a aquests 11 abans de la
-finestra; (b) deixar la FK d'aquest model i tallar els altres 24 (avui la comanda no ho fa: o
-tots o cap); (c) acceptar la pèrdua i declarar-ho amb `--espera`.
+No les crea la finestra i no les resol; es reporten:
+
+| model | absents |
+|---|---|
+| 1179 `BRW-FW26-0047` | **35** |
+| 1189 `BRW-FW26-0053` | **19** |
+| 173 `BRW-FW26-0011` | **15** |
+| 1206 `BRW-FW26-0060` | **11** |
+| 177 `BRW-FW26-0015` | 4 · 184 `BRW-FW26-0017` 2 · 163 `BRW-FW26-0001` 1 · 205 `BRW-FW26-0034` 1 |
+| | **88** |
+
+Són POMs **mesurats** al model que **cap regla resident no cobreix**: el motor no n'emet cel·la
+(llei de cel·la absent). Al 173, quatre d'aquests POMs són `S`, `S2`, `EK1-ANTIC` i `EK2-ANTIC`
+— els mateixos que S6 ve a reactivar i els que el catàleg tenia morts. **No és feina d'aquest
+brief**, però és el material d'un tram de re-graduació que algú haurà de decidir.
 
 ## ② Els jocs condemnats són **28**, no 27 — i només **11** canviarien d'estat
 
@@ -94,8 +110,10 @@ són totes: **141/521**, **26 vius sense família**, **13 `CAT-*` de les quals 1
 `CAT-UB` amb 1 viu + 84 d'arxiu**, **25 models amb FK**, **`S` i `S2` = pk 462 i 463**,
 **joc Brownie = pk 152**.
 
-Ordre executat: **empremta ABANS → S1→S7 en dry-run → S1→S6 escrivint → 2a passada → 3a
-passada → empremta DESPRÉS**. S7 no arriba a escriure (§①).
+Ordre executat: **empremta ABANS → S1→S7 en dry-run → S1→S6 escrivint → 2a i 3a passada →
+empremta DESPRÉS → S7 escrivint → 2a passada d'S7 → empremta FINAL**. S7 va amb
+`--espera "jocs arxivats=11"`, que és la xifra mesurada i **un acte humà declarat** (el brief
+en deia 27; v. §②).
 
 ---
 
@@ -193,14 +211,16 @@ però **no s'ha posat**: no és una dada del corpus).
 brief citava «284 “AH DEP” vs 1076»; al dump del 23/08 **només hi és la 1076** — la 284 ja no
 existeix, i per tant **la fusió pot haver-se fet ja o la fila pot haver mort**. S'anota.
 
-## S7 · `finestra_graduacio --schema fhort` → **ATURA** (v. §① i §②)
+## S7 · `finestra_graduacio --schema fhort` (v. §① i §②)
 
 | xifra | esperat | real |
 |---|---|---|
 | models amb FK a un joc | 25 | **25** ✅ |
-| **FK tallades** | 25 | **0** — la finestra atura per 1 model |
-| tallables si el 173 es resol | — | **24** |
-| **jocs arxivats** | 27 | **11** *(28 condemnats, 17 ja inactius)* |
+| **FK tallades** (totes inertes) | 25 | **25** ✅ |
+| cel·les absents PREEXISTENTS (reportades, no tocades) | — | **88** |
+| **jocs arxivats** | 27 | **11** *(28 condemnats, 17 ja inactius)* — declarat amb `--espera` |
+| `DELETE` fets | — | **0** |
+| 2a passada | — | **0 talls · 0 arxivats · 28 ja inactius** |
 
 ---
 
@@ -214,6 +234,7 @@ existeix, i per tant **la fusió pot haver-se fet ja o la fila pot haver mort**.
 | S4 | creats **0** · iguals 69 | creats **0** · iguals 69 |
 | S5 | remapats **0** · ja hi eren 103 | remapats **0** |
 | S6 | reactivats **0** · ja actius 2 | — |
+| S7 | talls **0** · arxivats **0** · ja inactius 28 | — |
 
 **L'únic moviment de la 2a passada és el que el §⑥ de la FASE A anuncia:** el `S` que S6 acaba
 de reactivar entra al conjunt dels vius i S3 el lliga. A la tercera, **zero canvis a tot
@@ -233,6 +254,12 @@ arreu**: el tram convergeix.
 
 > El bloc `regles` **byte a byte igual** és la prova en viu de la llei @girth: 1 159 regles de
 > catàleg i el tram no en toca ni una.
+
+**I l'empremta no es mou amb S7:** el hash global després d'S6 i després d'S7 és **el mateix**
+(`044a3fd9f018af40…`). Té sentit i val la pena dir-ho — la finestra toca `Model.grading_rule_set`
+i `GradingRuleSet.actiu`, i **cap dels dos és catàleg**: el gate de la FASE E no els veurà, i
+per tant **no es pot fer servir per verificar que la finestra s'ha fet**. Això es verifica amb
+el report d'S7, no amb l'empremta.
 
 **Estat final del tenant a l'assaig:** 143 vius (141 + 2 reactivats) · **106 amb canònic** · 37
 sense · **13 vius sense família** · 41 famílies · l'arxiu de 380 intacte.

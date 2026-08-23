@@ -4,7 +4,7 @@
 **Brief:** `OPS/SEMBRA_V5` · **Substrat:** `CENS_CATALEG_V5_STAGING.md` (22/08) ·
 `TREN_PANYS_2026-08-22.md` · `INSTANCIES_POSICIO_V2_2026-08-23.md` ·
 `POMS_TABS_ACTIUS_2026-08-23.md`
-**10 commits. Cap push. Cap migració. CAP escriptura a `ftt_staging`.**
+**12 commits. Cap push. Cap migració. CAP escriptura a `ftt_staging`.**
 
 > **PORTA D'ARRENCADA — OBERTA.** `origin/dev == dev` (res a fer amb el `git pull`) i les dues
 > actes hi són: `25e4f648` (instàncies v2) i `665bfa0e` (tabs). Llegides totes dues abans de
@@ -94,7 +94,20 @@ diferents** —una tolerància retocada a mà, un punt A reescrit— passarien e
 **idèntics**. Un gate que no pot veure el que la sembra escriu no és el gate d'aquesta sembra.
 **Si Agus prefereix els tres, es treu el bloc `globals` i el hash canvia; és una línia.**
 
-## ⑥ Un ORDRE que el brief no podia saber: **S6 ressuscita el que S3 i S5 ja han passat**
+## ⑥ ⚖️ El predicat de la cobertura de S7 **no és l'evident**, i el meu primer era dolent
+
+El motor només llegeix el contenidor **si la PEÇA MARE no té cap resident**
+(`pom/services.py:929-948`, i és el canvi de subjecte del 12/08 que el cens C7 documenta). Amb
+residents a la mare, el joc **ja és lletra morta**: un POM que el joc cobreix i les residents no
+és una **cel·la absent AVUI**, i tallar la FK no la crea.
+
+La primera versió d'S7 preguntava «el joc el cobreix i les residents no?» i **aturava la
+finestra dels 25 models de PROD** per un model amb 61 residents a la mare. Ho va trobar
+l'assaig (FASE B §①); corregit a `311873b2` i fixat al banc amb les dues cares: mare AMB
+residents → talla; mare SENSE residents i joc que cobreix el que les residents no → **atura
+sencera**. Amb el predicat bo, **la xifra del brief es confirma: 25 de 25, inerts**.
+
+## ⑦ Un ORDRE que el brief no podia saber: **S6 ressuscita el que S3 i S5 ja han passat**
 
 `S` i `S2` arriben a S6 **inactius** —és el que S6 ve a arreglar— i **S3 i S5 només toquen els
 VIUS**. Quan S6 els reactiva, els dos passos que els haurien lligat i classificat ja han
@@ -125,6 +138,8 @@ que `ops/sembra_v4/` + `sembra_cataleg_v4.py`— i el codi compartit, a `fhort/p
 | `c7661f04` | **S7** `finestra_graduacio` |
 | `28bb3a03` | **S0** `ops/sembra_v5/empremta.py` |
 | `40550072` | **el banc** — 32 tests |
+| `1df234fd` | les actes de la FASE A i de la FASE B |
+| `311873b2` | **fix S7** — el predicat de la cobertura és el de C7, i no l'evident (v. sota) |
 
 ## El corpus, i per què es verifica abans de llegir
 
@@ -179,7 +194,8 @@ d'arxiu** — mor amb l'arxiu, no aquí.
 | Control | Resultat |
 |---|---|
 | `manage.py check` | **net** (0 issues), abans de cada commit |
-| `fhort.pom.test_sembra_v5` | **32 tests · OK** · 298 s |
+| `fhort.pom.test_sembra_v5` | **33 tests · OK** |
+| `fhort.pom` (l'app del tram, gate proporcional) | v. sota |
 | `npm run build` | **NO s'ha fet, a posta** |
 
 **El build és desplegament, i aquest tren no toca frontend.** És la mateixa lectura que el tren
