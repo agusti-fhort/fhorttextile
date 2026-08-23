@@ -75,7 +75,14 @@ def measurement_identity_vocabulary_view(request):
     for r in MeasurementInstance.objects.all().order_by('eix', 'display_order', 'slug'):
         # El SUFIX només té sentit a l'eix POSICIÓ (els estats no componen codi, D-31.26); s'emet
         # a totes les files igualment perquè el client no hagi de saber en quin eix el pot trobar.
-        instancies.setdefault(r.eix, []).append({**_fila(r), 'eix': r.eix, 'sufix': r.sufix})
+        # `subeix` — EL SEGON NIVELL DE LA POSICIÓ (22-23/08). `''` a tot el que no en té: una
+        # posició sense sub-eix segueix sent excloent amb tota la resta del seu eix. El client
+        # ha de poder dir QUINS xips es desmarquen entre ells sense saber-se cap slug: per això
+        # viatja com a dada de la fila i no com una llista escrita al front.
+        instancies.setdefault(r.eix, []).append({
+            **_fila(r), 'eix': r.eix, 'sufix': r.sufix,
+            'subeix': MeasurementInstance.subeix_de(r.slug),
+        })
 
     # Només els eixos que TENEN files: un eix declarat i buit seria una columna sense cap opció.
     eixos = [
@@ -87,6 +94,11 @@ def measurement_identity_vocabulary_view(request):
     return Response({
         'capes': capes,
         'eixos': eixos,
+        # ELS SUB-EIXOS, EN ORDRE DE COMPOSICIÓ (22-23/08): CARA primer, LATERAL després —
+        # `back`+`left` proposa `BL` i mai `LB`. Va com a LLISTA perquè l'ordre ÉS la dada; les
+        # claus d'un objecte no en tenen. No porta noms: cap superfície n'ensenya el rètol
+        # (els xips van tots dins la columna POSICIÓ); el dia que en calgui, s'hi afegeixen.
+        'subeixos': [clau for clau, _ in MeasurementInstance.SUBEIXOS],
         'instancies': instancies,
         'regles': {
             # Com es compon el codi PROPOSAT d'una germana (D-31.26, estil Brownie natiu).

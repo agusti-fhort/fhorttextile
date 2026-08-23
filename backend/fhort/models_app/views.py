@@ -21,7 +21,7 @@ from fhort.pom.grading_regime import (
 # treballant» (D-2). El decorador bat NOMÉS en 2xx i mai llança.
 from fhort.tasks.services_batec import (SUP_ESCALAT, SUP_FITXA, SUP_MESURES, SUP_PRESA,
                                         bat_escriptura, batec_de_request)
-from fhort.pom.models import MeasurementLayer
+from fhort.pom.models import MeasurementInstance, MeasurementLayer
 from fhort.pom.plausibilitat import CODI_MESURA_FORA_RANG, mesura_fora_de_rang
 from .models import (BaseMeasurement, ConsumptionRecord, GarmentSet, Model, ModelFitxer,
                      ModelGarment, Watchpoint)
@@ -2329,6 +2329,11 @@ def set_measurements_view(request, model_id):
                 # del payload; qui no els digui rep el literal de sempre). Amb el literal fix
                 # que hi havia, dues germanes queien sobre la mateixa fila.
                 capa, instancia, garment = _identitat_de_mesura(m)
+                # 🔒 La mateixa llei que a `gravar_pom_view`: fins a una etiqueta per eix.
+                mal = MeasurementInstance.error_de_combinacio(instancia)
+                if mal:
+                    errors.append(f'POM {pom_id}: {mal}')
+                    continue
                 # L'ORIGEN I LES TOLERÀNCIES NO SÓN EFECTE SECUNDARI D'AQUESTA ESCRIPTURA
                 # (v. `_procedencia_de_mesura`): abans anaven als `defaults` de l'upsert i
                 # això les reescrivia a CADA fila del payload, canviés el valor o no.
@@ -2447,6 +2452,13 @@ def gravar_pom_view(request, model_id):
 
         # C4/BLOC 1-BIS — LA IDENTITAT DE LA FILA SURT DEL PAYLOAD (v. `_identitat_de_mesura`).
         capa, instancia, garment = _identitat_de_mesura(m)
+        # 🔒 ELS DOS EIXOS DE LA POSICIÓ (22-23/08): fins a UNA etiqueta per eix. `left`+`back`
+        # és una germana legítima; `left`+`right` i `front`+`back` no ho són. Es valida AQUÍ i
+        # no només a la UI: aquesta és la porta, i una pantalla no és una barana.
+        _mal = MeasurementInstance.error_de_combinacio(instancia)
+        if _mal:
+            errors.append(f'POM {pom_id}: {_mal}')
+            continue
         ident = (int(pom_id), capa, instancia, garment)
         if ident in identitats:
             # 🔴 DUES ENTRADES DEL MATEIX REQUEST QUE ESCRIUEN A LA MATEIXA FILA. Executar-ho

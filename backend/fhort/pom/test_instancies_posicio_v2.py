@@ -137,3 +137,147 @@ class CaresFrontBackTest(_Base):
             _migracio('0080_posicions_front_back').endavant(apps, None)
         self.assertIn('0079', str(cm.exception))
         self.assertFalse(I.objects.filter(slug='back').exists())   # i no n'ha creat cap
+
+
+class ExclusioPerEixTest(_Base):
+    """D2 · LA VALIDACIÓ DE BACKEND: fins a UNA etiqueta per eix, i una per sub-eix a la posició.
+
+    🚨 UNA PANTALLA NO ÉS UNA BARANA. Els xips ja no deixaran encendre `left` i `right` alhora,
+    però el slug entra per HTTP i qualsevol client (l'import, un script, una pestanya vella)
+    el pot compondre. La llei viu a `MeasurementInstance.error_de_combinacio` i la criden les
+    portes; això és el que mesura que la combinació il·legal no arriba a la BD.
+    """
+
+    def setUp(self):
+        self.sembra()
+
+    def mal(self, valor):
+        return I.error_de_combinacio(valor)
+
+    # ── el que NO pot ser ────────────────────────────────────────────────────────────────
+    def test_left_i_right_no(self):
+        self.assertIn('left', self.mal('left-right'))
+        self.assertIn('LATERAL', self.mal('left-right'))
+
+    def test_front_i_back_no(self):
+        self.assertIn('CARA', self.mal('front-back'))
+
+    def test_dos_estats_no(self):
+        self.assertTrue(self.mal('relaxed-extended'))
+
+    def test_una_posicio_sense_subeix_no_es_combina_amb_cap_altra(self):
+        """`top`, `cf`, `side`… es comporten com sempre: excloents amb tot el seu eix."""
+        self.assertTrue(self.mal('top-left'))
+        self.assertTrue(self.mal('cf-back'))
+        self.assertTrue(self.mal('top-bottom'))
+
+    # ── el que SÍ que pot ser ────────────────────────────────────────────────────────────
+    def test_la_combinada_legitima_back_left(self):
+        self.assertEqual(self.mal('back-left'), '')
+        self.assertEqual(self.mal('front-right'), '')
+
+    def test_els_dos_eixos_grans_segueixen_creuant_se(self):
+        self.assertEqual(self.mal('left-relaxed'), '')
+        self.assertEqual(self.mal('back-left-extended'), '')
+
+    def test_una_sola_etiqueta_i_la_unica(self):
+        for v in ('', 'left', 'back', 'waistband_seam'):
+            self.assertEqual(self.mal(v), '', v)
+
+    def test_el_vocabulari_desconegut_no_es_jutja(self):
+        """Un tenant pot crear-se la seva instància; un slug que el diccionari no conté no diu
+        de quin eix és, i inventar-li una llei seria pitjor que deixar-lo passar."""
+        self.assertEqual(self.mal('sleeve-2'), '')
+        self.assertEqual(self.mal('left-sleeve'), '')
+
+
+class PortesDeLaCombinacioTest(_Base):
+    """D2 · les portes HTTP la criden de debò: el serializer de mesures i el de la pertinença."""
+
+    def setUp(self):
+        self.sembra()
+
+    def test_el_serializer_de_la_pertinenca_rebutja(self):
+        from fhort.pom.serializers import GarmentPOMMapSerializer
+        s = GarmentPOMMapSerializer()
+        with self.assertRaises(Exception) as cm:
+            s.validate_instancia('left-right')
+        self.assertIn('LATERAL', str(cm.exception))
+
+    def test_el_serializer_de_la_pertinenca_deixa_passar_la_legitima(self):
+        from fhort.pom.serializers import GarmentPOMMapSerializer
+        self.assertEqual(GarmentPOMMapSerializer().validate_instancia('back-left'), 'back-left')
+
+    # ── la porta per fila de la pantalla de mesures, EXERCIDA (llei S27: res per introspecció)
+    def _serializer(self, instancia):
+        from fhort.models_app.models import Model
+        from fhort.models_app.serializers import BaseMeasurementSerializer
+        pom = POMMaster.objects.create(codi_client='CH', nom_client='Pit')
+        model = Model.objects.create(
+            codi_intern='TIV-1', codi_tenant='TIV', any=2026, sequencial=1,
+            temporada='SS26', size_run_model='S·M·L', base_size_label='M')
+        return BaseMeasurementSerializer(data={
+            'model': model.id, 'pom': pom.id, 'capa': 'exterior', 'instancia': instancia,
+            'nom_fitxa': 'CHX', 'base_value_cm': '10.00',
+        })
+
+    def test_la_porta_de_mesures_rebutja_la_combinacio_impossible(self):
+        ser = self._serializer('left-right')
+        self.assertFalse(ser.is_valid())
+        self.assertIn('instancia', ser.errors)
+        self.assertIn('LATERAL', str(ser.errors['instancia']))
+
+    def test_la_porta_de_mesures_accepta_la_combinada_legitima(self):
+        ser = self._serializer('back-left')
+        self.assertTrue(ser.is_valid(), ser.errors)
+
+
+class SufixCompostTest(_Base):
+    """D2 · el SUFIX: un de sol quan hi ha un eix (F · B · L · R) i compost quan n'hi ha dos,
+    amb la CARA primer i el LATERAL després (FL · FR · BL · BR).
+
+    ⚠️ DUES ORDENACIONS, I NO ES CONTRADIUEN. L'ordre de COMPOSICIÓ el mana
+    `MeasurementInstance.SUBEIXOS` (cara → lateral: el codi que va al fabricant es llegeix
+    cara-i-banda); l'ordre de PRESENTACIÓ dels xips el mana el `display_order` de les files
+    (Left · Right · Front · Back: el que es fa servir cada dia va primer). Qui composa el codi
+    és el front (`utils/diccionariMesures.codiProposat`), amb la regla que aquest diccionari
+    publica — aquí es mesura que la publica bé.
+    """
+
+    def setUp(self):
+        self.sembra()
+
+    def test_els_quatre_sufixos_simples(self):
+        self.assertEqual(
+            {s: self.sufix(s) for s in ('front', 'back', 'left', 'right')},
+            {'front': 'F', 'back': 'B', 'left': 'L', 'right': 'R'})
+
+    def test_l_ordre_de_composicio_es_cara_i_despres_lateral(self):
+        self.assertEqual([clau for clau, _ in I.SUBEIXOS], ['CARA', 'LATERAL'])
+
+    def test_el_subeix_de_cada_slug(self):
+        self.assertEqual(I.subeix_de('front'), 'CARA')
+        self.assertEqual(I.subeix_de('back'), 'CARA')
+        self.assertEqual(I.subeix_de('left'), 'LATERAL')
+        self.assertEqual(I.subeix_de('right'), 'LATERAL')
+        for sense in ('top', 'bottom', 'cf', 'cb', 'side', 'waistband_seam', 'relaxed'):
+            self.assertEqual(I.subeix_de(sense), '', sense)
+
+    def test_el_diccionari_publica_l_estructura(self):
+        """El front no se l'ha d'escriure: `subeix` per fila i l'ordre dels sub-eixos."""
+        from django.contrib.auth import get_user_model
+        from rest_framework.test import APIClient
+        user = get_user_model().objects.create_user('dicc_tiv', password='x')
+        c = APIClient(HTTP_HOST=self.get_test_tenant_domain())
+        c.force_authenticate(user=user)
+
+        r = c.get('/api/v1/mesures/diccionari/')
+
+        self.assertEqual(r.status_code, 200, r.data)
+        self.assertEqual(r.data['subeixos'], ['CARA', 'LATERAL'])
+        per_slug = {f['slug']: f for f in r.data['instancies']['POSICIO']}
+        self.assertEqual(per_slug['back']['subeix'], 'CARA')
+        self.assertEqual(per_slug['back']['sufix'], 'B')
+        self.assertEqual(per_slug['left']['subeix'], 'LATERAL')
+        self.assertEqual(per_slug['bottom']['subeix'], '')      # excloent amb tot el seu eix
+        self.assertEqual(per_slug['bottom']['sufix'], 'BM')

@@ -731,6 +731,19 @@ class GarmentPOMMapSerializer(serializers.ModelSerializer):
             'capa', 'instancia',
         )
 
+    def validate_instancia(self, valor):
+        """🔒 ELS DOS EIXOS DE LA POSICIÓ (22-23/08): fins a UNA etiqueta per eix.
+
+        La pertinença és l'ALTRA porta on s'escriu una instància (la pantalla del catàleg, amb
+        les seves píndoles). Si la llei només visqués a la porta de les mesures, el mateix slug
+        impossible entraria per aquí i la mesura que en naixés l'heretaria.
+        """
+        from fhort.pom.models import MeasurementInstance
+        mal = MeasurementInstance.error_de_combinacio(valor)
+        if mal:
+            raise serializers.ValidationError(mal)
+        return valor
+
 
 class _POMDisplayMixin(serializers.Serializer):
     """Els camps de display d'un POM, amb el FALLBACK de sempre: `pom_global` si n'hi ha, i si
