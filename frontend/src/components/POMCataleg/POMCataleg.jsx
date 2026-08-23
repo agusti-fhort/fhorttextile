@@ -6,6 +6,7 @@ import { useTraduccioPoms } from '../../utils/traduccioPomFont'
 import { useEstatVocabulari, codisDe } from '../../utils/vocabulariDominiFont'
 import { InfoTraduccio } from '../EditableTable/EditableTable'
 import SubTabs from '../ui/SubTabs'
+import Xip from '../ui/Xip'
 import {
   TABS, TAB_ACTIUS, TAB_INACTIUS, inactiusDarrere, recomptes, tria,
 } from './filtrePoms.js'
@@ -285,6 +286,7 @@ export default function POMCataleg() {
   // faria que la pantalla s'obrís al tab d'ahir sense que res ho digués, i el dia que algú
   // hi deixés «Inactius» posat, el catàleg viu semblaria buit.
   const [tab, setTab] = useState(TAB_ACTIUS)
+  const [nomesPendents, setNomesPendents] = useState(false)
   const [selId, setSelId] = useState(null)
   const [us, setUs] = useState(null)
   const [alies, setAlies] = useState([])
@@ -397,7 +399,8 @@ export default function POMCataleg() {
   // LA TRIA VIU FORA DEL COMPONENT (`filtrePoms.js`) i és la que els tests exerceixen: tab →
   // cerca → pendents, més el recompte de la CREUADA (què troba aquesta mateixa cerca a l'altre
   // costat). Aquí només se'n pinta el resultat.
-  const { files: filtrats, creuada } = useMemo(() => tria(llista, { tab, q }), [llista, tab, q])
+  const { files: filtrats, pendents, creuada } = useMemo(
+    () => tria(llista, { tab, q, nomesPendents }), [llista, tab, q, nomesPendents])
   // Els recomptes dels tabs són de la llista SENCERA i no els toca la cerca: el badge diu què
   // hi ha al catàleg, no què queda del filtre d'ara.
   const comptes = useMemo(() => recomptes(llista), [llista])
@@ -561,8 +564,20 @@ export default function POMCataleg() {
               Canviar de tab NO toca la cerca: buscar i després mirar l'altre costat és
               exactament el gest que la creuada de sota convida a fer. */}
           <SubTabs actiu={tab} onTria={setTab}
-            items={TABS.map(k => ({ key: k, label: `poms.cat.tab_${k}`, badge: comptes[k] }))} />
-
+            items={TABS.map(k => ({ key: k, label: `poms.cat.tab_${k}`, badge: comptes[k] }))}
+            dreta={
+              /* EL XIP DE PENDENTS · la futura cua de la criba. Diu quants n'hi ha DINS del tab
+                 i de la cerca, i el número no canvia pel fet de tenir-lo encès: si canviés,
+                 apagar-lo seria endevinar. Sense cap pendent no s'ofereix — un filtre que no
+                 pot filtrar res és una porta pintada. */
+              pendents ? (
+                <Xip on={nomesPendents} onClick={() => setNomesPendents(v => !v)}
+                  title={t('poms.cat.pendents_tip')}
+                  style={{ fontSize: 'var(--fs-label)', padding: '3px 10px' }}>
+                  {t('poms.cat.pendents_xip', { n: pendents })}
+                </Xip>
+              ) : null
+            } />
           {crearObert && (
             <FormulariPomNou cats={cats} ocupat={ocupat} t={t}
               onCrea={crearPom} onTanca={() => setCrearObert(false)} />

@@ -3592,6 +3592,8 @@
       "tab_actius": "Activos",
       "tab_inactius": "Inactivos",
       "tab_tots": "Todos",
+      "pendents_xip": "Pendientes de revisión ({{n}})",
+      "pendents_tip": "Filtra las medidas que esperan revisión",
       "creuada_inactius_one": "{{count}} coincidencia más en Inactivos",
       "creuada_inactius_other": "{{count}} coincidencias más en Inactivos",
       "creuada_actius_one": "{{count}} coincidencia más en Activos",

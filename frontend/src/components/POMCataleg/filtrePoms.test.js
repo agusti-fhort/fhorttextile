@@ -7,7 +7,8 @@
 //   2 · els RECOMPTES són de la llista sencera i NO ballen amb la cerca;
 //   3 · la CERCA actua dins del tab… i la CREUADA diu quantes n'hi ha a l'altre costat —la
 //       guarda perquè ningú re-creï un POM que viu a l'arxiu;
-//   4 · al tab «Tots», els inactius van DARRERE dins de cada família.
+//   4 · el filtre de PENDENTS es combina amb el tab i amb la cerca alhora;
+//   5 · al tab «Tots», els inactius van DARRERE dins de cada família.
 
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
@@ -94,11 +95,26 @@ test('la creuada troba l\'arxiu encara que el tab actiu no doni CAP resultat', (
   assert.deepEqual(r.creuada, { tab: TAB_INACTIUS, n: 1 })
 })
 
+test('el filtre de PENDENTS es combina amb el tab i amb la cerca', () => {
+  assert.deepEqual(tria(LLISTA, { tab: TAB_ACTIUS, nomesPendents: true }).files.map(p => p.id), [2])
+  assert.deepEqual(tria(LLISTA, { tab: TAB_INACTIUS, nomesPendents: true }).files.map(p => p.id), [5])
+  assert.deepEqual(tria(LLISTA, { tab: TAB_TOTS, nomesPendents: true }).files.map(p => p.id), [2, 5])
+  assert.deepEqual(
+    tria(LLISTA, { tab: TAB_TOTS, q: 'waist', nomesPendents: true }).files.map(p => p.id), [2])
+})
 
+test('el xip de pendents diu quants n\'hi ha DINS del tab i la cerca', () => {
+  assert.equal(tria(LLISTA, { tab: TAB_ACTIUS }).pendents, 1)
+  assert.equal(tria(LLISTA, { tab: TAB_TOTS }).pendents, 2)
+  assert.equal(tria(LLISTA, { tab: TAB_TOTS, q: 'waist' }).pendents, 1)
+  // …i el número NO canvia pel fet de tenir el filtre encès: si no, apagar-lo seria endevinar.
+  assert.equal(tria(LLISTA, { tab: TAB_TOTS, nomesPendents: true }).pendents, 2)
+})
 
 test('la cerca sense resultats no menteix', () => {
   const r = tria(LLISTA, { tab: TAB_TOTS, q: 'zzzzz' })
   assert.deepEqual(r.files, [])
+  assert.equal(r.pendents, 0)
   assert.equal(r.creuada, null)
 })
 

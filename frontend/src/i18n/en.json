@@ -3592,6 +3592,8 @@
       "tab_actius": "Active",
       "tab_inactius": "Inactive",
       "tab_tots": "All",
+      "pendents_xip": "Pending review ({{n}})",
+      "pendents_tip": "Filter the measurements awaiting review",
       "creuada_inactius_one": "{{count}} more match in Inactive",
       "creuada_inactius_other": "{{count}} more matches in Inactive",
       "creuada_actius_one": "{{count}} more match in Active",

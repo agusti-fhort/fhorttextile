@@ -44,6 +44,9 @@ export function casa(p, q) {
     .toLowerCase().includes(s)
 }
 
+/** `true` si la fila està pendent de revisió (el camp ja viatja al payload del catàleg). */
+export const esPendent = (p) => !!p?.pendent_revisio
+
 /**
  * Els recomptes dels tres tabs, sobre la llista SENCERA i sense tenir en compte la cerca:
  * el número del tab diu quantes files HI HA a l'altra banda, no quantes en queden del que
@@ -57,9 +60,10 @@ export function recomptes(llista) {
 }
 
 /**
- * LA TRIA: tab → cerca.
+ * LA TRIA SENCERA: tab → cerca → pendents.
  *
- * Torna també `creuada` — les coincidències que la mateixa cerca té A L'ALTRE COSTAT.
+ * Torna també `pendents` (quants n'hi ha DINS del tab i la cerca, que és el número que el xip
+ * ha de dir) i `creuada` — les coincidències que la mateixa cerca té A L'ALTRE COSTAT.
  *
  * 🔑 **LA CREUADA ÉS EL MOTIU DE FONS DEL TRAM**, no un extra: sense ella, buscar «waist» dins
  * d'Actius i no trobar-lo convida a crear-ne un de nou quan potser viu a l'arxiu — i llavors el
@@ -67,8 +71,10 @@ export function recomptes(llista) {
  * capçalera); si algun dia es pagina, aquest número ha de venir del servidor o convertir-se en
  * un enllaç sense xifra.
  */
-export function tria(llista, { tab = TAB_ACTIUS, q = '' } = {}) {
-  const files = delTab(llista, tab).filter(p => casa(p, q))
+export function tria(llista, { tab = TAB_ACTIUS, q = '', nomesPendents = false } = {}) {
+  const delSeuTab = delTab(llista, tab)
+  const cercats = delSeuTab.filter(p => casa(p, q))
+  const files = nomesPendents ? cercats.filter(esPendent) : cercats
 
   const altre = tab === TAB_ACTIUS ? TAB_INACTIUS : tab === TAB_INACTIUS ? TAB_ACTIUS : null
   // Sense text de cerca no hi ha res a creuar: el tab del costat ja diu quants n'hi ha al seu
@@ -77,7 +83,11 @@ export function tria(llista, { tab = TAB_ACTIUS, q = '' } = {}) {
     ? delTab(llista, altre).filter(p => casa(p, q)).length
     : 0
 
-  return { files, creuada: nCreuada ? { tab: altre, n: nCreuada } : null }
+  return {
+    files,
+    pendents: cercats.filter(esPendent).length,
+    creuada: nCreuada ? { tab: altre, n: nCreuada } : null,
+  }
 }
 
 /**
