@@ -231,17 +231,57 @@ class S3LligamTest(BancV5):
         self.assertEqual(self.pom.pom_global_id, altre.id)
         self.assertIn('NO es mou', sortida)
 
+    def _map_divergent(self):
+        """Un codi que el full aparella i que es diu una altra cosa, i que NO és una de les
+        dues excepcions mesurades. Es tria del corpus i no s'escriu a mà: el dia que el full
+        canviï, el banc canvia amb ell."""
+        from fhort.pom.management.commands.lliga_fhort_al_sistema import (EXCEPCIONS_DEL_MAPA,
+                                                                          normalitza)
+        for brw, sis in sorted(self.mapa.items()):
+            if EXCEPCIONS_DEL_MAPA.get(brw) == sis:
+                continue
+            nom = next(p['nom_en'] for p in self.poms if p['codi'] == sis)
+            if normalitza(nom) != normalitza(nom + ' (variant del tenant)'):
+                return brw, sis, nom
+        raise AssertionError('cap codi del full per a la prova')
+
     def test_el_full_el_mapa_pero_el_NOM_divergeix__no_es_lliga(self):
-        """🚨 Decisió 2 d'Agus (23/08): mai lligar per codi sol. Als dos entorns, 16 dels 105
-        codis que el full mapa apunten a un POM que es diu una altra cosa."""
-        altre = POMMaster.objects.create(codi_client='N', nom_client='Motive placement',
-                                         actiu=True)
-        self.assertIn('N', self.mapa)
+        """🚨 Sense `--el-cataleg-mana`, el codi sol no basta (llei fins al 23/08 a la tarda)."""
+        brw, sis, nom = self._map_divergent()
+        p = POMMaster.objects.create(codi_client=brw, nom_client=f'{nom} (variant del tenant)',
+                                     actiu=True)
         sortida = crida('lliga_fhort_al_sistema', '--schema', self.schema, '--no-dry-run')
-        altre.refresh_from_db()
-        self.assertIsNone(altre.pom_global_id)
+        p.refresh_from_db()
+        self.assertIsNone(p.pom_global_id)
         self.assertIn('es diuen coses diferents', sortida)
         self.assertIn('el codi sol no basta', sortida)
+
+    def test_amb_EL_CATALEG_MANA_el_nom_divergent_ja_no_barra(self):
+        """⚖️ Tancament del 23/08: el full és un document aprovat i el nom no el barra."""
+        brw, sis, nom = self._map_divergent()
+        p = POMMaster.objects.create(codi_client=brw, nom_client=f'{nom} (variant del tenant)',
+                                     actiu=True)
+        sortida = crida('lliga_fhort_al_sistema', '--schema', self.schema, '--no-dry-run',
+                        '--el-cataleg-mana')
+        p.refresh_from_db()
+        self.assertEqual(p.pom_global.codi, sis)
+        self.assertIn('el CATÀLEG MANA', sortida)
+
+    def test_les_dues_EXCEPCIONS_mesurades_queden_fora_fins_i_tot_amb_el_flag(self):
+        """⛔ `N → N5` i `RW → R7` no són la mateixa mesura, i cap flag els hi torna."""
+        from fhort.pom.management.commands.lliga_fhort_al_sistema import EXCEPCIONS_DEL_MAPA
+        creats = []
+        for brw, sis in EXCEPCIONS_DEL_MAPA.items():
+            self.assertEqual(self.mapa.get(brw), sis, f'{brw} ja no és al full amb {sis}')
+            creats.append(POMMaster.objects.create(
+                codi_client=brw, nom_client=f'nom del tenant per a {brw}', actiu=True))
+        sortida = crida('lliga_fhort_al_sistema', '--schema', self.schema, '--no-dry-run',
+                        '--el-cataleg-mana')
+        for p in creats:
+            p.refresh_from_db()
+            self.assertIsNone(p.pom_global_id, p.codi_client)
+        self.assertIn('EXCEPCIÓ MESURADA', sortida)
+        self.assertIn(f'excepcions mesurades fora sempre (N, RW): {len(creats)}', sortida)
 
     def test_el_codi_PROPI_amb_el_NOM_igual_SI_que_lliga(self):
         """L'altra cara: codi + nom és la condició, i quan totes dues es compleixen el POM es
