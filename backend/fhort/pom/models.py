@@ -732,6 +732,17 @@ class CustomerPOMAlias(models.Model):
                   "El matcher hi resol el POM però deixa la fila a «assignar instància».")
     creat_at = models.DateTimeField(auto_now_add=True)
     actualitzat_at = models.DateTimeField(auto_now=True)
+    #: LA MARCA D'EDICIÓ, i per què no n'hi ha prou amb `actualitzat_at`.
+    #: `actualitzat_at` és `auto_now`: el mou QUALSEVOL desa, també els d'una sembra o d'una
+    #: migració de dades, i per això no distingeix «algú ho ha editat» de «una comanda hi ha
+    #: passat per sobre». Aquest camp només l'estampa l'edició des de la biblioteca, i per això
+    #: sí que respon la pregunta que la fila fa: **qui llegeix un àlies ha de poder saber si
+    #: el text que hi ha és el que el diccionari hi va posar o el que algú hi va corregir
+    #: després.** `NULL` = mai editat, i és la immensa majoria.
+    #: 🔑 L'ORIGEN NO ES TOCA. Un àlies nascut d'un IMPORT que després algú corregeix segueix
+    #: sent d'IMPORT: l'origen diu D'ON VE, no qui l'ha tocat l'últim. Reescriure'l a MANUAL
+    #: perdria la provinença, que és exactament el que la columna serveix per saber.
+    editat_at = models.DateTimeField(null=True, blank=True, verbose_name="Editat el")
 
     class Meta:
         verbose_name = 'Àlies POM de client'
