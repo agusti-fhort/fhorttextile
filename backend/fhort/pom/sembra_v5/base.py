@@ -113,6 +113,12 @@ class ComandaV5(BaseCommand):
                 self.diu(self.style.ERROR(
                     f'   🚨 {nom}: real {real} ≠ esperat {esperat} — PREMISSA DEL BRIEF QUE '
                     'NO ES CONFIRMA'))
+        # Un `--espera` amb el nom mal escrit no ha de passar per bo: la guarda que volia
+        # declarar seguiria manant i el report diria una cosa que ningú ha demanat.
+        orfes = sorted(set(self.declarat) - {g[0] for g in self.guardes})
+        if orfes:
+            self.diu(self.style.ERROR(
+                f'   ⚠️  --espera per a xifres que aquesta comanda no mesura: {orfes}'))
         if self.excepcions:
             self.diu(f'\n── EXCEPCIONS ({len(self.excepcions)}) ──')
             for e in self.excepcions:
