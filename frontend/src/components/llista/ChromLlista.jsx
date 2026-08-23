@@ -235,6 +235,67 @@ export function BotoEsborrar({ onClick, title, disabled = false }) {
 }
 
 /**
+ * §8e · UN GEST D'ICONA DE FILA, amb la tinta que se li digui. És la mateixa forma de la
+ * paperera i del llapis —26×26, icona de 14, vora només al hover— parametritzada, perquè els
+ * gestos d'una fila en EDICIÓ (desar, cancel·lar) no són ni destructius ni el llapis i no
+ * poden manllevar-ne la tinta.
+ *
+ * `to` és el color de la icona i de la vora encesa; el fons del hover en surt amb `--sel`, que
+ * és el ressaltat neutre de la casa.
+ */
+export function BotoIcona({ onClick, icona, title, to = 'var(--text-soft)', disabled = false }) {
+  const [toc, gestos] = useToc()
+  const encès = toc.hover && !disabled
+  return (
+    <button type="button" onClick={onClick} disabled={disabled} title={title} aria-label={title}
+      {...gestos}
+      style={{
+        width: 26, height: 26,
+        borderWidth: 1, borderStyle: 'solid', borderColor: encès ? to : 'transparent',
+        borderRadius: 'var(--r-ctrl)', background: encès ? 'var(--sel)' : 'none',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        color: disabled ? 'var(--text-faint)' : to, fontSize: 14, padding: 0, outline: 'none',
+        ...(toc.focus ? anellFocus : null),
+      }}>
+      <i className={`ti ${icona}`} aria-hidden="true"
+        style={{ fontSize: 'inherit', color: 'currentColor' }} />
+    </button>
+  )
+}
+
+/**
+ * §8e · EL LLAPIS DE FILA. Germà de la paperera i amb la mateixa forma —26×26, icona de 14,
+ * vora només al hover—, però amb la tinta de la casa i no la destructiva: editar no és esborrar,
+ * i un llapis vermell diria que ho és.
+ *
+ * Va SEMPRE al costat de la paperera i abans: es llegeix d'esquerra a dreta de menys a més
+ * irreversible.
+ */
+export function BotoEditar({ onClick, title, disabled = false }) {
+  const [toc, gestos] = useToc()
+  const encès = toc.hover && !disabled
+  return (
+    <button type="button" onClick={onClick} disabled={disabled} title={title} aria-label={title}
+      {...gestos}
+      style={{
+        width: 26, height: 26,
+        borderWidth: 1, borderStyle: 'solid',
+        borderColor: encès ? 'var(--gold-border)' : 'transparent',
+        borderRadius: 'var(--r-ctrl)', background: encès ? 'var(--sel)' : 'none',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        color: disabled ? 'var(--text-faint)' : 'var(--text-soft)', fontSize: 14, padding: 0,
+        outline: 'none',
+        ...(toc.focus ? anellFocus : null),
+      }}>
+      <i className="ti ti-pencil" aria-hidden="true"
+        style={{ fontSize: 'inherit', color: 'currentColor' }} />
+    </button>
+  )
+}
+
+/**
  * La paginació de sota la llista. Els dos botons són SECUNDARIS de la casa (§5.2) i el text del
  * mig, tinta suau. Les tres etiquetes arriben traduïdes.
  */

@@ -70,6 +70,42 @@ class POMGlobal(models.Model):
     )
     # End Sprint S1
 
+    # ── SEMBRA v5 (2026-08-23) · les quatre columnes del catàleg que no tenien on anar ──────
+    # El full `CATALEG_SISTEMA_POM_v5_COMPLET_r2.xlsx` porta, per a cada POM, l'ordre dins de
+    # la família i tres classificacions que fins avui es reportaven i es perdien (la sembra v4
+    # ja ho va deixar escrit el 09/08: «tres columnes del corpus no tenen destí a l'esquema»).
+    # Pre-tren autoritzat per Agus el 23/08: ADDITIVES i amb el default buit, o sigui que cap
+    # fila canvia de valor i cap lector canvia de resposta fins que la sembra les ompli.
+    #
+    # 🔑 **ELS VALORS SÓN ELS LITERALS DEL FULL, i les `choices` només els declaren.** No es
+    # transliteren a codis (`AMPLADA`, `COL_LOCACIO`…) perquè el vocabulari **és** el del
+    # document: qualsevol traducció seria una taula de conversió més per mantenir, i el que
+    # han de llegir igual els dos entorns són els mateixos bytes del mateix arxiu.
+    REGIM_CHOICES = [
+        ('Amplada', 'Amplada'), ('Llarg', 'Llarg'),
+        ('Col·locació', 'Col·locació'), ('Fix', 'Fix'),
+    ]
+    ANCORATGE_CHOICES = [
+        ('Cota', 'Cota'), ('Caiguda', 'Caiguda'),
+        ('Component', 'Component'), ('Tirada', 'Tirada'),
+    ]
+
+    #: Ordre del POM DINS de la família (columna `Pos.`). 0 = el full no ho diu.
+    display_order = models.PositiveSmallIntegerField(default=0)
+    #: Què fa aquesta mesura: una amplada, un llarg, una col·locació o una cota fixa.
+    regim = models.CharField(max_length=20, choices=REGIM_CHOICES, blank=True, default='')
+    #: De què penja: d'una cota, d'una caiguda, d'un component o d'una tirada.
+    ancoratge = models.CharField(max_length=20, choices=ANCORATGE_CHOICES, blank=True,
+                                 default='')
+    #: 🔑 `capa_defecte`, i NO `capa`: la capa és de la PERTINENÇA (`GarmentPOMMap.capa`,
+    #: slug de `MeasurementLayer`) i el catàleg no la pot decidir — només la PROPOSA. Un camp
+    #: dit `capa` en un POM global es llegiria com «la capa d'aquesta mesura», que és fals.
+    capa_defecte = models.CharField(
+        max_length=20, blank=True, default='',
+        help_text='Capa que el catàleg PROPOSA (slug de pom.MeasurementLayer). Buit = cap '
+                  'proposta; la capa real la decideix la pertinença.')
+    # ── Fi SEMBRA v5 ──────────────────────────────────────────────────────────────────────
+
     class Meta:
         verbose_name = 'POM global'
         verbose_name_plural = 'POMs globals'
@@ -469,7 +505,13 @@ class POMMaster(models.Model):
         related_name='poms',
     )
     codi_client = models.CharField(max_length=30)
-    nom_client = models.CharField(max_length=200)
+    #: 🔑 **BUIT VOL DIR «MANA EL CANÒNIC»** (decisió d'Agus, 23/08, tancament de la sembra v5).
+    #: Fins avui el nom del tenant sempre guanyava (`nomenclatura.noms_de`), i per això un POM
+    #: lligat al catàleg del sistema seguia ensenyant el nom vell —i en anglès— encara que el
+    #: global en portés el canònic i les traduccions. Ara el tenant pot NO batejar: amb el nom
+    #: buit, la cascada cau al `POMGlobal` i la fitxa ensenya EN, CA i ES del catàleg.
+    #: `blank=True` és validació, no esquema: la columna ja era NOT NULL amb cadena buida.
+    nom_client = models.CharField(max_length=200, blank=True)
     notes = models.TextField(blank=True)
     actiu = models.BooleanField(default=True)
 
@@ -690,6 +732,17 @@ class CustomerPOMAlias(models.Model):
                   "El matcher hi resol el POM però deixa la fila a «assignar instància».")
     creat_at = models.DateTimeField(auto_now_add=True)
     actualitzat_at = models.DateTimeField(auto_now=True)
+    #: LA MARCA D'EDICIÓ, i per què no n'hi ha prou amb `actualitzat_at`.
+    #: `actualitzat_at` és `auto_now`: el mou QUALSEVOL desa, també els d'una sembra o d'una
+    #: migració de dades, i per això no distingeix «algú ho ha editat» de «una comanda hi ha
+    #: passat per sobre». Aquest camp només l'estampa l'edició des de la biblioteca, i per això
+    #: sí que respon la pregunta que la fila fa: **qui llegeix un àlies ha de poder saber si
+    #: el text que hi ha és el que el diccionari hi va posar o el que algú hi va corregir
+    #: després.** `NULL` = mai editat, i és la immensa majoria.
+    #: 🔑 L'ORIGEN NO ES TOCA. Un àlies nascut d'un IMPORT que després algú corregeix segueix
+    #: sent d'IMPORT: l'origen diu D'ON VE, no qui l'ha tocat l'últim. Reescriure'l a MANUAL
+    #: perdria la provinença, que és exactament el que la columna serveix per saber.
+    editat_at = models.DateTimeField(null=True, blank=True, verbose_name="Editat el")
 
     class Meta:
         verbose_name = 'Àlies POM de client'

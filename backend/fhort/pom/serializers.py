@@ -1,5 +1,6 @@
 from collections import defaultdict
 
+from django.utils import timezone
 from rest_framework import serializers, status
 from rest_framework.exceptions import APIException
 
@@ -71,6 +72,9 @@ class POMMasterSerializer(serializers.ModelSerializer):
     pom_code = serializers.SerializerMethodField()
     name_en = serializers.SerializerMethodField()
     name_cat = serializers.SerializerMethodField()
+    # SEMBRA v5 (23/08) — el CASTELLÀ del catàleg. Hi entra ara perquè fins avui no existia
+    # enlloc: `POMGlobal.nom_es` era buit a les 125 files velles i el v5 el porta a les 165.
+    name_es = serializers.SerializerMethodField()
     abbreviation = serializers.SerializerMethodField()
     categoria_nom = serializers.SerializerMethodField()
     applies_woven = serializers.BooleanField(source='pom_global.applies_woven', read_only=True, allow_null=True)
@@ -153,6 +157,9 @@ class POMMasterSerializer(serializers.ModelSerializer):
 
     def get_name_cat(self, obj):
         return noms_de(obj)['nom_ca']
+
+    def get_name_es(self, obj):
+        return noms_de(obj)['nom_es']
 
     def get_abbreviation(self, obj):
         return abreviatura_de(obj)
@@ -659,6 +666,9 @@ class GarmentPOMMapSerializer(serializers.ModelSerializer):
     pom_code = serializers.SerializerMethodField()
     name_en = serializers.SerializerMethodField()
     name_cat = serializers.SerializerMethodField()
+    # SEMBRA v5 (23/08) — el CASTELLÀ del catàleg. Hi entra ara perquè fins avui no existia
+    # enlloc: `POMGlobal.nom_es` era buit a les 125 files velles i el v5 el porta a les 165.
+    name_es = serializers.SerializerMethodField()
     abbreviation = serializers.SerializerMethodField()
     categoria = serializers.SerializerMethodField()
     applies_woven = serializers.BooleanField(source='pom.pom_global.applies_woven', read_only=True)
@@ -757,6 +767,9 @@ class _POMDisplayMixin(serializers.Serializer):
     pom_code = serializers.SerializerMethodField()
     name_en = serializers.SerializerMethodField()
     name_cat = serializers.SerializerMethodField()
+    # SEMBRA v5 (23/08) — el CASTELLÀ del catàleg. Hi entra ara perquè fins avui no existia
+    # enlloc: `POMGlobal.nom_es` era buit a les 125 files velles i el v5 el porta a les 165.
+    name_es = serializers.SerializerMethodField()
     abbreviation = serializers.SerializerMethodField()
     categoria = serializers.SerializerMethodField()
     unitat = serializers.CharField(source='pom.pom_global.unitat', read_only=True)
@@ -875,6 +888,12 @@ class ItemBaseMeasurementSerializer(serializers.ModelSerializer):
         read_only_fields = ('origen', 'created_at', 'updated_at', 'updated_by')
 
 
+#: El motiu, en una frase i al costat de qui el llança: el codi és la clau amb què el matcher
+#: troba l'àlies a les importacions, i moure'l trencaria el que ja s'hi ha resolt.
+_CODI_IMMUTABLE = ('El codi del client és la identitat de l\'àlies i no s\'edita: per canviar-lo, '
+                   'esborra aquest àlies i crea\'n un de nou.')
+
+
 class CustomerPOMAliasSerializer(serializers.ModelSerializer):
     """Biblioteca de nomenclatura del client: (client_code, client_description) → POM canònic.
     Font de sembra per-client del matcher (find_pom_master, estratègia (a))."""
@@ -926,6 +945,25 @@ class CustomerPOMAliasSerializer(serializers.ModelSerializer):
             # contracte només com a LLEGAT (camp obsolet, models.py:255-258).
             'client_code', 'client_description', 'description_en', 'description_local', 'language',
             'origen', 'pendent_revisio',
-            'creat_at', 'actualitzat_at',
+            'creat_at', 'actualitzat_at', 'editat_at',
         )
-        read_only_fields = ('creat_at', 'actualitzat_at')
+        read_only_fields = ('creat_at', 'actualitzat_at', 'editat_at')
+
+    # ── L'EDICIÓ D'UN ÀLIES (23/08) ───────────────────────────────────────────────────────
+    #
+    # 🔒 EL `client_code` ÉS LA IDENTITAT I NO S'EDITA. Canviar-lo no és editar l'àlies: és
+    # esborrar-ne un i crear-ne un altre, perquè el codi és el que el matcher busca a les
+    # importacions i el que la unicitat `(customer, client_code)` protegeix. La pantalla ja no
+    # l'ofereix, **però una pantalla no és una barana**: el camp entra per HTTP i qualsevol
+    # client el pot enviar. Aquí es rebutja amb el motiu escrit, que és el que ha d'arribar a
+    # la fila de qui ho ha intentat.
+    #
+    # 🔑 I L'ORIGEN ES CONSERVA. Un àlies d'IMPORT corregit a mà segueix sent d'IMPORT: el que
+    # es mou és `editat_at`, no `origen`. Reescriure'l com si fos nou perdria la provinença.
+    def update(self, instance, validated_data):
+        nou = validated_data.pop('client_code', None)
+        if nou is not None and nou != instance.client_code:
+            raise serializers.ValidationError({'client_code': _CODI_IMMUTABLE})
+        validated_data.pop('origen', None)
+        validated_data['editat_at'] = timezone.now()
+        return super().update(instance, validated_data)

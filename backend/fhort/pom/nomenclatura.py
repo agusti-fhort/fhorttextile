@@ -180,13 +180,17 @@ def noms_de(pom, alias=None):
 
     · `nom_en`: descripció EN de l'àlies > `nom_client` del tenant > `nom_en` global.
     · `nom_ca`: descripció LOCAL de l'àlies > `nom_client` del tenant > `nom_ca` global.
+    · `nom_es`: **NOMÉS el global** — el tenant no té camp de castellà i l'àlies només en té un
+      de «local» sense declarar de quina llengua és. Inventar-li una regla seria endevinar de
+      quina llengua parla `description_local`; el que hi ha és el castellà del CATÀLEG, i quan
+      el POM no està lligat, no n'hi ha. (Sembra v5, 23/08: el catàleg v5 en porta 165.)
 
     Que els dos caiguin al mateix `nom_client` quan el tenant té un sol nom NO és un defecte:
     el catàleg del tenant bateja una vegada, i qui pinta ja sap que una segona línia que
     repeteix la primera és soroll (ho resol `nomsDePom` al front).
     """
     if pom is None:
-        return {'nom_en': '', 'nom_ca': ''}
+        return {'nom_en': '', 'nom_ca': '', 'nom_es': ''}
     pg = _global(pom)
     a = alias if isinstance(alias, dict) else None
     propi = _net(pom.nom_client)
@@ -195,6 +199,11 @@ def noms_de(pom, alias=None):
                    or _net(pg.nom_en if pg else '')),
         'nom_ca': (_net(a.get('client_name_local') if a else '') or propi
                    or _net(pg.nom_ca if pg else '')),
+        # `getattr` i no `pg.nom_es`: aquest lector rep objectes duck-typed (stubs de banc,
+        # DTOs de paquet) i un camp NOU de la regla no pot fer petar qui encara no el porta.
+        # És la llei de la casa des del 21/08 —un camp nou vol `getattr` als lectors genèrics—
+        # i aquí ja hi havia dos bancs amb un `_Global` sense `nom_es`.
+        'nom_es': _net(getattr(pg, 'nom_es', '') if pg else ''),
     }
 
 
