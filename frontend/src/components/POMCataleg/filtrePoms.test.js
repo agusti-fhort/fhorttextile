@@ -1,0 +1,95 @@
+// LA TRIA DE LA LLISTA DE POMs — el guard.
+//
+//     cd frontend && node --test src/components/POMCataleg/filtrePoms.test.js
+//
+// El que fixa, que és tot el que la peça promet:
+//   1 · el DEFECTE és «actius» i la llista de treball deixa de portar l'arxiu a sobre;
+//   2 · els RECOMPTES són de la llista sencera i NO ballen amb la cerca;
+//   3 · la CERCA actua dins del tab actiu;
+//   4 · al tab «Tots», els inactius van DARRERE dins de cada família.
+
+import assert from 'node:assert/strict'
+import { test } from 'node:test'
+
+import {
+  TABS, TAB_ACTIUS, TAB_INACTIUS, TAB_TOTS,
+  delTab, casa, recomptes, tria, inactiusDarrere,
+} from './filtrePoms.js'
+
+// Files amb la forma que serveix `/api/v1/poms/` (retallades als camps que la tria toca).
+const P = (id, codi, nom, actiu, pendent = false) => ({
+  id, codi_client: codi, nom_client: nom, pom_code: codi, name_en: nom, name_cat: nom,
+  actiu, pendent_revisio: pendent,
+})
+
+const LLISTA = [
+  P(1, 'CH', 'Chest width', true),
+  P(2, 'WA', 'Waist width', true, true),          // actiu I pendent
+  P(3, 'HI', 'Hip width', true),
+  P(4, 'WA-OLD', 'Waist width (arxiu)', false),   // l'arxiu que la cerca ha de saber trobar
+  P(5, 'ZZ', 'Zip length', false, true),          // inactiu I pendent
+]
+
+test('el defecte és ACTIUS, i és el primer tab', () => {
+  assert.equal(TABS[0], TAB_ACTIUS)
+  assert.deepEqual(tria(LLISTA).files.map(p => p.id), [1, 2, 3])
+})
+
+test('cada tab veu el que li toca', () => {
+  assert.deepEqual(delTab(LLISTA, TAB_ACTIUS).map(p => p.id), [1, 2, 3])
+  assert.deepEqual(delTab(LLISTA, TAB_INACTIUS).map(p => p.id), [4, 5])
+  assert.deepEqual(delTab(LLISTA, TAB_TOTS).map(p => p.id), [1, 2, 3, 4, 5])
+})
+
+test('una fila sense `actiu` compta com a ACTIVA (mai desapareix per un camp absent)', () => {
+  const sensecamp = [{ id: 9, codi_client: 'X', nom_client: 'X' }]
+  assert.equal(delTab(sensecamp, TAB_ACTIUS).length, 1)
+  assert.equal(delTab(sensecamp, TAB_INACTIUS).length, 0)
+})
+
+test('els recomptes són de la llista SENCERA i no ballen amb la cerca', () => {
+  const r = recomptes(LLISTA)
+  assert.deepEqual(r, { [TAB_ACTIUS]: 3, [TAB_INACTIUS]: 2, [TAB_TOTS]: 5 })
+  // La cerca no els toca: el badge del tab diu què hi ha al catàleg, no què queda del filtre.
+  assert.deepEqual(recomptes(LLISTA), r)
+})
+
+test('la cerca mira codi, els dos noms i la categoria — i el buit ho casa tot', () => {
+  const p = { codi_client: 'WA', nom_client: 'Amplada de cintura', name_en: 'Waist width',
+              name_cat: 'Amplada', categoria: 'Lower body', actiu: true }
+  assert.equal(casa(p, ''), true, 'sense text, tot passa')
+  assert.equal(casa(p, '   '), true, 'només espais, també')
+  assert.equal(casa(p, 'wa'), true, 'pel codi')
+  assert.equal(casa(p, 'WAIST'), true, 'pel nom anglès, sense mirar majúscules')
+  assert.equal(casa(p, 'cintura'), true, 'pel nom del client')
+  assert.equal(casa(p, 'lower'), true, 'per la categoria')
+  assert.equal(casa(p, 'zzz'), false)
+  assert.equal(casa({}, 'zzz'), false, 'una fila buida no peta')
+})
+
+test('la cerca actua DINS del tab actiu', () => {
+  assert.deepEqual(tria(LLISTA, { tab: TAB_ACTIUS, q: 'waist' }).files.map(p => p.id), [2])
+  assert.deepEqual(tria(LLISTA, { tab: TAB_INACTIUS, q: 'waist' }).files.map(p => p.id), [4])
+  assert.deepEqual(tria(LLISTA, { tab: TAB_TOTS, q: 'waist' }).files.map(p => p.id), [2, 4])
+})
+
+
+
+
+
+
+test('la cerca sense resultats no menteix', () => {
+  assert.deepEqual(tria(LLISTA, { tab: TAB_TOTS, q: 'zzzzz' }).files, [])
+})
+
+test('dins d\'una família, els inactius van DARRERE i la resta conserva l\'ordre', () => {
+  assert.deepEqual(inactiusDarrere(LLISTA).map(p => p.id), [1, 2, 3, 4, 5])
+  assert.deepEqual(inactiusDarrere([LLISTA[3], LLISTA[0], LLISTA[4], LLISTA[1]]).map(p => p.id),
+    [1, 2, 4, 5])
+})
+
+test('sense llista no peta res', () => {
+  assert.deepEqual(recomptes(null), { [TAB_ACTIUS]: 0, [TAB_INACTIUS]: 0, [TAB_TOTS]: 0 })
+  assert.deepEqual(tria(null).files, [])
+  assert.deepEqual(inactiusDarrere(undefined), [])
+})

@@ -5,6 +5,8 @@ import useAuthStore from '../../store/auth'
 import { useTraduccioPoms } from '../../utils/traduccioPomFont'
 import { useEstatVocabulari, codisDe } from '../../utils/vocabulariDominiFont'
 import { InfoTraduccio } from '../EditableTable/EditableTable'
+import SubTabs from '../ui/SubTabs'
+import { TABS, TAB_ACTIUS, inactiusDarrere, recomptes, tria } from './filtrePoms.js'
 
 // Segueix la paginació de DRF fins al final. `page_size: 1000` era un SOSTRE: amb un catàleg més
 // gran, la pantalla n'hauria pintat 1000 i el comptador n'hauria dit 1000, sense que res
@@ -275,6 +277,12 @@ export default function POMCataleg() {
   const [llista, setLlista] = useState([])
   const [cats, setCats] = useState([])
   const [q, setQ] = useState('')
+  // ── ELS TABS (Agus, 23/08) ────────────────────────────────────────────────────────────
+  // S'OBRE SEMPRE A «ACTIUS» i el tab triat NO ES DESA. La llei de la casa és que les
+  // decisions d'usuari o es deriven de l'estat del servidor o es reinicien: un `localStorage`
+  // faria que la pantalla s'obrís al tab d'ahir sense que res ho digués, i el dia que algú
+  // hi deixés «Inactius» posat, el catàleg viu semblaria buit.
+  const [tab, setTab] = useState(TAB_ACTIUS)
   const [selId, setSelId] = useState(null)
   const [us, setUs] = useState(null)
   const [alies, setAlies] = useState([])
@@ -384,12 +392,13 @@ export default function POMCataleg() {
     return c ? (c.nom_en || c.nom_ca || c.codi) : t('poms.uncategorized')
   }, [catPerId, t])
 
-  const filtrats = useMemo(() => {
-    const s = q.trim().toLowerCase()
-    if (!s) return llista
-    return llista.filter(p => `${p.codi_client || ''} ${p.nom_client || ''} ${p.pom_code || ''} `
-      .concat(`${p.name_en || ''} ${p.name_cat || ''} ${p.categoria || ''}`).toLowerCase().includes(s))
-  }, [llista, q])
+  // LA TRIA VIU FORA DEL COMPONENT (`filtrePoms.js`) i és la que els tests exerceixen: tab →
+  // cerca → pendents, més el recompte de la CREUADA (què troba aquesta mateixa cerca a l'altre
+  // costat). Aquí només se'n pinta el resultat.
+  const { files: filtrats } = useMemo(() => tria(llista, { tab, q }), [llista, tab, q])
+  // Els recomptes dels tabs són de la llista SENCERA i no els toca la cerca: el badge diu què
+  // hi ha al catàleg, no què queda del filtre d'ara.
+  const comptes = useMemo(() => recomptes(llista), [llista])
 
   // UN BLOC PER CATEGORIA REAL, i prou.
   //
@@ -409,7 +418,10 @@ export default function POMCataleg() {
     const ordre = (id) => (id == null ? Infinity : (catPerId.get(id)?.display_order ?? Infinity - 1))
     return [...perCat.entries()]
       .sort((a, b) => ordre(a[0]) - ordre(b[0]) || String(nomCat(a[0])).localeCompare(String(nomCat(b[0]))))
-      .map(([id, items]) => ({ catId: id, cat: nomCat(id), items }))
+      // DINS DE CADA FAMÍLIA, ELS INACTIUS DARRERE (Agus, 23/08). Només es nota al tab «Tots»
+      // —als altres el grup és homogeni—, i per això no es condiciona al tab: una regla que val
+      // sempre no té cas especial que es pugui oblidar.
+      .map(([id, items]) => ({ catId: id, cat: nomCat(id), items: inactiusDarrere(items) }))
   }, [filtrats, catPerId, nomCat])
 
   const sel = useMemo(() => llista.find(p => p.id === selId) || null, [llista, selId])
@@ -538,6 +550,17 @@ export default function POMCataleg() {
               {t('poms.cat.create_new')}
             </button>)}
           </div>
+          {/* ── ELS TABS (Agus, 23/08) ──────────────────────────────────────────────────
+              Actius · Inactius · Tots, amb el recompte de la llista sencera. El component és
+              el de la casa (`ui/SubTabs`, subratllat d'or segons NORMA §8b-bis): cap patró nou
+              i cap color nou. El seu badge NO pinta el zero a posta —un «0» permanent al
+              costat d'un tab és soroll—, i aquí es respecta: si no hi ha arxiu, «Inactius» va
+              sol i ja ho diu tot.
+              Canviar de tab NO toca la cerca: buscar i després mirar l'altre costat és
+              exactament el gest que la creuada de sota convida a fer. */}
+          <SubTabs actiu={tab} onTria={setTab}
+            items={TABS.map(k => ({ key: k, label: `poms.cat.tab_${k}`, badge: comptes[k] }))} />
+
           {crearObert && (
             <FormulariPomNou cats={cats} ocupat={ocupat} t={t}
               onCrea={crearPom} onTanca={() => setCrearObert(false)} />
