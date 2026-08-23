@@ -505,7 +505,13 @@ class POMMaster(models.Model):
         related_name='poms',
     )
     codi_client = models.CharField(max_length=30)
-    nom_client = models.CharField(max_length=200)
+    #: 🔑 **BUIT VOL DIR «MANA EL CANÒNIC»** (decisió d'Agus, 23/08, tancament de la sembra v5).
+    #: Fins avui el nom del tenant sempre guanyava (`nomenclatura.noms_de`), i per això un POM
+    #: lligat al catàleg del sistema seguia ensenyant el nom vell —i en anglès— encara que el
+    #: global en portés el canònic i les traduccions. Ara el tenant pot NO batejar: amb el nom
+    #: buit, la cascada cau al `POMGlobal` i la fitxa ensenya EN, CA i ES del catàleg.
+    #: `blank=True` és validació, no esquema: la columna ja era NOT NULL amb cadena buida.
+    nom_client = models.CharField(max_length=200, blank=True)
     notes = models.TextField(blank=True)
     actiu = models.BooleanField(default=True)
 
