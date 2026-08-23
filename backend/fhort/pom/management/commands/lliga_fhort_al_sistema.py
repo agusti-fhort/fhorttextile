@@ -1,7 +1,13 @@
 """S3 · EL LLIGAM — cada POM VIU del tenant, al seu global de sistema.
 
-El lligam vol **DUES coincidències alhora, i mai una de sola** (llei d'Agus, 23/08, decisió 2
-sobre el report de la FASE B):
+⚖️ **EL CATÀLEG MANA** (decisió d'Agus del 23/08, tancament final). El mapa `Codi Brownie →
+codi de sistema` del r2 és un **document aprovat per la Montse**, i amb `--el-cataleg-mana` cap
+guarda de nom el barra: el full diu quin és el canònic i el full guanya. Les **dues úniques
+excepcions** —`N → N5` i `RW → R7`, mesurades el 23/08 i confirmades com a mesures DIFERENTS—
+viuen a `EXCEPCIONS_DEL_MAPA` i queden fora sempre.
+
+Sense el flag, el lligam vol **DUES coincidències alhora, i mai una de sola** (la llei que
+regia fins al tancament final):
 
     (1) CODI      — el mapa `codi Brownie → codi de sistema` del full ALIES_BROWNIE; o, si el
                     full no el mapa, que el codi del POM SIGUI un codi del v5;
@@ -42,6 +48,15 @@ from fhort.pom.sembra_v5 import corpus
 from fhort.pom.sembra_v5.base import ComandaV5
 
 
+#: 🚨 ELS DOS APARELLAMENTS DEL FULL QUE NO SÓN LA MATEIXA MESURA. Mesurat el 23/08 i
+#: confirmat per Agus: `N` («Motive placement») i `N5` («Reflective band height») són coses
+#: diferents, i `RW` («Welt height») i `R7` («Pocket topstitch») també. Amb `--el-cataleg-mana`
+#: el full és autoritat per a TOTS els altres aparellaments; aquests dos queden **sempre fora**
+#: i es reporten. La llista és curta a posta: si algun dia n'hi ha un tercer, es MESURA i
+#: s'afegeix aquí, no es descobreix a la fitxa d'un client.
+EXCEPCIONS_DEL_MAPA = {'N': 'N5', 'RW': 'R7'}
+
+
 def normalitza(nom):
     """El nom, reduït al que dues fonts han de compartir per ser el MATEIX nom.
 
@@ -62,6 +77,9 @@ class Command(ComandaV5):
     def arguments_propis(self, parser):
         parser.add_argument('--schema', required=True,
                             help='Schema del tenant (sense default: pany P2 del 22/08).')
+        parser.add_argument('--el-cataleg-mana', action='store_true',
+                            help='El mapa del r2 és autoritat: el nom divergent no barra el '
+                                 f'lligam (excepte {sorted(EXCEPCIONS_DEL_MAPA)}).')
 
     def corre(self, opts):
         mapa = corpus.mapa_brownie(self.corpus['alies'])
@@ -70,6 +88,7 @@ class Command(ComandaV5):
 
         lligats = ja_lligats = sobirans = divergents = sense_codi = sense_global = 0
         nom_divergent_mapa = nom_divergent_propi = per_codi_propi = 0
+        per_autoritat = excepcio_mesurada = 0
         desti_de = {}
 
         with self.transacciona(schema):
@@ -92,7 +111,22 @@ class Command(ComandaV5):
                     continue
 
                 # (2) EL NOM — i és la meitat que atura els paranys mesurats el 23/08.
-                if normalitza(p.nom_client) != normalitza(noms_v5[sistema]):
+                if (via == 'full' and EXCEPCIONS_DEL_MAPA.get(codi) == sistema):
+                    excepcio_mesurada += 1
+                    self.excepcio(
+                        f'⛔ {codi!r} → {sistema!r}: EXCEPCIÓ MESURADA — el full els aparella '
+                        f'però no són la mateixa mesura (tenant {p.nom_client!r} vs v5 '
+                        f'{noms_v5[sistema]!r}). Fora sempre, també amb --el-cataleg-mana.')
+                    continue
+                divergeix = normalitza(p.nom_client) != normalitza(noms_v5[sistema])
+                # ⚖️ El catàleg mana: es compta, es diu… i **se segueix avall a lligar**. El
+                # `continue` de sota és només per als que NO es lliguen.
+                if divergeix and via == 'full' and opts['el_cataleg_mana']:
+                    per_autoritat += 1
+                    self.excepcio(
+                        f'⚖️ {codi!r} → {sistema!r}: el nom divergeix ({p.nom_client!r} vs '
+                        f'{noms_v5[sistema]!r}) i el CATÀLEG MANA — es lliga.')
+                elif divergeix:
                     if via == 'full':
                         nom_divergent_mapa += 1
                         self.excepcio(
@@ -145,6 +179,8 @@ class Command(ComandaV5):
             self.guarda('POMs sobirans respectats', sobirans)
             self.guarda('POMs amb lligam divergent (reportats, no moguts)', divergents)
             self.guarda('POMs sense cap codi del v5', sense_codi)
+            self.guarda('POMs lligats per AUTORITAT DEL CATÀLEG (nom divergent)', per_autoritat)
+            self.guarda('excepcions mesurades fora sempre (N, RW)', excepcio_mesurada)
             self.guarda('POMs que el FULL mapa però amb NOM divergent', nom_divergent_mapa)
             self.guarda('POMs amb codi HOMÒNIM i nom divergent', nom_divergent_propi)
             self.guarda('POMs amb el global absent al schema', sense_global)
@@ -159,7 +195,8 @@ class Command(ComandaV5):
                     f'{sense_global} POMs sense el seu `POMGlobal` a `{schema}`: corre abans '
                     f'`sembra_cataleg_sistema --schema {schema} --no-dry-run`.')
 
-        self.diu(f'   lligats {lligats} (codi propi {per_codi_propi}) · ja lligats '
-                 f'{ja_lligats} · sobirans {sobirans} · lligam divergent {divergents} · '
-                 f'sense codi {sense_codi} · nom divergent {nom_divergent_mapa} (full) + '
-                 f'{nom_divergent_propi} (homònim) · global absent {sense_global}')
+        self.diu(f'   lligats {lligats} (codi propi {per_codi_propi} · per autoritat '
+                 f'{per_autoritat}) · ja lligats {ja_lligats} · sobirans {sobirans} · '
+                 f'lligam divergent {divergents} · sense codi {sense_codi} · nom divergent '
+                 f'{nom_divergent_mapa} (full) + {nom_divergent_propi} (homònim) · '
+                 f'excepcions {excepcio_mesurada} · global absent {sense_global}')
