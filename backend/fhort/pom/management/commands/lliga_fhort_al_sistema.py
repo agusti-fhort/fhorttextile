@@ -67,10 +67,22 @@ class Command(ComandaV5):
                     sense_desti += 1
                     if codi in noms_v5:
                         homonims += 1
-                        self.excepcio(
-                            f'🚨 {codi!r}: el full no el mapa, i el v5 REUTILITZA aquest codi '
-                            f'per a una altra mesura (tenant {p.nom_client!r} vs v5 '
-                            f'{noms_v5[codi]!r}). NO es lliga: seria el canònic equivocat.')
+                        # El nom es MESURA abans de dir que difereix: si algun dia coincideix,
+                        # el cas deixa de ser un parany i passa a ser un candidat — i llavors
+                        # el que toca és afegir-lo al full, no endevinar-lo aquí.
+                        mateix = (p.nom_client.strip().lower()
+                                  == noms_v5[codi].strip().lower())
+                        if mateix:
+                            self.excepcio(
+                                f'🚩 {codi!r}: el full no el mapa, però el v5 té aquest codi '
+                                f'amb el MATEIX nom ({p.nom_client!r}) — candidat a lligar. '
+                                'NO es lliga: el destí el declara el full.')
+                        else:
+                            self.excepcio(
+                                f'🚨 {codi!r}: el full no el mapa, i el v5 REUTILITZA aquest '
+                                f'codi per a una altra mesura (tenant {p.nom_client!r} vs v5 '
+                                f'{noms_v5[codi]!r}). NO es lliga: seria el canònic '
+                                'equivocat.')
                     else:
                         self.excepcio(f'{codi!r} ({p.nom_client}): cap codi Brownie al r2 el '
                                       'mapa. NO es lliga.')
