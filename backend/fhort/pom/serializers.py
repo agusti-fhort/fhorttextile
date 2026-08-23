@@ -716,6 +716,9 @@ class GarmentPOMMapSerializer(serializers.ModelSerializer):
     def get_name_cat(self, obj):
         return noms_de(obj.pom)['nom_ca']
 
+    def get_name_es(self, obj):
+        return noms_de(obj.pom)['nom_es']
+
     def get_abbreviation(self, obj):
         return abreviatura_de(obj.pom)
 
@@ -728,7 +731,7 @@ class GarmentPOMMapSerializer(serializers.ModelSerializer):
             'id',
             'garment_type_item', 'garment_type_item_codi', 'garment_type_item_name',
             'pom',
-            'pom_code', 'name_en', 'name_cat', 'abbreviation', 'categoria',
+            'pom_code', 'name_en', 'name_cat', 'name_es', 'abbreviation', 'categoria',
             'applies_woven', 'applies_knit', 'applies_swim',
             # PAS B3-ter — bloc complet "com mesurar"
             'start_point', 'end_point', 'reference_point',
@@ -775,7 +778,8 @@ class _POMDisplayMixin(serializers.Serializer):
     unitat = serializers.CharField(source='pom.pom_global.unitat', read_only=True)
 
     #: Els camps que el mixin aporta, per no repetir-los a cada `Meta.fields`.
-    CAMPS = ('pom_code', 'name_en', 'name_cat', 'abbreviation', 'categoria', 'unitat')
+    CAMPS = ('pom_code', 'name_en', 'name_cat', 'name_es', 'abbreviation', 'categoria',
+             'unitat')
 
     # FONT ÚNICA (22/08) — mateixa llei i mateix resolutor que la resta (ÀLIES > TENANT >
     # GLOBAL). La pertinença és de CATÀLEG (quins POMs porta una peça), no d'un model d'un
@@ -788,6 +792,9 @@ class _POMDisplayMixin(serializers.Serializer):
 
     def get_name_cat(self, obj):
         return noms_de(obj.pom)['nom_ca']
+
+    def get_name_es(self, obj):
+        return noms_de(obj.pom)['nom_es']
 
     def get_abbreviation(self, obj):
         return abreviatura_de(obj.pom)
