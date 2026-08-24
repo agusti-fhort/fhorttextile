@@ -28,7 +28,7 @@ la pinta. Si el contracte del payload es mogués, cal regenerar el JSON.
     ③  els POMs de gir CLAVEN el delta: B, D, F i J1 sense cap ⚠ a cap talla
     ④  la fila de la base (S) no té cap ⚠ enlloc
     ⑤  els 6 residus coneguts surten a la llista de problemes AMB la xifra
-    ⑥  l'autovalidació diu 36 regles actives (abans del fix: 0)
+    ⑥  l'autovalidació diu 38 regles actives (abans del fix: 0)
     ⑦  cap error de consola
 
 ## Ús
@@ -192,11 +192,11 @@ def main():
               all(('CORBA' in x or 'REPARTIMENT' in x) for x in escalat))
 
         # ── ⑥ el motor ha graduat de debò ────────────────────────────────────
-        prova('⑥ 36 regles actives (abans del fix: 0)', preview['regles'] == 36,
+        prova('⑥ 38 regles actives (abans del fix: 0)', preview['regles'] == 38,
               preview['regles'])
-        prova('⑥ l\'autovalidació passa amb 37/37 regles',
+        prova('⑥ l\'autovalidació passa amb 39/39 regles',
               preview['autovalidacio']['ok']
-              and '37/37' in preview['autovalidacio']['resum'],
+              and '39/39' in preview['autovalidacio']['resum'],
               preview['autovalidacio']['resum'][:120])
 
         # ── ⑦ consola ────────────────────────────────────────────────────────

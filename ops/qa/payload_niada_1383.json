@@ -49,12 +49,12 @@
      {
       "pom_code": "A",
       "peca": "837.DELANTERO",
-      "valor_cm": 43.28,
-      "delta_llegit_cm": -1.0,
+      "valor_cm": 42.29,
+      "delta_llegit_cm": -2.0,
       "delta_spec_cm": -2.0,
-      "desviament_cm": 0.998365,
+      "desviament_cm": 0.0,
       "valor_spec_cm": 42.0,
-      "ok": false,
+      "ok": true,
       "error": ""
      },
      {
@@ -118,7 +118,7 @@
       "valor_cm": 21.63,
       "delta_llegit_cm": -0.73,
       "delta_spec_cm": 0.0,
-      "desviament_cm": -0.725438,
+      "desviament_cm": -0.72597,
       "valor_spec_cm": 22.0,
       "ok": false,
       "error": ""
@@ -266,7 +266,7 @@
      {
       "pom_code": "A",
       "peca": "837.DELANTERO",
-      "valor_cm": 44.28,
+      "valor_cm": 44.29,
       "delta_llegit_cm": 0.0,
       "delta_spec_cm": 0.0,
       "desviament_cm": 0.0,
@@ -483,10 +483,10 @@
      {
       "pom_code": "A",
       "peca": "837.DELANTERO",
-      "valor_cm": 45.86,
-      "delta_llegit_cm": 1.58,
+      "valor_cm": 47.36,
+      "delta_llegit_cm": 3.08,
       "delta_spec_cm": 3.0,
-      "desviament_cm": -1.422773,
+      "desviament_cm": 0.075023,
       "valor_spec_cm": 47.0,
       "ok": false,
       "error": ""
@@ -552,7 +552,7 @@
       "valor_cm": 24.23,
       "delta_llegit_cm": 1.87,
       "delta_spec_cm": 0.8,
-      "desviament_cm": 1.07363,
+      "desviament_cm": 1.07424,
       "valor_spec_cm": 22.8,
       "ok": false,
       "error": ""
@@ -700,10 +700,10 @@
      {
       "pom_code": "A",
       "peca": "837.DELANTERO",
-      "valor_cm": 47.44,
-      "delta_llegit_cm": 3.16,
+      "valor_cm": 50.44,
+      "delta_llegit_cm": 6.15,
       "delta_spec_cm": 6.0,
-      "desviament_cm": -2.842397,
+      "desviament_cm": 0.152912,
       "valor_spec_cm": 50.0,
       "ok": false,
       "error": ""
@@ -769,7 +769,7 @@
       "valor_cm": 26.16,
       "delta_llegit_cm": 3.8,
       "delta_spec_cm": 1.6,
-      "desviament_cm": 2.201167,
+      "desviament_cm": 2.202272,
       "valor_spec_cm": 23.6,
       "ok": false,
       "error": ""
@@ -917,10 +917,10 @@
      {
       "pom_code": "A",
       "peca": "837.DELANTERO",
-      "valor_cm": 49.02,
-      "delta_llegit_cm": 4.74,
+      "valor_cm": 53.52,
+      "delta_llegit_cm": 9.23,
       "delta_spec_cm": 9.0,
-      "desviament_cm": -4.259178,
+      "desviament_cm": 0.233174,
       "valor_spec_cm": 53.0,
       "ok": false,
       "error": ""
@@ -986,7 +986,7 @@
       "valor_cm": 28.12,
       "delta_llegit_cm": 5.76,
       "delta_spec_cm": 2.4,
-      "desviament_cm": 3.359016,
+      "desviament_cm": 3.360548,
       "valor_spec_cm": 24.4,
       "ok": false,
       "error": ""
@@ -1157,17 +1157,17 @@
   ],
   "problemes_costures": [],
   "problemes_escalat": [
-   "La niada del POM A no aterra al delta que el grading mana: a la talla XL creix +4.741 cm quan n'havia de créixer +9.000 (diferència -4.259 cm). La causa és coneguda: el POM ancora sobre un punt de CORBA (extrem b), i el lliurable només porta regla als punts de gir i als piquets — el moviment d'aquell extrem no arriba al fitxer i el CAD del client el fa fluir.",
+   "La niada del POM A no aterra al delta que el grading mana: a la talla XL creix +9.233 cm quan n'havia de créixer +9.000 (diferència +0.233 cm). Els dos extrems són punts de gir: el que no aterra és el REPARTIMENT —la projecció v1 reparteix el delta simètricament al llarg de la recta a→b— i no la propagació al cosit.",
    "La niada del POM C no aterra al delta que el grading mana: a la talla XL creix +4.500 cm quan n'havia de créixer +9.000 (diferència -4.500 cm). La causa és coneguda: el POM ancora sobre un punt de CORBA (extrem a), i el lliurable només porta regla als punts de gir i als piquets — el moviment d'aquell extrem no arriba al fitxer i el CAD del client el fa fluir.",
    "La niada del POM E no aterra al delta que el grading mana: a la talla XL creix +1.597 cm quan n'havia de créixer +1.800 (diferència -0.203 cm). Els dos extrems són punts de gir: el que no aterra és el REPARTIMENT —la projecció v1 reparteix el delta simètricament al llarg de la recta a→b— i no la propagació al cosit.",
    "La niada del POM E1 no aterra al delta que el grading mana: a la talla XL creix +0.406 cm quan n'havia de créixer +0.900 (diferència -0.494 cm). Els dos extrems són punts de gir: el que no aterra és el REPARTIMENT —la projecció v1 reparteix el delta simètricament al llarg de la recta a→b— i no la propagació al cosit.",
-   "La niada del POM S no aterra al delta que el grading mana: a la talla XL creix +5.759 cm quan n'havia de créixer +2.400 (diferència +3.359 cm). Els dos extrems són punts de gir: el que no aterra és el REPARTIMENT —la projecció v1 reparteix el delta simètricament al llarg de la recta a→b— i no la propagació al cosit.",
+   "La niada del POM S no aterra al delta que el grading mana: a la talla XL creix +5.761 cm quan n'havia de créixer +2.400 (diferència +3.361 cm). Els dos extrems són punts de gir: el que no aterra és el REPARTIMENT —la projecció v1 reparteix el delta simètricament al llarg de la recta a→b— i no la propagació al cosit.",
    "La niada del POM S2 no aterra al delta que el grading mana: a la talla XL creix +1.059 cm quan n'havia de créixer +2.400 (diferència -1.341 cm). La causa és coneguda: el POM ancora sobre un punt de CORBA (extrem a), i el lliurable només porta regla als punts de gir i als piquets — el moviment d'aquell extrem no arriba al fitxer i el CAD del client el fa fluir."
   ],
-  "regles": 36,
+  "regles": 38,
   "autovalidacio": {
    "ok": true,
-   "resum": "✅ Autovalidació: 3840 punts rellegits sense cap desviació (màx. 0.000 µm), 37/37 regles idèntiques, cens immòbil (4116 entitats a les dues voltes).",
+   "resum": "✅ Autovalidació: 3840 punts rellegits sense cap desviació (màx. 0.000 µm), 39/39 regles idèntiques, cens immòbil (4274 entitats a les dues voltes).",
    "punts_comparats": 3840,
    "desviacio_maxima_um": 0.0
   },
