@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import StatCard from '../ui/StatCard'
 import Table from '../ui/Table'
-import Badge from '../ui/Badge'
-import { formatMinutes } from '../../utils/format'
+import RegistreRondes from './RegistreRondes'
+import { models } from '../../api/endpoints'
+import { formatMinutes, formatDataHora, localeDeIdioma } from '../../utils/format'
 
 const API = import.meta.env.VITE_API_URL || ''
 const MONO = 'IBM Plex Mono, monospace'
@@ -11,18 +12,27 @@ const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('acce
 
 const fmtDateTime = (v) => v ? new Date(v).toLocaleString('ca-ES', { dateStyle: 'medium', timeStyle: 'short' }) : '—'
 
-// Estat → variant de Badge (fallback gris).
-const STATUS_VARIANT = {
-  Done: 'ok', Completed: 'ok', Delivered: 'ok',
-  InProgress: 'gold', Requested: 'gate',
-  Blocked: 'err', Rectification: 'warn',
-}
-
 // 4.4 — Tab "Registre d'activitat" = albarà read-only del model (capçalera immutable,
 // resum, passos, repartiment per tècnic, historial col·lapsable). Sense escriptura.
+//
+// M2 · MOCKUP B v3 — LA GRAELLA DE PASSOS PASSA A SER **UNA SOLA GRAELLA PER RONDES**
+// (`RegistreRondes`), i la SUBSTITUEIX: micro-decisió d'Agus, sense convivència i sense flag.
+// Els quatre KPI de capçalera prenen el lloc de les tres StatCard —temps total i inici
+// d'activitat ja hi eren; rondes i entregues surten de la porta de voltes, que és la mateixa
+// que fa servir el Pla de treball—. La resta del tab (capçalera immutable, repartiment per
+// tècnic, historial complet de transicions) NO es toca: el mockup no la substitueix i treure-la
+// hauria estat un redisseny, no una adaptació.
+//
+// 🔑 La font segueix sent `/albara/` i **cap dada del registre canvia de mà**. El brief donava
+// `model_task_log_view` com a font d'aquesta graella; a la pantalla viva no ho és (aquell
+// endpoint alimenta `TaskLog.jsx`, que no el munta ningú) i, a més, un log de TRANSICIONS no
+// pot dir ni el temps ni l'inici ni el fi d'una tasca. V. l'acta.
 export default function RegistreActivitatTab({ modelId }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const locale = localeDeIdioma(i18n.language)
   const [data, setData] = useState(null)
+  const [rondes, setRondes] = useState([])
+  const [log, setLog] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showHistory, setShowHistory] = useState(false)
@@ -34,6 +44,18 @@ export default function RegistreActivitatTab({ modelId }) {
       .then(r => { if (!r.ok) throw new Error(r.status); return r.json() })
       .then(d => { if (alive) { setData(d); setLoading(false) } })
       .catch(e => { if (alive) { setError(e.message); setLoading(false) } })
+    // Les VOLTES, per la porta d'M1: l'albarà no en sap res (una ronda entregada és tancada) i
+    // és d'aquí que surten l'entrega niuada i els dos KPI nous. Si falla, la graella es queda
+    // amb els passos i sense agrupar: el registre no desapareix per una lectura auxiliar.
+    models.rondes(modelId)
+      .then(r => { if (alive) setRondes(Array.isArray(r?.data) ? r.data : []) })
+      .catch(() => { if (alive) setRondes([]) })
+    // El LOG, per al rastre d'FIT-8. No surt de l'`history` de l'albarà: aquell no porta la
+    // `nota`, que és justament el marcador de «reoberta després d'entrega». Mateixa lectura que
+    // fa el Pla de treball, i el mateix comptador.
+    models.taskLog(modelId)
+      .then(r => { if (alive) setLog(r?.data?.log ?? []) })
+      .catch(() => { if (alive) setLog([]) })
     return () => { alive = false }
   }, [modelId])
 
@@ -55,14 +77,6 @@ export default function RegistreActivitatTab({ modelId }) {
   }
 
   const { header, steps = [], totals = {}, per_technician = [], history = [] } = data || {}
-
-  const stepCols = [
-    { key: 'task_type', label: t('albara.taskType'), render: r => r.task_type || '—' },
-    { key: 'status', label: t('albara.status'), render: r => <Badge variant={STATUS_VARIANT[r.status] || 'gray'}>{r.status || '—'}</Badge> },
-    { key: 'minutes', label: t('albara.time'), align: 'right', render: r => formatMinutes(r.minutes) },
-    { key: 'started_at', label: t('albara.start'), render: r => fmtDateTime(r.started_at) },
-    { key: 'finished_at', label: t('albara.end'), render: r => fmtDateTime(r.finished_at) },
-  ]
 
   const techCols = [
     { key: 'label', label: t('albara.technician'), render: r => r.label || '—' },
@@ -95,15 +109,33 @@ export default function RegistreActivitatTab({ modelId }) {
         </div>
       </div>
 
-      {/* 2. Resum — tres StatCard */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+      {/* 2. Resum — els QUATRE KPI del mockup B v3. «Passos» se'n va: la graella ja diu quantes
+          tasques té cada volta, i el que el registre per rondes ha de dir al capdamunt és
+          quantes voltes hi ha hagut i quantes n'han sortit entregades. «Rectificacions» es
+          queda (és la xifra d'FIT-8 a escala de model) i «Inici activitat» pren el
+          `merited_at`, que ja portava aquest nom a l'i18n des d'abans d'M2. */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
         <StatCard icon="ti-clock" label={t('albara.totalTime')} value={formatMinutes(totals.total_minutes)} />
-        <StatCard icon="ti-list-check" label={t('albara.steps')} value={steps.length} />
+        <StatCard icon="ti-rotate-clockwise" label={t('rondes.reg_kpi_rondes')} value={rondes.length} />
+        <StatCard icon="ti-package-export" label={t('rondes.reg_kpi_entregues')}
+                  value={rondes.filter(r => r.entregada).length} />
         <StatCard icon="ti-rotate" label={t('albara.rectifications')} value={totals.rectifications ?? 0} />
+        {/* La data no cap a `--fs-display`: el mockup mateix li baixa el cos, i sense això
+            embolica a tres línies i desalinea la fila sencera de KPI. */}
+        <StatCard icon="ti-clock-play" label={t('albara.meritedAt')}
+                  value={formatDataHora(header?.merited_at, locale)}
+                  valueStyle={{ fontSize: 'var(--fs-h2)', lineHeight: '24px' }} />
       </div>
 
-      {/* 3. Taula de passos */}
-      <Table columns={stepCols} data={steps} empty={t('albara.notMerited')} />
+      {/* 3. UNA SOLA GRAELLA, per rondes (mockup B v3) — substitueix la taula de passos. */}
+      <div>
+        <div style={{ fontSize: 'var(--fs-label)', letterSpacing: '.08em',
+                      textTransform: 'uppercase', color: 'var(--text-soft)', fontWeight: 600,
+                      marginBottom: 10 }}>
+          {t('rondes.reg_titol')}
+        </div>
+        <RegistreRondes passos={steps} rondes={rondes} log={log} />
+      </div>
 
       {/* 4. Repartiment per tècnic */}
       <Table columns={techCols} data={per_technician} empty="—" />

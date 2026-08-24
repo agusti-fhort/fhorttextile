@@ -4,10 +4,14 @@ import { useTranslation } from 'react-i18next'
 import Badge from '../ui/Badge'
 import Modal from '../ui/Modal'
 import TempsDeclaratForm from './TempsDeclaratForm'
+import RondaPla from './RondaPla'
+import EntregaDialog from './EntregaDialog'
+import OkClientDialog from './OkClientDialog'
 import { models, modelTasks, taskTypes } from '../../api/endpoints'
 import { formatMinutes } from '../../utils/format'
 import { taskTypeLabel } from '../../utils/taskType'
 import { destiDeTasca } from '../../utils/destiTasca'
+import { agrupaPerRonda, potObrirVolta, RONDA_ENTREGADA } from '../../utils/rondes'
 
 // Pla de treball — PEÇA P3 + P4a (Q4 crescut): l'encàrrec del model com a procés.
 // Consumeix dashboard.tasques (compositor enriquit a P1, JA ordenat canònic) — NO reordena.
@@ -17,6 +21,16 @@ import { destiDeTasca } from '../../utils/destiTasca'
 // P4a — handoff (§6): Play sobre tasca d'ALTRI obre un diàleg de reassignació; en confirmar fa
 // modelTasks.claim (self-only, gated execute_tasks) i després el mateix camí de Play de P3.
 // Pause/Stop segueixen apagats a d'altri. Tres rendings (§5): meva / d'altri / fora d'encàrrec.
+//
+// M2 · LA CARA DE LES RONDES (mockup A v2) — el Pla s'AGRUPA PER VOLTA. El que canvia és
+// l'embolcall, no la targeta: `RondaPla` posa la capçalera agregada, la línia d'entrega i el
+// col·lapse, i les targetes de sempre hi entren com a `children`. Cap gest de transport, cap
+// camí de Play i cap regla de handoff s'han tocat.
+//
+// 🔑 **UN MODEL SENSE CAP VOLTA ES PINTA COM ABANS D'M2**, pla i sense contenidors. No és una
+// branca de conveniència: és la forma de tot model LLEGAT (la prohibició de backfill d'M1-bis
+// segueix vigent fins al retroactiu de M5), i embolicar la seva feina en una ronda que no
+// existeix seria dibuixar una volta que ningú no ha obert.
 
 const API = import.meta.env.VITE_API_URL || ''
 
@@ -54,9 +68,21 @@ const TRANSPORT = {
   Done:       { play: true,  pause: false, stop: false },
 }
 
-// Fora d'encàrrec / fora de recepta: extra marcat al backend amb off_recipe=True (B4a), o
-// tasca iniciada fora de l'encàrrec (origen='ad_hoc'). Activa el filet grana. NOMÉS marca.
-function isOutOfCharge(task) { return task?.off_recipe === true || task?.origen === 'ad_hoc' }
+// Fora d'encàrrec / fora de recepta: extra marcat al backend amb `off_recipe=True` (B4a).
+// Activa el filet grana. NOMÉS marca.
+//
+// 🚨 **M2 · `origen === 'ad_hoc'` SURT D'AQUEST PREDICAT, i el motiu és una llei nova.** Des d'M1-bis
+// **totes** les tasques que crea `obrir_ronda` neixen `ad_hoc` A POSTA —és el que les deixa
+// conviure amb la `prevista` del mateix tipus sota la unique parcial (`services_r`, nota de la
+// funció)—, o sigui que a partir de la R2 el joc REPLICAT sencer entrava aquí i cada volta nova
+// es pintava amb el filet grana i el rètol «fora d'encàrrec». Mesurat a la QA de pantalla del
+// banc: les dues tasques de la R2 marcades, i cap ho és.
+//
+// I no és una excepció que M2 s'inventi: és el MATEIX raonament que el backend ja va escriure a
+// `_NO_ES_REPLICA` («l'únic camp que literalment vol dir *això no és de la recepta* és
+// `off_recipe`»), i és el que les dues superfícies comercials —`WorkOrderDetail`, `OrderDetail`—
+// ja feien servir soles. Aquesta era l'única lectura de la casa que hi sumava `origen`.
+function isOutOfCharge(task) { return task?.off_recipe === true }
 
 const containerStyle = { background: 'transparent', width: '100%' }
 const cardsGrid = { display: 'flex', flexWrap: 'wrap', gap: 12 }
@@ -92,7 +118,7 @@ function TransportBtn({ icon, active, title, onClick }) {
   )
 }
 
-function TaskCard({ task, mine, hasToolRoute, onPlay, onPause, onStop, onDeclarar }) {
+function TaskCard({ task, mine, hasToolRoute, segellada = false, onPlay, onPause, onStop, onDeclarar }) {
   const { t } = useTranslation()
   const out = isOutOfCharge(task)
   const transport = TRANSPORT[task.status] || TRANSPORT.Pending
@@ -143,7 +169,13 @@ function TaskCard({ task, mine, hasToolRoute, onPlay, onPause, onStop, onDeclara
       {/* Peu: transport (placeholder) + badge d'estat */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                     gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+        {/* M2 · VOLTA ENTREGADA = FEINA SEGELLADA. El transport no s'apaga: se'n VA. Un botó
+            deshabilitat convida a prémer-lo i promet que algun dia s'encendrà; el que diu la
+            llei és que aquesta feina ja s'ha entregat i que rectificar-la obre volta nova.
+            (No és un guard: `Done→InProgress` segueix sent legal —el segell és TOU, FIT-2— i el
+            camí per fer-ho és el diàleg de la tasca, que deixa el rastre al log.) */}
         <div style={{ display: 'flex', gap: 4 }}>
+          {segellada ? <span /> : (<>
           {/* P4a: Play disponible també a d'altri (obre diàleg de handoff). Pause/Stop només meves. */}
           <TransportBtn icon="ti-player-play"  active={playActive} title={mine ? t('model_sheet.dashboard.workplan.play') : t('model_sheet.dashboard.workplan.handoff_play')} onClick={() => onPlay(task)} />
           <TransportBtn icon="ti-player-pause" active={mine && transport.pause} title={t('model_sheet.dashboard.workplan.pause')} onClick={() => onPause(task)} />
@@ -156,6 +188,7 @@ function TaskCard({ task, mine, hasToolRoute, onPlay, onPause, onStop, onDeclara
             <TransportBtn icon="ti-clock-plus" active title={t('temps_declarat.boto')}
                           onClick={() => onDeclarar(task)} />
           )}
+          </>)}
         </div>
         <Badge variant={STATUS_VARIANT[task.status] || 'gray'} style={{ maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {t(`model_sheet.dashboard.task_status.${task.status}`, { defaultValue: task.status })}
@@ -175,6 +208,15 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
   const [declarant, setDeclarant] = useState(null)  // F2.5: tasca externa a la qual declarar temps
   const [claiming, setClaiming] = useState(false)  // guard anti-doble-clic del claim
   const toastTimer = useRef(null)
+  // M2 — les voltes del model (amb l'entrega niuada) i el log, que és d'on surt el rastre FIT-8.
+  const [rondes, setRondes] = useState([])
+  const [log, setLog] = useState([])
+  const [entregant, setEntregant] = useState(null)   // bloc pendent d'informar l'entrega
+  const [okClient, setOkClient] = useState(null)     // entrega pendent de l'OK del client
+  const [obrintVolta, setObrintVolta] = useState(false)
+  // Col·lapse: NOMÉS les excepcions que l'usuari ha fet en aquesta pantalla. El defecte el
+  // deriva `agrupaPerRonda` de l'estat de la volta i no es desa enlloc (v. `utils/rondes`).
+  const [plegatManual, setPlegatManual] = useState({})
 
   useEffect(() => {
     let alive = true
@@ -210,6 +252,26 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
   const desti = (task) => destiDeTasca(tipusPerCode[task.task_type_code],
     { modelId, taskId: task.id })
 
+  // M2 — LES VOLTES. Porta pròpia i no un camp del model: una ronda entregada és una ronda
+  // TANCADA i `Model.ronda_oberta` no en pot ensenyar mai cap. El log hi va de la mà perquè el
+  // rastre de FIT-8 (`nota`) viu a les transicions, no a la ronda.
+  const [versio, setVersio] = useState(0)
+  useEffect(() => {
+    let alive = true
+    models.rondes(modelId)
+      .then(r => { if (alive) setRondes(Array.isArray(r?.data) ? r.data : []) })
+      .catch(() => { if (alive) setRondes([]) })
+    models.taskLog(modelId)
+      .then(r => { if (alive) setLog(r?.data?.log ?? []) })
+      .catch(() => { if (alive) setLog([]) })
+    return () => { alive = false }
+  }, [modelId, versio])
+
+  // Refresc COMPLET: el dashboard (que el pare recarrega) i les voltes, que són nostres. Tot el
+  // que escriu una ronda —entregar, OK del client, +Ronda— pot moure les DUES coses alhora:
+  // informar una entrega tanca la volta I tanca la seva feina viva (FIT-13 + FIT-6).
+  const refrescaTot = () => { setVersio(v => v + 1); onRefresh?.() }
+
   const list = Array.isArray(tasques) ? tasques : []
   const isMine = (task) => task.assignee_id != null && task.assignee_id === myProfileId
 
@@ -221,6 +283,14 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
   const done = list.filter(task => task.status === 'Done').length
   const pct = total ? Math.round((100 * done) / total) : 0
   const totalMin = list.reduce((s, task) => s + (task.temps_consumit_min || 0), 0)
+
+  // M2 — LES VOLTES, ja agregades. La lògica és compartida amb el Registre (`utils/rondes`):
+  // les dues superfícies responen les mateixes preguntes sobre una ronda i només les pinten
+  // diferent. `agrupaPerRonda` retorna també el bloc de la feina SENSE volta, que no es perd.
+  const blocs = agrupaPerRonda(list, rondes, { tipusPerCode, log })
+  const perVoltes = rondes.length > 0
+  const obert = (bloc) => plegatManual[bloc.clau] ?? bloc.obertPerDefecte
+  const commuta = (bloc) => setPlegatManual(p => ({ ...p, [bloc.clau]: !obert(bloc) }))
 
   function showToast(type, text) {
     setToast({ type, text })
@@ -350,6 +420,37 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
       })
   }
 
+  // ── M2 · ELS TRES GESTOS DE VOLTA ────────────────────────────────────────────────────────
+
+  // «+ Nova ronda». `codes: []` és el cas NORMAL des d'M1-bis: la volta nova neix amb el joc de
+  // l'anterior (`codes_a_replicar`) i el que es demana s'hi SUMA. Aquí no es demana res —qui
+  // vol una tasca que la volta anterior no tenia l'obre pel seu camí de sempre— i per això la
+  // porta no ha d'aplicar cap allow-list: el joc replicat no és una tria de qui obre.
+  //
+  // El botó només es pinta si NO hi ha cap volta oberta, que és el guard d'`obrir_ronda`
+  // (`potObrirVolta`): fer-lo visible i deixar que el backend contesti 400 seria oferir un gest
+  // que la pantalla ja sabia que no es podia fer.
+  function obreVolta() {
+    if (obrintVolta) return
+    setObrintVolta(true)
+    models.obrirRonda(modelId, { motiu: 'nova_mostra', codes: [] })
+      .then(res => {
+        const d = res?.data || {}
+        // La porta DIU què ha replicat, què ha adoptat del buit entre voltes i què ha quedat
+        // pel camí perquè el catàleg l'ha desactivat (M1-bis + CODA). Callar-ho deixaria
+        // l'usuari davant d'una volta amb tasques que ell no ha demanat i sense saber d'on surten.
+        const parts = []
+        if (d.codes_replicats?.length) parts.push(t('rondes.nova_replicats', { count: d.codes_replicats.length }))
+        if (d.codes_adoptats?.length) parts.push(t('rondes.nova_adoptats', { count: d.codes_adoptats.length }))
+        if (d.codes_omesos?.length) parts.push(t('rondes.nova_omesos', { codes: d.codes_omesos.join(', ') }))
+        showToast(d.codes_omesos?.length ? 'warn' : 'ok',
+          t('rondes.nova_ok', { n: d.seq }) + (parts.length ? ` · ${parts.join(' · ')}` : ''))
+        refrescaTot()
+      })
+      .catch(e => showToast('err', e?.response?.data?.error || t('rondes.nova_error')))
+      .finally(() => setObrintVolta(false))
+  }
+
   return (
     <section style={containerStyle}>
       <div style={sectionTitle}>{t('model_sheet.dashboard.workplan.title')}</div>
@@ -361,6 +462,23 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
                       fontStyle: 'italic', fontSize: 'var(--fs-body)' }}>
           {t('model_sheet.dashboard.workplan.empty')}
         </div>
+      ) : perVoltes ? (
+        /* M2 · MOCKUP A v2 — UN CONTENIDOR PER VOLTA, en ordre cronològic (la R1 a dalt, les
+           noves a baix). Les targetes són LES MATEIXES: el que hi ha de nou és l'embolcall. */
+        blocs.map(bloc => (
+          <RondaPla key={bloc.clau} bloc={bloc}
+            obert={obert(bloc)} onToggle={() => commuta(bloc)}
+            onEntregar={() => setEntregant(bloc)}
+            onOkClient={() => setOkClient(bloc.entrega)}>
+            {bloc.tasques.map(task => (
+              <TaskCard key={task.id} task={task} mine={isMine(task)}
+                hasToolRoute={Boolean(desti(task))}
+                segellada={bloc.estat === RONDA_ENTREGADA}
+                onPlay={handlePlay} onPause={handlePause} onStop={handleStop}
+                onDeclarar={setDeclarant} />
+            ))}
+          </RondaPla>
+        ))
       ) : (
         <div style={cardsGrid}>
           {list.map(task => (
@@ -368,6 +486,30 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
               onPlay={handlePlay} onPause={handlePause} onStop={handleStop}
               onDeclarar={setDeclarant} />
           ))}
+        </div>
+      )}
+
+      {/* «+ NOVA RONDA» · només quan no n'hi ha cap d'oberta (guard d'`obrir_ronda`), i mai en
+          un model que encara no ha fet cap gest de treball: la R1 neix sola del primer gest
+          (M1-bis · FIT-4) i un botó aquí faria creure que s'ha de declarar. */}
+      {perVoltes && potObrirVolta(rondes) && (
+        <button type="button" onClick={obreVolta} disabled={obrintVolta}
+          style={{
+            width: '100%', padding: 10, marginTop: 2, marginBottom: 6,
+            borderRadius: 'var(--r-card)', textAlign: 'center', cursor: obrintVolta ? 'not-allowed' : 'pointer',
+            border: '1px dashed var(--line)', background: 'transparent',
+            color: obrintVolta ? 'var(--text-faint)' : 'var(--text-soft)',
+            fontFamily: 'var(--mono)', fontSize: 'var(--fs-body)',
+          }}>
+          {t('rondes.nova')}
+        </button>
+      )}
+
+      {/* La frase del peu del mockup: diu la LLEI que la pantalla acaba d'aplicar (per què el
+          transport ha desaparegut de les voltes entregades). */}
+      {perVoltes && (
+        <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', marginBottom: 4 }}>
+          {t('rondes.peu_segellades')}
         </div>
       )}
 
@@ -399,6 +541,27 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
           }}
           onCancel={() => setDeclarant(null)}
         />
+      )}
+      {entregant && (
+        <EntregaDialog
+          ronda={entregant.ronda}
+          viues={entregant.total - entregant.fets}
+          onFet={() => {
+            setEntregant(null)
+            showToast('ok', t('rondes.entrega_ok', { n: entregant.ronda.seq }))
+            refrescaTot()
+          }}
+          onCancel={() => setEntregant(null)} />
+      )}
+      {okClient && (
+        <OkClientDialog
+          entrega={okClient}
+          onFet={() => {
+            setOkClient(null)
+            showToast('ok', t('rondes.ok_client_ok'))
+            refrescaTot()
+          }}
+          onCancel={() => setOkClient(null)} />
       )}
       {handoff && (
         <Modal

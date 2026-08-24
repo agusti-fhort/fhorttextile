@@ -4256,6 +4256,7 @@ def consumption_delivery_view(request, model_id):
     try:
         model = Model.objects.select_related('consumption_record').prefetch_related(
             'model_tasks__task_type',
+            'model_tasks__ronda',
             'model_tasks__timers__tecnic',
             'model_tasks__transitions__by',
         ).get(id=model_id)
@@ -4275,6 +4276,7 @@ def consumption_delivery_view(request, model_id):
     tasks = sorted(model.model_tasks.all(), key=lambda t: (t.order, t.id))
     for mt in tasks:
         task_minutes = 0
+        minuts_per_tecnic = {}   # M2 · etiqueta -> minuts SANS d'aquest pas (per al `qui`)
         for tm in mt.timers.all():
             if not tram_compta(tm):      # timer obert (B1-a) o tram desbocat → fora
                 continue
@@ -4284,12 +4286,31 @@ def consumption_delivery_view(request, model_id):
                 label = (tm.tecnic.nom_complet or tm.tecnic.user.get_username()) if tm.tecnic else str(tm.tecnic_id)
                 slot = per_tech.setdefault(tm.tecnic_id, {'technician_id': tm.tecnic_id, 'label': label, 'minutes': 0})
                 slot['minutes'] += tm.minuts
+                minuts_per_tecnic[label] = minuts_per_tecnic.get(label, 0) + tm.minuts
+        # M2 — DUES ADDICIONS READ-ONLY, i cap camp nou a cap taula.
+        #
+        # `ronda_seq`: el registre d'activitat s'agrupa per VOLTA (mockup B v3) i el pas no deia
+        # de quina era. Creuar-ho pel `task_type` seria ambigu precisament al cas que importa:
+        # amb rondes, el MATEIX code apareix un cop per volta i les files no es podrien
+        # distingir. `null` = feina d'abans del canvi de llei o nascuda al buit entre voltes
+        # (mateix contracte que `ModelTaskSerializer.ronda_seq`).
+        #
+        # `qui`: el tècnic que hi ha posat MÉS MINUTS SANS, no l'`assignee`. La lliçó és la de
+        # F1.5 i la repeteix `ModelTaskSerializer.obert_per`: `assignee` és PLANIFICACIÓ i el
+        # rellotge és REALITAT, i un registre d'ACTIVITAT ha de dir qui la va fer. Sense cap
+        # tram sa, `null` — «ningú no hi ha treballat» és una dada, no un forat a omplir amb
+        # el nom de qui la tenia assignada.
+        qui = None
+        if minuts_per_tecnic:
+            qui = max(minuts_per_tecnic.items(), key=lambda kv: (kv[1], kv[0]))[0]
         steps.append({
             'task_type': mt.task_type.name if mt.task_type_id else None,
             'status': mt.status,
             'minutes': task_minutes,
             'started_at': mt.started_at,
             'finished_at': mt.finished_at,
+            'ronda_seq': mt.ronda.seq if mt.ronda_id else None,
+            'qui': qui,
         })
         for tr in mt.transitions.all():
             if tr.from_status == 'Done' and tr.to_status == 'InProgress':
@@ -4397,7 +4418,7 @@ def model_dashboard_view(request, model_id):
 
     pla_tasks = (_ModelTask.objects
                  .filter(model_id=model.id)
-                 .select_related('task_type', 'assignee')
+                 .select_related('task_type', 'assignee', 'ronda')
                  .order_by('task_type__default_order', 'task_type__code'))
     # Temps consumit per tasca amb la regla d'higiene (== helper canònic _real_minutes). 1 query.
     from fhort.tasks.services_i import minuts_per_model_task
@@ -4423,6 +4444,16 @@ def model_dashboard_view(request, model_id):
         # B4a — origen/off_recipe per pintar el filet grana (extra fora de recepta) al board.
         'origen': t.origen,
         'off_recipe': t.off_recipe,
+        # M2 — ADDICIÓ READ-ONLY: de quina VOLTA és la tasca. El Pla de treball s'agrupa per
+        # ronda (mockup A v2) i aquest compositor era l'únic lloc que no ho deia. NO es fa
+        # llegint `/model-task-items/`, que ja porta `ronda`/`ronda_seq`: aquell endpoint té
+        # ABAST PER FILA (`scope_model_task_queryset`) i a un tècnic sense VIEW_TEAM_TASKS li
+        # amagaria les tasques d'altri — el Pla passaria a ensenyar-ne menys de les que ensenya
+        # avui, i en silenci. El compositor no scopa, i per això la volta ha de sortir d'aquí.
+        # `ronda_seq` null = feina d'abans del canvi de llei (M1-bis · FIT-4) o nascuda al buit
+        # entre voltes: mateix contracte que `ModelTaskSerializer.ronda_seq`.
+        'ronda': t.ronda_id,
+        'ronda_seq': t.ronda.seq if t.ronda_id else None,
     } for t in pla_tasks]
 
     # --- Q3: atenció tècnica — alertes POM PENDENTS de resoldre ---

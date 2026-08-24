@@ -85,3 +85,31 @@ export function unitLabel(unit = 'CM') {
 export function titleLen(cm) {
   return cm == null || cm === '' ? '' : `${cm} cm`;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DATES DE RONDA (M2) — la mateixa mà per a les dues superfícies
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// El locale es dedueix de l'idioma actiu i no s'escriu a cada pantalla: la còpia literal
+// `i18n.language === 'es' ? 'es-ES' : …` ja vivia en tres llocs i cada nou consumidor n'era un
+// quart lloc on divergir.
+export function localeDeIdioma(idioma) {
+  return idioma === 'es' ? 'es-ES' : idioma === 'en' ? 'en-GB' : 'ca-ES'
+}
+
+/** Data i hora curtes («20/08 · 16:40» a la maqueta). `null` → el guionet de la casa. */
+export function formatDataHora(v, locale = 'ca-ES') {
+  if (!v) return '—'
+  const d = new Date(v)
+  if (Number.isNaN(d.getTime())) return '—'
+  return `${d.toLocaleDateString(locale, { day: '2-digit', month: '2-digit' })} · `
+    + d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })
+}
+
+/** Només el dia («12 d'ag.»), per a l'OK del client i altres fets sense hora rellevant. */
+export function formatDataCurta(v, locale = 'ca-ES') {
+  if (!v) return '—'
+  const d = new Date(v)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString(locale, { day: 'numeric', month: 'short' })
+}

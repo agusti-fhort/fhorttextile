@@ -115,6 +115,71 @@ def _porta_estat(task, estat, prof):
         transition_task(task, estat, prof)
 
 
+#: M2 · minuts sintètics per tasca del banc, en l'ordre en què es munten. Prou diferents entre
+#: si perquè la revisió visual distingeixi una columna ben alineada d'una que copia el veí.
+_MINUTS_BANC = [74, 27, 66, 18]
+
+
+def _dona_temps_real(model, prof):
+    """M2 · dona TEMPS CONSOLIDAT als trams del banc, perquè les dues cares tinguin què pintar.
+
+    🔑 **PER QUÈ CAL.** Els trams que el banc fabrica es tanquen dins del mateix segon i sense cap
+    escriptura, i `_close_open_timer` els marca `consulta=True` —«s'hi ha entrat, no s'hi ha
+    treballat»—, que és exactament el que `TRAMS_SANS` exclou. Resultat: tot el banc sortia a
+    **0h 00m** i amb la columna «Qui» buida. Amb això, la graella del Registre i les capçaleres
+    de volta del Pla es poden contrastar amb el mockup als eixos temps i qui, que si no queden
+    muts.
+
+    🔒 **NO SIMULA CAP BATEC.** S'escriuen els camps del TRAM directament (`inici`, `minuts`,
+    `escriptura_at`, `consulta`) i prou. Cridar el batec d'escriptura de producte dispararia la
+    MERITACIÓ SaaS i l'event a `public` —v. `_merita_sintetic`—, que és el que aquest banc no ha
+    de tocar mai.
+    """
+    from datetime import timedelta
+
+    tocats = 0
+    trams = (TimerEntrada.objects
+             .filter(model_task__model=model, fi__isnull=False)
+             .order_by('pk'))
+    for i, tram in enumerate(trams):
+        minuts = _MINUTS_BANC[i % len(_MINUTS_BANC)]
+        tram.inici = tram.fi - timedelta(minutes=minuts)
+        tram.minuts = minuts
+        tram.escriptura_at = tram.inici + timedelta(minutes=1)
+        tram.consulta = False
+        tram.tecnic = tram.tecnic or prof
+        tram.save(update_fields=['inici', 'minuts', 'escriptura_at', 'consulta', 'tecnic'])
+        tocats += 1
+    return tocats
+
+
+def _merita_sintetic(model):
+    """M2 · dona al model del banc l'ALBARÀ que el Registre d'activitat exigeix per ensenyar-se.
+
+    🔒 **I NO PASSA PEL CAMÍ NORMAL, A POSTA.** La meritació de producte (`services_c._meritar_model`,
+    disparada pel batec d'escriptura) emet `model_consumption_started` a `public`, i aquell event
+    ÉS la unitat facturable del SaaS (`backoffice/recurring_service` en fa el `.count()` del
+    període). Meritar un model sintètic pel camí normal ficaria feina inventada a la facturació
+    d'algú. Aquí s'escriu **només la fila local** —`ConsumptionRecord` + la marca del model—, que
+    és exactament el que la porta `/albara/` mira (`merited: False` si no n'hi ha cap), i **cap
+    event surt del tenant**.
+
+    Idempotent: si el model ja té albarà, no en fa cap altre.
+    """
+    from django.utils import timezone
+
+    from fhort.models_app.models import ConsumptionRecord
+
+    if getattr(model, 'consumption_record', None) is not None:
+        return False
+    ara = timezone.now()
+    Model.objects.filter(pk=model.pk).update(consumption_started_at=ara)
+    ConsumptionRecord.objects.create(
+        model=model, code_snapshot=model.codi_intern, name_snapshot=model.nom_prenda or '',
+        period=ara.strftime('%Y-%m'), merited_at=ara)
+    return True
+
+
 def desmunta():
     """Esborra NOMÉS els models del banc. La guarda és el prefix i no hi ha cap altra via.
 
@@ -122,10 +187,15 @@ def desmunta():
     fum l'ha consumit (una entrega tanca la ronda i no es pot desfer), el que toca és tornar-lo
     a fabricar sencer.
     """
+    from fhort.models_app.models import ConsumptionRecord
+
     qs = Model.objects.filter(codi_intern__startswith=PREFIX)
     codis = list(qs.values_list('codi_intern', flat=True))
     ModelTask.objects.filter(model__codi_intern__startswith=PREFIX).delete()
     Ronda.objects.filter(model__codi_intern__startswith=PREFIX).delete()
+    # L'albarà sintètic d'M2 se'n va amb el banc: si es quedés, `reconcile_consumption` el
+    # veuria com una fila d'un model que ja no existeix.
+    ConsumptionRecord.objects.filter(model__codi_intern__startswith=PREFIX).delete()
     qs.delete()
     print(f'desmuntats: {codis or "(cap)"}')
 
@@ -168,6 +238,15 @@ def munta():
         if r1 is not None:
             tancar_ronda(r1, profile=prof)
         obrir_ronda(model, Ronda.MOTIU_NOVA_MOSTRA, [], profile=prof)
+
+    # QUARTA (M2) — l'ALBARÀ. Sense `ConsumptionRecord` la porta `/albara/` respon
+    # `merited: False` i el Registre d'activitat no ensenya res: el banc d'M1 no en tenia cap i
+    # la meitat B d'M2 no s'hi podia provar. Se'n donen a TOTS els models amb tasques; el verge
+    # es queda sense, que és el control negatiu de l'estat «encara no ha iniciat activitat».
+    for model, _nou in creats:
+        if ModelTask.objects.filter(model=model).exists():
+            _dona_temps_real(model, prof)
+            _merita_sintetic(model)
     return prof, creats
 
 

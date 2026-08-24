@@ -105,6 +105,10 @@ export const models = {
   // Una «correcció» és una volta d'una sola tasca: mateixa porta, motiu diferent. El backend hi
   // posa la genealogia (mare) sense que la UI l'hagi de saber.
   obrirRonda: (id, data) => client.post(`/api/v1/models/${id}/obrir-ronda/`, data),
+  // M1 · FIT-1 — LES VOLTES DEL MODEL, amb l'acte d'entrega NIUAT. Porta pròpia i no un camp
+  // del model: una ronda entregada és una ronda TANCADA, i `Model.ronda_oberta` no en pot
+  // ensenyar mai cap. Sense això l'Entrega seria una dada que no es pot llegir des d'enlloc.
+  rondes: (id) => client.get(`/api/v1/models/${id}/rondes/`),
   // Sprint B — CÒPIA model→model. Mirall de `materialitzar-poms` amb la font canviada (un altre
   // MODEL en comptes de l'ITEM). body: {pom_ids?, copy_values?, copy_run?, copy_grading?,
   // copy_files?} — totes les banderes per defecte certes. Mai trepitja el patrimoni del destí.
@@ -417,6 +421,20 @@ export const gradingRules = {
 
 // Capa de Projecte — instàncies ModelTask (model-task-items/, ModelViewSet + row-level scope).
 // Filtres reals del backend: ?model & status & task_type & assignee.
+// M1 · FIT-1 + FIT-13 — LES DUES PORTES D'ESCRIPTURA DE L'ENTREGA.
+//
+// ⚠️ `entrega()` **TANCA LA RONDA** en la mateixa transacció (FIT-13), i tancar-la tanca la
+// feina viva de la volta (FIT-6). No és un efecte secundari amagat: la cara ho ha de DIR abans
+// de confirmar. `okClient()` és el senyal manual i posterior del client i no toca la ronda.
+export const rondes = {
+  entrega: (rondaId, data) => client.post(`/api/v1/rondes/${rondaId}/entrega/`, data),
+}
+
+export const entregues = {
+  // Un sol cop: és un FET, no un interruptor. El segon PATCH el rebutja el servei amb 400.
+  okClient: (entregaId, data) => client.patch(`/api/v1/entregues/${entregaId}/ok-client/`, data),
+}
+
 export const modelTasks = {
   list: (params) => client.get('/api/v1/model-task-items/', { params }),
   listByModel: (modelId) => client.get('/api/v1/model-task-items/', { params: { model: modelId } }),
