@@ -167,7 +167,12 @@ function TaskCard({ task, mine, hasToolRoute, segellada = false, onPlay, onPause
   )
 }
 
-export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
+// M3 · FIT-9 — `modelTancat`: el model és `acabat` o `jubilat`. Un model fora del tauler es
+// CONSULTA (la seva feina, el seu temps i les seves voltes segueixen sencers a la pantalla), i
+// per això el que se'n va és el que ESCRIU: el transport de cada targeta i el «+ Nova ronda».
+// No s'apaguen: el camí per tornar a treballar-hi és reobrir el model, i un botó deshabilitat
+// no ho diria. Mateix criteri que la volta entregada d'M2 (`segellada`).
+export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab, modelTancat = false }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const token = localStorage.getItem('access_token')
@@ -458,7 +463,7 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
             {bloc.tasques.map(task => (
               <TaskCardCompacta key={task.id} task={task} mine={isMine(task)}
                 hasToolRoute={Boolean(desti(task))}
-                segellada={bloc.estat === RONDA_ENTREGADA}
+                segellada={modelTancat || bloc.estat === RONDA_ENTREGADA}
                 onPlay={handlePlay} onPause={handlePause} onStop={handleStop}
                 onDeclarar={setDeclarant} />
             ))}
@@ -468,6 +473,7 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
         <div style={cardsGrid}>
           {list.map(task => (
             <TaskCard key={task.id} task={task} mine={isMine(task)} hasToolRoute={Boolean(desti(task))}
+              segellada={modelTancat}
               onPlay={handlePlay} onPause={handlePause} onStop={handleStop}
               onDeclarar={setDeclarant} />
           ))}
@@ -485,7 +491,7 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
           Segueix vivint dins del pla PER VOLTES: «a sota de l'última ronda» demana que n'hi hagi
           alguna, i en un model sense cap la R1 neix sola del primer gest (M1-bis · FIT-4) —un
           botó allà faria creure que s'ha de declarar. */}
-      {perVoltes && (
+      {perVoltes && !modelTancat && (
         <button type="button" onClick={obreVolta} disabled={obrintVolta}
           style={{
             width: '100%', padding: 10, marginTop: 2, marginBottom: 6,

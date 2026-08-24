@@ -60,6 +60,15 @@ const cardEmpty = {
   background: 'var(--panel)', color: 'var(--text-faint)', fontStyle: 'italic',
   fontSize: 'var(--fs-body)',
 }
+// M3 · el banner d'un model fora del tauler. No és una alerta (no ha passat res dolent): és un
+// estat, i per això va amb la tinta i el fons neutres de la casa i no amb `--err`.
+const bannerTancat = {
+  display: 'flex', alignItems: 'center', gap: 8,
+  borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)',
+  borderRadius: 'var(--r-card)', padding: '10px 14px',
+  background: 'var(--bg-muted)', color: 'var(--text-soft)',
+  fontFamily: MONO, fontSize: 'var(--fs-body)', lineHeight: 1.5,
+}
 const stateBox = {
   borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)',
   borderRadius: 'var(--r-card)', padding: '14px 16px',
@@ -144,11 +153,30 @@ export default function DashboardTab({ modelId, onOpenTab, navigate, wpVersion =
   const base = art.base || {}
   const baseHasData = !!(base.base_size_label || (base.n_active ?? 0) > 0)
 
+  // M3 · FIT-9 — un model ACABAT o JUBILAT es CONSULTA, no es treballa. El banner ho diu una
+  // vegada i a dalt de tot, i el transport de les tasques se'n va (no s'apaga: un botó
+  // deshabilitat convida a prémer-lo i promet que algun dia s'encendrà, i aquí el que passa és
+  // que primer s'ha de reobrir el model). Mateix criteri que M2 va aplicar a la volta entregada.
+  const tancat = onSoc.estat === 'acabat' || onSoc.estat === 'jubilat'
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
 
+      {tancat && (
+        <div style={bannerTancat} role="status">
+          <i className="ti ti-flag-check" aria-hidden="true" style={{ fontSize: 16, flexShrink: 0 }} />
+          <span>
+            <strong>{t(`model_sheet.cicle.estat.${onSoc.estat}`)}</strong>
+            {onSoc.motiu_tancament && ` · ${t(`model_sheet.cicle.motiu_${onSoc.motiu_tancament}`)}`}
+            {onSoc.data_tancament && ` · ${onSoc.data_tancament.slice(0, 10)}`}
+            {' — '}{t('model_sheet.cicle.banner_ajuda')}
+          </span>
+        </div>
+      )}
+
       {/* ── Pla de treball (Q4 crescut) — ample total dalt (P2a) ───── */}
-      <WorkPlan tasques={tasques} modelId={modelId} onRefresh={load} onOpenTab={onOpenTab} />
+      <WorkPlan tasques={tasques} modelId={modelId} onRefresh={load} onOpenTab={onOpenTab}
+                modelTancat={tancat} />
 
       <div style={grid}>
       <div style={wrap}>

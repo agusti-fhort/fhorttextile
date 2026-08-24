@@ -163,6 +163,13 @@ class ModelListSerializer(serializers.ModelSerializer):
             'garment_type',
             'garment_type_item_nom',
             'lliurable_ronda_n',
+            # M3 · FIT-9 — l'ESTAT del cicle de vida, a la LLISTA. Hi faltava (la llista només
+            # servia `fase_actual`), i sense ell la vista «acabats» no tenia criteri de domini
+            # —pintava un buit amb el motiu escrit— ni el menú d'accions podia saber si aquell
+            # model es tanca, es jubila o es reobre.
+            'estat',
+            'motiu_tancament',
+            'data_tancament',
             'fase_actual',
             'responsable',
             'prioritat',

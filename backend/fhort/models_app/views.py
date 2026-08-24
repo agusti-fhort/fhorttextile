@@ -4384,6 +4384,11 @@ def model_dashboard_view(request, model_id):
     on_soc = {
         'fase': model.fase_actual,
         'estat': model.estat,
+        # M3 · FIT-9/10 — el banner de la fitxa ha de poder dir PER QUÈ està acabat i des de
+        # quan. Sense el motiu, «Acabat» i «Tret de catàleg» —que són fets ben diferents— es
+        # pintarien igual, i el segon és el que explica per què no hi haurà més voltes.
+        'motiu_tancament': model.motiu_tancament,
+        'data_tancament': model.data_tancament.isoformat() if model.data_tancament else None,
         'ready_for_gate': model_ready_for_gate(model.id),
         'next_phase': next_phase,
         'blockers': {'tasks_open': tasks_open},

@@ -996,7 +996,35 @@
     "pas_sense_mesures": "Save the POM to generate the size table",
     "pas_sense_regles": "Define the grading to generate the size table",
     "pas_sense_propagacio": "Propagate to generate the size table",
-    "measure_set": "Size set"
+    "measure_set": "Size set",
+    "cicle": {
+      "tancar": "Close model",
+      "tancar_confirm": "Close",
+      "tancar_ajuda": "Closing the model takes it off the active board. It stays available and can be reopened.",
+      "motiu": "Reason",
+      "motiu_acabat": "Finished (internal decision)",
+      "motiu_tret_de_cataleg": "Dropped from catalogue (the client will not produce it)",
+      "motiu_tret": "Dropped from catalogue (the client will not produce it)",
+      "ronda_oberta_avis": "Round R{{n}} is open. Confirming the delivery closes everything: this round is reported as delivered and its remaining live work is closed.",
+      "confirmar_i_tancar": "Confirm delivery and close",
+      "destinatari": "Recipient",
+      "descripcio": "What was delivered",
+      "jubilar": "Retire model",
+      "jubilar_ajuda": "Retiring archives it: it leaves the normal views and only shows under the “retired” filter.",
+      "reobrir": "Reopen model",
+      "reobrir_ajuda": "The model returns to the board. Inside, you decide whether to amend the last round or open a new one.",
+      "motiu_lliure": "Reason (optional)",
+      "confirmar": "Confirm",
+      "tancat_ok": "Model {{codi}} closed.",
+      "jubilat_ok": "Model {{codi}} retired.",
+      "reobert_ok": "Model {{codi}} reopened.",
+      "estat_titol": "Model state",
+      "estat": {
+        "acabat": "Finished",
+        "jubilat": "Retired"
+      },
+      "banner_ajuda": "this model is read-only; reopen it to work on it again."
+    }
   },
   "model_wizard": {
     "customer": "Customer",
@@ -1185,7 +1213,8 @@
     "col_deadline": "Deadline",
     "col_estat": "Status",
     "estat_pendent": "Commercial status: pending the Kanban.",
-    "select_page": "Select the whole page"
+    "select_page": "Select the whole page",
+    "view_retired": "Retired models"
   },
   "models_filters": {
     "button": "Filters",
@@ -2218,10 +2247,9 @@
       "SP": "SP · Special"
     },
     "estats": {
-      "Nou": "New",
-      "EnCurs": "In progress",
-      "EnRevisio": "In review",
-      "Tancat": "Closed"
+      "nou": "New",
+      "acabat": "Finished",
+      "jubilat": "Retired"
     }
   },
   "model": {
@@ -2264,10 +2292,9 @@
       "codi_tenant_help": "3 chars · auto-derived from customer code if empty"
     },
     "estats": {
-      "Nou": "New",
-      "EnCurs": "In progress",
-      "EnRevisio": "In review",
-      "Tancat": "Closed"
+      "nou": "New",
+      "acabat": "Finished",
+      "jubilat": "Retired"
     },
     "prioritats": {
       "1": "Low",
@@ -3486,7 +3513,12 @@
         "pending": "Pending",
         "open": "Open",
         "paused": "Paused",
-        "done": "Done"
+        "done": "Delivered"
+      },
+      "ronda": {
+        "oberta": "round open",
+        "entregada": "delivered",
+        "tancada": "closed"
       }
     },
     "milestones": {

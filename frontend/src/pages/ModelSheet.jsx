@@ -1868,6 +1868,16 @@ function ModelSheetHeader({ model, onDelete, onFeedback, onChanged }) {
         {model.fase_actual ? t(`model_sheet.dashboard.phase.${model.fase_actual}`, model.fase_actual) : '—'}
       </span>
 
+      {/* M3 · FIT-9 — l'ESTAT DEL CICLE, i NOMÉS quan diu alguna cosa: un model `nou` és el
+          cas normal i un badge que ho repetís a totes les fitxes seria soroll (regla del
+          silenci). Va al costat de la fase perquè són les dues coordenades del model: en quin
+          punt del procés és, i si encara és al tauler. */}
+      {model.estat && model.estat !== 'nou' && (
+        <span style={badgeNeutreH} title={t('model_sheet.cicle.estat_titol')}>
+          {t(`model_sheet.cicle.estat.${model.estat}`, model.estat)}
+        </span>
+      )}
+
       {/* P7 — el RECURS assignat. Només en una MARCA (és qui assigna) i només si n'hi ha un:
           un model sense recurs no viatja enlloc, i dir-ho amb un '—' aquí seria soroll a la
           capçalera. Qui l'ha de veure buit és la llista, que compara models entre ells. */}

@@ -996,7 +996,35 @@
     "pas_sense_mesures": "Hay que grabar el POM para generar la tabla de tallas",
     "pas_sense_regles": "Hay que definir la graduación para generar la tabla de tallas",
     "pas_sense_propagacio": "Hay que propagar para generar la tabla de tallas",
-    "measure_set": "Medir set"
+    "measure_set": "Medir set",
+    "cicle": {
+      "tancar": "Cerrar modelo",
+      "tancar_confirm": "Cerrar",
+      "tancar_ajuda": "Cerrar el modelo lo saca del tablero activo. Sigue consultable y se puede reabrir.",
+      "motiu": "Motivo",
+      "motiu_acabat": "Acabado (decisión interna)",
+      "motiu_tret_de_cataleg": "Retirado de catálogo (el cliente no lo producirá)",
+      "motiu_tret": "Retirado de catálogo (el cliente no lo producirá)",
+      "ronda_oberta_avis": "La ronda R{{n}} está abierta. Confirmar la entrega lo cierra todo: se informará la entrega de esta vuelta y se cerrará el trabajo que quede vivo.",
+      "confirmar_i_tancar": "Confirmar la entrega y cerrar",
+      "destinatari": "Destinatario",
+      "descripcio": "Qué se ha entregado",
+      "jubilar": "Jubilar modelo",
+      "jubilar_ajuda": "Jubilar lo archiva: queda fuera de las vistas normales y solo se ve con el filtro «jubilados».",
+      "reobrir": "Reabrir modelo",
+      "reobrir_ajuda": "El modelo vuelve al tablero. Dentro se decide si se rectifica la última vuelta o se abre una nueva.",
+      "motiu_lliure": "Motivo (opcional)",
+      "confirmar": "Confirmar",
+      "tancat_ok": "Modelo {{codi}} cerrado.",
+      "jubilat_ok": "Modelo {{codi}} jubilado.",
+      "reobert_ok": "Modelo {{codi}} reabierto.",
+      "estat_titol": "Estado del modelo",
+      "estat": {
+        "acabat": "Acabado",
+        "jubilat": "Jubilado"
+      },
+      "banner_ajuda": "este modelo se consulta; para volver a trabajar en él, reábrelo."
+    }
   },
   "model_wizard": {
     "customer": "Cliente",
@@ -1185,7 +1213,8 @@
     "col_deadline": "Deadline",
     "col_estat": "Estado",
     "estat_pendent": "Estado comercial: pendiente del Kanban.",
-    "select_page": "Seleccionar toda la página"
+    "select_page": "Seleccionar toda la página",
+    "view_retired": "Modelos jubilados"
   },
   "models_filters": {
     "button": "Filtros",
@@ -2218,10 +2247,9 @@
       "SP": "SP · Especial"
     },
     "estats": {
-      "Nou": "Nuevo",
-      "EnCurs": "En curso",
-      "EnRevisio": "En revisión",
-      "Tancat": "Cerrado"
+      "nou": "Nuevo",
+      "acabat": "Acabado",
+      "jubilat": "Jubilado"
     }
   },
   "model": {
@@ -2264,10 +2292,9 @@
       "codi_tenant_help": "3 caracteres · si está vacío se deriva del código cliente"
     },
     "estats": {
-      "Nou": "Nuevo",
-      "EnCurs": "En curso",
-      "EnRevisio": "En revisión",
-      "Tancat": "Cerrado"
+      "nou": "Nuevo",
+      "acabat": "Acabado",
+      "jubilat": "Jubilado"
     },
     "prioritats": {
       "1": "Baja",
@@ -3486,7 +3513,12 @@
         "pending": "Pendientes",
         "open": "En curso",
         "paused": "Pausados",
-        "done": "Hechos"
+        "done": "Entregados"
+      },
+      "ronda": {
+        "oberta": "ronda abierta",
+        "entregada": "entregada",
+        "tancada": "cerrada"
       }
     },
     "milestones": {

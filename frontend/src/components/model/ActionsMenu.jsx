@@ -57,6 +57,9 @@ export default function ActionsMenu({ targets, model, selectionSet = null, onCha
   const isStudio = useAuthStore(st => st.tenant?.tipologia === 'estudi')
   const enviables = list.filter(m => m.origen === 'EXTERN')
   const canConfigure = useAuthStore(st => st.user?.capabilities?.includes('configure')) ?? false
+  // M3 — el cicle de vida del model és un acte de GOVERN: el servidor el gateja amb
+  // `close_gates` (la mateixa de gate/regress de fase i del segell de graduació).
+  const canCloseGates = useAuthStore(st => st.user?.capabilities?.includes('close_gates')) ?? false
   const [recursosActius, setRecursosActius] = useState([])   // només ACTIU: la resta no deixa passar res
 
   // Clients distints de la selecció (l'assignació a comanda exigeix un sol client).
@@ -95,6 +98,10 @@ export default function ActionsMenu({ targets, model, selectionSet = null, onCha
         .then(r => setRecursosActius((r.data?.results ?? r.data ?? []).filter(x => x.estat === 'ACTIU')))
         .catch(() => setRecursosActius([]))
     }
+    // M3 — el tancament comença SEMPRE sense `ronda`: la volta oberta no es dedueix al client,
+    // la diu el servidor amb el 409. Preguntar-ho abans hauria estat una segona font de veritat.
+    if (kind === 'tancar_model') setForm({ motiu: 'acabat', ronda: null, destinatari: '', descripcio: '' })
+    if (kind === 'reobrir_model' || kind === 'jubilar_model') setForm({ motiu_text: '' })
     if (kind === 'production') setForm({ supplier_id: '', phase: defaultPhase, expected_at: '', notes: '' })
     if (kind === 'fitting') {
       setForm({ fase: single ? single.fase_actual : CURRENT, data: todayISO(), expected_at: '',
@@ -223,6 +230,60 @@ export default function ActionsMenu({ targets, model, selectionSet = null, onCha
   // P7 — UNA SOLA CRIDA, no runBulk: l'endpoint és en bloc i torna comptes agregats. El 409
   // (vincle no ACTIU) ha d'arribar sencer a l'usuari: és la llei de les dues claus dient que
   // el pont desmenteix l'assignació, no un error tècnic que es pugui resumir com a "omès".
+  // ── M3 · EL CICLE DE VIDA (FIT-9/10/11) ───────────────────────────────────────────────────
+  //
+  // 🚨 EL 409 NO ÉS UN ERROR: ÉS LA PREGUNTA. Tancar un model amb una volta oberta vol dir
+  // tancar feina que algú està fent, i el servidor no ho decideix sol (FIT-10). La primera
+  // crida torna `code='ronda_oberta'` amb el número de la volta; llavors el diàleg canvia de
+  // cara i demana el destinatari de l'entrega, perquè el que farà la segona crida és
+  // exactament això: informar-la (porta d'M1), tancar la volta i acabar el model d'un cop.
+  const runTancarModel = () => {
+    if (!single) return
+    setBusy(true)
+    const cos = { motiu: form.motiu || 'acabat' }
+    if (form.ronda) {
+      cos.confirmar_entrega = true
+      cos.destinatari = form.destinatari || ''
+      cos.descripcio = form.descripcio || ''
+    }
+    modelsApi.tancar(single.id, cos)
+      .then(r => {
+        setBusy(false); setModal(null)
+        onFeedback({ type: 'ok', text: t('model_sheet.cicle.tancat_ok', { codi: single.codi_intern }) })
+        onChanged && onChanged()
+        return r
+      })
+      .catch(e => {
+        setBusy(false)
+        const dades = e.response?.data || {}
+        if (dades.code === 'ronda_oberta' && dades.ronda) {
+          // Segona cara del MATEIX diàleg (no un segon modal): la pregunta arriba amb el número
+          // de la volta i el formulari passa a demanar el que l'entrega necessita.
+          setForm(f => ({ ...f, ronda: dades.ronda, destinatari: f.destinatari || '' }))
+          return
+        }
+        onFeedback({ type: 'err', text: dades.error || 'error' })
+      })
+  }
+
+  const runActeSimple = (kind) => {
+    if (!single) return
+    setBusy(true)
+    const crida = kind === 'jubilar_model' ? modelsApi.jubilar : modelsApi.reobrir
+    crida(single.id, { motiu: form.motiu_text || '' })
+      .then(() => {
+        setBusy(false); setModal(null)
+        const clau = kind === 'jubilar_model' ? 'model_sheet.cicle.jubilat_ok'
+                                              : 'model_sheet.cicle.reobert_ok'
+        onFeedback({ type: 'ok', text: t(clau, { codi: single.codi_intern }) })
+        onChanged && onChanged()
+      })
+      .catch(e => {
+        setBusy(false)
+        onFeedback({ type: 'err', text: e.response?.data?.error || 'error' })
+      })
+  }
+
   const runAssignResource = () => {
     setBusy(true)
     modelsApi.assignarRecurs({ model_ids: list.map(m => m.id), studio_codi: form.studio_codi || '' })
@@ -304,6 +365,24 @@ export default function ActionsMenu({ targets, model, selectionSet = null, onCha
       : []),
     { key: 'advance', label: t('model_sheet.advance_phase'), icon: 'ti-arrow-right', enabled: !conjunt && someNext, hint: conjuntHint },
     { key: 'back', label: t('model_sheet.back_phase'), icon: 'ti-arrow-left', enabled: !conjunt && somePrev, hint: conjuntHint },
+    // ── M3 · EL CICLE DE VIDA (FIT-9/10/11) ────────────────────────────────────────────────
+    // Només amb UN model i només amb `close_gates`, que és el que el servidor demana. L'entrada
+    // es gateja aquí i no s'ensenya-i-403: és el mateix que es va corregir a «assignar a
+    // comanda» (un tècnic la veia, omplia el diàleg i només llavors es menjava el rebuig).
+    // Les tres són EXCLOENTS entre si perquè els estats ho són: un model obert es tanca, un
+    // d'acabat es jubila o es reobre, i un de jubilat només es reobre.
+    ...((canCloseGates && single && single.estat === 'nou')
+      ? [{ key: 'tancar_model', label: t('model_sheet.cicle.tancar'), icon: 'ti-flag-check',
+           enabled: true }]
+      : []),
+    ...((canCloseGates && single && single.estat === 'acabat')
+      ? [{ key: 'jubilar_model', label: t('model_sheet.cicle.jubilar'), icon: 'ti-archive',
+           enabled: true }]
+      : []),
+    ...((canCloseGates && single && (single.estat === 'acabat' || single.estat === 'jubilat'))
+      ? [{ key: 'reobrir_model', label: t('model_sheet.cicle.reobrir'), icon: 'ti-lock-open',
+           enabled: true }]
+      : []),
   ]
   const phaseSelectOptions = (withCurrent) => (
     <>
@@ -409,6 +488,68 @@ export default function ActionsMenu({ targets, model, selectionSet = null, onCha
           )}
         </Modal>
       )}
+
+      {/* M3 · FIT-10 — TANCAR MODEL. Un sol diàleg amb DUES cares: la de sempre (motiu) i, si
+          el servidor ha dit que hi ha una volta oberta, la de la confirmació amb el número de
+          la volta i les dades de l'entrega. Dos modals haurien fet dues preguntes separades
+          d'una decisió que és una de sola. */}
+      {modal === 'tancar_model' && (
+        <Modal title={t('model_sheet.cicle.tancar')}
+          confirmLabel={busy ? t('model_sheet.working')
+                             : (form.ronda ? t('model_sheet.cicle.confirmar_i_tancar')
+                                           : t('model_sheet.cicle.tancar_confirm'))}
+          cancelLabel={t('model_sheet.cancel')}
+          confirmDisabled={busy || (Boolean(form.ronda) && !(form.destinatari || '').trim())}
+          onConfirm={runTancarModel} onCancel={() => !busy && setModal(null)}>
+          {form.ronda ? (
+            <>
+              <div style={warnBox}>
+                {t('model_sheet.cicle.ronda_oberta_avis', { n: form.ronda.seq })}
+              </div>
+              <Row label={t('model_sheet.cicle.destinatari') + ' *'}>
+                <input style={fullSel} value={form.destinatari || ''} autoFocus
+                  onChange={e => setForm(f => ({ ...f, destinatari: e.target.value }))} />
+              </Row>
+              <Row label={t('model_sheet.cicle.descripcio')}>
+                <textarea style={{ ...fullSel, minHeight: 50, resize: 'vertical' }}
+                  value={form.descripcio || ''}
+                  onChange={e => setForm(f => ({ ...f, descripcio: e.target.value }))} />
+              </Row>
+            </>
+          ) : (
+            <>
+              <div style={infoBox}>{t('model_sheet.cicle.tancar_ajuda')}</div>
+              <Row label={t('model_sheet.cicle.motiu')}>
+                <select style={fullSel} value={form.motiu || 'acabat'}
+                  onChange={e => setForm(f => ({ ...f, motiu: e.target.value }))}>
+                  <option value="acabat">{t('model_sheet.cicle.motiu_acabat')}</option>
+                  <option value="tret_de_cataleg">{t('model_sheet.cicle.motiu_tret')}</option>
+                </select>
+              </Row>
+            </>
+          )}
+        </Modal>
+      )}
+
+      {(modal === 'reobrir_model' || modal === 'jubilar_model') && (() => {
+        const esJubilar = modal === 'jubilar_model'
+        return (
+          <Modal title={t(esJubilar ? 'model_sheet.cicle.jubilar' : 'model_sheet.cicle.reobrir')}
+            confirmLabel={busy ? t('model_sheet.working') : t('model_sheet.cicle.confirmar')}
+            cancelLabel={t('model_sheet.cancel')} confirmDisabled={busy}
+            onConfirm={() => runActeSimple(modal)} onCancel={() => !busy && setModal(null)}>
+            <div style={infoBox}>
+              {t(esJubilar ? 'model_sheet.cicle.jubilar_ajuda' : 'model_sheet.cicle.reobrir_ajuda')}
+            </div>
+            {/* El motiu de la reobertura és TEXT LLIURE a posta (el backend no en té vocabulari):
+                els motius els posa la vida i una llista tancada els faria caber a la força. */}
+            <Row label={t('model_sheet.cicle.motiu_lliure')}>
+              <input style={fullSel} value={form.motiu_text || ''}
+                onChange={e => setForm(f => ({ ...f, motiu_text: e.target.value }))} />
+            </Row>
+          </Modal>
+        )
+      })()}
 
       {modal === 'assign_resource' && (
         <Modal title={t('model_sheet.assign_resource')}
