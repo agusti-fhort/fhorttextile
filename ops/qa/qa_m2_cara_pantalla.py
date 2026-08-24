@@ -149,6 +149,7 @@ def main():
 
     dues = banc['QA-M1-0004']      # R1 tancada + R2 replicada: el cas de dues voltes
     variats = banc['QA-M1-0001']   # una sola volta, quatre estats de tasca
+    llegat = banc['QA-M1-0005']    # CAP volta: la forma pre-llei, i l'únic pla PLA que hi ha
     print(f'bundle={DIST} · backend={BACKEND} · banc {sorted(banc)}\n')
 
     with sync_playwright() as p:
@@ -217,6 +218,35 @@ def main():
         # ④ Cap menú «···» a cap capçalera de ronda.
         crit('④ cap menú «···» a les capçaleres de ronda', '···' not in cos)
 
+        # ── CODA-BIS ─────────────────────────────────────────────────────────────────────
+        #
+        # ⑤ La barra global NO hi és quan hi ha voltes (aquest model en té dues)…
+        crit('⑤ amb voltes, cap barra de progrés global', 'tasques fetes' not in cos)
+
+        # ⑥ El botó d'entrega es pinta a la volta VIGENT encara que NO sigui lliurable, i el
+        #    senyal `lliurable` queda com a BADGE informatiu. Les dues coses es miren DINS de la
+        #    capçalera de cada volta i no a la pàgina sencera: el mot «Lliurable» hi surt també a
+        #    la pastilla del model (`BadgeLliurable`, d'abans d'M2) i a la R1, que sí que ho és —
+        #    buscar-lo al `body` deia que la pantalla estava malament quan estava bé.
+        def capcalera(n):
+            return pagina.locator(
+                f"xpath=//span[normalize-space()='RONDA {n}']/parent::div").first.inner_text()
+        cap1, cap2 = capcalera(1), capcalera(2)
+        crit('⑥ la R2 (vigent i NO lliurable) ofereix «Marcar entregable»',
+             'Marcar entregable' in cap2 and 'Lliurable' not in cap2, cap2.replace('\n', ' · '))
+        crit('⑥ …i la R1 (lliurable però TANCADA) porta el badge i cap botó',
+             'Lliurable' in cap1 and 'Marcar entregable' not in cap1, cap1.replace('\n', ' · '))
+
+        # ⑦ El refús d'una segona volta el diu el SERVIDOR, i diu quina bloqueja. Es prem el
+        #    botó de debò: la crida ha de fallar amb 400 i no ha de canviar res (aquest model ja
+        #    té la R2 oberta).
+        pagina.get_by_text('+ Nova ronda').first.click()
+        pagina.wait_for_timeout(1500)
+        toast = pagina.inner_text('body')
+        crit('⑦ el refús de la 2a volta arriba del servidor i diu QUINA bloqueja',
+             'R2' in toast and 'entrega' in toast.lower(),
+             [l for l in toast.splitlines() if 'ronda oberta' in l])
+
         # ── B · L'ENTREGA I EL SEU RASTRE ───────────────────────────────────────────────────
         # El model 0001 s'ha entregat al fum HTTP, que corre abans: aquí es LLEGEIX el resultat.
         print("\n── B · la línia d'entrega i el rastre FIT-8 ──")
@@ -249,6 +279,25 @@ def main():
             "or @title='Finalitzar']")
         crit('la volta entregada, desplegada, no ofereix cap transport (FIT-2 · el segell)',
              botons_volta_1.count() == 0, botons_volta_1.count())
+
+        # ── B-bis · EL PLA PLA (model LLEGAT, sense cap volta) ──────────────────────────────
+        print("\n── B-bis · el pla PLA del model llegat (CODA-BIS ①) ──")
+        pagina.goto(f'{BASE}/models/{llegat}?tab=Dashboard', wait_until='networkidle',
+                    timeout=60000)
+        pagina.wait_for_timeout(2000)
+        cos = pagina.inner_text('body')
+        pagina.screenshot(path=str(CAPTURES / 'm2_pla_llegat_sense_volta.png'), full_page=True)
+        bolca('m2_pla_llegat_sense_volta', cos)
+
+        crit('① el model SENSE cap volta no dibuixa cap contenidor de ronda',
+             'RONDA 1' not in cos and 'SENSE VOLTA' not in cos)
+        crit('① …i recupera la barra de progrés global (1/2 · 50%)',
+             'tasques fetes' in cos and '50%' in cos,
+             [l for l in cos.splitlines() if 'tasques fetes' in l])
+        crit('① …amb el temps acumulat igualment a la capçalera',
+             'Temps acumulat sobre el model' in cos)
+        crit('① …i sense «+ Nova ronda» (la R1 neix del primer gest, no es declara)',
+             '+ Nova ronda' not in cos)
 
         # ── C · EL REGISTRE D'ACTIVITAT ─────────────────────────────────────────────────────
         print("\n── C · Registre d'activitat (mockup B v3) ──")
