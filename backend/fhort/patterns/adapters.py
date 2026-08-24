@@ -38,7 +38,7 @@ from .engine.ports import GradedPOMDelta, GradingSnapshot
 from .engine.aama_reader import costat_respecte_del_doblec
 from .engine.natural_segments import segmentar_peca_natural
 from .engine.segments import segmentar_peca
-from .models import PatternPiece, PatternPoint, PatternSegment
+from .models import PatternPiece, PatternPOM, PatternPoint, PatternSegment
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -572,6 +572,18 @@ def pom_specs(pattern_file) -> tuple[tuple[POMSpec, ...], list[str]]:
     ofereix, o un punt que ja no hi és) NO es descarten en silenci: surten a la llista de
     problemes perquè qui exporti sàpiga que aquell POM no entrarà a la niada.
 
+    🔑 El mode `ortogonal` s'exclou TAMBÉ, i amb motiu propi. No és que no es pugui
+    mesurar —es mesura perfectament, i el Taller n'ensenya el valor—: és que un `POMSpec`
+    porta DUES adreces i una caiguda en té TRES, i la projecció reparteix el delta entre
+    les dues movent-les en sentits oposats al llarg de la seva pròpia direcció
+    (`grading_projection._deltes_dels_poms:294-298`). Fer-hi passar una caiguda voldria
+    dir separar els dos HPS l'un de l'altre per fer baixar un escot, que no és el que
+    ningú ha demanat i, sobretot, no és una decisió d'aquest sprint: com es reparteix el
+    delta d'un POM ortogonal entre el punt que cau i la línia que el referencia és
+    patronatge, i s'escriu amb la Montse davant. Mentre no estigui decidit, la caiguda
+    MESURA i no GRADUA, i qui exporti ho llegeix a la llista de problemes en lloc de
+    rebre una niada moguda per una regla que ningú no va triar.
+
     Des d'I0/T4b hi ha un tercer motiu d'exclusió, i és de la MATEIXA família: un POM
     ancorat sobre la meitat mirallada d'una peça de simetria. El punt existeix a la nostra
     geometria però no al fitxer que emetem, que surt plegat. Emetre'l voldria dir triar un
@@ -588,6 +600,15 @@ def pom_specs(pattern_file) -> tuple[tuple[POMSpec, ...], list[str]]:
             codi = pom.pom_master.pom_code
             definicio = pom.definicio_mesura or {}
             mode = definicio.get('mode', 'points')
+
+            if mode == PatternPOM.MODE_ORTOGONAL:
+                problemes.append(
+                    f'El POM {codi} és una CAIGUDA ortogonal: es mesura sobre el patró, '
+                    f'però encara no es gradua. Repartir el seu delta entre el punt que '
+                    f'cau i la línia de referència és una decisió de patronatge que no '
+                    f'està presa. No entrarà a la niada.'
+                )
+                continue
 
             if mode != 'points':
                 problemes.append(
