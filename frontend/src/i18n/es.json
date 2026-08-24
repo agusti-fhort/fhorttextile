@@ -864,7 +864,8 @@
         "handoff_cancel": "Cancelar",
         "claim_denied": "No puedes coger una tarea de este tipo (no está en tu lista de ejecución)",
         "claim_error": "No se ha podido reasignar la tarea",
-        "time_total": "Tiempo acumulado sobre el modelo"
+        "time_total": "Tiempo acumulado sobre el modelo",
+        "progress_pla": "{{done}}/{{total}} tareas hechas"
       },
       "timeline": {
         "section": "Qué ha cambiado",
@@ -5218,6 +5219,7 @@
     "reg_kpi_entregues": "Entregas",
     "reg_col_qui": "Quién",
     "reg_entrega_a": "Entrega a {{destinatari}}",
-    "reg_buit": "Este modelo todavía no tiene actividad registrada"
+    "reg_buit": "Este modelo todavía no tiene actividad registrada",
+    "lliurable": "Entregable"
   }
 }

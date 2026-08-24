@@ -248,12 +248,23 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
   // frontend de temps_consumit_min quadra EXACTAMENT amb el rollup de l'albarà (ambdós sumen els
   // minuts de timers consolidats de TOTES les tasques del model; el compositor no scopa) → suma
   // local, zero crides noves (P5 PAS 0.2). Degradació amb gràcia: 0 tasques → 0% / 0h 00m.
-  // El PROGRÉS GLOBAL («n/m tasques fetes · %» i la seva barra) se'n va del Dashboard (M2 · CODA,
-  // decisió d'Agus): amb el pla repartit per voltes, el progrés que vol dir alguna cosa és el de
-  // cada capçalera de ronda, i un percentatge sobre TOTES les tasques del model barrejava voltes
-  // entregades amb la vigent. El TEMPS acumulat sí que es queda —és un fet del model sencer, no
-  // d'una volta— i puja a la capçalera de secció, que és on el mockup el posa.
+  // EL PROGRÉS GLOBAL («n/m tasques fetes · %» i la seva barra) NOMÉS ES PINTA AL PLA PLA
+  // (M2 · CODA-BIS, decisió d'Agus). Amb voltes, el progrés que vol dir alguna cosa és el de cada
+  // capçalera de ronda, i un percentatge sobre TOTES les tasques del model barrejaria voltes
+  // entregades amb la vigent. Sense cap volta no hi ha cap capçalera que el digui, i retirar-lo
+  // hi deixava un Dashboard sense cap indicador de progrés — mesurat: 4 dels 7 models amb
+  // tasques de `fhort`.
+  //
+  // 🔑 **LA CONDICIÓ S'AUTOEXTINGEIX I NO CAL RETIRAR-LA A MÀ.** `perVoltes` és fals només mentre
+  // el model no tingui cap `Ronda`, i la R1 neix sola del primer gest de treball (M1-bis · FIT-4):
+  // tot model que rebi feina en surt. El retroactiu de M5 buidarà el que quedi. El dia que la
+  // població sigui zero, aquesta branca deixarà de pintar-se sense que ningú hi torni.
+  //
+  // El TEMPS acumulat, en canvi, es diu SEMPRE: és un fet del model sencer, no d'una volta.
   const totalMin = list.reduce((s, task) => s + (task.temps_consumit_min || 0), 0)
+  const total = list.length
+  const done = list.filter(task => task.status === 'Done').length
+  const pct = total ? Math.round((100 * done) / total) : 0
 
   // M2 — LES VOLTES, ja agregades. La lògica és compartida amb el Registre (`utils/rondes`):
   // les dues superfícies responen les mateixes preguntes sobre una ronda i només les pinten
@@ -496,6 +507,23 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
           }}>
           {t('rondes.nova')}
         </button>
+      )}
+
+      {/* PROGRÉS GLOBAL · **només sense voltes** (v. la nota de `pct`). Amb rondes, cada capçalera
+          ja porta el seu, i aquesta barra hi diria una tercera xifra que no és de ningú. */}
+      {!perVoltes && list.length > 0 && (
+        <div style={{ width: '100%', marginTop: 14 }}>
+          <div style={{ marginBottom: 6, fontSize: 'var(--fs-label)', color: 'var(--text-soft)' }}>
+            {t('model_sheet.dashboard.workplan.progress_pla', { done, total })} · {pct}%
+          </div>
+          {/* `.prog` de la maqueta: 6px de canal en --line-soft, sense vora, píndola. El farciment
+              és --ok: la barra diu QUANT S'HA FET, i el fet és verd a tot el sistema. */}
+          <div style={{ height: 6, borderRadius: 'var(--r-pill)', background: 'var(--line-soft)',
+                        overflow: 'hidden' }}>
+            <div style={{ width: `${pct}%`, height: '100%', background: 'var(--ok)',
+                          transition: 'width 200ms' }} />
+          </div>
+        </div>
       )}
 
       {/* La frase del peu del mockup: diu la LLEI que la pantalla acaba d'aplicar (per què el
