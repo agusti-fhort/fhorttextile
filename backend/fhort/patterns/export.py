@@ -57,7 +57,7 @@ from .adapters import (
 from .engine.aama_reader import AAMAReader, fold_piece
 from .engine.aama_writer import AAMAWriter, UnknownProfileError
 from .engine.errors import PatternEngineError
-from .engine.geometry import POMAnchorData
+from .engine.geometry import POMAnchorData, PointKind
 from .engine.grading_projection import (
     GradingContextError,
     GradingNotApproved,
@@ -137,6 +137,11 @@ class ExportResult:
     autovalidacio: Autovalidacio
     problemes_poms: tuple[str, ...] = field(default_factory=tuple)
     problemes_costures: tuple[str, ...] = field(default_factory=tuple)
+    #: El que ha sortit malament ESCALANT (no ancorant): ordres que no s'han pogut
+    #: traslladar del cosit al tall, i POMs la re-mesura dels quals no aterra al delta que
+    #: el grading manava. Cap de les dues coses atura l'exportació —el patronista mana—,
+    #: però totes dues es diuen amb la xifra al davant.
+    problemes_escalat: tuple[str, ...] = field(default_factory=tuple)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -181,6 +186,7 @@ def build_export(
         raise ExportBlocked(str(e)) from e
 
     previews = preview_per_talla(doc, projeccio, snapshot, specs, sews)
+    problemes_escalat = _problemes_escalat(doc, specs, projeccio, previews)
 
     # ── 3. La capa FTT-POM: les mesures, dibuixades dins el fitxer. I la taula de grading
     #       del document passa a ser LA NOSTRA: la que venia dins el fitxer del client
@@ -252,7 +258,106 @@ def build_export(
         autovalidacio=auto,
         problemes_poms=tuple(problemes),
         problemes_costures=tuple(problemes_sews),
+        problemes_escalat=problemes_escalat,
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# El que ha sortit malament ESCALANT
+# ─────────────────────────────────────────────────────────────────────────────
+
+#: Per sota d'això, una re-mesura ha aterrat. Mig mil·límetre és molt més fi que qualsevol
+#: cosa que una taula de tall pugui distingir; el que passa d'aquí és una diferència que un
+#: patronista veuria al material i, per tant, s'ha de dir.
+TOL_RESIDU_CM = 0.05
+
+#: Els avisos del motor que qui exporta ha de llegir com a PROBLEMA (i no com a nota
+#: tècnica). Es dedupliquen: el mateix punt es queixa a cada talla, i cinc vegades la
+#: mateixa frase no informa cinc vegades més.
+CODIS_ESCALAT = ('ordre_cosit_en_conflicte', 'ordre_cosit_sense_company')
+
+
+def _extrems_de_corba(doc, spec) -> tuple[str, ...]:
+    """Quins extrems d'un POM seuen sobre un punt de CORBA. → ('a',), ('a','b')…
+
+    Importa perquè un extrem de corba **no és expressable al lliurable**: el RUL només
+    porta regla als punts de gir i als piquets, i el CAD del client fa fluir la resta. El
+    moviment que aquí li donem existeix a la nostra geometria de treball i desapareix al
+    fitxer — que és, exactament, per què la re-mesura d'aquell POM no aterra.
+    """
+    peca = doc.piece(spec.peca)
+    if peca is None:
+        return ()
+    fora = []
+    for nom, ref in (('a', spec.ref_a), ('b', spec.ref_b)):
+        if ref.vora is None:
+            continue   # els piquets SÍ que porten regla
+        if ref.vora >= len(peca.boundaries):
+            continue
+        punts = peca.boundaries[ref.vora].points
+        if ref.ordre < len(punts) and punts[ref.ordre].kind is not PointKind.TURN:
+            fora.append(nom)
+    return tuple(fora)
+
+
+def _problemes_escalat(doc, specs, projeccio, previews) -> tuple[str, ...]:
+    """Les dues maneres que té l'escalat de no fer el que el grading manava, dites.
+
+    Cap de les dues atura res: un patró que creix una mica menys del que la fitxa diu
+    segueix sent un patró que algú pot voler exportar, i qui decideix és el patronista.
+    El que no pot passar és que ho decideixi sense saber-ho — i fins ara la única pista
+    era una columna de ⚠ a la taula, que és la gramàtica d'un error de mesura i no la
+    d'una limitació coneguda del motor.
+    """
+    linies: list[str] = []
+
+    # ── 1. El que el motor ha dit escalant, una sola vegada per punt.
+    vistos: set[tuple] = set()
+    for avis in projeccio.avisos:
+        if avis.codi not in CODIS_ESCALAT:
+            continue
+        clau = (avis.codi, avis.peca,
+                avis.detall.get('vora'), avis.detall.get('ordre'))
+        if clau in vistos:
+            continue
+        vistos.add(clau)
+        linies.append(f'[{avis.peca}] {avis.missatge}')
+
+    # ── 2. El que la re-mesura diu, amb la xifra i a la talla on més es nota.
+    per_pom = {s.pom_code: s for s in specs}
+    pitjor: dict[str, tuple[float, str, float, float]] = {}
+    for sp in previews:
+        for p in sp.poms:
+            if p.desviament_cm is None or p.delta_spec_cm is None:
+                continue
+            if abs(p.desviament_cm) <= TOL_RESIDU_CM:
+                continue
+            anterior = pitjor.get(p.pom_code)
+            if anterior is None or abs(p.desviament_cm) > abs(anterior[0]):
+                pitjor[p.pom_code] = (
+                    p.desviament_cm, sp.talla, p.delta_llegit_cm, p.delta_spec_cm)
+
+    for codi in sorted(pitjor):
+        desv, talla, llegit, manat = pitjor[codi]
+        spec = per_pom.get(codi)
+        corba = _extrems_de_corba(doc, spec) if spec is not None else ()
+        motiu = (
+            f' La causa és coneguda: el POM ancora sobre un punt de CORBA '
+            f'(extrem {" i ".join(corba)}), i el lliurable només porta regla als punts de '
+            f'gir i als piquets — el moviment d\'aquell extrem no arriba al fitxer i el CAD '
+            f'del client el fa fluir.'
+            if corba else
+            f' Els dos extrems són punts de gir: el que no aterra és el REPARTIMENT '
+            f'—la projecció v1 reparteix el delta simètricament al llarg de la recta a→b— '
+            f'i no la propagació al cosit.'
+        )
+        linies.append(
+            f'La niada del POM {codi} no aterra al delta que el grading mana: a la talla '
+            f'{talla} creix {llegit:+.3f} cm quan n\'havia de créixer {manat:+.3f} '
+            f'(diferència {desv:+.3f} cm).' + motiu
+        )
+
+    return tuple(linies)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
