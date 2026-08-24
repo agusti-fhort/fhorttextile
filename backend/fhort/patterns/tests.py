@@ -1761,6 +1761,174 @@ class MesuraTest(unittest.TestCase):
             resoldre(self.back, {'mode': 'telepatia'}, self.punts)
 
 
+class CaigudaOrtogonalTest(unittest.TestCase):
+    """La caiguda perpendicular: el que la fa útil és el que NO la fa moure.
+
+    Tot el valor d'aquest mode és que no depèn dels eixos del full. Si depengués, seria
+    una resta de coordenades i no caldria cap mode: per això el test que mana aquí és el
+    del gir, i per això n'hi ha un que compara contra la resta de coordenades per veure
+    que les dues NO són el mateix quan la peça no seu recta.
+    """
+
+    class Punt:
+        """Un punt qualsevol: l'engine només demana `.x` i `.y`."""
+        def __init__(self, x, y):
+            self.x, self.y = x, y
+
+    @staticmethod
+    def _rota(punts, graus):
+        a = math.radians(graus)
+        cos, sin = math.cos(a), math.sin(a)
+        return {
+            k: CaigudaOrtogonalTest.Punt(p.x * cos - p.y * sin, p.x * sin + p.y * cos)
+            for k, p in punts.items()
+        }
+
+    #: La forma canònica: línia de referència horitzontal de 100 mm i un punt 77 mm avall.
+    RECEPTA = {'mode': 'ortogonal', 'ref_a': 1, 'ref_b': 2, 'p': 3}
+
+    def setUp(self):
+        P = self.Punt
+        self.recte = {1: P(0.0, 0.0), 2: P(100.0, 0.0), 3: P(40.0, -77.0)}
+        # Referència INCLINADA i punt que no seu entre les dues àncores: l'escot asimètric,
+        # on els dos HPS no són a la mateixa alçada i el punt més baix no queda al mig.
+        self.asimetric = {1: P(0.0, 0.0), 2: P(100.0, 40.0), 3: P(20.0, -30.0)}
+
+    def test_el_cas_simple_es_la_distancia_a_la_linia(self):
+        r = resoldre(None, self.RECEPTA, self.recte)
+        self.assertAlmostEqual(r.valor_cm, 7.7, places=10)
+        self.assertEqual(r.metode, 'ortogonal')
+
+    def test_el_peu_de_la_perpendicular_es_DERIVAT_i_no_es_materialitza(self):
+        """Com el punt del mode `landmark`: es calcula cada vegada, no es desa com a vèrtex.
+
+        I `punts` torna el segment (peu → p) i prou: la polilínia la longitud de la qual ÉS
+        el valor, que és la mateixa invariant que compleixen `recta` i `vora`.
+        """
+        r = resoldre(None, self.RECEPTA, self.recte)
+        self.assertTrue(r.derivat)
+        self.assertEqual(len(r.punts), 2)
+        (peu_x, peu_y), (px, py) = r.punts
+        self.assertAlmostEqual(peu_x, 40.0, places=10)
+        self.assertAlmostEqual(peu_y, 0.0, places=10)
+        self.assertAlmostEqual(math.hypot(px - peu_x, py - peu_y) / 10.0, r.valor_cm,
+                               places=10)
+
+    def test_LA_PECA_ROTADA_MESURA_EXACTAMENT_EL_MATEIX(self):
+        """El test que justifica el mode. Un DXF no promet que la peça segui recta al
+        plànol, i la mesura no pot dependre de com hi seu."""
+        base = resoldre(None, self.RECEPTA, self.recte).valor_cm
+        for graus in (30, 90, 137.5, -63, 180, 359.9):
+            with self.subTest(graus=graus):
+                girat = resoldre(None, self.RECEPTA, self._rota(self.recte, graus))
+                self.assertAlmostEqual(girat.valor_cm, base, places=10)
+
+    def test_una_resta_de_coordenades_NO_hauria_donat_el_mateix(self):
+        """La prova per l'absurd: ΔY sobreviu al cas recte i es trenca al gir de 30°.
+
+        És el bug que aquest mode evita, escrit com a test perquè ningú no el reintrodueixi
+        «per simplificar»."""
+        girat = self._rota(self.recte, 30)
+        delta_y = abs(girat[3].y - girat[1].y) / 10.0
+        self.assertAlmostEqual(resoldre(None, self.RECEPTA, girat).valor_cm, 7.7, places=10)
+        self.assertNotAlmostEqual(delta_y, 7.7, places=2)
+
+    def test_asimetric_la_referencia_la_posen_les_ancores_no_el_full(self):
+        """Amb els dos HPS a alçades diferents no hi ha cap «nivell» horitzontal: el
+        nivell és la recta que els uneix, i és contra aquesta recta que es mesura."""
+        r = resoldre(None, self.RECEPTA, self.asimetric)
+        esperat = abs(100.0 * (-30.0) - 40.0 * 20.0) / math.hypot(100.0, 40.0) / 10.0
+        self.assertAlmostEqual(r.valor_cm, esperat, places=10)
+        # I no és cap de les dues distàncies fàcils: ni la vertical ni la distància a ref_a.
+        self.assertNotAlmostEqual(r.valor_cm, 3.0, places=2)
+        self.assertNotAlmostEqual(r.valor_cm, math.hypot(20.0, 30.0) / 10.0, places=2)
+
+    def test_el_peu_pot_caure_FORA_del_tram_i_es_correcte(self):
+        """La referència és una RECTA (el nivell), no el tram entre les dues àncores. Un
+        punt que queda per fora dels dos HPS —passa a la màniga i als escots asimètrics—
+        continua tenint una caiguda, i és la perpendicular a la recta perllongada.
+        """
+        P = self.Punt
+        fora = {1: P(0.0, 0.0), 2: P(100.0, 40.0), 3: P(-40.0, -30.0)}
+        r = resoldre(None, self.RECEPTA, fora)
+
+        esperat = abs(100.0 * (-30.0) - 40.0 * (-40.0)) / math.hypot(100.0, 40.0) / 10.0
+        self.assertAlmostEqual(r.valor_cm, esperat, places=10)
+
+        # El peu queda darrere de ref_a: fora del tram, sobre la recta.
+        (peu_x, peu_y), _ = r.punts
+        self.assertLess(peu_x, 0.0)
+        # I hi és de debò, sobre la recta: el producte vectorial amb la direcció és zero.
+        self.assertAlmostEqual(100.0 * peu_y - 40.0 * peu_x, 0.0, places=9)
+
+    def test_lasimetric_tambe_sobreviu_al_gir(self):
+        base = resoldre(None, self.RECEPTA, self.asimetric).valor_cm
+        for graus in (30, -45, 111):
+            with self.subTest(graus=graus):
+                self.assertAlmostEqual(
+                    resoldre(None, self.RECEPTA, self._rota(self.asimetric, graus)).valor_cm,
+                    base, places=10)
+
+    def test_el_valor_no_te_signe(self):
+        """Una caiguda no té costat: el punt a sobre i el punt a sota de la línia mesuren
+        el mateix. El signe diria de quin costat cau, i això no és la mesura."""
+        P = self.Punt
+        avall = {1: P(0.0, 0.0), 2: P(100.0, 0.0), 3: P(40.0, -77.0)}
+        amunt = {1: P(0.0, 0.0), 2: P(100.0, 0.0), 3: P(40.0, +77.0)}
+        self.assertAlmostEqual(resoldre(None, self.RECEPTA, avall).valor_cm,
+                               resoldre(None, self.RECEPTA, amunt).valor_cm, places=10)
+
+    def test_lordre_de_les_dues_referencies_es_indiferent(self):
+        """ref_a i ref_b defineixen una RECTA, i una recta no té sentit de marxa."""
+        endavant = resoldre(None, self.RECEPTA, self.asimetric)
+        enrere = resoldre(None, {'mode': 'ortogonal', 'ref_a': 2, 'ref_b': 1, 'p': 3},
+                          self.asimetric)
+        self.assertAlmostEqual(endavant.valor_cm, enrere.valor_cm, places=10)
+
+    # ── degenerats: error explícit, mai un NaN que viatgi ────────────────────
+
+    def test_dues_referencies_al_mateix_lloc_es_un_error_dit(self):
+        P = self.Punt
+        with self.assertRaises(MeasureError) as ctx:
+            resoldre(None, self.RECEPTA, {1: P(5.0, 5.0), 2: P(5.0, 5.0), 3: P(0.0, 0.0)})
+        self.assertIn('mateix punt', str(ctx.exception))
+
+    def test_dues_referencies_quasi_al_mateix_lloc_tambe(self):
+        """Per sota del llindar no hi ha direcció fiable, encara que els dos punts siguin
+        formalment diferents. Sense això, el quocient donaria un número enorme i ningú no
+        sabria d'on ha sortit."""
+        P = self.Punt
+        with self.assertRaises(MeasureError):
+            resoldre(None, self.RECEPTA,
+                     {1: P(5.0, 5.0), 2: P(5.0, 5.0 + 1e-9), 3: P(0.0, 0.0)})
+
+    def test_una_ancora_que_falta_diu_QUINA(self):
+        """Amb tres àncores de papers diferents, «falta un punt» no deixaria saber quin
+        s'ha de tornar a clicar."""
+        for absent in ('ref_a', 'ref_b', 'p'):
+            with self.subTest(absent=absent):
+                recepta = {k: v for k, v in self.RECEPTA.items() if k != absent}
+                with self.assertRaises(MeasureError) as ctx:
+                    resoldre(None, recepta, self.recte)
+                self.assertIn(absent, str(ctx.exception))
+
+    def test_el_punt_sobre_la_linia_no_es_cap_error_es_un_zero(self):
+        """Cau zero perquè no cau: és una resposta geomètrica, no una avaria. Qui ho ha de
+        rebutjar és l'API (una recepta que ho demana és un error de qui la fa), no el motor."""
+        P = self.Punt
+        sobre = {1: P(0.0, 0.0), 2: P(100.0, 0.0), 3: P(55.0, 0.0)}
+        self.assertAlmostEqual(resoldre(None, self.RECEPTA, sobre).valor_cm, 0.0, places=10)
+
+    def test_els_modes_de_sempre_no_han_canviat(self):
+        """Cap recepta existent no canvia de resposta perquè n'hagi entrat una de nova."""
+        P = self.Punt
+        punts = {1: P(0.0, 0.0), 2: P(30.0, 40.0)}
+        r = resoldre(None, {'mode': 'points', 'a': 1, 'b': 2}, punts)
+        self.assertAlmostEqual(r.valor_cm, 5.0, places=10)
+        self.assertEqual(r.metode, 'recta')
+        self.assertFalse(r.derivat)
+
+
 class CosturaTest(unittest.TestCase):
     """El diferencial vol dir coses OPOSADES segons el tipus. És tot el test."""
 
@@ -1941,6 +2109,200 @@ class AnotacioAPITest(PatternsAPITestBase):
 # ═════════════════════════════════════════════════════════════════════════════
 # Guard de puresa — la frontera hexagonal, feta complir per una màquina
 # ═════════════════════════════════════════════════════════════════════════════
+
+class CaigudaOrtogonalAPITest(PatternsAPITestBase):
+    """La caiguda per l'API: què s'accepta, què rebota, i què n'arriba al client.
+
+    Es fa sobre l'AMELIA de `fixtures/`, MAI sobre el banc del 837 a staging: aquell és
+    material viu de l'Agus i un test que hi escrivís deixaria feina que ningú no ha
+    demanat dins de la seva pantalla.
+
+    Munta el seu propi fixture en lloc d'heretar d'`AnotacioAPITest`: heretar-ne li
+    tornaria a executar la dotzena de tests que ja passen, i el temps de la suite és de
+    tothom.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.fp = PatternFile.objects.get(
+            pk=self._upload(AMELIA_DXF.read_bytes()).data['id'])
+        self.back = self.fp.pieces.get(nom_block='BACK')
+        self.pom_master = POMMaster.objects.create(
+            codi_client='DROP', nom_client='Caiguda d\'escot')
+        self.girs = list(
+            self.back.points.filter(mena='vertex', tipus='turn', boundary_index=0)
+            .order_by('ordre'))
+
+    #: `back` porta 22 girs al contorn de tall; en calen tres que no siguin colineals.
+    def _tres(self):
+        return self.girs[0], self.girs[5], self.girs[10]
+
+    def _ancora_recta(self, a, b):
+        request = self.factory.post('/api/v1/patterns/pattern-poms/', {
+            'pattern_piece': self.back.id,
+            'pom_master': self.pom_master.id,
+            'definicio_mesura': {'mode': 'points', 'a': a.id, 'b': b.id},
+            'metode': 'recta',
+        }, format='json')
+        force_authenticate(request, user=self.user)
+        return PatternPOMViewSet.as_view({'post': 'create'})(request)
+
+    def _caiguda(self, ref_a, ref_b, punt, metode='ortogonal', pom=None):
+        request = self.factory.post('/api/v1/patterns/pattern-poms/', {
+            'pattern_piece': self.back.id,
+            'pom_master': (pom or self.pom_master).id,
+            'definicio_mesura': {
+                'mode': 'ortogonal',
+                'ref_a': ref_a.id, 'ref_b': ref_b.id, 'p': punt.id,
+            },
+            'metode': metode,
+        }, format='json')
+        force_authenticate(request, user=self.user)
+        return PatternPOMViewSet.as_view({'post': 'create'})(request)
+
+    # ── el camí bo ───────────────────────────────────────────────────────────
+
+    def test_ancorar_una_caiguda_la_mesura_al_servidor(self):
+        ref_a, ref_b, punt = self._tres()
+        resp = self._caiguda(ref_a, ref_b, punt)
+        self.assertEqual(resp.status_code, 201, resp.data)
+
+        pom = PatternPOM.objects.get(pk=resp.data['id'])
+        self.assertEqual(pom.metode, PatternPOM.METODE_ORTOGONAL)
+        self.assertIsNotNone(pom.valor_mesurat_cm)
+
+        # El valor és la perpendicular, calculada a part: no l'ha dit el client i no és la
+        # distància a cap dels dos extrems.
+        vx, vy = ref_b.x - ref_a.x, ref_b.y - ref_a.y
+        wx, wy = punt.x - ref_a.x, punt.y - ref_a.y
+        esperat = round(abs(vx * wy - vy * wx) / math.hypot(vx, vy) / 10.0, 2)
+        self.assertAlmostEqual(pom.valor_mesurat_cm, esperat, places=2)
+
+    def test_la_caiguda_es_mes_curta_que_qualsevol_de_les_dues_rectes(self):
+        """La perpendicular és, per definició, la distància MÍNIMA a la recta. Si algun dia
+        algú la calculés com una recta a un extrem, això ho cantaria."""
+        ref_a, ref_b, punt = self._tres()
+        pom = PatternPOM.objects.get(pk=self._caiguda(ref_a, ref_b, punt).data['id'])
+        for extrem in (ref_a, ref_b):
+            self.assertLess(
+                pom.valor_mesurat_cm,
+                math.hypot(punt.x - extrem.x, punt.y - extrem.y) / 10.0)
+
+    # ── el que ha de rebotar ─────────────────────────────────────────────────
+
+    def test_dues_referencies_iguals_rebota_ABANS_de_desar(self):
+        """L'engine també ho rebutja, però desar-ho igualment deixaria un ancoratge que
+        ningú no pot mesurar i que algú hauria de venir a esborrar."""
+        ref_a, _, punt = self._tres()
+        resp = self._caiguda(ref_a, ref_a, punt)
+        self.assertEqual(resp.status_code, 400, resp.data)
+        self.assertEqual(PatternPOM.objects.count(), 0)
+
+    def test_el_punt_que_cau_sobre_una_referencia_rebota(self):
+        ref_a, ref_b, _ = self._tres()
+        resp = self._caiguda(ref_a, ref_b, ref_b)
+        self.assertEqual(resp.status_code, 400, resp.data)
+        self.assertEqual(PatternPOM.objects.count(), 0)
+
+    def test_una_ancora_que_falta_rebota(self):
+        ref_a, ref_b, _ = self._tres()
+        request = self.factory.post('/api/v1/patterns/pattern-poms/', {
+            'pattern_piece': self.back.id,
+            'pom_master': self.pom_master.id,
+            'definicio_mesura': {'mode': 'ortogonal', 'ref_a': ref_a.id, 'ref_b': ref_b.id},
+            'metode': 'ortogonal',
+        }, format='json')
+        force_authenticate(request, user=self.user)
+        resp = PatternPOMViewSet.as_view({'post': 'create'})(request)
+        self.assertEqual(resp.status_code, 400, resp.data)
+
+    def test_el_metode_i_la_forma_de_la_recepta_no_es_poden_separar(self):
+        """Una decisió escrita dues vegades: si es poguessin separar, la fila diria una
+        cosa i el valor en diria una altra."""
+        ref_a, ref_b, punt = self._tres()
+
+        # metode ortogonal + recepta de dos punts
+        with self.subTest(cas='metode ortogonal, recepta de punts'):
+            request = self.factory.post('/api/v1/patterns/pattern-poms/', {
+                'pattern_piece': self.back.id, 'pom_master': self.pom_master.id,
+                'definicio_mesura': {'mode': 'points', 'a': ref_a.id, 'b': ref_b.id},
+                'metode': 'ortogonal',
+            }, format='json')
+            force_authenticate(request, user=self.user)
+            self.assertEqual(
+                PatternPOMViewSet.as_view({'post': 'create'})(request).status_code, 400)
+
+        # recepta ortogonal + metode recta
+        with self.subTest(cas='recepta ortogonal, metode recta'):
+            self.assertEqual(self._caiguda(ref_a, ref_b, punt, metode='recta').status_code,
+                             400)
+
+    def test_un_PATCH_no_pot_separar_les_dues_meitats(self):
+        """El Taller reobre un POM enviant NOMÉS la recepta. Si la validació mirés només el
+        payload, aquest és exactament el forat pel qual s'hi colaria una contradicció."""
+        ref_a, ref_b, punt = self._tres()
+        pom_id = self._caiguda(ref_a, ref_b, punt).data['id']
+
+        request = self.factory.patch(f'/api/v1/patterns/pattern-poms/{pom_id}/', {
+            'definicio_mesura': {'mode': 'points', 'a': ref_a.id, 'b': ref_b.id},
+        }, format='json')
+        force_authenticate(request, user=self.user)
+        resp = PatternPOMViewSet.as_view({'patch': 'partial_update'})(request, pk=pom_id)
+        self.assertEqual(resp.status_code, 400, resp.data)
+
+        # I la fila del disc no s'ha mogut.
+        pom = PatternPOM.objects.get(pk=pom_id)
+        self.assertEqual(pom.definicio_mesura['mode'], PatternPOM.MODE_ORTOGONAL)
+
+    # ── el vocabulari que se serveix ─────────────────────────────────────────
+
+    def test_lendpoint_de_metodes_serveix_la_gramatica_sencera(self):
+        """El front no ha de saber quants clics vol cada mètode: li ho diu això."""
+        request = self.factory.get('/api/v1/patterns/pattern-poms/metodes/')
+        force_authenticate(request, user=self.user)
+        resp = PatternPOMViewSet.as_view({'get': 'metodes'})(request)
+        self.assertEqual(resp.status_code, 200, resp.data)
+
+        per_codi = {m['codi']: m for m in resp.data}
+        self.assertEqual(set(per_codi), {'recta', 'vora', 'ortogonal'})
+        self.assertEqual(per_codi['recta']['ancores'], ['a', 'b'])
+        self.assertEqual(per_codi['vora']['ancores'], ['a', 'b'])
+        self.assertEqual(per_codi['ortogonal']['ancores'], ['ref_a', 'ref_b', 'p'])
+        self.assertEqual(per_codi['ortogonal']['mode'], 'ortogonal')
+        self.assertEqual(per_codi['recta']['mode'], 'points')
+
+    def test_el_vocabulari_i_els_choices_no_poden_divergir(self):
+        """Si algú afegeix un mètode als `choices` i s'oblida de la seva gramàtica, el
+        vocabulari peta aquí i no al navegador."""
+        self.assertEqual(
+            {c for c, _ in PatternPOM.METODE_CHOICES},
+            set(PatternPOM.ANCORES_PER_METODE),
+        )
+
+    # ── la frontera amb la projecció ─────────────────────────────────────────
+
+    def test_la_caiguda_es_MESURA_pero_no_entra_a_la_niada(self):
+        """Frontera d'aquest sprint, escrita com a test perquè es vegi que és deliberada:
+        `POMSpec` porta dues adreces i una caiguda en té tres. Com es reparteix el seu
+        delta entre el punt i la línia és patronatge i no està decidit, així que la
+        projecció no la rep — i qui exporti ho llegeix, no ho endevina."""
+        ref_a, ref_b, punt = self._tres()
+        pom = PatternPOM.objects.get(pk=self._caiguda(ref_a, ref_b, punt).data['id'])
+        self.assertIsNotNone(pom.valor_mesurat_cm)      # es mesura
+
+        specs, problemes = pom_specs(self.fp)
+        self.assertEqual(specs, ())                     # i no gradua
+        self.assertEqual(len(problemes), 1)
+        self.assertIn('CAIGUDA', problemes[0])
+        self.assertIn(self.pom_master.codi_client, problemes[0])
+
+    def test_les_receptes_de_sempre_segueixen_entrant_a_la_niada(self):
+        """L'exclusió és de la caiguda, no un embut nou per a tothom."""
+        self.assertEqual(self._ancora_recta(self.girs[0], self.girs[5]).status_code, 201)
+        specs, problemes = pom_specs(self.fp)
+        self.assertEqual(len(specs), 1)
+        self.assertEqual(problemes, [])
+
 
 class PurityGuardTest(unittest.TestCase):
     """`engine/` és un paquet Python pur i ho ha de continuar sent.
