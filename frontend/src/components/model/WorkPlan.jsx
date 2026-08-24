@@ -5,6 +5,7 @@ import Badge from '../ui/Badge'
 import Modal from '../ui/Modal'
 import TempsDeclaratForm from './TempsDeclaratForm'
 import RondaPla from './RondaPla'
+import TaskCardCompacta from './TaskCardCompacta'
 import EntregaDialog from './EntregaDialog'
 import OkClientDialog from './OkClientDialog'
 import { models, modelTasks, taskTypes } from '../../api/endpoints'
@@ -12,6 +13,7 @@ import { formatMinutes } from '../../utils/format'
 import { taskTypeLabel } from '../../utils/taskType'
 import { destiDeTasca } from '../../utils/destiTasca'
 import { agrupaPerRonda, potObrirVolta, RONDA_ENTREGADA } from '../../utils/rondes'
+import { TASK_ICON, STATUS_VARIANT, TRANSPORT, isOutOfCharge } from '../../utils/tascaPla'
 
 // Pla de treball — PEÇA P3 + P4a (Q4 crescut): l'encàrrec del model com a procés.
 // Consumeix dashboard.tasques (compositor enriquit a P1, JA ordenat canònic) — NO reordena.
@@ -40,49 +42,12 @@ const API = import.meta.env.VITE_API_URL || ''
 // `utils/destiTasca`. Aquí només cal creuar la tasca amb el seu tipus per `code` — el compositor
 // del dashboard no porta `eina`/`mode`, o sigui que el catàleg es demana a part i es creua.
 
-// task_type.code → icona Tabler (no hi havia mapa compartit; design system).
-const TASK_ICON = {
-  pattern_digit: 'ti-vector', pattern_cad: 'ti-vector-bezier', pattern_hand: 'ti-pencil',
-  pattern_review: 'ti-eye-check', pom: 'ti-ruler-2', size_check: 'ti-ruler-measure',
-  tech_sheet: 'ti-file-text', bom: 'ti-list-details', scaling: 'ti-resize',
-  marking: 'ti-layout-grid', Audit: 'ti-checklist',
-}
+// 🔑 ELS MAPES D'AQUESTA SECCIÓ VIUEN ARA A `utils/tascaPla` (M2 · CODA). El Dashboard pinta les
+// tasques de dues maneres —aquesta targeta i la COMPACTA de dins dels contenidors de ronda— i la
+// llei de la casa diu que es dupliqui la PRESENTACIÓ i es comparteixi la LÒGICA. Això és la
+// lògica: icona, variant d'estat, transport per estat i el predicat de fora d'encàrrec. Aquest
+// component no ha canviat ni una línia de JSX; només d'on li arriben.
 
-// status → variant del Badge del design system (mateix criteri que el dashboard F1).
-const STATUS_VARIANT = { Done: 'ok', InProgress: 'gold', Paused: 'warn', Pending: 'gray' }
-
-// Transport actiu per estat. Aquest és avui l'ÚNIC transport de la casa: l'ACTIONS de
-// KanbanTasks que aquest mapa emmirallava ja no existeix (la pàgina Kanban global es va jubilar
-// a fc98cab6), i cap altra superfície pinta play/pause/stop. No hi ha res amb què sincronitzar.
-//
-// play = Pending/Paused/Done (start/resume/reopen); en InProgress només es reactiva si hi ha eina
-// per navegar-hi. pause = InProgress (només té sentit sobre feina en curs).
-// stop = InProgress i PAUSED. A Paused no és una transició nova —`Paused → Done` segueix
-// prohibida a la màquina d'estats (decisió Agus: NO es toca)— sinó un GEST: play+stop encadenat
-// (`handleStop`). Pending NO en té: tancar una tasca mai començada és «cancel·lar», una altra
-// cosa que aquest sprint no decideix.
-const TRANSPORT = {
-  Pending:    { play: true,  pause: false, stop: false },
-  Paused:     { play: true,  pause: false, stop: true  },
-  InProgress: { play: false, pause: true,  stop: true  },
-  Done:       { play: true,  pause: false, stop: false },
-}
-
-// Fora d'encàrrec / fora de recepta: extra marcat al backend amb `off_recipe=True` (B4a).
-// Activa el filet grana. NOMÉS marca.
-//
-// 🚨 **M2 · `origen === 'ad_hoc'` SURT D'AQUEST PREDICAT, i el motiu és una llei nova.** Des d'M1-bis
-// **totes** les tasques que crea `obrir_ronda` neixen `ad_hoc` A POSTA —és el que les deixa
-// conviure amb la `prevista` del mateix tipus sota la unique parcial (`services_r`, nota de la
-// funció)—, o sigui que a partir de la R2 el joc REPLICAT sencer entrava aquí i cada volta nova
-// es pintava amb el filet grana i el rètol «fora d'encàrrec». Mesurat a la QA de pantalla del
-// banc: les dues tasques de la R2 marcades, i cap ho és.
-//
-// I no és una excepció que M2 s'inventi: és el MATEIX raonament que el backend ja va escriure a
-// `_NO_ES_REPLICA` («l'únic camp que literalment vol dir *això no és de la recepta* és
-// `off_recipe`»), i és el que les dues superfícies comercials —`WorkOrderDetail`, `OrderDetail`—
-// ja feien servir soles. Aquesta era l'única lectura de la casa que hi sumava `origen`.
-function isOutOfCharge(task) { return task?.off_recipe === true }
 
 const containerStyle = { background: 'transparent', width: '100%' }
 const cardsGrid = { display: 'flex', flexWrap: 'wrap', gap: 12 }
@@ -470,8 +435,11 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
             obert={obert(bloc)} onToggle={() => commuta(bloc)}
             onEntregar={() => setEntregant(bloc)}
             onOkClient={() => setOkClient(bloc.entrega)}>
+            {/* Dins d'una volta, la targeta COMPACTA de la maqueta: quatre o cinc hi caben en
+                una fila sota la capçalera, que és el que fa llegible el pla per rondes. La gran
+                es queda per al pla PLA (model sense voltes), just a sota. */}
             {bloc.tasques.map(task => (
-              <TaskCard key={task.id} task={task} mine={isMine(task)}
+              <TaskCardCompacta key={task.id} task={task} mine={isMine(task)}
                 hasToolRoute={Boolean(desti(task))}
                 segellada={bloc.estat === RONDA_ENTREGADA}
                 onPlay={handlePlay} onPause={handlePause} onStop={handleStop}
