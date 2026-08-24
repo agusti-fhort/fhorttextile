@@ -587,3 +587,186 @@ paths explícits; arbre de sortida net.
 | 🚩 4 · `TaskLog.jsx` és codi mort | ⏳ obert |
 | ⚠️ 5 · `ObrirTascaDialog` diu de menys | ⏳ obert |
 | 🚩 **NOU** · el pla PLA es queda **sense cap progrés** (C2) | **decisió teva**: una línia si el vols |
+
+---
+---
+
+# CODA-BIS · tres retocs finals
+
+> Annex al mateix document. Mateixa branca **`m2-cara-rondes`**, mateix worktree, **cap push**.
+> Contracte: `docs/maquetes/proposta_A_v2_pla_treball.html`.
+> ⚠️ **El punt 3 és backend** → hi torna a córrer el bloc RONDA sencer.
+
+---
+
+## D1 · ① LA BARRA GLOBAL TORNA, NOMÉS SENSE VOLTES
+
+La CODA la va retirar sencera i va deixar declarat el forat (C2): un model **sense cap `Ronda`**
+es pinta pla, no té capçaleres que diguin el progrés, i es quedava sense cap indicador. Ara la
+condició és explícita: **`!perVoltes && list.length > 0`**.
+
+- **Amb ≥1 ronda** → cap barra global. Cada capçalera porta el seu progrés i una tercera xifra
+  sobre el total del model barrejaria voltes entregades amb la vigent.
+- **Sense cap ronda** → torna «n/m tasques fetes · %» i la barra.
+- **El temps acumulat es diu SEMPRE**, amb voltes o sense: és un fet del model sencer.
+
+### 🔑 La condició s'autoextingeix, i per això no és deute
+
+`perVoltes` és fals **només mentre el model no tingui cap `Ronda`**, i la R1 **neix sola del
+primer gest de treball** (M1-bis · FIT-4): tot model que rebi feina en surt tot sol. El retroactiu
+de **M5** buidarà el que quedi. El dia que la població sigui zero, la branca deixarà de pintar-se
+**sense que ningú hi hagi de tornar** — no cal recordar-se de retirar-la.
+
+Clau nova: `model_sheet.dashboard.workplan.progress_pla` (ca/en/es). No es reaprofita la
+`progress_label` que la CODA va retirar: aquella parlava del pla sencer i aquesta **només del pla
+sense voltes**, i tornar-li el nom vell convidaria a tornar-la a pintar a tot arreu.
+
+### El banc guanya el cas — i és l'únic que **no es pot muntar pel camí normal**
+
+`QA-M1-0005 · [QA-M1] Llegat sense volta (pre-llei)`: tasques amb `ronda=NULL` i **cap fila
+`Ronda`**.
+
+> 🚨 **El codi viu ja no sap fabricar aquesta forma.** Des d'M1-bis qualsevol gest de treball fa
+> néixer la R1, o sigui que el banc no la pot obtenir per cap camí de producte. Però és la que
+> tenen els models d'abans del canvi de llei —**4 dels 7** models amb tasques de `fhort` al
+> tancament d'M2— i ho serà fins al retroactiu de M5. Sense aquest model, la branca del pla pla
+> **no es pot veure mai**: es reprodueix una població, no s'esquiva cap llei (els estats es mouen
+> igualment per `transition_task`, que no toca cap `Ronda`).
+
+⚠️ **I va ABANS de la segona passada del muntatge**, pel mateix motiu que la segona passada
+existeix: els seus `_porta_estat` passen per `InProgress` i `_aplica_exclusio_tecnic` és **GLOBAL**
+— muntat al final, **pausava la `InProgress` del model 0001** i el banc perdia el seu únic estat
+«en curs». Mesurat, corregit.
+
+---
+
+## D2 · ② EL BOTÓ D'ENTREGA JA NO DEPÈN DE `lliurable`
+
+«Marcar entregable» es pinta **sempre a la volta VIGENT**; el senyal deduït baixa a **badge
+informatiu** al costat de l'estat (`rondes.lliurable`, ca/en/es).
+
+### Per què el senyal no podia ser la porta
+
+`ronda_lliurable` mira **NOMÉS** les tasques `es_lliurable` (5 dels 15 tipus actius) i, **per
+disseny**, torna `False` quan la volta no en té cap — *«no hi ha res per lliurar» no és «ja està
+lliurat»* (`services_r`, docstring). Dues conseqüències que la condició provocava:
+
+1. **Una volta que no produeix cap lliurable no s'hauria pogut entregar MAI des de la pantalla.**
+   El botó no hi hauria estat i no hi ha cap altra porta a la cara.
+2. **S'entrega el que hi ha.** Una volta es pot enviar a mitges —és literalment el que l'acta d'M1
+   diu que distingeix `lliurable` d'`entregada`— i condicionar el gest al senyal prohibia aquell
+   cas real per protegir-ne un que **ja té avís propi** (el badge, i el diàleg amb el recompte de
+   feina viva).
+
+Les dues preguntes segueixen separades com al contracte del serializer (`lliurable` deduït ·
+`entregada` declarat) i **ara també a la cara**: una informa, l'altra s'escriu.
+
+**El botó viu a la volta VIGENT i prou.** Una de tancada o entregada ja no admet cap entrega
+(`informar_entrega` la rebutjaria amb `entrega_invalida`), i oferir-l'hi seria una mentida de
+pantalla — no una porta que el servidor resol.
+
+**El diàleg no canvia**: segueix declarant que confirmar **TANCARÀ la volta** i **quantes tasques
+vives s'endú** (FIT-13 + FIT-6), i el refús, si n'hi ha, el diu el servidor.
+
+---
+
+## D3 · ③ UNA RONDA OBERTA PER MODEL
+
+### ⚠️ El guard JA HI ERA. El que no hi era és un missatge accionable.
+
+La llei és d'F1.1 i s'imposa on toca:
+
+| Fet | On |
+|---|---|
+| `Ronda.objects.create` apareix a **dos** llocs a tot el backend | `obrir_ronda` (guardat) i `ronda_del_gest`, que fa `get_or_create(model, seq=1)` i **no pot** fabricar una segona volta viva |
+| `obrir_correccio` **no crea cap `Ronda`** (S-20) | hereta la de la mare |
+| La BD **no** hi ajuda, a posta | `uniq_ronda_model_seq` fa única `(model, seq)`, no «una d'oberta». Una constraint parcial obligaria a **inventar-se el tancament**, i tancar una volta és un acte humà (docstring de `Ronda`) |
+| Test del refús | `test_no_es_poden_obrir_dues_rondes_alhora`, ja hi era |
+
+**La decisió d'Agus/CTO RATIFICA el que ja passava.** Ho dic explícitament perquè la propera
+sessió no busqui un guard nou que no existeix.
+
+### El que sí que ha canviat: el text
+
+Deia *«Aquest model ja té una ronda oberta; tanca-la abans d'obrir-ne una altra»*, i fallava dues
+vegades:
+
+- **Amagava la sortida normal.** Una volta es tanca **ENTREGANT-LA** (FIT-13). «Tancar» sol **no
+  té cap porta pròpia** a tot el producte (v. «vist fora d'scope» de l'acta d'M1). Qui llegia
+  «tanca-la» buscava un botó que no existeix.
+- **No deia QUINA volta bloqueja**, que en un model amb història és justament el que no se sap.
+
+Ara:
+
+> **«Aquest model ja té una ronda oberta: entrega o tanca la R{n} primer.»**
+
+Test nou —`test_el_refus_de_la_segona_ronda_diu_QUINA_volta_bloqueja`— que fixa **les dues
+meitats** del missatge (`R{n}` i la paraula «entrega») i que el refús **no deixa cap volta a
+mitges**. El text viatja fins al toast de «+ Nova ronda», que és visible sempre precisament
+perquè el motiu el digui el servidor: **mesurat d'extrem a extrem al fum de pantalla** (⑦),
+prement el botó de debò contra el backend viu.
+
+---
+
+## D4 · GATE
+
+| Control | Resultat |
+|---|---|
+| `npm run build` | **VERD** |
+| `eslint` sobre els fitxers tocats | **0 errors** · 1 warning **preexistent** (dependència `token` del `useEffect` del `/me/`) |
+| `manage.py check` | **net** |
+| Bloc RONDA sencer (el punt 3 és backend) | **`Ran 179 tests` · `OK`** — v. la nota de sota. Cap test existent tocat |
+| Fum de pantalla · `qa_m2_cara_pantalla.py` | **38 OK · 0 FAIL** (30 abans + **8 nous**) |
+| Fum HTTP · `qa_m2_cara_http.py` | **41 OK · 0 FAIL** |
+| Banc | `[QA-M1]`, ara **5 models**. Model **1383: no s'hi ha entrat** |
+| Servei | `ftt-staging.service` **NO reiniciat**. Gunicorn propi a `:8124`, **aturat al tancament** |
+
+> 🔑 **179 i no 177, i el número és el MESURAT.** El test nou és **un** i el bloc en corre **tres
+> de més**: `RondaLliurableTest` i `CorreccioSenseRondaTest` **hereten de `RondaTest`**
+> (`test_ronda.py:212` i `:266`) i en tornen a córrer tots els mètodes, o sigui que qualsevol
+> mètode afegit a la classe base s'executa **3 vegades**. És el mateix efecte que l'acta d'M1 ja
+> va haver d'explicar al seu §7.4 quan els 113 no quadraven amb el recompte per `grep`. Ho anoto
+> perquè jo mateix vaig escriure «177» abans de mirar la sortida: **el número d'un gate es
+> transcriu, no es dedueix.**
+
+### Les vuit assercions noves
+
+| # | Asserció | Com mesura |
+|---|---|---|
+| ⑤ | amb voltes, **cap** barra global | absència sobre el model de dues voltes |
+| ⑥ | la **R2** (vigent i **NO** lliurable) ofereix «Marcar entregable» | 🔑 **dins de la capçalera de la volta**, no al `body`: el mot «Lliurable» hi surt també a la pastilla del model (`BadgeLliurable`, d'abans d'M2) i a la R1, que sí que ho és. La primera versió d'aquesta asserció buscava al `body` i **deia que la pantalla estava malament quan estava bé** |
+| ⑥ | la **R1** (lliurable però **TANCADA**) porta el badge i **cap** botó | el parell demostra que els dos senyals són independents |
+| ⑦ | el refús de la 2a volta **arriba del servidor** i diu quina bloqueja | **prement el botó de debò**: la crida falla amb 400 i el toast diu *«…entrega o tanca la R2 primer.»* |
+| ① ×4 | el model **llegat**: cap contenidor de ronda · la barra global torna (**1/2 · 50%**) · el temps segueix a la capçalera · **cap** «+ Nova ronda» | sobre `QA-M1-0005` |
+
+⚠️ **Ordre obligat dels dos fums**: primer l'HTTP (que remunta el banc **i entrega** la R1 del
+0001), després el de pantalla, que llegeix aquell resultat a la secció B. Corregut a l'inrevés,
+la secció B falla per una raó que no té res a veure amb el codi — m'hi vaig entrebancar.
+
+**Captura nova**: `ops/qa/captures/m2_pla_llegat_sense_volta.png` — el pla PLA amb targeta gran,
+la barra global i cap contenidor.
+
+---
+
+## D5 · COMMITS
+
+| Hash | Punt | Concern |
+|---|---|---|
+| `51589dd2` | ① | `feat(model)`: la barra de progrés global torna, NOMÉS al pla sense voltes |
+| `125cebb2` | ② | `feat(model)`: entregar és un GEST, no un premi: el botó no depèn de `lliurable` |
+| `b45ed667` | ③ | `feat(tasks)`: el refús d'una segona volta diu QUINA bloqueja i com desbloquejar-la |
+| *(HEAD)* | — | `docs(ordres)`: la CODA-BIS d'M2 — **aquest annex** + les assercions del fum |
+
+---
+
+## D6 · ESTAT DELS PENDENTS
+
+| # | Estat ara |
+|---|---|
+| 🚩 «objectiu» i «tancament projectat» | ⏳ obert — planificació, fora d'M2 |
+| ✅ el menú «···» | **TANCAT** (CODA · C4) |
+| 🚩 `isOutOfCharge` sense `origen` | ⏳ **segueix pendent de ratificar** — el predicat viu a `utils/tascaPla` i el segueixen les dues targetes |
+| 🚩 `TaskLog.jsx` és codi mort | ⏳ obert |
+| ⚠️ `ObrirTascaDialog` diu de menys | ⏳ obert |
+| ✅ el pla PLA sense progrés | **TANCAT** (D1) |
+| ℹ️ **NOU** · `ronda_lliurable` ja no governa cap porta de la cara | Segueix sent el senyal previ i el badge. Si algun dia ha de tornar a governar alguna cosa, que sigui **declarat**, no per omissió d'un altre camí |

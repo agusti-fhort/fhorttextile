@@ -864,7 +864,8 @@
         "handoff_cancel": "Cancel",
         "claim_denied": "You can't take a task of this type (it's not in your execution list)",
         "claim_error": "Could not reassign the task",
-        "time_total": "Time accrued on the model"
+        "time_total": "Time accrued on the model",
+        "progress_pla": "{{done}}/{{total}} tasks done"
       },
       "timeline": {
         "section": "What changed",
@@ -5250,6 +5251,7 @@
     "reg_kpi_entregues": "Deliveries",
     "reg_col_qui": "Who",
     "reg_entrega_a": "Delivered to {{destinatari}}",
-    "reg_buit": "This model has no recorded activity yet"
+    "reg_buit": "This model has no recorded activity yet",
+    "lliurable": "Deliverable"
   }
 }

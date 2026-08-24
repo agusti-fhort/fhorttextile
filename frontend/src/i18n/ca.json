@@ -864,7 +864,8 @@
         "handoff_cancel": "Cancel·lar",
         "claim_denied": "No pots agafar una tasca d'aquest tipus (no és a la teva llista d'execució)",
         "claim_error": "No s'ha pogut reassignar la tasca",
-        "time_total": "Temps acumulat sobre el model"
+        "time_total": "Temps acumulat sobre el model",
+        "progress_pla": "{{done}}/{{total}} tasques fetes"
       },
       "timeline": {
         "section": "Què ha canviat",
@@ -5250,6 +5251,7 @@
     "reg_kpi_entregues": "Entregues",
     "reg_col_qui": "Qui",
     "reg_entrega_a": "Entrega a {{destinatari}}",
-    "reg_buit": "Aquest model encara no té activitat registrada"
+    "reg_buit": "Aquest model encara no té activitat registrada",
+    "lliurable": "Lliurable"
   }
 }
