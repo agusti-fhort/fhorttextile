@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next'
 
 import Badge from '../ui/Badge'
 import { formatMinutes, formatDataHora, formatDataCurta, localeDeIdioma } from '../../utils/format'
-import { RONDA_ENTREGADA, RONDA_TANCADA } from '../../utils/rondes'
+import { RONDA_ENTREGADA, RONDA_OBERTA, RONDA_TANCADA } from '../../utils/rondes'
 
 // M2 · MOCKUP A v2 — EL CONTENIDOR D'UNA VOLTA al Pla de treball.
 //
@@ -76,6 +76,18 @@ export default function RondaPla({ bloc, obert, onToggle, onEntregar, onOkClient
         {fase && <Badge variant="gray">{fase}</Badge>}
         {estat && <Badge variant={ESTAT_VARIANT[estat] || 'gold'}>{t(`rondes.estat_${estat}`)}</Badge>}
 
+        {/* `lliurable` és un SENYAL, no una porta (M2 · CODA-BIS). Diu «ja hi és tot el que
+            aquesta volta havia de produir» —totes les tasques `es_lliurable` són Done— i el seu
+            lloc és al costat de l'estat, informant. El gest d'entregar ja no en depèn: v. el botó
+            més avall. Les dues preguntes segueixen separades al contracte del serializer
+            (`lliurable` deduït · `entregada` declarat) i ara també a la cara. */}
+        {bloc.lliurable && !entrega && (
+          <Badge variant="ok" icon="ti-package-export"
+                 title={t('lliurable.badge_titol', { n: ronda?.seq })}>
+            {t('rondes.lliurable')}
+          </Badge>
+        )}
+
         <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)',
                        fontFamily: 'var(--mono)' }}>
           {!orfe && (
@@ -103,11 +115,19 @@ export default function RondaPla({ bloc, obert, onToggle, onEntregar, onOkClient
           </span>
         </span>
 
-        {/* «Marcar entregable»: NOMÉS quan el senyal previ diu que ja hi és tot (`lliurable`) i
-            la volta encara és viva. `lliurable` i `entregada` responen dues preguntes diferents
-            i el contracte del serializer les separa a posta: aquest botó viu de la primera i
-            escriu la segona. */}
-        {bloc.lliurable && !entrega && estat && estat !== RONDA_ENTREGADA && estat !== RONDA_TANCADA && (
+        {/* «Marcar entregable» · **SEMPRE a la volta VIGENT**, sense condició de `lliurable`
+            (M2 · CODA-BIS, decisió d'Agus).
+            🔑 **El senyal deduït no pot ser la porta.** `ronda_lliurable` respon «ja hi és tot?»
+            mirant NOMÉS les tasques `es_lliurable`, i per disseny torna `False` quan la volta no
+            en té cap («no hi ha res per lliurar» no és «ja està lliurat»): una volta de feina que
+            no produeix fitxa ni patró no s'hauria pogut entregar MAI des de la pantalla. I
+            s'entrega el que hi ha —una volta es pot enviar a mitges—, o sigui que condicionar el
+            gest al senyal era prohibir un cas real per protegir-ne un que ja té avís propi.
+            Qui refusa, si cal, és el servidor; i el diàleg segueix dient que confirmar TANCARÀ la
+            volta i quantes tasques vives s'endú.
+            Es pinta a la volta VIGENT: una de tancada o entregada ja no admet cap entrega
+            (`informar_entrega` la rebutjaria, i l'oferta seria una mentida de pantalla). */}
+        {estat === RONDA_OBERTA && !entrega && (
           <button type="button" onClick={onEntregar}
             style={{
               fontFamily: 'var(--mono)', fontSize: 'var(--fs-caption)', padding: '5px 12px',
