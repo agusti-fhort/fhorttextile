@@ -341,3 +341,181 @@ llavors se n'obre una altra, que ha de sortir amb el joc replicat.
 
 **Res per pushejar per part meva.** `m1bis-fit4` surt de `0e3a5eb6` i vol un **merge** a `dev`;
 el worktree es pot retirar amb `git worktree remove /var/www/ftt-m1`, deixant la branca com a pin.
+
+---
+---
+
+# CODA · fix de genealogia `mare` + adopció del buit
+
+> Annex al mateix document (no és un fitxer nou). Mateixa branca **`m1bis-fit4`**, mateix
+> worktree, **cap push**, **cap restart** del servei compartit.
+> Tanca dos dels tres punts que el §8 deixava oberts: el **🚨 3** (defecte de genealogia) i, de
+> passada, dona sortida al **🚩 2** (la feina que queia al buit ja no s'hi queda per sempre).
+> **DECISIÓ 1 d'Agus: `_NO_ES_REPLICA = {off_recipe}` es queda com està — cap canvi.** ✅
+
+---
+
+## C1 · DECISIÓ 3 · La `mare` és la tasca homòloga de la volta anterior
+
+### El defecte, dit exacte
+
+`obrir_ronda` demanava la `mare` a `tasca_vigent`. Però quan `obrir_ronda` s'executa **totes les
+voltes són tancades** —és el seu propi guard—, i llavors `tasca_vigent` cau a la **regla 2**
+(`Q(origen='prevista') | Q(motiu='correccio', ronda__isnull=True)`), que retorna la tasca **base**:
+amb la llei nova, la de la **R1**. Resultat: la `mare` de la R3 apuntava a la R1 i **la cadena
+saltava la R2 sencera**, mentre el `help_text` del camp deia *«la tasca homònima de la volta
+anterior»*.
+
+### El fix — `services_r.mare_homologa(ronda_anterior, code)`
+
+| Regla | Com |
+|---|---|
+| Es resol contra **la volta TANCADA de `seq` més alta** | `_ronda_anterior` guanya el filtre `tancada_el__isnull=False` **explícit**. És redundant avui (el guard viu a `obrir_ronda`), i és exactament així com sobreviuen els defectes a un refactor: la funció que decideix de quina volta es replica i contra quina es resol la mare ho ha de dir **ella** |
+| Sense homòloga a aquella volta → **`mare=NULL`** | «La volta anterior no en tenia» és una **dada**. No s'encadena amb voltes més velles |
+| Amb diverses tasques del mateix code a la volta → **la més recent** (`-id`) | Mateix criteri que la **regla 4** de `tasca_vigent`: entre una correcció i la tasca que corregeix, el que es repeteix és **l'esmena** |
+
+### 🚩 C1-bis · UNA DESVIACIÓ DECLARADA — el model LLEGAT
+
+**No la vaig veure jo: la van enxampar tres tests d'M1 que ja hi eren**
+(`test_la_filla_apunta_a_la_mare_homonima`, a `RondaTest`, `RondaLliurableTest` i
+`CorreccioSenseRondaTest`). Van passar de verd a vermell amb el fix literal, i **no els he tocat**.
+
+**El cas:** un model d'abans del canvi de llei té tota la feina a `ronda=NULL` i **cap fila
+`Ronda`**. Aplicant «si no hi ha homòloga a la darrera volta, `mare=NULL`» al peu de la lletra, el
+**primer +Ronda** d'aquests models **perdria el lligam amb tot l'històric**. I són **els models
+reals**: els 32 d'staging tenen aquesta forma.
+
+**La lectura que he aplicat:** la DECISIÓ 3 prohibeix *«encadenar amb voltes MÉS VELLES»*, i en un
+model sense cap volta **no n'hi ha cap per saltar-se** — la feina històrica **és** la volta
+anterior d'aquell model, encara que no tingui fila. Per això, **i només quan `anterior is None`**,
+es conserva el criteri d'abans (`tasca_vigent`, que hi cau a la regla 2 i retorna precisament la
+tasca base).
+
+Amb la llei nova aquest camí **s'apaga sol**: tot model que rebi un gest ja neix amb R1.
+🚩 **Si vols la lletra literal, és una línia** (`mares = {code: mare_homologa(anterior, code) …}`)
+— però llavors caldrà decidir què es fa amb aquells tres tests i amb la genealogia dels 32 models.
+
+---
+
+## C2 · DECISIÓ 2 · L'adopció de la feina del buit
+
+### El buit, i per què existeix
+
+`ronda_del_gest` retorna `None` quan **totes les voltes són tancades** (cas 3 d'M1-bis, §2.1): una
+tasca oberta llavors neix `ronda=NULL` i **espera**. Aquí s'acaba l'espera.
+
+### La frontera — temporal i exacta
+
+`services_r.tasques_del_buit(model, ronda_anterior)`:
+
+```
+ModelTask.objects.filter(model=model, ronda__isnull=True,
+                         created_at__gt=ronda_anterior.tancada_el)
+```
+
+**Els camps reals**, tal com et vaig prometre citar-los: **`Ronda.tancada_el`**
+(`tasks/models.py`, *«null = oberta. És la definició de vigent»*) i **`ModelTask.created_at`**
+(`auto_now_add=True`). No he hagut d'inventar cap nom: tots dos existien.
+
+🔒 **NO ÉS UN BACKFILL.** Tot el que és **anterior** al tancament de la volta anterior no es toca:
+segueix esperant el retroactiu de **M5** i la **sub-decisió (b) queda sencera**. Dues baranes de
+test: una `NULL` **pre-R1** i una creada **MENTRE** la volta anterior encara era viva — cap de les
+dues s'adopta. Sense volta anterior no hi ha buit: un model que no n'ha tancat cap no té
+«després de».
+
+### L'adopció **només escriu `ronda`**
+
+Ni `motiu`, ni `mare`, ni `order`, ni l'estat, ni `origen`, ni `created_at`. La tasca ja existeix,
+ja té la seva història i potser ja s'ha treballat: **entrar a una volta no és néixer-hi**, i
+reescriure-li la genealogia seria inventar que la va proposar la ronda. Un test compara la tupla
+sencera abans i després.
+
+### ⚠️ Dues regles derivades que la decisió no fixava (i que calien)
+
+**1. Un code ja adoptat NO es replica a sobre.** Altrament la volta quedaria amb **dos germans del
+mateix code** —un de viu, potser començat, i un de buit— i `tasca_vigent` hauria de triar entre
+ells **dins de la mateixa ronda**. L'adopció mana sobre la proposta: *el que ja existeix no es
+proposa*.
+
+> 🔑 **I el cas s'hi arriba sol, no és teòric.** Un code que a la volta anterior només va existir
+> com a `ad_hoc` (creat per `obrir_ronda`) **no deixa cap `prevista` enrere**; en tancar-se la
+> volta, `tasca_vigent` no en troba cap i `open-task` **en crea una de nova**, al buit. Test:
+> `test_el_code_adoptat_NO_es_replica_a_sobre`, per la cadena R2→buit→R3.
+
+**2. Excepció simètrica per a `off_recipe`.** Un extra nascut al buit **s'adopta igual** —és feina
+d'aquesta volta— però **no tapa** la rèplica del seu code: `off_recipe` vol dir literalment «fora
+de la recepta», i que algú hagi fet un extra de `pom` no vol dir que la volta no hagi de fer el
+`pom` de la recepta. És la mateixa frontera de `_NO_ES_REPLICA` (DECISIÓ 1, intacta) llegida des
+de l'altre costat.
+
+### Contracte de porta
+
+`POST /models/<id>/obrir-ronda/` guanya **`codes_adoptats`** al costat de `codes_replicats` i
+`codes_omesos`. **No són tasques noves i M2 no les pot pintar igual**: són feina que ja existia i
+que aquesta volta recull.
+
+---
+
+## C3 · TESTS I GATE
+
+Els tres que demanaves, i els que van sortir pel camí:
+
+| Demanat | Test |
+|---|---|
+| (a) cadena R1→R2→R3 amb `mare` correcta a cada salt | `test_la_cadena_R1_R2_R3_no_salta_cap_volta` (comprova el salt correcte **i** que ja no va a la R1) |
+| (b) tasca nascuda al buit → adoptada per la R(n+1) | `test_una_tasca_nascuda_al_buit_l_adopta_la_volta_seguent` |
+| (c) tasca NULL pre-R1 → intacta | `test_una_tasca_ANTERIOR_a_la_primera_volta_no_es_toca` |
+
+I 10 més: `mare` de la R2, code sense homòloga → `NULL`, code que neix a la R2 i encadena a la R3,
+correcció que mana sobre la seva mare, **model llegat** (C1-bis), l'adopció que només escriu
+`ronda`, la frontera del tancament, la dedup adoptat↔replicat, l'excepció `off_recipe`, una volta
+només amb feina adoptada, i la porta HTTP.
+
+### Gate
+
+```
+venv/bin/python manage.py check                      → net
+venv/bin/python manage.py makemigrations tasks --dry-run
+    No changes detected in app 'tasks'               → CAP migració, com s'esperava
+
+venv/bin/python manage.py test \
+    fhort.tasks.test_ronda fhort.tasks.test_tasca_vigent fhort.tasks.test_contracte_f2 \
+    fhort.tasks.test_m1_entrega fhort.tasks.test_m1bis_fit4 \
+    --settings=fhort.settings_m1 --keepdb
+```
+
+**`Ran 176 tests in 618.659s` · `OK` · `EXIT=0`** (140 eren el gate d'M1-bis; **36 nous**).
+
+> 🔑 **La correguda intermèdia va sortir VERMELLA i és el millor que ha passat en aquest tram**:
+> `FAILED (failures=3)`, els tres `test_la_filla_apunta_a_la_mare_homonima`. El fix literal de la
+> DECISIÓ 3 hauria entrat en verd si el gate hagués estat només els tests nous. **Cap test
+> existent s'ha tocat** per fer-lo passar; el que s'ha canviat és el codi (C1-bis).
+
+---
+
+## C4 · COMMITS I ESTAT
+
+| Hash | Concern |
+|---|---|
+| `f9f8e8c5` | `fix(tasks)`: la mare d'una volta és la tasca homòloga de la volta anterior |
+| `dd76e3de` | `feat(tasks)`: la volta nova adopta la feina nascuda al buit entre voltes |
+| `9629ae77` | `fix(tasks)`: el model llegat conserva la mare històrica al primer +Ronda |
+
+> Van sortir **tres** commits d'un encàrrec de dos: el tercer és la reparació de la regressió que
+> el gate va destapar, i barrejar-lo amb el primer hauria amagat al log que la lletra de la
+> DECISIÓ 3 tenia un cas que no cobria.
+
+**Estat del §8 d'M1-bis després de la CODA:**
+
+| # | Estat ara |
+|---|---|
+| 🚩 1 · `_NO_ES_REPLICA` | ✅ **TANCAT** — DECISIÓ 1: es queda `{off_recipe}` |
+| 🚩 2 · `ronda_del_gest` cas 3 | ✅ **confirmat i completat**: la feina del buit ja no hi queda per sempre (C2) |
+| 🚨 3 · defecte de genealogia | ✅ **TANCAT** (C1) |
+| 🚩 4 · cap servei únic de creació de `ModelTask` | ⏳ **segueix obert** — deute anotat |
+| ⚠️ 5 · contracte de `obrir-ronda` per a M2 | ⏳ i ara també amb **`codes_adoptats`** |
+| ⚠️ 6 · allow-list · ℹ️ 7 · i18n · ℹ️ 8 · banc | sense canvis |
+| 🚩 **NOU** · la desviació del **model llegat** (C1-bis) | 🚩 **pendent de la teva confirmació** |
+
+**Res per pushejar per part meva.** `m1bis-fit4` (ara **9 commits** sobre `0e3a5eb6`) vol un
+**merge** a `dev`.
