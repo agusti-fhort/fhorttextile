@@ -2,20 +2,33 @@
 
 El valor d'un POM ancorat **no s'escriu: es llegeix**. Aquí és on es llegeix.
 
-Dos modes, i el segon existeix perquè el patronatge real el necessita:
+Tres modes, i cap dels dos últims és un caprici: el patronatge real els necessita.
 
-  · `points`   — la mesura va d'un punt ancorat a un altre.
-  · `landmark` — la mesura surt d'un punt DERIVAT: "1 cm sota el punt de sisa". El punt
-                 no existeix a la geometria i no s'hi dibuixa; es calcula cada vegada
-                 sobre la vora, de manera que si la sisa es mou, el punt derivat es mou
-                 amb ella. Si es materialitzés com a vèrtex, seria una còpia que
-                 envelliria.
+  · `points`    — la mesura va d'un punt ancorat a un altre.
+  · `landmark`  — la mesura surt d'un punt DERIVAT: "1 cm sota el punt de sisa". El punt
+                  no existeix a la geometria i no s'hi dibuixa; es calcula cada vegada
+                  sobre la vora, de manera que si la sisa es mou, el punt derivat es mou
+                  amb ella. Si es materialitzés com a vèrtex, seria una còpia que
+                  envelliria.
+  · `ortogonal` — la CAIGUDA. Tres àncores: dues fan la línia de REFERÈNCIA i la tercera
+                  és el punt que hi cau; el valor és la distància perpendicular del punt
+                  a la línia. És el que demanen les mesures «des del nivell HPS» (escot
+                  davant, caiguda d'espatlla, profunditat de sisa), que no són ni una
+                  recta entre dos punts del patró ni una longitud per vora.
 
 I dos mètodes de mesurar, que no són intercanviables: la distància RECTA entre dos punts
 (el que mesura una cinta estirada) i la longitud PER VORA (el que mesura una cinta que
 resegueix la corba). Una sisa recta i una sisa resseguida es diferencien en centímetres.
 `POMMaster` no diu quin toca —no té camp per dir-ho—, així que el mètode es desa a
 `PatternPOM.metode` i per defecte és RECTA, dit i no assumit.
+
+⚠️ **La caiguda ortogonal NO és ΔY.** Restar coordenades seria molt més curt i estaria
+malament dues vegades: en una peça que al plànol seu girada, els eixos del full no són
+els de la peça; i en un escot asimètric, els dos HPS no seuen a la mateixa alçada, o
+sigui que no hi ha cap «nivell HPS» que un eix del full pugui representar. Qui ha de
+posar la referència és la PEÇA —dues àncores seves—, i llavors el valor sobreviu a totes
+dues coses perquè gira amb elles. El `metode` no hi juga cap paper: una perpendicular no
+té variant recta ni variant per vora.
 """
 from __future__ import annotations
 
@@ -28,6 +41,12 @@ from .geometry import BoundaryData, PieceData, PointData
 
 MM_PER_CM = 10.0
 
+#: Sota d'això, les dues àncores de referència són el mateix punt i la línia no té
+#: direcció. Mateix valor que `grading_projection.TOL_DIRECCIO_MM`, que resol la mateixa
+#: pregunta a l'altra punta del motor: dos punts separats per menys que això no orienten
+#: res, i normalitzar-hi un vector dona un número sense sentit (o un NaN).
+TOL_REFERENCIA_MM = 1e-6
+
 
 class MeasureError(PatternEngineError):
     """La recepta no es pot resoldre sobre aquesta geometria."""
@@ -36,7 +55,7 @@ class MeasureError(PatternEngineError):
 @dataclass(frozen=True)
 class MeasureResult:
     valor_cm: float
-    metode: str                       # 'recta' | 'vora'
+    metode: str                       # 'recta' | 'vora' | 'ortogonal'
     punts: tuple[tuple[float, float], ...]   # els punts que la mesura toca, en mm
     derivat: bool = False             # ha calgut calcular algun punt que no existeix?
 
@@ -69,7 +88,53 @@ def resoldre(
         b = _punt(definicio.get('b'), punts_per_id)
         return _mesura(piece, a, b, metode, derivat=True)
 
+    if mode == 'ortogonal':
+        return _ortogonal(
+            _punt(definicio.get('ref_a'), punts_per_id, 'ref_a'),
+            _punt(definicio.get('ref_b'), punts_per_id, 'ref_b'),
+            _punt(definicio.get('p'), punts_per_id, 'p'),
+        )
+
     raise MeasureError(f"Mode de mesura desconegut: '{mode}'.")
+
+
+def _ortogonal(ref_a, ref_b, p) -> MeasureResult:
+    """La distància PERPENDICULAR de `p` a la recta que passa per `ref_a` i `ref_b`.
+
+    Es resol amb el producte vectorial 2D i no projectant sobre eixos, que és el que la
+    fa immune al gir de la peça: |(b−a) × (p−a)| / |b−a| és l'àrea del paral·lelogram
+    dividida per la base, i tant l'àrea com la base giren juntes.
+
+    El PEU de la perpendicular és un punt derivat —no és a la geometria i no s'hi
+    dibuixa—, exactament com el punt del mode `landmark`. Per això `derivat=True`.
+
+    `punts` torna el segment (peu → p), i NOMÉS aquest: és la polilínia la longitud de la
+    qual ÉS el valor, que és la invariant que compleixen també `recta` i `vora`. La línia
+    de referència no hi entra perquè no forma part de la mesura; qui la vulgui dibuixar ja
+    en té les dues àncores a la recepta.
+    """
+    vx, vy = ref_b[0] - ref_a[0], ref_b[1] - ref_a[1]
+    base = hypot(vx, vy)
+    if base <= TOL_REFERENCIA_MM:
+        raise MeasureError(
+            'Les dues àncores de referència són el mateix punt: no defineixen cap línia, '
+            'i sense línia no hi ha perpendicular. Tria dos punts separats.'
+        )
+
+    wx, wy = p[0] - ref_a[0], p[1] - ref_a[1]
+    # Producte vectorial 2D (l'àrea signada del paral·lelogram). El SIGNE diria de quin
+    # costat de la línia cau el punt; una caiguda no en té, de costat, així que es descarta
+    # aquí i no més amunt: qui llegeixi el valor no ha de saber que mai va existir.
+    creuat = vx * wy - vy * wx
+    distancia = abs(creuat) / base
+
+    # El peu: `ref_a` + la projecció escalar de w sobre v. Pot caure FORA del segment
+    # ref_a–ref_b, i és correcte que hi caigui: la referència és una RECTA (el nivell), no
+    # un tram. L'escot d'una peça asimètrica cau sovint fora dels dos HPS.
+    t = (wx * vx + wy * vy) / (base * base)
+    peu = (ref_a[0] + t * vx, ref_a[1] + t * vy)
+
+    return MeasureResult(distancia / MM_PER_CM, 'ortogonal', (peu, p), derivat=True)
 
 
 def _mesura(piece, a, b, metode: str, derivat: bool) -> MeasureResult:
@@ -91,9 +156,14 @@ def _mesura(piece, a, b, metode: str, derivat: bool) -> MeasureResult:
     return MeasureResult(recta / MM_PER_CM, 'recta', (a, b), derivat)
 
 
-def _punt(pid, punts_per_id) -> tuple[float, float]:
+def _punt(pid, punts_per_id, nom: str = '') -> tuple[float, float]:
     if pid is None:
-        raise MeasureError('La recepta de mesura no diu quins punts uneix.')
+        # `nom` només el passa el mode ortogonal, que té TRES àncores amb papers
+        # diferents: dir «falta un punt» no ajudaria a saber quin s'ha de tornar a clicar.
+        raise MeasureError(
+            f"La recepta de mesura no diu quina àncora és «{nom}»." if nom
+            else 'La recepta de mesura no diu quins punts uneix.'
+        )
     p = punts_per_id.get(pid)
     if p is None:
         raise MeasureError(
