@@ -64,7 +64,7 @@ from fhort.patterns.engine.grading_projection import (
     project,
 )
 from fhort.patterns.engine.operations import POMSpec, PointRef, move_points
-from fhort.patterns.engine.measure import MeasureError, resoldre
+from fhort.patterns.engine.measure import MeasureError, eix_dominant, resoldre
 from fhort.patterns.engine.roundtrip import compare, compare_grade_tables
 from fhort.patterns.engine.dart_detection import (
     LLINDAR_PINCA,
@@ -1929,6 +1929,137 @@ class CaigudaOrtogonalTest(unittest.TestCase):
         self.assertFalse(r.derivat)
 
 
+class CotaProjeccioTest(unittest.TestCase):
+    """La cota d'eix: |Δ| de la projecció sobre l'horitzontal o la vertical.
+
+    És el mode que SÍ que viu als eixos del full, i el test que el separa del seu germà
+    `ortogonal` és el del gir: aquí, girar la peça HA de canviar el valor. Si no el canviés
+    seria que algú l'ha reimplementat com una distància, i llavors els dos modes farien el
+    mateix.
+    """
+
+    class Punt:
+        def __init__(self, x, y):
+            self.x, self.y = x, y
+
+    def setUp(self):
+        P = self.Punt
+        # 250 mm d'ample per 98,1 d'alt: les proporcions de l'EK del banc del 837.
+        self.punts = {1: P(2018.6, 1164.3), 2: P(1768.8, 1066.2)}
+
+    def _resol(self, eix=None):
+        recepta = {'mode': 'projeccio', 'a': 1, 'b': 2}
+        if eix is not None:
+            recepta['eix'] = eix
+        return resoldre(None, recepta, self.punts)
+
+    def test_horitzontal_es_delta_x(self):
+        r = self._resol('H')
+        self.assertAlmostEqual(r.valor_cm, abs(2018.6 - 1768.8) / 10.0, places=10)
+        self.assertEqual(r.metode, 'projeccio')
+
+    def test_vertical_es_delta_y(self):
+        self.assertAlmostEqual(
+            self._resol('V').valor_cm, abs(1164.3 - 1066.2) / 10.0, places=10)
+
+    def test_auto_tria_leix_de_mes_recorregut(self):
+        """El que fa qualsevol CAD quan l'usuari no en tria cap."""
+        self.assertAlmostEqual(self._resol().valor_cm, self._resol('H').valor_cm, places=10)
+        self.assertAlmostEqual(self._resol('').valor_cm, self._resol('H').valor_cm, places=10)
+        self.assertGreater(self._resol('H').valor_cm, self._resol('V').valor_cm)
+
+    def test_auto_amb_la_cota_a_laltre_eix(self):
+        P = self.Punt
+        alt = {1: P(0.0, 0.0), 2: P(30.0, 400.0)}
+        r = resoldre(None, {'mode': 'projeccio', 'a': 1, 'b': 2}, alt)
+        self.assertAlmostEqual(r.valor_cm, 40.0, places=10)
+
+    def test_un_empat_exacte_cau_a_lhoritzontal(self):
+        """Arbitrari i escrit a posta: val més una regla que resolgui sempre igual que una
+        que depengui de com hagi arrodonit el CAD."""
+        P = self.Punt
+        diagonal = {1: P(0.0, 0.0), 2: P(100.0, 100.0)}
+        self.assertEqual(eix_dominant((0.0, 0.0), (100.0, 100.0)), 'H')
+        self.assertAlmostEqual(
+            resoldre(None, {'mode': 'projeccio', 'a': 1, 'b': 2}, diagonal).valor_cm,
+            10.0, places=10)
+
+    def test_LA_PECA_ROTADA_CANVIA_EL_VALOR_i_ha_de_canviar(self):
+        """El test que separa aquest mode del seu germà.
+
+        `ortogonal` mesura contra el NIVELL de la peça i per això sobreviu al gir;
+        `projeccio` mesura contra els eixos del FULL i per això no hi ha de sobreviure. Si
+        algun dia aquest test es posés verd, seria que els dos modes han convergit i un
+        dels dos ha deixat de fer la seva feina.
+        """
+        recte = self._resol('H').valor_cm
+        a = math.radians(30)
+        cos, sin = math.cos(a), math.sin(a)
+        girat = {k: self.Punt(p.x * cos - p.y * sin, p.x * sin + p.y * cos)
+                 for k, p in self.punts.items()}
+        self.assertNotAlmostEqual(
+            resoldre(None, {'mode': 'projeccio', 'a': 1, 'b': 2, 'eix': 'H'},
+                     girat).valor_cm,
+            recte, places=2)
+
+    def test_el_segment_es_la_COTA_i_no_la_corda(self):
+        """Una cota d'eix és paral·lela al seu eix, i seu a la coordenada MITJANA dels dos
+        punts: entre tots dos, no enganxada a un. I la seva longitud ÉS el valor —la mateixa
+        invariant que compleixen recta, vora i la caiguda."""
+        r = self._resol('H')
+        (x0, y0), (x1, y1) = r.punts
+        self.assertAlmostEqual(y0, y1, places=10)                     # paral·lela a H
+        self.assertAlmostEqual(y0, (1164.3 + 1066.2) / 2.0, places=10)  # a la mitjana
+        self.assertAlmostEqual(math.hypot(x1 - x0, y1 - y0) / 10.0, r.valor_cm, places=10)
+
+        v = self._resol('V')
+        (vx0, _), (vx1, _) = v.punts
+        self.assertAlmostEqual(vx0, vx1, places=10)                   # paral·lela a V
+        self.assertAlmostEqual(vx0, (2018.6 + 1768.8) / 2.0, places=10)
+
+    def test_els_extrems_son_derivats(self):
+        self.assertTrue(self._resol('H').derivat)
+
+    def test_lordre_dels_punts_es_indiferent(self):
+        endavant = self._resol('H').valor_cm
+        enrere = resoldre(None, {'mode': 'projeccio', 'a': 2, 'b': 1, 'eix': 'H'},
+                          self.punts).valor_cm
+        self.assertAlmostEqual(endavant, enrere, places=10)
+
+    def test_dos_punts_alineats_amb_leix_donen_zero_i_no_es_cap_error(self):
+        """Acotar en horitzontal dos punts a la mateixa abscissa mesura zero. És una
+        resposta geomètrica, no una avaria: qui l'ha de veure és qui miri la cota."""
+        P = self.Punt
+        vertical = {1: P(50.0, 0.0), 2: P(50.0, 300.0)}
+        r = resoldre(None, {'mode': 'projeccio', 'a': 1, 'b': 2, 'eix': 'H'}, vertical)
+        self.assertAlmostEqual(r.valor_cm, 0.0, places=10)
+
+    def test_un_eix_inventat_ho_diu_i_no_endevina(self):
+        with self.assertRaises(MeasureError) as ctx:
+            self._resol('Z')
+        self.assertIn('Z', str(ctx.exception))
+
+    def test_una_ancora_que_falta_diu_QUINA(self):
+        for absent in ('a', 'b'):
+            with self.subTest(absent=absent):
+                recepta = {'mode': 'projeccio', 'a': 1, 'b': 2}
+                del recepta[absent]
+                with self.assertRaises(MeasureError) as ctx:
+                    resoldre(None, recepta, self.punts)
+                self.assertIn(absent, str(ctx.exception))
+
+    def test_la_caiguda_i_la_projeccio_NO_donen_el_mateix(self):
+        """Els dos modes existeixen perquè responen preguntes diferents. Sobre la mateixa
+        geometria han de dir coses diferents; si convergissin, un dels dos sobraria."""
+        P = self.Punt
+        punts = {1: P(0.0, 0.0), 2: P(100.0, 40.0), 3: P(20.0, -30.0)}
+        caiguda = resoldre(
+            None, {'mode': 'ortogonal', 'ref_a': 1, 'ref_b': 2, 'p': 3}, punts).valor_cm
+        cota = resoldre(
+            None, {'mode': 'projeccio', 'a': 1, 'b': 3, 'eix': 'V'}, punts).valor_cm
+        self.assertNotAlmostEqual(caiguda, cota, places=2)
+
+
 class CosturaTest(unittest.TestCase):
     """El diferencial vol dir coses OPOSADES segons el tipus. És tot el test."""
 
@@ -2302,6 +2433,217 @@ class CaigudaOrtogonalAPITest(PatternsAPITestBase):
         specs, problemes = pom_specs(self.fp)
         self.assertEqual(len(specs), 1)
         self.assertEqual(problemes, [])
+
+
+class CotaProjeccioAPITest(PatternsAPITestBase):
+    """La cota d'eix per l'API, i el desplaçament de presentació.
+
+    Sobre l'AMELIA de `fixtures/`, MAI sobre el banc del 837: aquell és material viu de
+    l'Agus.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.fp = PatternFile.objects.get(
+            pk=self._upload(AMELIA_DXF.read_bytes()).data['id'])
+        self.back = self.fp.pieces.get(nom_block='BACK')
+        self.pom_master = POMMaster.objects.create(
+            codi_client='NECK', nom_client='Amplada de coll')
+        self.girs = list(
+            self.back.points.filter(mena='vertex', tipus='turn', boundary_index=0)
+            .order_by('ordre'))
+
+    def _cota(self, a, b, eix=None, metode='projeccio'):
+        recepta = {'mode': 'projeccio', 'a': a.id, 'b': b.id}
+        if eix is not None:
+            recepta['eix'] = eix
+        request = self.factory.post('/api/v1/patterns/pattern-poms/', {
+            'pattern_piece': self.back.id, 'pom_master': self.pom_master.id,
+            'definicio_mesura': recepta, 'metode': metode,
+        }, format='json')
+        force_authenticate(request, user=self.user)
+        return PatternPOMViewSet.as_view({'post': 'create'})(request)
+
+    # ── el camí bo ───────────────────────────────────────────────────────────
+
+    def test_ancorar_una_cota_la_mesura_al_servidor(self):
+        a, b = self.girs[0], self.girs[5]
+        resp = self._cota(a, b, 'H')
+        self.assertEqual(resp.status_code, 201, resp.data)
+
+        pom = PatternPOM.objects.get(pk=resp.data['id'])
+        self.assertEqual(pom.metode, PatternPOM.METODE_PROJECCIO)
+        self.assertAlmostEqual(pom.valor_mesurat_cm, round(abs(b.x - a.x) / 10.0, 2),
+                               places=2)
+
+    def test_lauto_es_desa_com_a_buit_i_el_motor_el_resol(self):
+        """AUTO no es materialitza en un eix concret al desar: es desa el buit i es resol a
+        cada lectura. Si es congelés, moure un punt del patró deixaria la cota mirant un eix
+        que ja no és el dominant, i ningú no ho sabria."""
+        a, b = self.girs[0], self.girs[5]
+        pom = PatternPOM.objects.get(pk=self._cota(a, b).data['id'])
+        self.assertEqual(pom.definicio_mesura.get('eix', ''), '')
+
+        dominant = 'H' if abs(b.x - a.x) >= abs(b.y - a.y) else 'V'
+        esperat = abs(b.x - a.x) if dominant == 'H' else abs(b.y - a.y)
+        self.assertAlmostEqual(pom.valor_mesurat_cm, round(esperat / 10.0, 2), places=2)
+
+    def test_la_cota_no_es_mai_mes_llarga_que_la_recta(self):
+        """Una projecció és un catet i la recta és la hipotenusa. Si algun dia sortís més
+        llarga, és que s'ha calculat la distància i no la projecció."""
+        a, b = self.girs[0], self.girs[5]
+        pom = PatternPOM.objects.get(pk=self._cota(a, b, 'H').data['id'])
+        self.assertLessEqual(pom.valor_mesurat_cm,
+                             math.hypot(b.x - a.x, b.y - a.y) / 10.0 + 1e-9)
+
+    # ── el que ha de rebotar ─────────────────────────────────────────────────
+
+    def test_un_eix_inventat_rebota_i_no_desa_res(self):
+        a, b = self.girs[0], self.girs[5]
+        self.assertEqual(self._cota(a, b, 'Z').status_code, 400)
+        self.assertEqual(PatternPOM.objects.count(), 0)
+
+    def test_els_dos_extrems_iguals_reboten(self):
+        a = self.girs[0]
+        self.assertEqual(self._cota(a, a, 'H').status_code, 400)
+        self.assertEqual(PatternPOM.objects.count(), 0)
+
+    def test_el_metode_i_la_forma_de_la_recepta_no_es_poden_separar(self):
+        a, b = self.girs[0], self.girs[5]
+        self.assertEqual(self._cota(a, b, 'H', metode='recta').status_code, 400)
+
+    def test_una_recepta_landmark_segueix_valent_per_a_recta_i_vora(self):
+        """La generalització de la llei metode↔mode no pot haver tancat la porta a una
+        forma que el motor ja sap llegir i que hi ha desada des de S6."""
+        for metode in ('recta', 'vora'):
+            with self.subTest(metode=metode):
+                self.assertTrue(PatternPOM.mode_admes(metode, PatternPOM.MODE_LANDMARK))
+        self.assertFalse(
+            PatternPOM.mode_admes('ortogonal', PatternPOM.MODE_LANDMARK))
+        self.assertFalse(
+            PatternPOM.mode_admes('projeccio', PatternPOM.MODE_POINTS))
+
+    # ── el vocabulari ────────────────────────────────────────────────────────
+
+    def test_el_vocabulari_serveix_leix_com_a_opcio(self):
+        """El Taller ha de poder oferir la sub-tria sense saber que cap eix existeix."""
+        request = self.factory.get('/api/v1/patterns/pattern-poms/metodes/')
+        force_authenticate(request, user=self.user)
+        resp = PatternPOMViewSet.as_view({'get': 'metodes'})(request)
+        self.assertEqual(resp.status_code, 200, resp.data)
+
+        per_codi = {m['codi']: m for m in resp.data}
+        self.assertEqual(set(per_codi), {'recta', 'vora', 'ortogonal', 'projeccio'})
+        self.assertEqual(per_codi['projeccio']['ancores'], ['a', 'b'])
+        self.assertEqual(per_codi['projeccio']['opcions'], {'eix': ['', 'H', 'V']})
+        # Els que no en tenen, la porten buida i no absent: una forma sola per a tots.
+        self.assertEqual(per_codi['recta']['opcions'], {})
+
+    def test_tot_metode_te_gramatica_i_les_opcions_son_valors_del_model(self):
+        self.assertEqual(
+            {c for c, _ in PatternPOM.METODE_CHOICES},
+            set(PatternPOM.ANCORES_PER_METODE),
+        )
+        self.assertEqual(
+            {c for c, _ in PatternPOM.METODE_CHOICES},
+            set(PatternPOM.MODES_ACCEPTATS),
+        )
+        self.assertEqual(
+            PatternPOM.OPCIONS_PER_METODE[PatternPOM.METODE_PROJECCIO]['eix'],
+            list(PatternPOM.EIXOS),
+        )
+
+    # ── la frontera amb la projecció d'escalat ───────────────────────────────
+
+    def test_la_cota_es_MESURA_pero_no_entra_a_la_niada(self):
+        """I el motiu no és el de la caiguda: aquí la forma hi cabria (dues adreces), i el
+        que no encaixa és la DIRECCIÓ del creixement."""
+        a, b = self.girs[0], self.girs[5]
+        pom = PatternPOM.objects.get(pk=self._cota(a, b, 'H').data['id'])
+        self.assertIsNotNone(pom.valor_mesurat_cm)
+
+        specs, problemes = pom_specs(self.fp)
+        self.assertEqual(specs, ())
+        self.assertEqual(len(problemes), 1)
+        self.assertIn('PROJECCIÓ', problemes[0])
+        self.assertIn(self.pom_master.codi_client, problemes[0])
+
+
+class CotaDesplacadaAPITest(CotaProjeccioAPITest):
+    """El desplaçament de la línia de cota: presentació, i mai mesura.
+
+    Hereta el fixture d'`CotaProjeccioAPITest` a posta —li cal la mateixa peça i el mateix
+    POMMaster—, i els tests heretats es tornen a córrer: són barats i el que verifiquen (que
+    la cota es mesura bé) és precondició del que aquesta classe afegeix.
+    """
+
+    def _mou(self, pom_id, offset):
+        request = self.factory.patch(f'/api/v1/patterns/pattern-poms/{pom_id}/', {
+            'cota_offset_mm': offset,
+        }, format='json')
+        force_authenticate(request, user=self.user)
+        return PatternPOMViewSet.as_view({'patch': 'partial_update'})(request, pk=pom_id)
+
+    def test_neix_a_zero_o_sigui_sobre_la_mesura(self):
+        pom = PatternPOM.objects.get(pk=self._cota(self.girs[0], self.girs[5]).data['id'])
+        self.assertEqual(pom.cota_offset_mm, 0.0)
+
+    def test_moure_la_cota_NO_toca_el_valor(self):
+        """La llei sencera del camp, en un test: el número que la cota anuncia no depèn
+        d'on seu la cota."""
+        pom_id = self._cota(self.girs[0], self.girs[5], 'H').data['id']
+        abans = PatternPOM.objects.get(pk=pom_id).valor_mesurat_cm
+
+        resp = self._mou(pom_id, 42.5)
+        self.assertEqual(resp.status_code, 200, resp.data)
+
+        despres = PatternPOM.objects.get(pk=pom_id)
+        self.assertEqual(despres.cota_offset_mm, 42.5)
+        self.assertEqual(despres.valor_mesurat_cm, abans)
+
+    def test_el_desplacament_te_signe(self):
+        """El signe diu de quin costat de la mesura seu la cota. Un valor absolut deixaria
+        el patronista sense poder-la posar a l'altra banda."""
+        pom_id = self._cota(self.girs[0], self.girs[5], 'H').data['id']
+        self._mou(pom_id, -18.0)
+        self.assertEqual(PatternPOM.objects.get(pk=pom_id).cota_offset_mm, -18.0)
+
+    def test_el_client_segueix_sense_poder_dictar_el_valor(self):
+        """Que s'obri una porta d'escriptura a la fila no n'obre cap altra."""
+        pom_id = self._cota(self.girs[0], self.girs[5], 'H').data['id']
+        abans = PatternPOM.objects.get(pk=pom_id).valor_mesurat_cm
+
+        request = self.factory.patch(f'/api/v1/patterns/pattern-poms/{pom_id}/', {
+            'cota_offset_mm': 5.0, 'valor_mesurat_cm': 999.0,
+        }, format='json')
+        force_authenticate(request, user=self.user)
+        PatternPOMViewSet.as_view({'patch': 'partial_update'})(request, pk=pom_id)
+
+        self.assertEqual(PatternPOM.objects.get(pk=pom_id).valor_mesurat_cm, abans)
+
+    def test_el_desplacament_viatja_amb_la_geometria(self):
+        """Sense això la cota tornaria al seu lloc a cada recàrrega, i el drag no serviria
+        de res."""
+        pom_id = self._cota(self.girs[0], self.girs[5], 'H').data['id']
+        self._mou(pom_id, 30.0)
+
+        request = self.factory.get(f'/api/v1/patterns/pattern-files/{self.fp.id}/geometry/')
+        force_authenticate(request, user=self.user)
+        resp = PatternFileViewSet.as_view({'get': 'geometry'})(request, pk=self.fp.id)
+        self.assertEqual(resp.status_code, 200)
+
+        peca = next(p for p in resp.data['pieces'] if p['nom_block'] == 'BACK')
+        cota = next(p for p in peca['poms'] if p['id'] == pom_id)
+        self.assertEqual(cota['cota_offset_mm'], 30.0)
+
+    def test_un_desplacament_no_re_valida_la_recepta(self):
+        """Un PATCH que només mou la cota no ha de topar amb la llei metode↔mode: no en
+        toca cap de les dues meitats."""
+        pom_id = self._cota(self.girs[0], self.girs[5], 'H').data['id']
+        self.assertEqual(self._mou(pom_id, 12.0).status_code, 200)
+        pom = PatternPOM.objects.get(pk=pom_id)
+        self.assertEqual(pom.metode, PatternPOM.METODE_PROJECCIO)
+        self.assertEqual(pom.definicio_mesura['mode'], PatternPOM.MODE_PROJECCIO)
 
 
 class PurityGuardTest(unittest.TestCase):
