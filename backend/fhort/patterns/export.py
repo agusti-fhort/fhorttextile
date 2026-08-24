@@ -186,7 +186,9 @@ def build_export(
         raise ExportBlocked(str(e)) from e
 
     previews = preview_per_talla(doc, projeccio, snapshot, specs, sews)
-    problemes_escalat = _problemes_escalat(doc, specs, projeccio, previews)
+    problemes_escalat = (
+        _problemes_capcalera(projeccio) + _problemes_escalat(doc, specs, projeccio, previews)
+    )
 
     # ── 3. La capa FTT-POM: les mesures, dibuixades dins el fitxer. I la taula de grading
     #       del document passa a ser LA NOSTRA: la que venia dins el fitxer del client
@@ -298,6 +300,28 @@ def _extrems_de_corba(doc, spec) -> tuple[str, ...]:
         if ref.ordre < len(punts) and punts[ref.ordre].kind is not PointKind.TURN:
             fora.append(nom)
     return tuple(fora)
+
+
+def _problemes_capcalera(projeccio) -> tuple[str, ...]:
+    """El que li falta al RUL per ser un RUL que el CAD reconegui com a seu.
+
+    Només una cosa hi pot faltar, i no és culpa nostra: **el nom de la taula de regles**.
+    Es copia del `GRADE RULE TABLE:` que el DXF d'origen declara, i si aquell fitxer no en
+    porta cap no hi ha res a copiar. Inventar-lo seria pitjor —el DXF que emetem i el RUL
+    germà dirien noms diferents de la mateixa taula—, així que la línia no surt i es diu.
+
+    La versió del format i les unitats no hi poden faltar mai: són propietats del fitxer
+    que ESCRIVIM i el writer les posa (`rul_writer.VERSIO_AAMA`, `UNITATS_PER_DEFECTE`).
+    """
+    if projeccio.grade_table.nom:
+        return ()
+    return (
+        'El RUL sortirà SENSE la línia `GRADE RULE TABLE:`. El nom de la taula de regles es '
+        'copia del DXF d\'origen i aquest fitxer no en declara cap; inventar-ne un faria que '
+        'el DXF i el RUL germà parlessin de taules diferents. Si el CAD de destí rebutja la '
+        'niada, aquesta és la primera cosa a mirar: cal tornar a exportar el patró des del '
+        'CAD amb la taula de regles anomenada.',
+    )
 
 
 def _problemes_escalat(doc, specs, projeccio, previews) -> tuple[str, ...]:

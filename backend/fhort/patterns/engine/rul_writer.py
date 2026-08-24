@@ -31,6 +31,16 @@ from .geometry import GradeTable
 COL_SEP = ' '
 FI_LINIA_REGLA = ' '
 
+#: La versió del format, tal com la declara el material real (el RUL que el PolyPattern
+#: exporta del 837 obre amb aquesta línia exacta). NO és inventar-se res: és dir quin
+#: format estem escrivint, i és el que escrivim. Només es fa servir quan el document
+#: d'origen no en declara cap de seva —si en declara, mana la seva (reproduir, no millorar).
+VERSIO_AAMA = 'ANSI/AAMA-292-B'
+
+#: Idem per a les unitats: els deltes van en mm i el factor els torna a les natives, o
+#: sigui que el fitxer és mètric. El material real ho diu així.
+UNITATS_PER_DEFECTE = 'METRIC'
+
 
 class RULWriter:
     """Implementa la meitat `write` del port `GradeCodec`."""
@@ -39,12 +49,18 @@ class RULWriter:
         factor = table.unitats_factor_mm or 1.0
         linies: list[str] = []
 
-        if table.aama_version:
-            linies.append(f'version {table.aama_version}')
+        # ── LA CAPÇALERA, SENCERA I EN ORDRE ────────────────────────────────────────
+        # L'ordre i la presència de les línies no són cosmètica. El RUL que el PolyPattern
+        # exporta del 837 obre amb `version` + `AUTHOR:` + `UNITS:` + `GRADE RULE TABLE:`
+        # i després el bloc de talles; el nostre n'emetia només `UNITS:` perquè les altres
+        # tres eren condicionals i el patró venia sense RUL d'origen (`grade_table` a NULL),
+        # o sigui que no hi havia d'on copiar-les. Ara la versió i les unitats tenen
+        # defecte —són propietats del fitxer que ESCRIVIM, no de l'origen— i les altres
+        # dues es copien del DXF (v. `grading_projection._capcalera_del_document`).
+        linies.append(f'version {table.aama_version or VERSIO_AAMA}')
         if table.autor:
             linies.append(f'AUTHOR: {table.autor}')
-        if table.unitats:
-            linies.append(f'UNITS: {table.unitats}')
+        linies.append(f'UNITS: {table.unitats or UNITATS_PER_DEFECTE}')
         if table.nom:
             linies.append(f'GRADE RULE TABLE:{table.nom}')
         if table.talla_base:
