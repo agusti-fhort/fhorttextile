@@ -47,9 +47,16 @@ class PatternPOMSerializer(serializers.ModelSerializer):
         model = PatternPOM
         fields = [
             'id', 'pattern_piece', 'peca', 'pom_master', 'pom_code', 'pom_nom',
-            'definicio_mesura', 'metode', 'valor_mesurat_cm', 'data_creacio',
+            'definicio_mesura', 'metode', 'valor_mesurat_cm', 'cota_offset_mm',
+            'data_creacio',
         ]
         # El valor NO és escrivible: el calcula el servidor des de la geometria.
+        #
+        # `cota_offset_mm` SÍ que ho és, i la frontera entre tots dos és tota la llei del
+        # camp: el valor és una LECTURA de la geometria i el desplaçament és una PREFERÈNCIA
+        # de qui dibuixa. Un PATCH que només porti el desplaçament no recalcula res —el
+        # `_recalcular` de la vista rellegeix la geometria igualment i hi torna el mateix
+        # número—, i no hi ha cap camí perquè el desplaçament entri en cap càlcul.
         read_only_fields = ['valor_mesurat_cm', 'data_creacio', 'peca', 'pom_code', 'pom_nom']
 
     def get_pom_code(self, obj):

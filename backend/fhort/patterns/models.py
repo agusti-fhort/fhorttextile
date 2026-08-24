@@ -533,6 +533,27 @@ class PatternPOM(models.Model):
             for codi, _ in cls.METODE_CHOICES
         ]
 
+    #: 🔑 **PRESENTACIÓ, MAI MESURA.** On seu la línia de cota respecte de la mesura, en mm,
+    #: comptat perpendicularment i amb signe (el signe diu de quin costat).
+    #:
+    #: Que visqui a la MATEIXA fila que la recepta és deliberat i té un límit escrit: una
+    #: cota és d'un ancoratge, i moure-la no és una opinió que calgui versionar ni compartir
+    #: entre usuaris. El que NO pot passar mai és que toqui `valor_mesurat_cm`: el valor es
+    #: llegeix de la geometria i el desplaçament només diu on es dibuixa la línia que
+    #: l'anuncia. Per això és un camp a part i no un tercer element de `definicio_mesura` —
+    #: dins de la recepta, qualsevol lector del motor l'hauria de saber ignorar, i el dia que
+    #: un se n'oblidés el desplaçament entraria en un càlcul.
+    #:
+    #: 0 = la cota seu sobre la mesura mateixa, que és on ha estat fins avui.
+    #:
+    #: ⚠️ NO és `models_app.POMPlacement`: allò acota un CROQUIS de la fitxa tècnica i es desa
+    #: normalitzat 0..1 sobre la bbox de l'objecte que anota. Això acota GEOMETRIA REAL i va
+    #: en mil·límetres del patró. Comparteixen la paraula «cota» i res més.
+    cota_offset_mm = models.FloatField(
+        default=0.0,
+        help_text='Desplaçament perpendicular de la línia de cota, en mm. Presentació pura.',
+    )
+
     creat_per = models.ForeignKey(
         'accounts.UserProfile', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='pattern_poms_creats',
