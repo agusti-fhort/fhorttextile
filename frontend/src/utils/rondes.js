@@ -149,15 +149,3 @@ export function agrupaPerRonda(files, rondes, opcions = {}) {
   if (orfes.length) blocs.push(bloc(null, orfes))
   return blocs
 }
-
-/**
- * Es pot obrir una volta nova? NOMÉS si no n'hi ha cap d'oberta.
- *
- * No és una regla d'aquesta cara: és el guard d'`obrir_ronda` («aquest model ja té una ronda
- * oberta; tanca-la abans d'obrir-ne una altra»), llegit abans de pintar el botó perquè
- * l'usuari no es trobi un 400 per una cosa que la pantalla ja sabia.
- */
-export function potObrirVolta(rondes) {
-  if (!Array.isArray(rondes)) return false
-  return !rondes.some(r => !r.tancada_el)
-}

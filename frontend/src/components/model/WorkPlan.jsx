@@ -12,7 +12,7 @@ import { models, modelTasks, taskTypes } from '../../api/endpoints'
 import { formatMinutes } from '../../utils/format'
 import { taskTypeLabel } from '../../utils/taskType'
 import { destiDeTasca } from '../../utils/destiTasca'
-import { agrupaPerRonda, potObrirVolta, RONDA_ENTREGADA } from '../../utils/rondes'
+import { agrupaPerRonda, RONDA_ENTREGADA } from '../../utils/rondes'
 import { TASK_ICON, STATUS_VARIANT, TRANSPORT, isOutOfCharge } from '../../utils/tascaPla'
 
 // Pla de treball — PEÇA P3 + P4a (Q4 crescut): l'encàrrec del model com a procés.
@@ -398,9 +398,9 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
   // vol una tasca que la volta anterior no tenia l'obre pel seu camí de sempre— i per això la
   // porta no ha d'aplicar cap allow-list: el joc replicat no és una tria de qui obre.
   //
-  // El botó només es pinta si NO hi ha cap volta oberta, que és el guard d'`obrir_ronda`
-  // (`potObrirVolta`): fer-lo visible i deixar que el backend contesti 400 seria oferir un gest
-  // que la pantalla ja sabia que no es podia fer.
+  // El botó es pinta SEMPRE (M2 · CODA): si el gest no toca, qui ho diu és el servidor i el seu
+  // motiu va al toast. Amagar-lo estalviava un 400 i, a canvi, deixava l'usuari sense saber si li
+  // faltava permís, si la pantalla s'havia trencat o si simplement no tocava.
   function obreVolta() {
     if (obrintVolta) return
     setObrintVolta(true)
@@ -474,10 +474,18 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
         </div>
       )}
 
-      {/* «+ NOVA RONDA» · només quan no n'hi ha cap d'oberta (guard d'`obrir_ronda`), i mai en
-          un model que encara no ha fet cap gest de treball: la R1 neix sola del primer gest
-          (M1-bis · FIT-4) i un botó aquí faria creure que s'ha de declarar. */}
-      {perVoltes && potObrirVolta(rondes) && (
+      {/* «+ NOVA RONDA» — la banda puntejada del mockup, a sota de l'última ronda i **SEMPRE
+          VISIBLE** (M2 · CODA, decisió d'Agus).
+          🔑 **La visibilitat no es condiciona al client.** Abans es pintava només si cap volta
+          era oberta —el guard d'`obrir_ronda` llegit per endavant— i això feia desaparèixer el
+          botó sense dir per què: qui no el trobava no sabia si li faltava permís, si la pantalla
+          s'havia trencat o si el gest no tocava. Ara el gest s'ofereix sempre i **qui el refusa
+          és el servidor, amb el seu motiu** («aquest model ja té una ronda oberta; tanca-la
+          abans d'obrir-ne una altra»), que és el que `obreVolta` ja porta al toast.
+          Segueix vivint dins del pla PER VOLTES: «a sota de l'última ronda» demana que n'hi hagi
+          alguna, i en un model sense cap la R1 neix sola del primer gest (M1-bis · FIT-4) —un
+          botó allà faria creure que s'ha de declarar. */}
+      {perVoltes && (
         <button type="button" onClick={obreVolta} disabled={obrintVolta}
           style={{
             width: '100%', padding: 10, marginTop: 2, marginBottom: 6,
