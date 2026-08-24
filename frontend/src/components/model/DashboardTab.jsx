@@ -165,9 +165,14 @@ export default function DashboardTab({ modelId, onOpenTab, navigate, wpVersion =
       {tancat && (
         <div style={bannerTancat} role="status">
           <i className="ti ti-flag-check" aria-hidden="true" style={{ fontSize: 16, flexShrink: 0 }} />
+          {/* REGLA DEL SILENCI: el motiu només es pinta quan DIU alguna cosa. «Acabat ·
+              Acabat (decisió interna)» era una redundància mesurada a la primera captura; el
+              fet que canvia la lectura és l'altre —que el client l'ha tret de catàleg—, i
+              aquest sí que s'escriu sempre. */}
           <span>
             <strong>{t(`model_sheet.cicle.estat.${onSoc.estat}`)}</strong>
-            {onSoc.motiu_tancament && ` · ${t(`model_sheet.cicle.motiu_${onSoc.motiu_tancament}`)}`}
+            {onSoc.motiu_tancament === 'tret_de_cataleg'
+              && ` · ${t('model_sheet.cicle.motiu_tret')}`}
             {onSoc.data_tancament && ` · ${onSoc.data_tancament.slice(0, 10)}`}
             {' — '}{t('model_sheet.cicle.banner_ajuda')}
           </span>
