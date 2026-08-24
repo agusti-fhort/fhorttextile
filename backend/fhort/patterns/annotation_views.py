@@ -77,9 +77,71 @@ class PatternPOMSerializer(serializers.ModelSerializer):
             if valor.get('landmark') is None or valor.get('b') is None:
                 raise serializers.ValidationError(
                     'Una mesura per landmark necessita el punt base i el punt final.')
+        elif mode == PatternPOM.MODE_ORTOGONAL:
+            self._valida_ortogonal(valor)
         else:
             raise serializers.ValidationError(f"Mode de mesura desconegut: '{mode}'.")
         return valor
+
+    @staticmethod
+    def _valida_ortogonal(valor):
+        """Les tres àncores d'una caiguda, i les dues maneres de fer-la mentir.
+
+        Totes dues acaben en un zero o en un infinit, i cap de les dues és un accident
+        que el motor hagi de desxifrar més avall:
+
+        · `ref_a == ref_b` — les dues àncores de referència són el mateix punt, i llavors
+          no hi ha cap línia de la qual caure. L'engine també ho rebutja
+          (`measure.TOL_REFERENCIA_MM`), però l'API ho ha de dir ABANS de desar: un
+          ancoratge que es desa sabent que no es podrà mesurar és un ancoratge que algú
+          haurà de venir a esborrar.
+        · `p` és una de les dues referències — el punt cau sobre la seva pròpia línia i la
+          caiguda mesura zero. És exactament el mateix error que el `a == b` del mode de
+          punts, i es rebota igual.
+        """
+        falten = [k for k in PatternPOM.ANCORES_PER_METODE[PatternPOM.METODE_ORTOGONAL]
+                  if valor.get(k) is None]
+        if falten:
+            raise serializers.ValidationError(
+                'Una caiguda ortogonal necessita les tres àncores (dues de referència i '
+                f'el punt que hi cau). Falten: {", ".join(falten)}.')
+        if valor['ref_a'] == valor['ref_b']:
+            raise serializers.ValidationError(
+                'Les dues àncores de referència són el mateix punt: no defineixen cap '
+                'línia, i sense línia no hi ha perpendicular.')
+        if valor['p'] in (valor['ref_a'], valor['ref_b']):
+            raise serializers.ValidationError(
+                'El punt que cau és una de les àncores de referència: això mesuraria zero.')
+
+    def validate(self, dades):
+        """El `metode` i la FORMA de la recepta han de dir el mateix.
+
+        Són una sola decisió escrita dues vegades (v. `PatternPOM.mode_esperat`), i aquí
+        és on es comprova que no s'hagin separat. Un `metode='ortogonal'` amb una recepta
+        de dos punts es desaria sense queixar-se i es mesuraria com una recta: la fila
+        diria una cosa i el valor en diria una altra.
+
+        Es resol contra l'estat EFECTIU, no contra el que arriba: un PATCH pot portar
+        només la recepta (és el que fa el Taller en reobrir un POM) o només el mètode, i
+        llavors la meitat que falta és la que ja hi ha desada. Validar només el payload
+        deixaria passar exactament el cas que això vol impedir.
+        """
+        metode = dades.get('metode', getattr(self.instance, 'metode', PatternPOM.METODE_RECTA))
+        recepta = dades.get(
+            'definicio_mesura', getattr(self.instance, 'definicio_mesura', None) or {})
+        mode = recepta.get('mode', PatternPOM.MODE_POINTS)
+
+        esperat = PatternPOM.mode_esperat(metode)
+        if esperat and mode != esperat:
+            raise serializers.ValidationError(
+                {'metode': f"El mètode «{metode}» vol una recepta de mode «{esperat}», i "
+                           f"la que ha arribat és de mode «{mode}»."})
+        if not esperat and mode == PatternPOM.MODE_ORTOGONAL:
+            raise serializers.ValidationError(
+                {'definicio_mesura': f"Una recepta de mode «{PatternPOM.MODE_ORTOGONAL}» "
+                                     f"vol el mètode «{PatternPOM.METODE_ORTOGONAL}», i el "
+                                     f"que ha arribat és «{metode}»."})
+        return dades
 
 
 def acceptacio_viva(rel: SewRelation) -> SewToleranceAcceptance | None:
@@ -555,6 +617,21 @@ class PatternPOMViewSet(BulkDeleteMixin, viewsets.ModelViewSet):
         """Un POM ancorat no reté res: ningú no el referencia. Sempre cau."""
         pom.delete()
         return None
+
+    @action(detail=False, methods=['get'], url_path='metodes')
+    def metodes(self, request):
+        """El vocabulari de mètodes de mesura: quins n'hi ha i què vol cadascun.
+
+        **Cap enum al front.** Quants clics guia el Taller, i què significa cadascun, no
+        ho pot saber una llista escrita a mà dins d'un `.jsx`: el dia que entrés un quart
+        mètode, la pantalla el continuaria ignorant i ningú no ho veuria fins que algú es
+        queixés. Ve d'aquí, i d'aquí ve de `PatternPOM.ANCORES_PER_METODE`, que és on
+        viuen els `choices`.
+
+        Sense rètols, a posta: els tres idiomes són del client (llei i18n-gate), i una
+        etiqueta servida des d'aquí seria un quart lloc on mantenir-los.
+        """
+        return Response(PatternPOM.vocabulari_metodes())
 
 
 class SewRelationViewSet(BulkDeleteMixin, viewsets.ModelViewSet):

@@ -443,10 +443,38 @@ class PatternPOM(models.Model):
     #: a ella mateixa, i el motor n'hauria de triar una de les dues en silenci.
     METODES_TRIPLETA = {METODE_ORTOGONAL}
 
+    #: 🔑 **LA GRAMÀTICA DE CADA MÈTODE, en un sol lloc.** Quantes àncores vol i com es
+    #: diuen dins de la recepta. Serveix per a tres coses que abans s'haurien escrit tres
+    #: vegades: validar la recepta al serializer, dir-li al Taller quants clics ha de
+    #: guiar, i posar nom a cada clic. El client NO en té cap còpia — se la serveix
+    #: l'endpoint `pattern-poms/metodes/` —, que és el que evita que el dia que entri un
+    #: quart mètode calgui tocar el front per fer-l'hi saber.
+    ANCORES_PER_METODE = {
+        METODE_RECTA: ('a', 'b'),
+        METODE_VORA: ('a', 'b'),
+        METODE_ORTOGONAL: ('ref_a', 'ref_b', 'p'),
+    }
+
     @classmethod
     def mode_esperat(cls, metode: str) -> str:
         """Quina forma de recepta exigeix aquest mètode. Buit = qualsevol de les de dos punts."""
         return cls.MODE_ORTOGONAL if metode in cls.METODES_TRIPLETA else ''
+
+    @classmethod
+    def vocabulari_metodes(cls) -> list[dict]:
+        """El vocabulari que se serveix al client: codi, forma de recepta i àncores.
+
+        Sense etiquetes: els tres idiomes viuen al front (llei i18n-gate), i un rètol
+        servit des d'aquí seria un quart lloc on mantenir-los.
+        """
+        return [
+            {
+                'codi': codi,
+                'mode': cls.mode_esperat(codi) or cls.MODE_POINTS,
+                'ancores': list(cls.ANCORES_PER_METODE[codi]),
+            }
+            for codi, _ in cls.METODE_CHOICES
+        ]
 
     creat_per = models.ForeignKey(
         'accounts.UserProfile', on_delete=models.SET_NULL, null=True, blank=True,
