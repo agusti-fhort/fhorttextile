@@ -85,6 +85,46 @@ class RondaError(Exception):
     """Rebuig d'una operació de ronda (ja n'hi ha una d'oberta, cap code vàlid…)."""
 
 
+def ronda_del_gest(model):
+    """M1-bis · FIT-4 — LA RONDA A LA QUAL NEIX una tasca que acaba de sortir d'un gest de treball.
+
+    Aquesta és la peça que substitueix la llei vella («la R1 és implícita»): la volta 1 ja no es
+    dóna per feta, **neix sola del primer gest de treball** —programar, assignar o entrar-hi i
+    executar— sense que ningú l'hagi de declarar. Les voltes següents segueixen sent explícites
+    (`obrir_ronda`), i per això aquí NOMÉS es crea la R1.
+
+    Tres respostes, i cap és arbitrària:
+
+      1. **Hi ha una ronda OBERTA** → aquella. És FIT-4: «es pot obrir una tasca lliure que entra
+         en aquesta ronda». La feina nova que apareix enmig d'una volta és feina d'aquella volta.
+      2. **El model no té CAP ronda** → es crea la **R1 (`seq=1`)** i s'hi lliga la tasca.
+      3. **Té rondes però totes tancades** → **`None`**, i la tasca neix sense ronda. Obrir-ne una
+         de nova aquí seria fabricar una R(n+1) automàticament, i FIT-4 diu el contrari: «R2+
+         neixen amb +Ronda explícit». Aquesta feina espera que el PM obri la volta.
+
+    🔒 **NOMÉS MIRA ENDAVANT** (sub-decisió b, Agus 24/08). No adopta res: les tasques que ja
+    tenen `ronda=NULL` es queden NULL fins al retroactiu de M5. En un model amb feina prèvia i
+    cap ronda, el primer gest NOU crea la R1 i **només la tasca d'aquell gest hi entra** (c).
+
+    🔒 **NO POT NÉIXER DUES VEGADES.** Qui ho impedeix és la BD, no un `if`: `uniq_ronda_model_seq`
+    (`Ronda.Meta.constraints`) ja fa única la parella `(model, seq)`, i `get_or_create` s'hi
+    recolza —dos gestos simultanis sobre el mateix model xoquen a la constraint i el perdedor
+    rellegeix la fila del guanyador. Sense la constraint caldria un lock; amb ella no en cal cap.
+
+    Retorna la `Ronda` o `None`. **No transiciona res i no toca cap tasca existent.**
+    """
+    from .models import Ronda
+
+    oberta = _ronda_oberta(model)
+    if oberta is not None:
+        return oberta
+    if Ronda.objects.filter(model=model).exists():
+        return None                      # cas 3: totes tancades → el PM ha d'obrir la següent
+    ronda, _ = Ronda.objects.get_or_create(
+        model=model, seq=1, defaults={'motiu': Ronda.MOTIU_NOVA_MOSTRA})
+    return ronda
+
+
 def obrir_ronda(model, motiu, tasques_codes, *, profile=None):
     """Obre una volta nova de feina sobre un model i li crea les tasques.
 

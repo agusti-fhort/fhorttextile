@@ -6,6 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.filters import OrderingFilter, SearchFilter
 from django_filters.rest_framework import DjangoFilterBackend
+from django.db import transaction
 from django.db.models import Count, Q, ProtectedError, Min
 from django.db.models.functions import Coalesce
 
@@ -28,7 +29,7 @@ from .services_d import (advance_phase_gate, advance_phases_chain, regress_phase
 from .services_e import (request_production, set_production_status,
                          ProductionError, has_delivered_production)
 from .services_g import lookup_estimated_minutes
-from .services_r import tasca_vigent
+from .services_r import ronda_del_gest, tasca_vigent
 
 
 class TaskTypeViewSet(viewsets.ReadOnlyModelViewSet):
@@ -288,9 +289,13 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
             return Response({'error': 'TaskType no trobat o inactiu.'},
                             status=status.HTTP_404_NOT_FOUND)
         order = ModelTask.objects.filter(model=model).count()
-        task = ModelTask.objects.create(
-            model=model, task_type=tt, order=order, status='Pending',
-            origen='ad_hoc', off_recipe=True, work_order=wo)
+        # M1-bis · FIT-4 — un extra també és un GEST DE TREBALL: si el model encara no té cap
+        # volta, aquesta la fa néixer (R1). Atòmic: no pot quedar la tasca sense la seva ronda.
+        with transaction.atomic():
+            task = ModelTask.objects.create(
+                model=model, task_type=tt, order=order, status='Pending',
+                origen='ad_hoc', off_recipe=True, work_order=wo,
+                ronda=ronda_del_gest(model))
         return Response(ModelTaskSerializer(task).data, status=status.HTTP_201_CREATED)
 
     def perform_create(self, serializer):
@@ -344,14 +349,20 @@ def define_model_tasks_view(request, model_id):
     created = []
     base_order = (ModelTask.objects.filter(model_id=model_id)
                   .count())  # afegeix al final de l'ordre existent
-    for i, t in enumerate(types):
-        if t.id in existing:
-            continue
-        est = lookup_estimated_minutes(model, t)   # snapshot del temps estimat (None si no n'hi ha)
-        mt = ModelTask.objects.create(model_id=model_id, task_type=t,
-                                      order=base_order + i, status='Pending',
-                                      origen='prevista', estimated_minutes=est)
-        created.append(mt.id)
+    # M1-bis · FIT-4 — definir la feina d'un model ÉS el gest de programació, i és el primer que
+    # rep un model nou. La ronda es resol UN COP per a tot el lot: totes les tasques d'aquesta
+    # crida són del mateix gest i han d'anar a la mateixa volta.
+    with transaction.atomic():
+        ronda = ronda_del_gest(model)
+        for i, t in enumerate(types):
+            if t.id in existing:
+                continue
+            est = lookup_estimated_minutes(model, t)   # snapshot del temps estimat (None si no n'hi ha)
+            mt = ModelTask.objects.create(model_id=model_id, task_type=t,
+                                          order=base_order + i, status='Pending',
+                                          origen='prevista', estimated_minutes=est,
+                                          ronda=ronda)
+            created.append(mt.id)
     return Response({'created_ids': created, 'skipped_existing': sorted(existing)},
                     status=status.HTTP_201_CREATED)
 
@@ -578,9 +589,14 @@ def open_model_task_view(request, model_id):
     if task is None:
         order = ModelTask.objects.filter(model=model).count()
         est = lookup_estimated_minutes(model, tt)
-        task = ModelTask.objects.create(model=model, task_type=tt, order=order,
-                                        status='Pending', origen='prevista',
-                                        estimated_minutes=est)
+        # M1-bis · FIT-4 — entrar-hi i executar és el gest de treball més directe de tots.
+        # ⚠️ NOMÉS quan la tasca es CREA. Si `tasca_vigent` n'ha trobat una, aquella tasca ja té
+        # la ronda que li toca i moure-la seria migrar feina entre voltes: FIT-6 ho prohibeix.
+        with transaction.atomic():
+            task = ModelTask.objects.create(model=model, task_type=tt, order=order,
+                                            status='Pending', origen='prevista',
+                                            estimated_minutes=est,
+                                            ronda=ronda_del_gest(model))
         created = True
     # ── J · R3 · ENTRAR NO ENDÚ NI REOBRE ────────────────────────────────────────────────────
     #
@@ -1643,10 +1659,13 @@ def crono_declarat_view(request, model_id):
         if accio != 'engegar':
             return Response({'error': 'Aquesta tasca no té cap crono.'},
                             status=http_status.HTTP_404_NOT_FOUND)
-        task = ModelTask.objects.create(
-            model=model, task_type=tt, order=ModelTask.objects.filter(model=model).count(),
-            status='Pending', origen='prevista',
-            estimated_minutes=lookup_estimated_minutes(model, tt))
+        # M1-bis · FIT-4 — engegar el crono d'una externa és treballar-hi: mateix gest, mateixa llei.
+        with transaction.atomic():
+            task = ModelTask.objects.create(
+                model=model, task_type=tt, order=ModelTask.objects.filter(model=model).count(),
+                status='Pending', origen='prevista',
+                estimated_minutes=lookup_estimated_minutes(model, tt),
+                ronda=ronda_del_gest(model))
 
     def _tram_per_id():
         """El tram sobre el qual s'actua. Sempre d'AQUESTA tasca: un id de fora no val."""

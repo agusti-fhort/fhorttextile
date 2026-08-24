@@ -273,7 +273,9 @@ class ModelDetailSerializer(serializers.ModelSerializer):
     # —qui el veu, quan i com— és F2; aquí no es notifica ningú. Llista buida = cap ronda, o cap
     # ronda acabada: el consumidor no ha de distingir-ho per decidir si ensenya res.
     lliurable_ronda_n = serializers.SerializerMethodField()
-    # F2.0 — la volta VIGENT del model: {seq, motiu, oberta_el} o null (la 1a és implícita).
+    # F2.0 — la volta VIGENT del model: {seq, motiu, oberta_el} o null.
+    # M1-bis · FIT-4 — `null` ja no vol dir «encara no n'hi ha cap i la 1a és implícita»:
+    # vol dir que el model no té cap volta OBERTA (o no ha rebut encara cap gest de treball).
     # El modal de F2.1 l'ha de saber per titular la cara B («obrir ronda N+1»).
     ronda_oberta = serializers.SerializerMethodField()
     # SET-1 · A4 — el conjunt, niuat, amb les germanes per navegar-hi des de la capçalera.
