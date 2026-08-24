@@ -264,8 +264,20 @@ def obrir_ronda(model, motiu, tasques_codes, *, profile=None):
     if motiu not in dict(Ronda.MOTIU_CHOICES):
         raise RondaError(f'Motiu de ronda desconegut: {motiu!r}.')
     demanats = list(dict.fromkeys(tasques_codes or []))   # dedup preservant ordre
-    if _ronda_oberta(model) is not None:
-        raise RondaError('Aquest model ja té una ronda oberta; tanca-la abans d\'obrir-ne una altra.')
+    # 🔒 **UNA RONDA OBERTA PER MODEL** (llei ratificada per Agus/CTO, M2 · CODA-BIS). El guard hi
+    # és des d'F1.1 i és l'ÚNIC lloc que el pot imposar: `Ronda.objects.create` només apareix aquí
+    # i a `ronda_del_gest`, que fa `get_or_create(seq=1)` i per tant no pot fabricar una segona
+    # volta viva. La BD no hi ajuda a posta —`uniq_ronda_model_seq` fa única la parella
+    # `(model, seq)`, no «una d'oberta»— perquè una constraint parcial obligaria a inventar-se el
+    # tancament, i tancar una volta és un acte humà (v. el docstring de `Ronda`).
+    #
+    # El MISSATGE diu QUINA volta bloqueja i les DUES sortides que té. Deia només «tanca-la», i
+    # això amagava la sortida normal: la volta es tanca **entregant-la** (FIT-13), i «tancar» sol
+    # no té cap porta pròpia. Qui el llegeix és l'usuari, al toast de «+ Nova ronda».
+    oberta = _ronda_oberta(model)
+    if oberta is not None:
+        raise RondaError(f'Aquest model ja té una ronda oberta: entrega o tanca la '
+                         f'R{oberta.seq} primer.')
 
     # M1-bis · FIT-4 — LA VOLTA NOVA NEIX AMB EL JOC DE L'ANTERIOR. El que el cridador demana
     # s'HI SUMA, no el substitueix: la proposta replicada no es pot «desmarcar», perquè FIT-4 diu
