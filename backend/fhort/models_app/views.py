@@ -5640,11 +5640,18 @@ def tancar_model_view(request, model_id):
 
     FIT-10 — l'acte humà que acaba un model. `motiu` ∈ {`acabat`, `tret_de_cataleg`}.
 
-    🚨 **AMB RONDA OBERTA CONTESTA 409, I EL 409 ÉS LA PREGUNTA.** Porta `code='ronda_oberta'`
-    i les dades de la volta perquè la cara pugui demanar la confirmació amb el número a la mà
-    («la R{n} està oberta; confirmar l'entrega i tancar-ho tot»). Amb `confirmar_entrega=true`
-    la segona crida ho fa tot en una transacció: entrega (porta d'M1) → tancament de la volta i
-    de la seva feina viva (FIT-13 + FIT-6) → `estat='acabat'`.
+    🚨 **AMB RONDA OBERTA CONTESTA 409, I EL 409 ÉS LA PREGUNTA.** Porta `code='ronda_oberta'`,
+    les dades de la volta i **`requereix_entrega`**, perquè la cara sàpiga quina pregunta ha de
+    fer. Amb `confirmar=true` la segona crida ho fa tot en una transacció, i el que fa amb la
+    volta depèn del motiu (CODA d'M3):
+
+      · `acabat`           → entrega (porta d'M1) → tancament de la volta i de la feina viva
+                             (FIT-13 + FIT-6) → `estat='acabat'`. Demana `destinatari`.
+      · `tret_de_cataleg`  → **cap entrega** (FIT-1: l'Entrega registra fets que han passat) →
+                             `tancar_ronda` → `estat='acabat'`.
+
+    `confirmar_entrega` s'accepta com a àlies de `confirmar`: és el nom que la porta va publicar
+    a M3 i el que els fums escrits abans de la CODA segueixen enviant.
     """
     from .services_cicle import CicleVidaError, tancar_model
 
@@ -5655,7 +5662,7 @@ def tancar_model_view(request, model_id):
     try:
         entrega = tancar_model(
             model, motiu=dades.get('motiu'), profile=profile,
-            confirmar_entrega=_truthy(dades.get('confirmar_entrega')),
+            confirmar=_truthy(dades.get('confirmar')) or _truthy(dades.get('confirmar_entrega')),
             destinatari=(dades.get('destinatari') or '').strip(),
             descripcio=(dades.get('descripcio') or '').strip())
     except CicleVidaError as e:

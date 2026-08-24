@@ -21,6 +21,7 @@ from rest_framework.test import APIClient
 
 from fhort.pom.models import GarmentType
 from fhort.tasks.models import Customer, GarmentTypeItem, ModelTask, TaskType
+from fhort.tasks.services_c import transition_task
 
 URL = '/api/v1/model-task-items/by-model/'
 
@@ -213,11 +214,12 @@ class FiltresIOrdreTest(BaseByModel):
 
 
 class BoardRondaAwareTest(BaseByModel):
-    """M3 · FASE 4 — el board després del canvi: qui en surt i què diu cada fila de la volta.
+    """M3 · FASE 4 + CODA — el board després del canvi: qui en surt, què diu cada fila i, des de
+    la CODA, **a quina columna cau cadascú**.
 
-    Els tests de dalt (`KanbanStateTest`) segueixen VERDS i sense tocar: la classificació de les
-    quatre columnes **no ha canviat** (v. l'aturada declarada al docstring de `kanban_state`).
-    El que canvia és la població del board i el que cada fila pot DIR."""
+    Els tests de `KanbanStateTest` (els 14 de FASE 0b) segueixen VERDS i sense tocar-ne cap: la
+    precedència de la feina viva no s'ha mogut i el seu cas de `done` és un model **sense cap
+    volta**, que és exactament l'excepció pre-llei que la CODA conserva."""
 
     def setUp(self):
         super().setUp()
@@ -308,3 +310,114 @@ class BoardRondaAwareTest(BaseByModel):
         r2 = self._obrir_ronda(m, 'nova_mostra', ['pom'], profile=self.prof)
         fila = self._fila(m)
         self.assertEqual(fila['ronda'], {'seq': r2.seq, 'estat': 'oberta'})
+
+
+class QuatreColumnesCodaTest(BaseByModel):
+    """🔒 M3 · CODA — **LA 4a COLUMNA ÉS UN FET D'ENTREGA.**
+
+    Els casos límit són els de la captura `m3_d1_board.png`, que va ser justament la que va
+    ensenyar el problema: un model a «Entregats» amb el xip `R1 · volta oberta`."""
+
+    def setUp(self):
+        super().setUp()
+        from fhort.models_app.services_cicle import tancar_model
+        from fhort.tasks.services_r import informar_entrega, obrir_ronda, tancar_ronda
+        self._obrir_ronda, self._entrega = obrir_ronda, informar_entrega
+        self._tancar_ronda, self._tancar_model = tancar_ronda, tancar_model
+
+    def _model_tot_done(self):
+        """Un model amb feina, tota FETA. Cap comptador viu: la volta és qui decidirà."""
+        m = self._model()
+        self._tasca(m, status='Done')
+        return m
+
+    def _estat(self, model, **params):
+        fila = self._fila(model, all='true', **params)
+        return None if fila is None else fila['kanban_state']
+
+    def test_volta_ENTREGADA_i_cap_oberta_ES_la_quarta_columna(self):
+        m = self._model_tot_done()
+        r = self._obrir_ronda(m, 'nova_mostra', ['pom'], profile=self.prof)
+        for t in r.tasques.all():                       # la volta, treballada i acabada
+            transition_task(t, 'InProgress', self.prof)
+            transition_task(t, 'Done', self.prof)
+        self._entrega(r, destinatari='Brumà SL', profile=self.prof)   # …i ENVIADA (tanca la volta)
+        self.assertEqual(self._estat(m), 'done')
+        self.assertEqual(self._fila(m, all='true')['ronda']['estat'], 'entregada')
+
+    def test_tot_done_amb_la_volta_OBERTA_torna_a_les_columnes_de_feina(self):
+        """🚨 EL CAS DE LA CAPTURA. Feina acabada i no enviada **és feina nostra**: el gest que
+        falta és humà (entregar), no una tasca. El senyal de que ja es pot enviar el porta el
+        badge LLIURABLE, que existeix des d'F2.7."""
+        m = self._model_tot_done()
+        r = self._obrir_ronda(m, 'nova_mostra', ['pom'], profile=self.prof)
+        for t in r.tasques.all():
+            transition_task(t, 'InProgress', self.prof)
+            transition_task(t, 'Done', self.prof)
+        fila = self._fila(m, all='true')
+        self.assertEqual(fila['counts'], {'pending': 0, 'paused': 0, 'in_progress': 0, 'done': 2})
+        self.assertEqual(fila['kanban_state'], 'pending')      # ← abans de la CODA: 'done'
+        self.assertEqual(fila['ronda']['estat'], 'oberta')
+
+    def test_una_volta_TANCADA_SENSE_entrega_tampoc_hi_entra(self):
+        """Tancada ≠ entregada. Una volta que es va tancar sense declarar cap enviament no és
+        un fet d'entrega, i el model segueix demanant un gest."""
+        m = self._model_tot_done()
+        r = self._obrir_ronda(m, 'nova_mostra', ['pom'], profile=self.prof)
+        self._tancar_ronda(r, profile=self.prof)
+        fila = self._fila(m, all='true')
+        self.assertEqual(fila['kanban_state'], 'pending')
+        self.assertEqual(fila['ronda']['estat'], 'tancada')
+
+    def test_EXCEPCIO_PRE_LLEI_un_model_SENSE_CAP_VOLTA_conserva_la_lectura_vella(self):
+        """⏳ Tot model LLEGAT. La prohibició de backfill d'M1-bis fa que la seva feina no pugui
+        tenir volta —ni, per tant, entrega—: aplicar-li la llei nova l'hauria empès a «pendent»
+        per sempre per una cosa que no és seva. Mateix patró que la barra de progrés d'M2."""
+        m = self._model_tot_done()
+        fila = self._fila(m, all='true')
+        self.assertIsNone(fila['ronda'])
+        self.assertEqual(fila['kanban_state'], 'done')
+
+    def test_i_l_excepcio_s_APAGA_SOLA_quan_el_model_rep_una_volta(self):
+        """L'autoextinció, mesurada: el MATEIX model, abans i després de tenir volta."""
+        m = self._model_tot_done()
+        self.assertEqual(self._estat(m), 'done')
+        self._obrir_ronda(m, 'nova_mostra', ['pom'], profile=self.prof)
+        self.assertEqual(self._estat(m), 'pending')
+
+    def test_la_feina_viva_segueix_manant_sobre_la_volta(self):
+        """La precedència no s'ha tocat: una volta entregada no pinta «entregat» un model on
+        algú està treballant ara mateix (feina nascuda al buit, posterior a l'entrega)."""
+        m = self._model_tot_done()
+        r = self._obrir_ronda(m, 'nova_mostra', ['pom'], profile=self.prof)
+        for t in r.tasques.all():
+            transition_task(t, 'InProgress', self.prof)
+            transition_task(t, 'Done', self.prof)
+        self._entrega(r, destinatari='Brumà SL', profile=self.prof)
+        nova = self._tasca(m, self.tt_fitxa, status='Pending')       # feina del BUIT
+        self.assertEqual(self._estat(m), 'pending')
+        transition_task(nova, 'InProgress', self.prof)
+        self.assertEqual(self._estat(m), 'open')
+
+    def test_amb_volta_oberta_i_cap_tasca_viva_el_model_NO_s_amaga_per_defecte(self):
+        """Conseqüència directa: si cau a una columna de feina, ha de ser a la llista per
+        defecte. Una fila que existeix a la columna i no a la consulta seria un fantasma."""
+        m = self._model_tot_done()
+        self._obrir_ronda(m, 'nova_mostra', ['pom'], profile=self.prof)
+        for t in ModelTask.objects.filter(model=m, status='Pending'):
+            transition_task(t, 'InProgress', self.prof)
+            transition_task(t, 'Done', self.prof)
+        self.assertIsNotNone(self._fila(m))            # sense `all=true`
+        self.assertEqual(self._fila(m)['kanban_state'], 'pending')
+
+    def test_un_model_ENTREGAT_segueix_amagat_per_defecte(self):
+        """…i el contrari es manté: la feina ENVIADA sí que és feina acabada, i el filtre per
+        defecte («amaga el que ja està fet») l'ha de seguir traient."""
+        m = self._model_tot_done()
+        r = self._obrir_ronda(m, 'nova_mostra', ['pom'], profile=self.prof)
+        for t in r.tasques.all():
+            transition_task(t, 'InProgress', self.prof)
+            transition_task(t, 'Done', self.prof)
+        self._entrega(r, destinatari='Brumà SL', profile=self.prof)
+        self.assertIsNone(self._fila(m))
+        self.assertIsNotNone(self._fila(m, all='true'))

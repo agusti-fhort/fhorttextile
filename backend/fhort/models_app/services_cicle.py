@@ -38,8 +38,8 @@ def _registra(model, de, a, *, motiu, profile):
         model=model, de_estat=de, a_estat=a, motiu=(motiu or '')[:200], per=profile)
 
 
-def tancar_model(model, *, motiu, profile, confirmar_entrega=False,
-                 destinatari='', descripcio=''):
+def tancar_model(model, *, motiu, profile, confirmar=False,
+                 destinatari='', descripcio='', confirmar_entrega=None):
     """FIT-10 — TANCA un model: `estat = 'acabat'`. Retorna l'`Entrega` creada, o None.
 
     `motiu` és una de `Model.MOTIU_TANCAMENT_CHOICES` i no és decoratiu: separa la decisió
@@ -49,23 +49,34 @@ def tancar_model(model, *, motiu, profile, confirmar_entrega=False,
     🚨 **AMB RONDA OBERTA, EL SISTEMA AVISA I NO DECIDEIX** (FIT-10). Tancar un model amb una
     volta viva vol dir tancar feina que algú està fent, i això no pot passar per accident: la
     primera crida **refusa** amb `code='ronda_oberta'` i les dades de la volta, perquè la cara
-    pugui preguntar-ho amb totes les lletres. Només la segona crida —amb `confirmar_entrega`—
-    ho fa, i llavors ho fa SENCER i en **una sola transacció**:
+    pugui preguntar-ho amb totes les lletres. Només la segona —amb `confirmar`— ho fa, i llavors
+    ho fa SENCER i en **una sola transacció**.
 
-        informar l'entrega  →  tancar la ronda (i la seva feina viva, FIT-6)  →  estat='acabat'
+    🔒 **I EL QUE FA AMB LA VOLTA DEPÈN DEL MOTIU** (decisió d'Agus · CODA d'M3):
 
-    És la porta d'M1 la que entrega (`services_r.informar_entrega`), no una segona
-    implementació: així el tancament del model hereta FIT-13 (entregar tanca la volta) i FIT-6
-    (tancar la volta tanca la seva feina, tasca per tasca i pel mecanisme únic) sense repetir-ne
-    ni una línia. Per això el diàleg demana `destinatari` (i `descripcio`): són els de l'acte
-    d'entrega, i sense destinatari M1 refusa —una entrega sense destinatari no diu res.
+    | motiu | què li passa a la volta oberta |
+    |---|---|
+    | `acabat` | **s'ENTREGA** (`informar_entrega`) → i l'entrega la tanca (FIT-13) amb la seva feina viva (FIT-6). Per això aquesta via demana `destinatari` |
+    | `tret_de_cataleg` | **es TANCA i prou** (`tancar_ronda`) → cap `Entrega`, cap destinatari |
 
-    🚩 **PENDENT D'AGUS** (declarat a l'acta): amb `tret_de_cataleg` i ronda oberta, aquest camí
-    escriu igualment una ENTREGA. El brief ho fixa així per a les dues vies, però «el client
-    diu que no es produirà» i «li hem entregat la volta» no són el mateix fet. La sortida
-    alternativa existeix i és barata (`tancar_ronda(ronda, profile=...)`, que tanca la feina
-    viva sense declarar cap entrega): és una branca de tres línies aquí i una frase al diàleg.
+    **Per què la segona via no entrega: FIT-1.** L'`Entrega` registra un fet que **ha passat** —
+    «això s'ha enviat a algú, aquest dia»—, i quan el client informa que la peça no es produirà
+    no s'ha enviat res. Escriure-hi una entrega hauria fabricat un fet fals a la taula que
+    justament serveix per saber què es va enviar i quan; i com que el comercial llegeix
+    `ModelTask` i no `Entrega` (`get_billable_items`), no s'hi guanyava ni tan sols facturació.
+    La feina viva es tanca igual —el model s'acaba— però es tanca **declarant que es tanca**,
+    no declarant una entrega que ningú no ha fet.
+
+    En les dues vies, l'acte és **d'M1 i no una segona implementació** (`informar_entrega` /
+    `tancar_ronda`, `services_r`): així el tancament del model hereta FIT-13 i FIT-6 sense
+    repetir-ne ni una línia.
+
+    `confirmar_entrega` és el nom VELL del paràmetre i segueix acceptat: la porta HTTP el rebia
+    així d'M3 i els fums escrits abans de la CODA el continuen enviant. Amb dues vies i una que
+    no entrega res, el nom honest és `confirmar`.
     """
+    if confirmar_entrega is not None:
+        confirmar = confirmar or bool(confirmar_entrega)
     if profile is None:
         raise CicleVidaError('Cal un perfil per tancar un model.', code='no_profile')
     if motiu not in dict(Model.MOTIU_TANCAMENT_CHOICES):
@@ -78,22 +89,35 @@ def tancar_model(model, *, motiu, profile, confirmar_entrega=False,
         raise CicleVidaError('Un model jubilat no es torna a tancar: reobre\'l primer.',
                              code='jubilat')
 
-    r = ronda_oberta(model)
-    if r is not None and not confirmar_entrega:
-        raise CicleVidaError(
-            f'La ronda R{r.seq} està oberta. Tancar el model ara confirma l\'entrega d\'aquella '
-            f'volta i tanca la feina que hi queda viva.',
-            code='ronda_oberta',
-            dades={'ronda': {'id': r.pk, 'seq': r.seq, 'motiu': r.motiu}})
+    entrega_la_volta = (motiu == Model.MOTIU_TANCAMENT_ACABAT)
 
-    from fhort.tasks.services_r import EntregaError, RondaError, informar_entrega
+    r = ronda_oberta(model)
+    if r is not None and not confirmar:
+        raise CicleVidaError(
+            (f'La ronda R{r.seq} està oberta. Tancar el model ara confirma l\'entrega d\'aquella '
+             f'volta i tanca la feina que hi queda viva.') if entrega_la_volta else
+            (f'La ronda R{r.seq} està oberta. Tancar el model ara la tanca —amb la feina que hi '
+             f'queda viva— sense declarar cap entrega.'),
+            code='ronda_oberta',
+            # `requereix_entrega` diu a la cara QUINA pregunta ha de fer: amb `acabat` demana el
+            # destinatari (l'acte d'entrega el necessita), amb `tret_de_cataleg` no hi ha res a
+            # demanar perquè no s'entrega res.
+            dades={'ronda': {'id': r.pk, 'seq': r.seq, 'motiu': r.motiu},
+                   'requereix_entrega': entrega_la_volta})
+
+    from fhort.tasks.services_r import EntregaError, RondaError, informar_entrega, tancar_ronda
 
     entrega = None
     with transaction.atomic():
         if r is not None:
             try:
-                entrega = informar_entrega(r, destinatari=destinatari, profile=profile,
-                                           descripcio=descripcio)
+                if entrega_la_volta:
+                    entrega = informar_entrega(r, destinatari=destinatari, profile=profile,
+                                               descripcio=descripcio)
+                else:
+                    # 🔒 FIT-1 — cap entrega: la volta es tanca DECLARANT que es tanca. `tancar_ronda`
+                    # ja tanca la feina viva tasca per tasca i pel mecanisme únic (FIT-6).
+                    tancar_ronda(r, profile=profile)
             except EntregaError as e:
                 raise CicleVidaError(str(e), code='entrega_invalida')
             except RondaError as e:

@@ -180,6 +180,74 @@ class TancarAmbRondaObertaTest(BaseCicle):
         self.assertEqual(Entrega.objects.filter(ronda=r).count(), 1)   # no se n'ha inventat cap altra
 
 
+class TretDeCatalegNoEntregaTest(BaseCicle):
+    """🔒 M3 · CODA — **`tret_de_cataleg` NO ESCRIU CAP ENTREGA** (decisió d'Agus).
+
+    FIT-1: l'`Entrega` registra un fet que HA PASSAT —«això s'ha enviat a algú, aquest dia»—, i
+    quan el client informa que la peça no es produirà no s'ha enviat res. La volta es tanca
+    igual (la feina viva no pot quedar viva en un model acabat), però es tanca **declarant que
+    es tanca**, no declarant un enviament que ningú no ha fet."""
+
+    def test_tanca_la_volta_i_la_seva_feina_SENSE_cap_entrega(self):
+        r = self._ronda_oberta()
+        entrega = tancar_model(self.model, motiu=Model.MOTIU_TANCAMENT_TRET_DE_CATALEG,
+                               profile=self.prof, confirmar=True)
+        r.refresh_from_db(); self.model.refresh_from_db()
+        self.assertIsNone(entrega)                                   # cap acte d'entrega…
+        self.assertFalse(Entrega.objects.exists())                   # …ni cap fila
+        self.assertIsNotNone(r.tancada_el)                           # la volta, tancada
+        self.assertFalse(r.tasques.exclude(status='Done').exists())  # i la feina, tancada (FIT-6)
+        self.assertEqual(self.model.estat, Model.ESTAT_ACABAT)
+        self.assertEqual(self.model.motiu_tancament, Model.MOTIU_TANCAMENT_TRET_DE_CATALEG)
+
+    def test_i_NO_demana_destinatari(self):
+        """El destinatari és de l'acte d'ENTREGA. Sense entrega no hi ha a qui, i exigir-lo
+        hauria bloquejat un tancament legítim per un camp que no vol dir res en aquesta via."""
+        self._ronda_oberta()
+        tancar_model(self.model, motiu=Model.MOTIU_TANCAMENT_TRET_DE_CATALEG,
+                     profile=self.prof, confirmar=True, destinatari='')
+        self.model.refresh_from_db()
+        self.assertEqual(self.model.estat, Model.ESTAT_ACABAT)
+
+    def test_l_avis_diu_quina_pregunta_toca_fer(self):
+        """El 409 segueix sent la PREGUNTA, però `requereix_entrega` diu a la cara si ha de
+        demanar el destinatari o no: les dues vies no pregunten el mateix."""
+        self._ronda_oberta()
+        with self.assertRaises(CicleVidaError) as cm:
+            tancar_model(self.model, motiu=Model.MOTIU_TANCAMENT_TRET_DE_CATALEG,
+                         profile=self.prof)
+        self.assertEqual(cm.exception.code, 'ronda_oberta')
+        self.assertFalse(cm.exception.dades['requereix_entrega'])
+        self.assertIn('sense declarar cap entrega', str(cm.exception))
+
+    def test_la_via_ACABAT_es_queda_com_estava(self):
+        """La CODA no toca l'altra via: `acabat` segueix entregant i seguint demanant destinatari."""
+        r = self._ronda_oberta()
+        with self.assertRaises(CicleVidaError) as cm:
+            tancar_model(self.model, motiu=Model.MOTIU_TANCAMENT_ACABAT, profile=self.prof)
+        self.assertTrue(cm.exception.dades['requereix_entrega'])
+        entrega = tancar_model(self.model, motiu=Model.MOTIU_TANCAMENT_ACABAT, profile=self.prof,
+                               confirmar=True, destinatari='Brumà SL')
+        self.assertIsNotNone(entrega)
+        self.assertEqual(entrega.ronda_id, r.pk)
+
+    def test_el_nom_VELL_del_parametre_segueix_valent(self):
+        """`confirmar_entrega` és el que la porta va publicar a M3 i el que els fums d'abans de
+        la CODA segueixen enviant: retirar-lo hauria trencat els dos fums sense guanyar res."""
+        self._ronda_oberta()
+        tancar_model(self.model, motiu=Model.MOTIU_TANCAMENT_TRET_DE_CATALEG,
+                     profile=self.prof, confirmar_entrega=True)
+        self.model.refresh_from_db()
+        self.assertEqual(self.model.estat, Model.ESTAT_ACABAT)
+
+    def test_sense_volta_oberta_les_dues_vies_es_comporten_igual(self):
+        """Sense volta viva no hi ha res a tancar ni a entregar: el motiu només es persisteix."""
+        tancar_model(self.model, motiu=Model.MOTIU_TANCAMENT_TRET_DE_CATALEG, profile=self.prof)
+        self.model.refresh_from_db()
+        self.assertEqual(self.model.estat, Model.ESTAT_ACABAT)
+        self.assertFalse(Entrega.objects.exists())
+
+
 class ReobrirTest(BaseCicle):
     """FIT-11 — el model torna a OBERT, i el rastre diu qui, quan i per què."""
 
@@ -263,6 +331,24 @@ class PortesTest(BaseCicle):
         self.assertEqual(resp.status_code, 409, resp.data)
         self.assertEqual(resp.data['code'], 'ronda_oberta')
         self.assertEqual(resp.data['ronda']['seq'], r.seq)
+
+    def test_post_tancar_TRET_DE_CATALEG_no_torna_cap_entrega(self):
+        """CODA — per HTTP, la via del catàleg tanca sense entrega i sense demanar destinatari."""
+        self._ronda_oberta()
+        resp = self._client().post(
+            f'/api/v1/models/{self.model.pk}/tancar/',
+            {'motiu': 'tret_de_cataleg', 'confirmar': True}, format='json')
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(resp.data['estat'], 'acabat')
+        self.assertIsNone(resp.data['entrega'])
+        self.assertFalse(Entrega.objects.exists())
+
+    def test_post_tancar_el_409_diu_si_cal_entrega(self):
+        self._ronda_oberta()
+        resp = self._client().post(f'/api/v1/models/{self.model.pk}/tancar/',
+                                   {'motiu': 'tret_de_cataleg'}, format='json')
+        self.assertEqual(resp.status_code, 409)
+        self.assertFalse(resp.data['requereix_entrega'])
 
     def test_post_tancar_confirmat_torna_l_estat_i_l_entrega(self):
         self._ronda_oberta()
