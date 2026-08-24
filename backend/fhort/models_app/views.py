@@ -4,6 +4,7 @@ from decimal import Decimal, InvalidOperation
 from django.db import connection, transaction
 from django.db.models import Exists, OuterRef
 from rest_framework import mixins, viewsets
+from rest_framework import status as http_status
 from rest_framework.decorators import api_view, parser_classes, permission_classes, action
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -12,7 +13,7 @@ from rest_framework.filters import OrderingFilter, SearchFilter
 from django_filters.rest_framework import DjangoFilterBackend
 import django_filters
 
-from fhort.accounts.capabilities import HasCapability, EXECUTE_TASKS, CONFIGURE
+from fhort.accounts.capabilities import HasCapability, EXECUTE_TASKS, CONFIGURE, CLOSE_GATES
 from fhort.pom.services import SealedGradingVersionError, _te_regles
 from fhort.pom.grading_regime import (
     CODI_LINEAR_ZERO, MISSATGE_LINEAR_ZERO, es_linear_degenerada, valida_breaks,
@@ -5571,3 +5572,131 @@ def set_pom_regim_view(request, model_id, pom_id):
         # de poder confirmar què ha quedat desat sense tornar a demanar la taula.
         'breaks': rule.breaks or [],
     })
+
+
+# ── M3 · EL CICLE DE VIDA DEL MODEL — les tres portes (FIT-9 · FIT-10 · FIT-11) ──────────────
+#
+# ✅ CAPABILITY: **`CLOSE_GATES`**, i no és una tria per analogia. És la capacitat de GOVERN de
+# la casa: és la que gateja els actes que mouen un MODEL sense executar-ne cap tasca —
+# `gate_model_view`, `regress_model_view` i `gate_bulk_view` («accions de govern post-reunió»,
+# `tasks/views_b.py:827-897`)— i la que segella una versió de graduació (`fitting/views.py:75`:
+# «aprovar és un gate, i els gates són decisió humana i gated»). Acabar, jubilar i reobrir un
+# model són exactament això: decisions de responsable sobre el model sencer. Per rol la tenen
+# `manager` i `admin`, no el `technician` ni el `product_manager` (`accounts/capabilities.py`).
+#
+# Per què NO `_ExecuteTasks` (la d'M1 per a l'entrega): entregar una volta és feina de qui
+# treballa —«qui pot treballar pot entregar»—, i tancar el model és tancar-ho tot, inclosa la
+# feina viva d'altri. Aquí NO cal el TODO que M1 va haver de declarar: la capability existia.
+
+class _CloseGates(HasCapability):
+    """Gate de GOVERN (CLOSE_GATES) per als actes del cicle de vida del model."""
+    required_capability = CLOSE_GATES
+
+
+def _model_i_perfil(request, model_id):
+    """(model, profile, resposta_d_error). La resposta és None quan tot va bé."""
+    profile = getattr(request.user, 'profile', None)
+    if profile is None:
+        return None, None, Response({'error': 'Usuari sense perfil en aquest tenant.',
+                                     'code': 'no_profile'}, status=http_status.HTTP_403_FORBIDDEN)
+    try:
+        model = Model.objects.get(pk=model_id)
+    except Model.DoesNotExist:
+        return None, None, Response({'error': 'Model no trobat.'},
+                                    status=http_status.HTTP_404_NOT_FOUND)
+    return model, profile, None
+
+
+def _estat_del_model(model, entrega=None):
+    """La forma que tornen les tres portes: l'estat VIU + l'últim rastre. Una sola forma per a
+    les tres, perquè la cara no hagi d'aprendre'n tres."""
+    ultim = model.esdeveniments_estat.select_related('per').first()   # ordering: -quan
+    return {
+        'model_id': model.pk,
+        'estat': model.estat,
+        'motiu_tancament': model.motiu_tancament,
+        'data_tancament': model.data_tancament.isoformat() if model.data_tancament else None,
+        'rastre': None if ultim is None else {
+            'de': ultim.de_estat, 'a': ultim.a_estat, 'motiu': ultim.motiu,
+            'per': ultim.per.nom_complet if ultim.per_id else None,
+            'quan': ultim.quan.isoformat(),
+        },
+        'entrega': None if entrega is None else {
+            'id': entrega.pk, 'ronda_seq': entrega.ronda.seq,
+            'destinatari': entrega.destinatari, 'data': entrega.data.isoformat(),
+        },
+    }
+
+
+@api_view(['POST'])
+@permission_classes([_CloseGates])
+def tancar_model_view(request, model_id):
+    """POST /api/v1/models/<model_id>/tancar/ · {motiu, confirmar_entrega?, destinatari?, descripcio?}
+
+    FIT-10 — l'acte humà que acaba un model. `motiu` ∈ {`acabat`, `tret_de_cataleg`}.
+
+    🚨 **AMB RONDA OBERTA CONTESTA 409, I EL 409 ÉS LA PREGUNTA.** Porta `code='ronda_oberta'`
+    i les dades de la volta perquè la cara pugui demanar la confirmació amb el número a la mà
+    («la R{n} està oberta; confirmar l'entrega i tancar-ho tot»). Amb `confirmar_entrega=true`
+    la segona crida ho fa tot en una transacció: entrega (porta d'M1) → tancament de la volta i
+    de la seva feina viva (FIT-13 + FIT-6) → `estat='acabat'`.
+    """
+    from .services_cicle import CicleVidaError, tancar_model
+
+    model, profile, err = _model_i_perfil(request, model_id)
+    if err is not None:
+        return err
+    dades = request.data or {}
+    try:
+        entrega = tancar_model(
+            model, motiu=dades.get('motiu'), profile=profile,
+            confirmar_entrega=_truthy(dades.get('confirmar_entrega')),
+            destinatari=(dades.get('destinatari') or '').strip(),
+            descripcio=(dades.get('descripcio') or '').strip())
+    except CicleVidaError as e:
+        codi = (http_status.HTTP_409_CONFLICT if e.code == 'ronda_oberta'
+                else http_status.HTTP_400_BAD_REQUEST)
+        return Response({'error': str(e), 'code': e.code, **e.dades}, status=codi)
+    model.refresh_from_db()
+    return Response(_estat_del_model(model, entrega), status=http_status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([_CloseGates])
+def reobrir_model_view(request, model_id):
+    """POST /api/v1/models/<model_id>/reobrir/ · {motiu?}
+
+    FIT-11 — el model torna a OBERT. Què es fa a dins (rectificar la darrera volta o obrir-ne
+    una de nova) és una decisió posterior i separada, i el guard d'FIT-11 viu a
+    `transition_task`, no aquí.
+    """
+    from .services_cicle import CicleVidaError, reobrir_model
+
+    model, profile, err = _model_i_perfil(request, model_id)
+    if err is not None:
+        return err
+    try:
+        reobrir_model(model, profile=profile,
+                      motiu=((request.data or {}).get('motiu') or '').strip())
+    except CicleVidaError as e:
+        return Response({'error': str(e), 'code': e.code}, status=http_status.HTTP_400_BAD_REQUEST)
+    model.refresh_from_db()
+    return Response(_estat_del_model(model), status=http_status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([_CloseGates])
+def jubilar_model_view(request, model_id):
+    """POST /api/v1/models/<model_id>/jubilar/ · {motiu?}  — FIT-9, l'arxiu. Només des d'`acabat`."""
+    from .services_cicle import CicleVidaError, jubilar_model
+
+    model, profile, err = _model_i_perfil(request, model_id)
+    if err is not None:
+        return err
+    try:
+        jubilar_model(model, profile=profile,
+                      motiu=((request.data or {}).get('motiu') or '').strip())
+    except CicleVidaError as e:
+        return Response({'error': str(e), 'code': e.code}, status=http_status.HTTP_400_BAD_REQUEST)
+    model.refresh_from_db()
+    return Response(_estat_del_model(model), status=http_status.HTTP_200_OK)
