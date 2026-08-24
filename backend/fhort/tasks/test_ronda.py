@@ -170,12 +170,15 @@ class RondaTest(TenantTestCase):
 
     def test_tancar_ronda_torna_la_vigencia_a_la_prevista(self):
         r = obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, ['pom'])
-        tancar_ronda(r)
+        # M1 · FIT-6 — tancar la ronda ara TANCA la feina que hi penja, i tancar feina és un
+        # acte amb autor: la volta té una `pom` Pending viva, o sigui que cal un tècnic.
+        tancar_ronda(r, profile=self.prof)
         self.assertIsNotNone(r.tancada_el)
         self.assertEqual(tasca_vigent(self.model, 'pom'), self.pom_r1)
 
     def test_la_ronda_3_es_numera_despres_de_la_2_tancada(self):
-        tancar_ronda(obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, ['pom']))
+        tancar_ronda(obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, ['pom']),
+                     profile=self.prof)
         self.assertEqual(obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, ['pom']).seq, 3)
 
     # ── El lliurable, abans que el flag existeixi (F1.6) ─────────────────────
