@@ -402,3 +402,160 @@ pendent a la BD: no és d'aquest sprint, però `migrate_schemas` no en fa tries 
 | 🚩 3 | `frontend/src/components/EstatBadge.jsx` — **component sense cap importador** que el cens va trobar. Candidat a retirar; no s'ha tocat | §1 |
 | 🚩 4 | La columna «Estat» de `/models` segueix pintant un guió. Ara que les VISTES filtren per estat, la columna és redundant: o pinta l'estat comercial del Kanban (quan hi sigui) o se'n va | §6 |
 | ⚠️ 5 | El brief demanava base `dev` amb M2-codes; `dev` va avançar durant l'sprint i el merge ja s'ha fet **aquí** | §0 |
+
+---
+---
+
+# ANNEX · CODA D'M3 — les dues decisions d'Agus, implementades
+
+> Preses després de llegir l'acta i la captura `m3_d1_board.png`. Tanquen les 🚩 1 i 2 de §10.
+> Dos commits: `a003d225` (backend + tests) i `21e3b7cc` (cara + fums).
+
+---
+
+## C1 · LA 4a COLUMNA ÉS UN FET D'ENTREGA
+
+### La llei
+
+> **Hi entra només la darrera volta TANCADA amb ENTREGA i cap volta oberta.**
+> Tot-Done-amb-volta-oberta → columna d'estat de feina (el badge lliurable ja el porta).
+> **EXCEPCIÓ PRE-LLEI AUTOEXTINGIBLE**: un model sense cap `Ronda` conserva la lectura vella
+> (tot Done → 4a columna) fins al retroactiu d'M5 — mateix patró que la barra de progrés.
+
+### La derivació, sencera (`tasks/views_b.py::kanban_state`)
+
+```
+open     in_progress > 0
+paused   paused > 0 i cap en curs
+pending  en queda alguna de pendent
+—— i quan no queda cap feina viva, mana LA VOLTA ——
+done     darrera volta TANCADA i amb ENTREGA        ← el fet
+done     el model NO TÉ CAP VOLTA                   ← ⏳ excepció pre-llei
+pending  la volta és OBERTA, o es va tancar sense declarar cap entrega
+```
+
+**Per què el cas «tancada sense entrega» també cau a feina**: tancada ≠ entregada. Una volta que
+es va tancar sense declarar cap enviament no és un fet d'entrega, i el que li falta segueix sent
+**un gest humà**. La `Ronda` del banc que es tanca per `tancar_ronda` (i, des de C2, la via del
+catàleg) és exactament aquest cas.
+
+**Per què no calia una quarta subconsulta per «cap volta oberta»**: `ronda_*` és la volta de `seq`
+més alt, i per la llei *una ronda oberta per model* —ratificada el 24/08 i imposada a
+`services_r.obrir_ronda`— una volta oberta només pot ser aquesta. Si aquesta és tancada, no n'hi
+ha cap d'oberta. Queda escrit al codi, perquè el dia que aquella llei canviï això s'ha de revisar.
+
+### ⏳ L'excepció s'apaga sola, i té test
+
+Un model sense cap `Ronda` és **tot model llegat**: la prohibició de backfill d'M1-bis (vigent
+fins al retroactiu d'M5) fa que la seva feina no pugui tenir volta ni, per tant, entrega.
+Aplicar-li la llei nova l'hauria empès a «pendent» **per sempre** per una cosa que no és seva.
+`test_i_l_excepcio_s_APAGA_SOLA_quan_el_model_rep_una_volta` mesura el mateix model abans i
+després de rebre'n una: `done` → `pending`. El dia del retroactiu, la branca deixa de trobar
+models i es pot retirar sense tocar res més.
+
+### ⚠️ Una conseqüència declarada: la consulta per defecte
+
+`by_model` sense `?all=true` filtrava **només per comptadors** (`pending|paused|in_progress > 0`).
+Amb la llei nova, un model tot-Done amb volta oberta cau a una columna de FEINA i aquell filtre
+l'hauria amagat: una fila que existeix a la columna i no a la consulta. El filtre passa a mantenir
+també els models amb **volta oberta**. El que volia treure —la feina ACABADA— segueix fora, i hi ha
+test de les dues meitats (`..._NO_s_amaga_per_defecte` i `un_model_ENTREGAT_segueix_amagat...`).
+El Dashboard sempre demana `all=true`, o sigui que el board no en nota res.
+
+### La prova que ho tanca: el mateix model, abans i després de l'ACTE
+
+Al fum de pantalla, sobre `QA-M1-0002` (tot Done, R1 oberta):
+
+```
+  OK   🔒 tot Done amb la volta OBERTA ja NO és a «Entregats» · Entregats · 0 · —
+  OK   …i sí que és a una columna de FEINA, amb el xip que ho explica
+         · Pendents · 2 · [QA-M1] Tot fet · QA-M1-0002 · … · R1 · volta oberta
+  OK   🔒 en informar l'ENTREGA, el mateix model passa a «Entregats»
+         · Entregats · 1 · [QA-M1] Tot fet · QA-M1-0002 · … · R1 · entregada
+```
+
+**Cap comptador de tasques ha canviat entre les dues lectures** (ja era tot Done): si la columna
+fos una aritmètica, el model no s'hauria mogut. Es mou perquè ara és un FET. Captures
+`m3_d1_board.png` (abans) i `m3_d2_board_entregat.png` (després).
+
+---
+
+## C2 · `tret_de_cataleg` NO ESCRIU CAP ENTREGA
+
+### La llei
+
+> **FIT-1: l'Entrega registra fets que HAN PASSAT.** Quan el client informa que la peça no es
+> produirà, no s'ha enviat res. La volta es tanca via `tancar_ronda` directament; la via
+> `acabat` es queda com estava.
+
+### Què canvia, exactament
+
+| | `acabat` (decisió interna) | `tret_de_cataleg` (fet del client) |
+|---|---|---|
+| Volta oberta | `informar_entrega` → tanca la volta (FIT-13) | **`tancar_ronda`** → la tanca i prou |
+| Feina viva | es tanca (FIT-6, dins de l'entrega) | es tanca (FIT-6, dins de `tancar_ronda`) |
+| `Entrega` | **una fila nova** | **cap** |
+| El diàleg demana | destinatari (obligatori) + descripció | **res** |
+| Botó | «Confirmar l'entrega i tancar» | «Tancar la volta i el model» |
+
+**La feina viva es tanca igual** —un model acabat no pot deixar feina viva a dins—, però es tanca
+**declarant que es tanca**. I no s'hi perdia ni facturació: el comercial llegeix `ModelTask`
+(`get_billable_items`), no `Entrega`.
+
+### La cara no ho endevina: ho diu el servidor
+
+El 409 porta ara **`requereix_entrega`**. Podria haver-se deduït del motiu al client —el client el
+tria—, però llavors hi hauria dues fonts de veritat per a la mateixa regla, i la que mana és la
+del servei que farà el tancament. Amb `false`, el diàleg no pinta el camp de destinatari **ni
+l'exigeix**: un camp obligatori per a un acte que no passa hauria bloquejat un tancament legítim.
+
+### El nom del paràmetre
+
+`confirmar_entrega` → **`confirmar`** (amb dues vies i una que no entrega res, era un nom que
+mentia). El vell segueix acceptat a la porta i al servei: és el que M3 va publicar i el que els
+fums escrits abans de la CODA envien, i retirar-lo hauria trencat dos fums sense guanyar res.
+Hi ha test del pas (`test_el_nom_VELL_del_parametre_segueix_valent`).
+
+---
+
+## C3 · EL GATE DE LA CODA
+
+| Control | Resultat |
+|---|---|
+| `manage.py check` | **net** |
+| Bloc RONDA + tests nous | **`Ran 253 tests` · `OK`** |
+| Bloc GATES (R13) | **`Ran 131 tests` · `OK (skipped=1)`** |
+| `by_model` (el node tocat) | **31 tests · OK** — els **14 de FASE 0b, sense tocar-ne cap** |
+| `test_m3_cicle_vida` | **35 tests · OK** (+6 de la via del catàleg) |
+| `npm run build` · `npx eslint src` | net · **0 errors** (274 warnings, els de l'entrada) |
+| Fum HTTP | **31 OK · 0 FAIL** |
+| Fum de PANTALLA | **28 OK · 0 FAIL** (+2 captures noves) |
+
+🔑 **Que els 14 tests de FASE 0b segueixin verds i sense tocar-ne cap no és sort: és la prova que
+la llei nova no reinterpreta res del que ja estava fixat.** El seu cas de `done`
+(`test_done_nomes_quan_tot_es_done`) és un model **sense cap volta** — o sigui, exactament
+l'excepció pre-llei. La resta són precedència de feina viva, que no s'ha mogut.
+
+### Captures noves
+
+| Captura | Què hi surt |
+|---|---|
+| `m3_b3_avis_tret_de_cataleg.png` | el diàleg de la via del catàleg: **sense camp de destinatari**, amb l'avís que no es declararà cap entrega i el botó «Tancar la volta i el model» |
+| `m3_b4_tret_de_cataleg_tancat.png` | la fitxa que en resulta: banner «Acabat · Tret de catàleg», volta **Tancada** i **cap línia d'entrega** |
+| `m3_d2_board_entregat.png` | el board després de l'acte: el model a «Entregats» amb el xip `R1 · entregada` |
+
+---
+
+## C4 · EL QUE QUEDA OBERT DESPRÉS DE LA CODA
+
+| # | Estat |
+|---|---|
+| 🚩 1 · la 4a columna | ✅ **TANCADA** per C1 |
+| 🚩 2 · `tret_de_cataleg` + entrega | ✅ **TANCADA** per C2 |
+| 🚩 3 · `EstatBadge.jsx` sense importadors | segueix oberta (no s'ha tocat) |
+| 🚩 4 · la columna «Estat» de `/models` pinta un guió | segueix oberta |
+| ⏳ · l'excepció pre-llei de la 4a columna | **viva fins al retroactiu d'M5**, amb el test que la mesura i la branca marcada al codi |
+
+> ⏳ **Per a qui faci M5**: quan el retroactiu doni voltes a la feina llegada, la branca
+> `if row['ronda_seq'] is None: return 'done'` de `kanban_state` deixa de trobar models. Es
+> retira aquella línia i el test `test_EXCEPCIO_PRE_LLEI_...`, i no hi ha res més a tocar.
