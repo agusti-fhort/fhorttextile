@@ -289,6 +289,67 @@ def tancar_ronda(ronda, *, profile=None):
     return ronda
 
 
+# ── M1 · FIT-1 + FIT-13 · L'ENTREGA ──────────────────────────────────────────
+
+class EntregaError(Exception):
+    """Rebuig d'una operació d'entrega (la ronda ja en té una, l'ok ja s'ha informat…)."""
+
+
+def informar_entrega(ronda, *, destinatari, profile, descripcio='', data=None):
+    """Declara que una ronda s'ha ENTREGAT. **I amb això la tanca** (FIT-13).
+
+    🔑 **L'ESTAT «ENTREGADA» ES DECLARA, NO ES DEDUEIX.** `ronda_lliurable` seguirà responent el
+    que sempre ha respost —«ja hi és tot?»— i es queda com el senyal PREVI que permet a la UI
+    oferir el gest («ja es pot marcar entregable»). El que diu que una volta s'ha entregat és
+    aquesta fila, escrita per una persona que ho sap perquè ho ha fet.
+
+    🔒 **L'ACTE TANCA LA RONDA, I EN LA MATEIXA TRANSACCIÓ** (FIT-13 · M1). Entregar i deixar la
+    volta oberta seria declarar que s'ha enviat una cosa que encara s'està fent; i fer-ho en dues
+    transaccions deixaria, el dia que la segona fallés, una entrega informada sobre una ronda
+    viva —l'estat que precisament no ha d'existir. O hi són totes dues o no hi és cap.
+    Com que tancar la ronda tanca la seva feina viva (FIT-6), `profile` és sempre obligatori
+    aquí: entregar és un acte, i el seu autor és qui també signa aquell tancament.
+
+    Retorna l'`Entrega` creada.
+    """
+    from django.db import transaction
+
+    from .models import Entrega
+
+    if profile is None:
+        raise EntregaError('Cal un perfil per informar una entrega.')
+    destinatari = (destinatari or '').strip()
+    if not destinatari:
+        raise EntregaError('Una entrega sense destinatari no diu res: cal dir a qui s\'ha entregat.')
+    if Entrega.objects.filter(ronda=ronda).exists():
+        raise EntregaError('Aquesta ronda ja té una entrega informada; una volta s\'entrega un cop.')
+
+    with transaction.atomic():
+        entrega = Entrega.objects.create(
+            ronda=ronda, destinatari=destinatari, descripcio=(descripcio or '').strip(),
+            qui_informa=profile, **({'data': data} if data is not None else {}))
+        tancar_ronda(ronda, profile=profile)
+    return entrega
+
+
+def informar_ok_client(entrega, *, profile, data_ok=None):
+    """El client ha dit que li ha arribat bé. Senyal MANUAL i POSTERIOR (FIT-1).
+
+    No es dedueix de res i no té cap efecte sobre la ronda: quan arriba, la ronda ja fa estona
+    que és tancada. S'informa **un sol cop**: és un fet, no un interruptor.
+    """
+    from django.utils import timezone
+
+    if profile is None:
+        raise EntregaError('Cal un perfil per informar l\'OK del client.')
+    if entrega.data_ok is not None:
+        raise EntregaError('L\'OK del client d\'aquesta entrega ja estava informat.')
+    entrega.data_ok = data_ok or timezone.now()
+    entrega.qui_informa_ok = profile
+    entrega.save(update_fields=['data_ok', 'qui_informa_ok'])
+    return entrega
+
+
 def ronda_lliurable(ronda):
     """La ronda ha produït tot el que havia de lliurar?
 
