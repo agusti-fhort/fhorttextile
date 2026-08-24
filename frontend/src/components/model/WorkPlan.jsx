@@ -54,9 +54,13 @@ const cardsGrid = { display: 'flex', flexWrap: 'wrap', gap: 12 }
 // A6 · NOMÉS PELL. `.lblc` de la maqueta: 10px MAJÚSCULES amb tracking .08em i pes 600.
 const sectionTitle = {
   fontSize: 'var(--fs-label)', lineHeight: '12px', color: 'var(--text-soft)', fontWeight: 600,
-  textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10,
+  textTransform: 'uppercase', letterSpacing: '.08em',
 }
-const footerWrap = { width: '100%', marginTop: 14 }
+// `.sec` del mockup — el marge inferior passa d'aquí (abans el portava el rètol tot sol).
+const secRow = {
+  display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+  gap: 12, flexWrap: 'wrap', marginBottom: 10,
+}
 
 function TransportBtn({ icon, active, title, onClick }) {
   return (
@@ -244,9 +248,11 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
   // frontend de temps_consumit_min quadra EXACTAMENT amb el rollup de l'albarà (ambdós sumen els
   // minuts de timers consolidats de TOTES les tasques del model; el compositor no scopa) → suma
   // local, zero crides noves (P5 PAS 0.2). Degradació amb gràcia: 0 tasques → 0% / 0h 00m.
-  const total = list.length
-  const done = list.filter(task => task.status === 'Done').length
-  const pct = total ? Math.round((100 * done) / total) : 0
+  // El PROGRÉS GLOBAL («n/m tasques fetes · %» i la seva barra) se'n va del Dashboard (M2 · CODA,
+  // decisió d'Agus): amb el pla repartit per voltes, el progrés que vol dir alguna cosa és el de
+  // cada capçalera de ronda, i un percentatge sobre TOTES les tasques del model barrejava voltes
+  // entregades amb la vigent. El TEMPS acumulat sí que es queda —és un fet del model sencer, no
+  // d'una volta— i puja a la capçalera de secció, que és on el mockup el posa.
   const totalMin = list.reduce((s, task) => s + (task.temps_consumit_min || 0), 0)
 
   // M2 — LES VOLTES, ja agregades. La lògica és compartida amb el Registre (`utils/rondes`):
@@ -418,7 +424,18 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
 
   return (
     <section style={containerStyle}>
-      <div style={sectionTitle}>{t('model_sheet.dashboard.workplan.title')}</div>
+      {/* `.sec` del mockup: el rètol a l'esquerra i el TEMPS ACUMULAT SOBRE EL MODEL a la dreta,
+          alineats a la línia de base. El temps és l'únic número global que sobreviu: és un fet
+          del model sencer i no el diu cap capçalera de volta. */}
+      <div style={secRow}>
+        <span style={sectionTitle}>{t('model_sheet.dashboard.workplan.title')}</span>
+        <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)' }}>
+          {t('model_sheet.dashboard.workplan.time_total')}:{' '}
+          <span style={{ fontFamily: 'var(--mono)', color: 'var(--text-main)' }}>
+            {formatMinutes(totalMin)}
+          </span>
+        </span>
+      </div>
       {/* §8c — estat buit: frase en --text-faint CURSIVA, mai caixa buida muda. */}
       {list.length === 0 ? (
         <div style={{ borderWidth: 1, borderStyle: 'dashed', borderColor: 'var(--line)',
@@ -481,24 +498,6 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
         </div>
       )}
 
-      {/* Peu (§1): barra de progrés (% Done) + temps acumulat sobre el model (ample total) */}
-      <div style={footerWrap}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
-                      gap: 12, flexWrap: 'wrap', marginBottom: 6, fontSize: 'var(--fs-label)',
-                      color: 'var(--text-soft)' }}>
-          <span>{t('model_sheet.dashboard.workplan.progress_label', { done, total })} · {pct}%</span>
-          <span>{t('model_sheet.dashboard.workplan.time_total')}:{' '}
-            <span style={{ fontFamily: 'var(--mono)', color: 'var(--text-main)' }}>{formatMinutes(totalMin)}</span>
-          </span>
-        </div>
-        {/* `.prog` de la maqueta: 6px de canal en --line-soft, sense vora, píndola. El farciment
-            és --ok: la barra diu QUANT S'HA FET, i el fet és verd a tot el sistema. */}
-        <div style={{ height: 6, borderRadius: 'var(--r-pill)', background: 'var(--line-soft)',
-                      overflow: 'hidden' }}>
-          <div style={{ width: `${pct}%`, height: '100%', background: 'var(--ok)',
-                        transition: 'width 200ms' }} />
-        </div>
-      </div>
       {declarant && (
         <TempsDeclaratForm
           tasca={declarant}
