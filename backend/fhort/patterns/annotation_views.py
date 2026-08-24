@@ -133,22 +133,22 @@ class PatternPOMSerializer(serializers.ModelSerializer):
         només la recepta (és el que fa el Taller en reobrir un POM) o només el mètode, i
         llavors la meitat que falta és la que ja hi ha desada. Validar només el payload
         deixaria passar exactament el cas que això vol impedir.
+
+        La pregunta la respon el MODEL (`mode_admes`), i no una llista d'ifs aquí: un
+        mètode pot admetre MÉS d'una forma —`recta` llegeix tant `points` com `landmark`—
+        i escriure-ho aquí voldria dir mantenir la taula en dos llocs. Amb dos mètodes
+        n'hi havia prou amb dues branques; amb quatre, ja no.
         """
         metode = dades.get('metode', getattr(self.instance, 'metode', PatternPOM.METODE_RECTA))
         recepta = dades.get(
             'definicio_mesura', getattr(self.instance, 'definicio_mesura', None) or {})
         mode = recepta.get('mode', PatternPOM.MODE_POINTS)
 
-        esperat = PatternPOM.mode_esperat(metode)
-        if esperat and mode != esperat:
+        if not PatternPOM.mode_admes(metode, mode):
+            admesos = ' · '.join(PatternPOM.MODES_ACCEPTATS.get(metode, ()))
             raise serializers.ValidationError(
-                {'metode': f"El mètode «{metode}» vol una recepta de mode «{esperat}», i "
+                {'metode': f"El mètode «{metode}» vol una recepta de mode «{admesos}», i "
                            f"la que ha arribat és de mode «{mode}»."})
-        if not esperat and mode == PatternPOM.MODE_ORTOGONAL:
-            raise serializers.ValidationError(
-                {'definicio_mesura': f"Una recepta de mode «{PatternPOM.MODE_ORTOGONAL}» "
-                                     f"vol el mètode «{PatternPOM.METODE_ORTOGONAL}», i el "
-                                     f"que ha arribat és «{metode}»."})
         return dades
 
 
