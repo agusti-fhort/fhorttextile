@@ -92,10 +92,33 @@ def te_paret_albara(task):
         delivery_note__status__in=['ISSUED', 'INVOICED']).exists()
 
 
-def _log(task, frm, to, profile, auto=None):
+def _log(task, frm, to, profile, auto=None, nota=None):
     # `auto` viatja fins al log perquè digui la veritat: null = gest del tècnic, slug = guard.
+    # `nota` (M1 · FIT-2) és el CONTEXT del gest en text, quan n'hi ha: null a la immensa
+    # majoria de transicions, que no tenen res a dir.
     TaskTransition.objects.create(model_task=task, from_status=frm, to_status=to, by=profile,
-                                  auto=auto)
+                                  auto=auto, nota=nota)
+
+
+def _nota_reobertura_post_entrega(task):
+    """M1 · FIT-2 — «reoberta després d'entrega de R{n}», o None si no s'escau.
+
+    🔒 **EL SEGELL SEGUEIX SENT TOU.** Això NO és un guard: `Done→InProgress` era legal ahir i ho
+    és avui, i aquesta funció no pot rebutjar res. L'única cosa que canvia és que el log deixa
+    dit que aquella feina ja s'havia entregat —que és una conversa diferent de la paret DURA de
+    l'albarà (`te_paret_albara`), que sí que refusa.
+
+    Només parla quan la tasca pertany a una ronda amb entrega INFORMADA. Una tasca de la volta 1
+    (`ronda` NULL, la implícita) o d'una volta que ningú no ha entregat no té res a rastrejar.
+    La CARA d'aquest rastre —qui el veu i com— és M2; aquí només hi ha la dada.
+    """
+    ronda = getattr(task, 'ronda', None)
+    if ronda is None:
+        return None
+    entrega = getattr(ronda, 'entrega', None)   # OneToOne invers: None si no n'hi ha
+    if entrega is None:
+        return None
+    return f"reoberta després d'entrega de R{ronda.seq}"
 
 
 def _aplica_exclusio_tecnic(profile, task):
@@ -369,7 +392,11 @@ def transition_task(task, to_status, profile, force=False, auto=None,
 
     task.status = to_status
     task.save()
-    _log(task, frm, to_status, profile, auto=auto)
+    # M1 · FIT-2 — el rastre es calcula ABANS del log i només per a la reobertura: és l'únic
+    # moment en què la frase té sentit i l'únic en què la tasca pot estar entregada.
+    nota = (_nota_reobertura_post_entrega(task)
+            if (frm == 'Done' and to_status == 'InProgress') else None)
+    _log(task, frm, to_status, profile, auto=auto, nota=nota)
 
     # Pas 5B-fix: arrencar la PRIMERA tasca treu el model de Pending → Dev.
     if to_status == 'InProgress':

@@ -331,6 +331,24 @@ class TaskTransition(models.Model):
     auto = models.CharField(max_length=32, null=True, blank=True,
                             help_text="Marca d'automatisme. null = gest humà del tècnic; "
                                       "slug del guard que ha actuat en cas contrari.")
+    # M1 · FIT-2 — EL RASTRE, i va AQUÍ i no a `ModelTask.motiu`.
+    #
+    # `ModelTask.motiu` és genealogia MUTABLE amb `choices` (`nova_mostra`/`correccio`): diu
+    # PER QUÈ EXISTEIX la tasca, i escriure-hi «reoberta després d'entrega» hi encabiria una
+    # frase que no és cap dels dos valors i, sobretot, **esborraria** el motiu de la volta —una
+    # dada que ningú no podria recuperar. `TaskTransition` és el **log immutable** (v. docstring
+    # de la classe): una fila per gest, que no es reescriu mai, i el rastre d'una reobertura ÉS
+    # un gest. Per això el rastre és una NOTA d'aquesta fila i no un camp de la tasca.
+    #
+    # I NO va a `auto`, encara que hi cabria: aquell camp significa «això no ho ha fet una
+    # persona» (null = gest humà), i reobrir una tasca entregada és exactament un gest humà —el
+    # segell és TOU i Done→InProgress segueix sent legal. Posar-l'hi faria mentir el log a
+    # canvi d'estalviar una columna.
+    #
+    # Text lliure i nullable: mirall de `GateEvent.notes`, la nota de l'altre log d'actes
+    # d'aquesta mateixa app. null = la immensa majoria de transicions, que no tenen res a dir.
+    nota = models.TextField(null=True, blank=True,
+                            help_text='Rastre en text del context del gest. null = res a dir.')
 
     class Meta:
         ordering = ['at']
