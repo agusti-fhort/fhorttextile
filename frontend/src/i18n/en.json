@@ -4433,7 +4433,28 @@
       "value_pattern_t": "pattern",
       "value_sheet": "spec {{cm}}",
       "value_sheet_none": "sheet —",
-      "value_sheet_t": "spec"
+      "value_sheet_t": "spec",
+      "metode_label": "Measurement method",
+      "metode": {
+        "recta": "Straight",
+        "vora": "Along edge",
+        "ortogonal": "Drop"
+      },
+      "metode_ajuda": {
+        "recta": "Straight distance between two points, like a taut tape.",
+        "vora": "Length following the edge between two points, like a tape tracing the curve.",
+        "ortogonal": "Perpendicular distance from a point to the line set by two anchors (for example, the drop from HPS level)."
+      },
+      "ancora": {
+        "a": "point A",
+        "b": "point B",
+        "ref_a": "the first anchor of the reference line",
+        "ref_b": "the second anchor of the reference line",
+        "p": "the point that drops"
+      },
+      "ancora_pas": "Placing {{codi}} ({{nom}}) — click {{ancora}} ({{pas}} of {{total}})",
+      "ancora_pas_sense_pom": "Click {{ancora}} ({{pas}} of {{total}})",
+      "ancora_reopen": "Reopening {{codi}} — mark {{ancora}} again ({{pas}} of {{total}}). Esc to leave without changing anything"
     },
     "loading": "Loading pattern…",
     "empty_title": "No pattern yet",

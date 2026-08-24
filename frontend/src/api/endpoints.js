@@ -996,6 +996,12 @@ export const patterns = {
   poms: {
     list: (patternFileId) => client.get('/api/v1/patterns/pattern-poms/',
       { params: { pattern_piece__pattern_file: patternFileId } }),
+    // EL VOCABULARI DE MÈTODES (recta · vora · caiguda ortogonal), amb la gramàtica de
+    // cadascun: quantes àncores vol i com es diuen dins de la recepta. Ve del servidor pel
+    // mateix motiu que `vocabulariDomini` (v. la seva capçalera): una llista escrita a mà
+    // dins d'un `.jsx` deriva dels `choices` del model i ningú no se n'assabenta. Amb això
+    // el Taller sap quants clics ha de guiar sense saber quins mètodes existeixen.
+    metodes: () => client.get('/api/v1/patterns/pattern-poms/metodes/'),
     create: (data) => client.post('/api/v1/patterns/pattern-poms/', data),
     // REOBRIR (W4b/T5a): la recepta nova sobre el MATEIX PatternPOM, i el servidor RECALCULA
     // el valor. Mai esborrar-i-crear: corregir on és una mesura no és tornar-la a ancorar.

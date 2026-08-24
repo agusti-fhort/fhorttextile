@@ -4433,7 +4433,28 @@
       "value_pattern_t": "patró",
       "value_sheet": "fitxa {{cm}}",
       "value_sheet_none": "fitxa —",
-      "value_sheet_t": "fitxa"
+      "value_sheet_t": "fitxa",
+      "metode_label": "Mètode de mesura",
+      "metode": {
+        "recta": "Recta",
+        "vora": "Per vora",
+        "ortogonal": "Caiguda"
+      },
+      "metode_ajuda": {
+        "recta": "Distància recta entre dos punts, com una cinta estirada.",
+        "vora": "Longitud resseguint la vora entre dos punts, com una cinta que segueix la corba.",
+        "ortogonal": "Distància perpendicular d'un punt a la línia que marquen dues àncores (per exemple, la caiguda des del nivell HPS)."
+      },
+      "ancora": {
+        "a": "el punt A",
+        "b": "el punt B",
+        "ref_a": "la primera àncora de la línia de referència",
+        "ref_b": "la segona àncora de la línia de referència",
+        "p": "el punt que hi cau"
+      },
+      "ancora_pas": "Col·locant {{codi}} ({{nom}}) — clica {{ancora}} ({{pas}} de {{total}})",
+      "ancora_pas_sense_pom": "Clica {{ancora}} ({{pas}} de {{total}})",
+      "ancora_reopen": "Reobrint {{codi}} — torna a marcar {{ancora}} ({{pas}} de {{total}}). Esc per sortir sense tocar res"
     },
     "loading": "Carregant el patró…",
     "empty_title": "Encara no hi ha cap patró",

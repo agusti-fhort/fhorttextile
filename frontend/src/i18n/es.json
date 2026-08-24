@@ -4433,7 +4433,28 @@
       "value_pattern_t": "patrón",
       "value_sheet": "ficha {{cm}}",
       "value_sheet_none": "ficha —",
-      "value_sheet_t": "ficha"
+      "value_sheet_t": "ficha",
+      "metode_label": "Método de medida",
+      "metode": {
+        "recta": "Recta",
+        "vora": "Por borde",
+        "ortogonal": "Caída"
+      },
+      "metode_ajuda": {
+        "recta": "Distancia recta entre dos puntos, como una cinta tensada.",
+        "vora": "Longitud siguiendo el borde entre dos puntos, como una cinta que recorre la curva.",
+        "ortogonal": "Distancia perpendicular de un punto a la línea que marcan dos anclajes (por ejemplo, la caída desde el nivel HPS)."
+      },
+      "ancora": {
+        "a": "el punto A",
+        "b": "el punto B",
+        "ref_a": "el primer anclaje de la línea de referencia",
+        "ref_b": "el segundo anclaje de la línea de referencia",
+        "p": "el punto que cae"
+      },
+      "ancora_pas": "Colocando {{codi}} ({{nom}}) — haz clic en {{ancora}} ({{pas}} de {{total}})",
+      "ancora_pas_sense_pom": "Haz clic en {{ancora}} ({{pas}} de {{total}})",
+      "ancora_reopen": "Reabriendo {{codi}} — vuelve a marcar {{ancora}} ({{pas}} de {{total}}). Esc para salir sin tocar nada"
     },
     "loading": "Cargando el patrón…",
     "empty_title": "Todavía no hay ningún patrón",

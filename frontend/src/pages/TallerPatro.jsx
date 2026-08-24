@@ -88,6 +88,12 @@ export default function TallerPatro() {
   // cercador: A → B → ancorat. Sense pomActiu, el mode POM és la via secundària (el POM
   // que no és a la fitxa) i llavors sí que cal preguntar quin és — el picker.
   const [pomActiu, setPomActiu] = useState(null)
+  // ── El vocabulari de MÈTODES de mesura, servit pel backend (cap enum aquí). Cada entrada
+  // porta la seva gramàtica: `{codi, mode, ancores}`. `ancores` és el que fa que el gest
+  // sigui guiat sense que aquesta pantalla sàpiga què és una caiguda ortogonal — en diu
+  // quants clics vol i com es diu cadascun, i la guia i la recepta surten d'aquí.
+  const [metodes, setMetodes] = useState([])
+  const [metodeSel, setMetodeSel] = useState('')
   const [nomTram, setNomTram] = useState('')
   const [creantTram, setCreantTram] = useState(false)
   const [tramRessaltat, setTramRessaltat] = useState(null)
@@ -185,6 +191,22 @@ export default function TallerPatro() {
     } catch { /* la llista de rebuigs no és crítica: si no ve, no es diu res */ }
   }, [modelId])
 
+  // El vocabulari de mètodes: una sola lectura en obrir el taller. Si no ve (xarxa, permís),
+  // la pantalla es queda sense selector i el gest segueix sent el de dos punts de sempre —
+  // ni un mètode inventat aquí ni una eina que no es pot fer servir.
+  useEffect(() => {
+    let viu = true
+    patterns.poms.metodes()
+      .then(({ data }) => {
+        if (!viu) return
+        const llista = data || []
+        setMetodes(llista)
+        setMetodeSel(prev => prev || llista[0]?.codi || '')
+      })
+      .catch(() => { /* sense vocabulari, el Taller no ofereix el selector i prou */ })
+    return () => { viu = false }
+  }, [])
+
   // Els REBUIGS sí que es llegeixen en obrir (F/T3): és una consulta a una taula, no el motor.
   // El que T1 treu de l'arrencada és A2, que opina sobre tot el patró — no saber quants «no»
   // hi ha vius és el que fa que un recompte de zero propostes menteixi.
@@ -260,6 +282,14 @@ export default function TallerPatro() {
     })
   }
 
+  // El mètode viu i la seva gramàtica. Amb el vocabulari encara no arribat (o caigut), es
+  // cau al gest de sempre: dos punts. No és un enum escrit aquí —és el mínim que la pantalla
+  // sap fer sense servidor— i el selector no s'ofereix fins que el vocabulari hi és.
+  const metodeActiu = useMemo(
+    () => metodes.find(m => m.codi === metodeSel) || null,
+    [metodes, metodeSel])
+  const ancoresPom = metodeActiu?.ancores || ['a', 'b']
+
   // Clicar una fila PENDENT de la llista de treball ÉS l'ordre de col·locar aquell POM:
   // no obre cap cercador, perquè ja se sap quin POM és. El canvas passa a guiar.
   const colocarPOM = (fila) => {
@@ -306,7 +336,10 @@ export default function TallerPatro() {
 
   const onClicPunt = (iman) => {
     const punt = iman.punt
-    const maxPunts = mode === 'pinca' ? 3 : 2
+    // Quants clics vol aquest gest. En mode POM ho diu el MÈTODE (dos per a una recta o una
+    // longitud per vora, tres per a una caiguda ortogonal), i ho diu el servidor: si un dia
+    // n'entra un de quatre àncores, aquesta línia ja el guia.
+    const maxPunts = mode === 'pinca' ? 3 : mode === 'pom' ? ancoresPom.length : 2
     // Forma FUNCIONAL a posta: llegir `puntsPom` del closure el faria servir el valor
     // d'abans del clic anterior si dos events arriben junts, i la mesura acabaria unint
     // un punt amb ell mateix.
@@ -325,12 +358,13 @@ export default function TallerPatro() {
       setArcInvertit(false)
 
       const nous = [...prev, punt]
-      if (nous.length === 2 && mode === 'pom') {
-        // Dos punts. Si sabem de quin POM es tracta —perquè s'està col·locant de la llista de
-        // treball, o perquè s'està REOBRINT un d'ancorat— s'ancora i s'acaba. Si no (via
-        // secundària: un POM que no és a la fitxa), llavors sí que cal preguntar quin és.
+      if (nous.length === maxPunts && mode === 'pom') {
+        // Totes les àncores posades. Si sabem de quin POM es tracta —perquè s'està col·locant
+        // de la llista de treball, o perquè s'està REOBRINT un d'ancorat— s'ancora i s'acaba.
+        // Si no (via secundària: un POM que no és a la fitxa), llavors sí que cal preguntar
+        // quin és.
         const master = pomActiu?.pom_master ?? ombra?.pomMaster
-        if (master) ancorar(master, nous[0], nous[1])
+        if (master) ancorar(master, nous)
         else setPickerObert(true)
       }
       // En mode TRAM i PINÇA no es crea res encara: falta el nom, i el vistiplau.
@@ -339,23 +373,33 @@ export default function TallerPatro() {
   }
 
   /** L'ancoratge, un de sol per a tots els camins: el guiat, el del picker, i el de REOBRIR. */
-  const ancorar = async (pomMasterId, a, b) => {
-    const peca = pecaDelPunt(a)
+  const ancorar = async (pomMasterId, punts) => {
+    const peca = pecaDelPunt(punts[0])
     setPickerObert(false)
     try {
       // S'envia la RECEPTA, mai el valor: el valor el llegeix el servidor de la geometria.
-      const recepta = { mode: 'points', a: a.id, b: b.id }
+      // La forma de la recepta la dicta el MÈTODE, i el mètode ve del servidor: aquí no hi
+      // ha cap `{mode: 'points', a, b}` escrit a mà que el dia que entri un mètode nou es
+      // quedi enrere sense que ningú ho vegi.
+      const recepta = { mode: metodeActiu?.mode || 'points' }
+      ancoresPom.forEach((clau, i) => { recepta[clau] = punts[i].id })
+      const metode = metodeActiu?.codi || 'recta'
+
       if (pomEditId) {
         // REOBERT (T5a): es RECALCULA sobre el MATEIX PatternPOM. Esborrar-lo i crear-ne un
         // altre li canviaria l'id i li esborraria la data —i qualsevol cosa que un dia hi
         // pengi—, per una feina que és una correcció, no un ancoratge nou.
-        await patterns.poms.update(pomEditId, { definicio_mesura: recepta })
+        //
+        // El `metode` viatja SEMPRE amb la recepta, també en reobrir: el servidor comprova
+        // que tots dos diguin el mateix, i enviar-ne només un deixaria que un POM reobert
+        // amb un altre mètode xoqués contra el que encara hi ha desat.
+        await patterns.poms.update(pomEditId, { definicio_mesura: recepta, metode })
       } else {
         await patterns.poms.create({
           pattern_piece: peca.id,
           pom_master: pomMasterId,
           definicio_mesura: recepta,
-          metode: 'recta',
+          metode,
         })
       }
       // Feina feta: la fila passa a col·locada i el canvas deixa de guiar. Qui vulgui
@@ -810,16 +854,24 @@ export default function TallerPatro() {
     return null
   }, [geometria])
 
-  /** Reobrir un POM ancorat: la recepta torna al canvas i es torna a marcar A i B. */
+  /** Reobrir un POM ancorat: la recepta torna al canvas i es tornen a marcar les àncores.
+
+   * El selector es posa al mètode del POM que s'obre, i no al que hi hagués triat abans:
+   * reobrir una caiguda per corregir-la i que el canvas et demanés dos punts seria començar
+   * a fer-ne una altra cosa. Les àncores que es dibuixen de fons són les d'AQUELL mètode —
+   * llegir-hi sempre `a` i `b` deixaria l'ombra buida en tot el que no fos una recta.
+   */
   const reobrirPOM = (pom) => {
     const def = pom.definicio_mesura || {}
+    const claus = metodes.find(m => m.codi === pom.metode)?.ancores || ['a', 'b']
     netejarSeleccio()
     setPomEditId(pom.id)
+    if (pom.metode) setMetodeSel(pom.metode)
     setOmbra({
       mena: 'pom',
       pomMaster: pom.pom_master,
       codi: pom.pom_code,
-      punts: [def.a, def.b].map(id => puntPerId(id)).filter(Boolean),
+      punts: claus.map(clau => puntPerId(def[clau])).filter(Boolean),
     })
     setMode('pom')
   }
@@ -1179,19 +1231,24 @@ export default function TallerPatro() {
             <Veredicte t={t} v={veredicte} onTanca={veredicteVist} />
           )}
           {mode === 'pom' && (
-            <Avis
-              text={ombra?.mena === 'pom'
-                ? t('pattern.taller.pom_reopen_hint', { codi: ombra.codi })
-                : pomActiu
-                  ? t(puntsPom.length === 0
-                      ? 'pattern.taller.place_a' : 'pattern.taller.place_b',
-                      { codi: pomActiu.codi_client,
-                        nom: pomActiu.nom_client || pomActiu.nom_canonic })
-                  : t(puntsPom.length === 0
-                      ? 'pattern.pom_hint_first' : 'pattern.pom_hint_second')}
-              onTanca={cancelar}
-              tancaEtiqueta={t('pattern.taller.cancel_place')}
-            />
+            <>
+              {/* El selector només apareix si el servidor ha dit quins mètodes hi ha, i
+                  només si n'hi ha més d'un: una tria d'una sola opció no és una tria. */}
+              {metodes.length > 1 && (
+                <SelectorMetode
+                  t={t} metodes={metodes} triat={metodeSel}
+                  onTria={codi => { setMetodeSel(codi); setPuntsPom([]) }}
+                  pas={puntsPom.length} ancores={ancoresPom}
+                />
+              )}
+              <Avis
+                text={textAncoratge(t, {
+                  ombra, pomActiu, fets: puntsPom.length, ancores: ancoresPom,
+                })}
+                onTanca={cancelar}
+                tancaEtiqueta={t('pattern.taller.cancel_place')}
+              />
+            </>
           )}
           {mode === 'seg' && (
             <Avis
@@ -1289,7 +1346,7 @@ export default function TallerPatro() {
 
           {pickerObert && (
             <POMPicker
-              onTria={pom => ancorar(pom.id, puntsPom[0], puntsPom[1])}
+              onTria={pom => ancorar(pom.id, puntsPom)}
               onCancel={() => { setPickerObert(false); setPuntsPom([]) }}
             />
           )}
@@ -1435,6 +1492,127 @@ function Veredicte({ t, v, onTanca }) {
           <span>{a.text}</span>
         </div>
       ))}
+    </div>
+  )
+}
+
+/**
+ * La frase que guia el gest d'ancorar. Una funció i no un niu de ternaris dins del JSX
+ * perquè ara té dues famílies de casos i llegir-les barrejades no ho posava fàcil.
+ *
+ * Les mesures de DUES àncores conserven els textos de sempre, literals: són gest conformat
+ * i no hi havia cap motiu per reescriure'ls. Les de TRES o més entren per la branca nova,
+ * que diu sempre quina àncora toca i en quin pas va — un gest de tres clics sense guia és
+ * un gest que s'endevina (la mateixa llei que ja regeix el de la pinça).
+ */
+function textAncoratge(t, { ombra, pomActiu, fets, ancores }) {
+  const reobrint = ombra?.mena === 'pom'
+  const nom = ancores[Math.min(fets, ancores.length - 1)]
+
+  if (ancores.length <= 2) {
+    if (reobrint) return t('pattern.taller.pom_reopen_hint', { codi: ombra.codi })
+    if (pomActiu) {
+      return t(fets === 0 ? 'pattern.taller.place_a' : 'pattern.taller.place_b', {
+        codi: pomActiu.codi_client,
+        nom: pomActiu.nom_client || pomActiu.nom_canonic,
+      })
+    }
+    return t(fets === 0 ? 'pattern.pom_hint_first' : 'pattern.pom_hint_second')
+  }
+
+  const dades = {
+    ancora: t(`pattern.taller.ancora.${nom}`),
+    pas: fets + 1,
+    total: ancores.length,
+  }
+  if (reobrint) {
+    return t('pattern.taller.ancora_reopen', { ...dades, codi: ombra.codi })
+  }
+  if (pomActiu) {
+    return t('pattern.taller.ancora_pas', {
+      ...dades,
+      codi: pomActiu.codi_client,
+      nom: pomActiu.nom_client || pomActiu.nom_canonic,
+    })
+  }
+  return t('pattern.taller.ancora_pas_sense_pom', dades)
+}
+
+//: Pictograma per mètode. NOMÉS decoració: un codi que no hi sigui cau al genèric i el
+//: mètode segueix funcionant igual. El que no pot viure al client és QUINS mètodes hi ha
+//: (això ve del servidor); com es dibuixen, sí.
+const ICONA_METODE = {
+  recta: 'ti-line',
+  vora: 'ti-vector-spline',
+  ortogonal: 'ti-corner-down-right',
+}
+
+/**
+ * Tria del mètode de mesura, i —quan el mètode vol més de dues àncores— el comptador de
+ * passos amb l'àncora que toca ara marcada.
+ *
+ * Canviar de mètode REINICIA els punts clicats (ho fa qui el crida). No és una pèrdua de
+ * feina: dos punts posats per a una recta no són les dues primeres àncores d'una caiguda,
+ * i deixar-los-hi hauria fet que el tercer clic ancorés una cosa que ningú no ha marcat.
+ */
+function SelectorMetode({ t, metodes, triat, onTria, pas, ancores }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap',
+      flexShrink: 0, fontSize: 'var(--fs-caption)', color: 'var(--text-soft)',
+    }}>
+      <span>{t('pattern.taller.metode_label')}</span>
+      <div role="radiogroup" aria-label={t('pattern.taller.metode_label')}
+           style={{ display: 'flex', gap: '0.3rem' }}>
+        {metodes.map(m => {
+          const actiu = m.codi === triat
+          return (
+            <button
+              key={m.codi} role="radio" aria-checked={actiu}
+              onClick={() => onTria(m.codi)}
+              title={t(`pattern.taller.metode_ajuda.${m.codi}`)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '0.25rem', cursor: 'pointer',
+                borderRadius: 4, padding: '0.2rem 0.5rem',
+                fontSize: 'var(--fs-caption)', color: 'var(--text-main)',
+                background: actiu ? 'var(--gold)' : 'var(--panel)',
+                border: `1px solid ${actiu ? 'var(--gold)' : 'var(--line)'}`,
+              }}
+            >
+              <i className={`ti ${ICONA_METODE[m.codi] || 'ti-ruler-2'}`} />
+              {t(`pattern.taller.metode.${m.codi}`)}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* El comptador only per als gestos llargs: amb dos clics, la frase de l'avís ja ho diu
+          tot i una fila de xips seria soroll. */}
+      {ancores.length > 2 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+          {ancores.map((nom, i) => {
+            const fet = i < pas
+            const ara = i === pas
+            return (
+              <span
+                key={nom}
+                aria-current={ara ? 'step' : undefined}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '0.2rem',
+                  borderRadius: 4, padding: '0.1rem 0.4rem',
+                  border: `1px solid ${ara ? 'var(--gold)' : 'var(--line)'}`,
+                  background: ara ? 'var(--gold)' : 'transparent',
+                  color: ara ? 'var(--text-main)' : 'var(--text-soft)',
+                  opacity: fet ? 0.6 : 1,
+                }}
+              >
+                <i className={`ti ${fet ? 'ti-check' : 'ti-point'}`} />
+                {t(`pattern.taller.ancora.${nom}`)}
+              </span>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
