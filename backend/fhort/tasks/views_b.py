@@ -161,7 +161,10 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
         # ⚠️ I ES POT DEMANAR EXPLÍCITAMENT: `?estat=acabat` (o `jubilat`) els torna a ensenyar.
         # L'exclusió és el DEFAULT, no una paret: qui pregunta per ells, els vol. Mateix criteri
         # que `?inclou=` del catàleg («el que està EN ÚS no s'amaga mai»).
-        if not (qp.get('estat') or '').strip():
+        # Un `?estat=` que NO és cap de les choices s'ignora com l'ignora el filtre (regla
+        # lenient de C1), i llavors l'exclusió **torna a manar**: si no, un valor mal escrit
+        # obriria el board als acabats sense que ningú ho hagués demanat.
+        if (qp.get('estat') or '').strip() not in dict(Model.ESTAT_CHOICES):
             models_qs = models_qs.exclude(estat__in=[Model.ESTAT_ACABAT, Model.ESTAT_JUBILAT])
         qs = qs.filter(model_id__in=models_qs.values('id'))
 

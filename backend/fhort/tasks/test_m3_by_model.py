@@ -252,6 +252,14 @@ class BoardRondaAwareTest(BaseByModel):
         self._acaba(m)
         self.assertIsNotNone(self._fila(m, all='true', estat='acabat'))
 
+    def test_un_estat_MAL_ESCRIT_no_obre_el_board_als_acabats(self):
+        """El filtre és lenient amb un valor invàlid (l'ignora); l'exclusió, no: si un typo
+        obrís el board als acabats, l'amagatall dependria de saber escriure."""
+        m = self._model()
+        self._tasca(m, status='Pending')
+        self._acaba(m)
+        self.assertIsNone(self._fila(m, all='true', estat='acabatt'))
+
     def test_reobrir_el_torna_al_board(self):
         from fhort.models_app.services_cicle import reobrir_model
         m = self._model()
