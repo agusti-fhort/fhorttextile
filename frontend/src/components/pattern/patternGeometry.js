@@ -11,33 +11,57 @@
  */
 
 /** Bounding box d'un conjunt de peces (en mm). */
+//: La capsa de recanvi quan no hi ha res de què mesurar-ne cap. Existeix perquè el visor
+//: pugui dibuixar un llenç buit en lloc de quedar-se cec.
+const BBOX_BUIT = { minX: 0, minY: 0, maxX: 100, maxY: 100, ample: 100, alt: 100 }
+
 export function bboxDePeces(pieces) {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-  for (const p of pieces) {
-    for (const b of p.boundaries || []) {
-      for (const q of b.points || []) {
-        if (q.x < minX) minX = q.x
-        if (q.y < minY) minY = q.y
-        if (q.x > maxX) maxX = q.x
-        if (q.y > maxY) maxY = q.y
-      }
-    }
-    for (const n of p.notches || []) {
-      if (n.x < minX) minX = n.x
-      if (n.y < minY) minY = n.y
-      if (n.x > maxX) maxX = n.x
-      if (n.y > maxY) maxY = n.y
-    }
+
+  // 🚨 CADA PUNT PASSA PER `Number.isFinite` ABANS D'ENTRAR-HI.
+  //
+  // Un sol punt brut —un `null` d'un camp que el serializer encara no serveix, un
+  // `undefined` d'una forma nova— contamina el mínim i el màxim, i d'allà el NaN baixa fins
+  // al zoom i a la posició: el visor es queda EN BLANC amb «NaN%» al control. La pantalla no
+  // diu què ha passat i el patró sencer desapareix per un element.
+  //
+  // Comparar sense guard no salva: `null < Infinity` és cert, i el mínim passa a ser `null`.
+  const mira = (q) => {
+    if (!q || !Number.isFinite(q.x) || !Number.isFinite(q.y)) return
+    if (q.x < minX) minX = q.x
+    if (q.y < minY) minY = q.y
+    if (q.x > maxX) maxX = q.x
+    if (q.y > maxY) maxY = q.y
   }
-  if (!isFinite(minX)) return { minX: 0, minY: 0, maxX: 100, maxY: 100, ample: 100, alt: 100 }
+
+  for (const p of pieces || []) {
+    for (const b of p.boundaries || []) for (const q of b.points || []) mira(q)
+    for (const n of p.notches || []) mira(n)
+  }
+
+  if (!Number.isFinite(minX)) return { ...BBOX_BUIT }
   return { minX, minY, maxX, maxY, ample: maxX - minX, alt: maxY - minY }
 }
 
-/** Escala que fa cabre el bbox dins el viewport, amb un marge. */
+/**
+ * Escala que fa cabre el bbox dins el viewport, amb un marge.
+ *
+ * 🚨 **L'amplada i l'alçada es CALCULEN de les cantonades, no es llegeixen de l'objecte.**
+ * Llegir-les de `bbox.ample`/`bbox.alt` volia dir que un bbox amb les quatre cantonades
+ * bones però sense els dos camps derivats donava `Math.max(undefined, 1)` = NaN, i el NaN
+ * baixava fins al zoom: **els dos visors del patró, en blanc**. Va passar (v.
+ * `INFORME_NAN_VISOR_2026-08-24.md`), i va passar perquè aquesta funció demanava dades que
+ * ja tenia. Ara no en demana cap que no pugui deduir.
+ *
+ * I si el que arriba no és mesurable, es torna una escala d'1 en lloc d'un NaN: un patró a
+ * escala equivocada és un problema; un visor cec no es pot ni diagnosticar.
+ */
 export function escalaPerCabre(bbox, ampleViewport, altViewport, marge = 40) {
-  const w = Math.max(bbox.ample, 1)
-  const h = Math.max(bbox.alt, 1)
-  return Math.min((ampleViewport - marge) / w, (altViewport - marge) / h)
+  const finit = (v, defecte) => (Number.isFinite(v) ? v : defecte)
+  const w = Math.max(finit(bbox?.maxX, 1) - finit(bbox?.minX, 0), 1)
+  const h = Math.max(finit(bbox?.maxY, 1) - finit(bbox?.minY, 0), 1)
+  const z = Math.min((finit(ampleViewport, 0) - marge) / w, (finit(altViewport, 0) - marge) / h)
+  return Number.isFinite(z) && z > 0 ? z : 1
 }
 
 /**

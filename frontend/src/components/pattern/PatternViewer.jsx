@@ -75,7 +75,12 @@ export const METRICA_EINA_COMPACTA = {
   borderRadius: 4, padding: '0.2rem 0.5rem', fontSize: 'var(--fs-caption)', gap: '0.25rem',
 }
 
-const clampZoom = (v) => Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, v))
+// L'últim filtre abans que una xifra arribi al zoom. `Math.max`/`Math.min` deixen passar el
+// NaN sencer (`Math.max(0.02, NaN)` és NaN), o sigui que sense aquesta línia el zoom pot
+// acabar sent NaN i el llenç, en blanc. El recanvi és 1: es veu malament, però es veu.
+const clampZoom = (v) => (Number.isFinite(v)
+  ? Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, v))
+  : 1)
 
 /**
  * La mida d'un glif, en px de CONTINGUT (es divideix pel zoom perquè a pantalla sigui la que
@@ -206,7 +211,11 @@ export default function PatternViewer({
     const w = el.clientWidth
     const h = omplirAlcada ? el.clientHeight : ALCADA
     if (!w || !h) return
-    const z = clampZoom(escalaPerCabre({ minX, maxX, minY, maxY }, w, h))
+    // L'objecte va SENCER —amb `ample` i `alt`— i no a mitges. `escalaPerCabre` ja no en
+    // depèn (les dedueix de les cantonades), però fabricar-ne un d'incomplet va ser
+    // exactament el que va cegar els dos visors: no es torna a fer.
+    const z = clampZoom(escalaPerCabre(
+      { minX, maxX, minY, maxY, ample: maxX - minX, alt: maxY - minY }, w, h))
     setZoom(z)
     // El contingut es dibuixa en mm amb l'eix Y capgirat: el centrem al viewport.
     setPos({
