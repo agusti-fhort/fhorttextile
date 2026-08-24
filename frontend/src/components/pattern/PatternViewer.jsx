@@ -70,7 +70,7 @@ const ALCADA = 560
 export const METRICA_EINA = {
   borderRadius: 4, padding: '0.35rem 0.8rem', fontSize: 'var(--fs-body)', gap: '0.35rem',
 }
-const METRICA_EINA_COMPACTA = {
+export const METRICA_EINA_COMPACTA = {
   borderRadius: 4, padding: '0.2rem 0.5rem', fontSize: 'var(--fs-caption)', gap: '0.25rem',
 }
 

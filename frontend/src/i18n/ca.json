@@ -4454,7 +4454,12 @@
       },
       "ancora_pas": "Col·locant {{codi}} ({{nom}}) — clica {{ancora}} ({{pas}} de {{total}})",
       "ancora_pas_sense_pom": "Clica {{ancora}} ({{pas}} de {{total}})",
-      "ancora_reopen": "Reobrint {{codi}} — torna a marcar {{ancora}} ({{pas}} de {{total}}). Esc per sortir sense tocar res"
+      "ancora_reopen": "Reobrint {{codi}} — torna a marcar {{ancora}} ({{pas}} de {{total}}). Esc per sortir sense tocar res",
+      "ancora_estat": {
+        "fet": "{{ancora}}: fet",
+        "ara": "{{ancora}}: toca ara",
+        "pendent": "{{ancora}}: pendent"
+      }
     },
     "loading": "Carregant el patró…",
     "empty_title": "Encara no hi ha cap patró",

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { patterns, models, modelTasks } from '../api/endpoints'
-import PatternViewer, { METRICA_EINA } from '../components/pattern/PatternViewer'
+import PatternViewer, { METRICA_EINA, METRICA_EINA_COMPACTA } from '../components/pattern/PatternViewer'
 import {
   arcDirigit, longitudTram, puntsDelSegment, puntsEntreIndexs, situaPunt,
 } from '../components/pattern/patternGeometry'
@@ -1242,7 +1242,15 @@ export default function TallerPatro() {
               {metodes.length > 1 && (
                 <SelectorMetode
                   t={t} metodes={metodes} triat={metodeSel}
-                  onTria={codi => { setMetodeSel(codi); setPuntsPom([]) }}
+                  onTria={codi => {
+                    setMetodeSel(codi)
+                    setPuntsPom([])
+                    // I l'ombra de la reobertura se'n va amb els punts: dibuixava les àncores
+                    // del mètode VELL, i amb un recompte diferent deixava dos punts de fons
+                    // mentre el comptador en demanava tres. D'on es ve deixa de ser rellevant
+                    // quan es canvia el QUÈ es mesura.
+                    setOmbra(o => (o ? { ...o, punts: [] } : o))
+                  }}
                   pas={puntsPom.length} ancores={ancoresPom}
                 />
               )}
@@ -1547,7 +1555,10 @@ function textAncoratge(t, { ombra, pomActiu, fets, ancores }) {
 //: mètode segueix funcionant igual. El que no pot viure al client és QUINS mètodes hi ha
 //: (això ve del servidor); com es dibuixen, sí.
 const ICONA_METODE = {
-  recta: 'ti-line',
+  // ⚠️ `ti-line` NO: a dos pams d'aquí, a la barra d'eines, ja vol dir «mode Tram»
+  // (BarraEines). Dos significats per al mateix glif a la mateixa pantalla és pitjor que un
+  // glif menys evocador.
+  recta: 'ti-arrows-horizontal',
   vora: 'ti-vector-spline',
   ortogonal: 'ti-corner-down-right',
 }
@@ -1567,21 +1578,24 @@ function SelectorMetode({ t, metodes, triat, onTria, pas, ancores }) {
       flexShrink: 0, fontSize: 'var(--fs-caption)', color: 'var(--text-soft)',
     }}>
       <span>{t('pattern.taller.metode_label')}</span>
-      <div role="radiogroup" aria-label={t('pattern.taller.metode_label')}
-           style={{ display: 'flex', gap: '0.3rem' }}>
+      {/* `aria-pressed`, i NO `role="radio"`: el control visualment idèntic de la barra
+          d'eines ja parla així, i dues gramàtiques d'ARIA per a la mateixa pell a la mateixa
+          pantalla és pitjor que una de menys específica. Un `role="radiogroup"` de debò
+          voldria roving tabindex i navegació per fletxes, que aquí no hi ha. */}
+      <div style={{ display: 'flex', gap: '0.3rem' }}>
         {metodes.map(m => {
           const actiu = m.codi === triat
           return (
             <button
-              key={m.codi} role="radio" aria-checked={actiu}
+              key={m.codi} aria-pressed={actiu}
               onClick={() => onTria(m.codi)}
               title={t(`pattern.taller.metode_ajuda.${m.codi}`)}
               style={{
-                display: 'flex', alignItems: 'center', gap: '0.25rem', cursor: 'pointer',
-                borderRadius: 4, padding: '0.2rem 0.5rem',
-                fontSize: 'var(--fs-caption)', color: 'var(--text-main)',
+                display: 'flex', alignItems: 'center', cursor: 'pointer',
+                color: 'var(--text-main)',
                 background: actiu ? 'var(--gold)' : 'var(--panel)',
                 border: `1px solid ${actiu ? 'var(--gold)' : 'var(--line)'}`,
+                ...METRICA_EINA_COMPACTA,
               }}
             >
               <i className={`ti ${ICONA_METODE[m.codi] || 'ti-ruler-2'}`} />
@@ -1591,27 +1605,35 @@ function SelectorMetode({ t, metodes, triat, onTria, pas, ancores }) {
         })}
       </div>
 
-      {/* El comptador only per als gestos llargs: amb dos clics, la frase de l'avís ja ho diu
+      {/* El comptador només per als gestos llargs: amb dos clics, la frase de l'avís ja ho diu
           tot i una fila de xips seria soroll. */}
       {ancores.length > 2 && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
           {ancores.map((nom, i) => {
             const fet = i < pas
             const ara = i === pas
+            const estat = ara ? 'ara' : fet ? 'fet' : 'pendent'
             return (
               <span
                 key={nom}
                 aria-current={ara ? 'step' : undefined}
+                aria-label={t(`pattern.taller.ancora_estat.${estat}`, {
+                  ancora: t(`pattern.taller.ancora.${nom}`),
+                })}
                 style={{
                   display: 'flex', alignItems: 'center', gap: '0.2rem',
-                  borderRadius: 4, padding: '0.1rem 0.4rem',
-                  border: `1px solid ${ara ? 'var(--gold)' : 'var(--line)'}`,
-                  background: ara ? 'var(--gold)' : 'transparent',
+                  // Píndola i no radi 4: és un xip d'estat (NORMA §3). I «on soc» s'escriu
+                  // amb `--sel` + filet d'or, mai amb el daurat ple —el daurat de fons és de
+                  // CONTROL, i com a tinta de text no arriba a AA (3,16:1 sobre --sel).
+                  borderRadius: 'var(--r-pill)', padding: '0.1rem 0.5rem',
+                  border: `1px solid ${ara ? 'var(--gold-border)' : 'var(--line)'}`,
+                  background: ara ? 'var(--sel)' : 'transparent',
+                  // Sense `opacity`: apagar text de 10 px el deixava a 2,43:1. El que
+                  // distingeix «fet» de «pendent» és l'icona, que no es compra amb contrast.
                   color: ara ? 'var(--text-main)' : 'var(--text-soft)',
-                  opacity: fet ? 0.6 : 1,
                 }}
               >
-                <i className={`ti ${fet ? 'ti-check' : 'ti-point'}`} />
+                <i className={`ti ${fet ? 'ti-check' : 'ti-point'}`} aria-hidden="true" />
                 {t(`pattern.taller.ancora.${nom}`)}
               </span>
             )

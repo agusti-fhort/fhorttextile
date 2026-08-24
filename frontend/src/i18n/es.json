@@ -4454,7 +4454,12 @@
       },
       "ancora_pas": "Colocando {{codi}} ({{nom}}) — haz clic en {{ancora}} ({{pas}} de {{total}})",
       "ancora_pas_sense_pom": "Haz clic en {{ancora}} ({{pas}} de {{total}})",
-      "ancora_reopen": "Reabriendo {{codi}} — vuelve a marcar {{ancora}} ({{pas}} de {{total}}). Esc para salir sin tocar nada"
+      "ancora_reopen": "Reabriendo {{codi}} — vuelve a marcar {{ancora}} ({{pas}} de {{total}}). Esc para salir sin tocar nada",
+      "ancora_estat": {
+        "fet": "{{ancora}}: hecho",
+        "ara": "{{ancora}}: toca ahora",
+        "pendent": "{{ancora}}: pendiente"
+      }
     },
     "loading": "Cargando el patrón…",
     "empty_title": "Todavía no hay ningún patrón",

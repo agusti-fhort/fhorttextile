@@ -4454,7 +4454,12 @@
       },
       "ancora_pas": "Placing {{codi}} ({{nom}}) — click {{ancora}} ({{pas}} of {{total}})",
       "ancora_pas_sense_pom": "Click {{ancora}} ({{pas}} of {{total}})",
-      "ancora_reopen": "Reopening {{codi}} — mark {{ancora}} again ({{pas}} of {{total}}). Esc to leave without changing anything"
+      "ancora_reopen": "Reopening {{codi}} — mark {{ancora}} again ({{pas}} of {{total}}). Esc to leave without changing anything",
+      "ancora_estat": {
+        "fet": "{{ancora}}: done",
+        "ara": "{{ancora}}: current step",
+        "pendent": "{{ancora}}: pending"
+      }
     },
     "loading": "Loading pattern…",
     "empty_title": "No pattern yet",
