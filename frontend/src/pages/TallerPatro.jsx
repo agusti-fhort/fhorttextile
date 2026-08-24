@@ -383,23 +383,28 @@ export default function TallerPatro() {
       // quedi enrere sense que ningú ho vegi.
       const recepta = { mode: metodeActiu?.mode || 'points' }
       ancoresPom.forEach((clau, i) => { recepta[clau] = punts[i].id })
-      const metode = metodeActiu?.codi || 'recta'
 
       if (pomEditId) {
         // REOBERT (T5a): es RECALCULA sobre el MATEIX PatternPOM. Esborrar-lo i crear-ne un
         // altre li canviaria l'id i li esborraria la data —i qualsevol cosa que un dia hi
         // pengi—, per una feina que és una correcció, no un ancoratge nou.
         //
-        // El `metode` viatja SEMPRE amb la recepta, també en reobrir: el servidor comprova
-        // que tots dos diguin el mateix, i enviar-ne només un deixaria que un POM reobert
-        // amb un altre mètode xoqués contra el que encara hi ha desat.
-        await patterns.poms.update(pomEditId, { definicio_mesura: recepta, metode })
+        // El `metode` hi viatja NOMÉS si se sap quin és. Amb el vocabulari caigut no hi ha
+        // mètode viu, i enviar-hi el recanvi ('recta') CONVERTIRIA en silenci el POM que
+        // s'està corregint —una caiguda o una longitud per vora passarien a recta sense que
+        // ningú ho digués. Omès, el servidor conserva el que ja hi ha desat, que és el que
+        // feia aquesta crida abans que hi hagués mètodes per triar.
+        const cos = { definicio_mesura: recepta }
+        if (metodeActiu) cos.metode = metodeActiu.codi
+        await patterns.poms.update(pomEditId, cos)
       } else {
+        // En crear, en canvi, no hi ha res a conservar: sense vocabulari s'ancora amb el
+        // mètode per defecte del model, que és el que la pantalla acaba de guiar.
         await patterns.poms.create({
           pattern_piece: peca.id,
           pom_master: pomMasterId,
           definicio_mesura: recepta,
-          metode,
+          metode: metodeActiu?.codi || 'recta',
         })
       }
       // Feina feta: la fila passa a col·locada i el canvas deixa de guiar. Qui vulgui
