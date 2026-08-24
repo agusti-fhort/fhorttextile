@@ -22,6 +22,7 @@ import logging
 import math
 import re
 import unittest
+from unittest.mock import patch
 
 from django.db import connection
 from django.db.models import ProtectedError
@@ -136,6 +137,7 @@ from fhort.patterns.annotation_views import (PatternPOMViewSet, PatternSegmentVi
                                              comprovar_costura)
 from fhort.patterns.export import ExportBlocked, build_export
 from fhort.patterns.services import CONFIRM_TEXT_CA
+from fhort.patterns import annotation_views
 from fhort.patterns.models import (DartProposalRejection, ExportAcknowledgement, PatternFile,
                                    PatternPiece, PatternPOM, PatternPoint, PatternSegment,
                                    SegmentPreference, SewProposalRejection, SewRelation,
@@ -2635,6 +2637,29 @@ class CotaDesplacadaAPITest(CotaProjeccioAPITest):
         peca = next(p for p in resp.data['pieces'] if p['nom_block'] == 'BACK')
         cota = next(p for p in peca['poms'] if p['id'] == pom_id)
         self.assertEqual(cota['cota_offset_mm'], 30.0)
+
+    def test_moure_la_cota_NO_torna_a_carregar_la_geometria(self):
+        """El drag desa a cada deixada, i `_mesurar` carrega el patró SENCER (totes les
+        peces, tots els punts). Rellegir-lo per moure una línia de lloc seria pagar el fitxer
+        sencer per una preferència de dibuix — i el valor no en depèn."""
+        pom_id = self._cota(self.girs[0], self.girs[5], 'H').data['id']
+        with patch.object(annotation_views, '_mesurar') as mesura:
+            self.assertEqual(self._mou(pom_id, 9.0).status_code, 200)
+        mesura.assert_not_called()
+        self.assertEqual(PatternPOM.objects.get(pk=pom_id).cota_offset_mm, 9.0)
+
+    def test_canviar_la_recepta_SI_que_torna_a_mesurar(self):
+        """La cara complementària: el que sí que mou el valor no es pot saltar mai."""
+        pom_id = self._cota(self.girs[0], self.girs[5], 'H').data['id']
+        request = self.factory.patch(f'/api/v1/patterns/pattern-poms/{pom_id}/', {
+            'definicio_mesura': {
+                'mode': 'projeccio', 'a': self.girs[0].id, 'b': self.girs[6].id, 'eix': 'V'},
+        }, format='json')
+        force_authenticate(request, user=self.user)
+        with patch.object(annotation_views, '_mesurar', return_value=1.23) as mesura:
+            PatternPOMViewSet.as_view({'patch': 'partial_update'})(request, pk=pom_id)
+        mesura.assert_called_once()
+        self.assertEqual(PatternPOM.objects.get(pk=pom_id).valor_mesurat_cm, 1.23)
 
     def test_un_desplacament_no_re_valida_la_recepta(self):
         """Un PATCH que només mou la cota no ha de topar amb la llei metode↔mode: no en

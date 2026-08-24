@@ -637,9 +637,18 @@ class PatternPOMViewSet(BulkDeleteMixin, viewsets.ModelViewSet):
         pom = serializer.save(creat_per=getattr(self.request.user, 'profile', None))
         self._recalcular(pom)
 
+    #: Els camps que canvien QUÈ es mesura. Qualsevol altre no pot moure el valor.
+    CAMPS_DE_LA_MESURA = {'definicio_mesura', 'metode', 'pattern_piece', 'pom_master'}
+
     def perform_update(self, serializer):
         pom = serializer.save()
-        self._recalcular(pom)
+        # Arrossegar una cota no torna a mesurar res. `_mesurar` carrega la geometria SENCERA
+        # del `PatternFile` (totes les peces, tots els punts: 3.840 al banc del 837), i el
+        # drag desa a cada deixada — recalcular-hi voldria dir rellegir tot el patró per
+        # moure una línia de lloc. El valor depèn de la recepta i de la geometria, i un
+        # desplaçament de presentació no és cap de les dues.
+        if self.CAMPS_DE_LA_MESURA & set(serializer.validated_data):
+            self._recalcular(pom)
 
     def _recalcular(self, pom: PatternPOM):
         try:
