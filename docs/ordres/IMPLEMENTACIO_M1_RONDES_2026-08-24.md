@@ -1,5 +1,15 @@
 # M1 · NUCLI DE RONDES — Entrega, tancament, rastre
 
+> ⚠️ **DUES COSES D'AQUESTA ACTA JA NO SÓN VIGENTS** (superades per **M1-bis**, mateix dia —
+> `IMPLEMENTACIO_M1BIS_FIT4_2026-08-24.md`):
+> · **§2 · l'ATURADA de FIT-4** — l'Agus va donar la llei i les sub-decisions, i M1-bis les
+>   implementa: la R1 **neix del primer gest de treball** amb `seq=1`, i R2+ **repliquen el joc
+>   de tasques** de la volta anterior. La llei «la R1 és implícita» que aquesta acta cita com a
+>   vigent **ja no ho és**.
+> · **§4 · els permisos de l'entrega** — el `TODO(M1)` està **RESOLT**: `_ExecuteTasks`, la
+>   mateixa capability que obre. Ja no és `IsAuthenticated`.
+> La resta de l'acta (FIT-1, FIT-13, FIT-6, FIT-2) segueix descrivint el codi viu.
+
 > **Patró B · IMPLEMENTA.** Sprint acotat al backend. Cap fitxer de `patterns/**` ni del Taller
 > tocat; cap tasca ni cap gest sobre el model **1383**.
 > **Deliverable únic**: aquest fitxer. **Cap push** — el fa l'Agus.

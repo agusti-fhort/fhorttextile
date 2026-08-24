@@ -1774,17 +1774,14 @@ def obrir_ronda_view(request, model_id):
 
 # ── M1 · FIT-1 + FIT-13 · LES PORTES DE L'ENTREGA ───────────────────────────────────────────
 #
-# 🚩 PERMISOS — TODO DECLARAT, i el motiu és un fet del cens, no una preferència.
-# El brief demana «la mateixa capability que avui governa `tancar_ronda`». **No n'hi ha cap**:
-# `tancar_ronda` no té ni una sola crida de producte a tot `backend/fhort` (només tests), o
-# sigui que mai ha tingut porta HTTP i per tant mai ha tingut capability. La germana més propera
-# és `obrir_ronda_view`, gated `_ExecuteTasks` (EXECUTE_TASKS) + allow-list de `task_type`.
-# Aquí NO se n'inventa cap: `IsAuthenticated`, i que l'Agus decideixi de qui és aquest gest
-# —perquè informar una entrega s'assembla més a un acte de PM (define_tasks / gates) que a
-# executar una tasca, i triar-ho jo seria decidir una política de permisos per omissió.
+# ✅ PERMISOS — RESOLT (decisió d'Agus, M1-bis 24/08): **`_ExecuteTasks`, la mateixa que obre**.
+# «Qui pot treballar pot entregar.» El TODO d'M1 queda retirat: hi vaig deixar `IsAuthenticated`
+# perquè `tancar_ronda` no havia tingut mai porta HTTP i per tant cap capability que heretar, i
+# la conseqüència era que la porta que TANCA la ronda era més oberta que la que l'obre. Ara les
+# dues van amb `EXECUTE_TASKS` i aquella asimetria desapareix.
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])   # TODO(M1): capability pendent de decisió (v. nota ↑)
+@permission_classes([_ExecuteTasks])
 def entrega_ronda_view(request, ronda_id):
     """POST /api/v1/rondes/<ronda_id>/entrega/  ·  {destinatari, descripcio?, data?}
 
@@ -1828,7 +1825,7 @@ def entrega_ronda_view(request, ronda_id):
 
 
 @api_view(['PATCH'])
-@permission_classes([IsAuthenticated])   # TODO(M1): capability pendent de decisió (v. nota ↑)
+@permission_classes([_ExecuteTasks])
 def entrega_ok_client_view(request, entrega_id):
     """PATCH /api/v1/entregues/<entrega_id>/ok-client/  ·  {data_ok?}
 
