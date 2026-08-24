@@ -390,6 +390,14 @@ class PatternPOM(models.Model):
     #: resol des de S6, però la UI v1 només ofereix el mode de punts: el mode landmark
     #: entra amb l'editor de receptes, no abans.
     MODE_LANDMARK = 'landmark'
+    #: **La CAIGUDA ortogonal.** Tres àncores, no dues: dues defineixen una línia de
+    #: REFERÈNCIA (els dos HPS de la peça) i la tercera és el punt que hi cau. La mesura
+    #: és la distància perpendicular del punt a la línia.
+    #:
+    #: No és ΔY del sistema de coordenades, i la diferència no és acadèmica: un ΔY
+    #: mentiria en una peça girada al plànol i mentiria en un escot asimètric (on els dos
+    #: HPS no estan a la mateixa alçada). La referència l'ha de posar la PEÇA, no el full.
+    MODE_ORTOGONAL = 'ortogonal'
 
     pattern_piece = models.ForeignKey(
         PatternPiece, on_delete=models.CASCADE, related_name='poms',
@@ -400,21 +408,45 @@ class PatternPOM(models.Model):
         'pom.POMMaster', on_delete=models.PROTECT, related_name='pattern_poms',
     )
 
-    #: La recepta. Dues formes, v1:
+    #: La recepta. Tres formes:
     #:   {"mode": "points",   "a": <PatternPoint.id>, "b": <PatternPoint.id>}
     #:   {"mode": "landmark", "landmark": <PatternPoint.id>, "offset_cm": 1.0,
     #:    "direccio": "down", "b": <PatternPoint.id>}
+    #:   {"mode": "ortogonal", "ref_a": <PatternPoint.id>, "ref_b": <PatternPoint.id>,
+    #:    "p": <PatternPoint.id>}
+    #:
+    #: Els dos primers NO canvien de forma: el mode ortogonal s'hi afegeix, no els
+    #: reescriu. Cap fila existent no es toca.
     definicio_mesura = models.JSONField(default=dict)
 
     #: LLEGIT de la geometria, mai teclejat. Si algú el pogués editar, deixaria de ser
     #: una mesura del patró per ser una opinió sobre el patró.
     valor_mesurat_cm = models.FloatField(null=True, blank=True)
 
-    #: Com s'ha mesurat: recta entre punts, o longitud resseguint la vora.
+    #: Com s'ha mesurat: recta entre punts, longitud resseguint la vora, o caiguda
+    #: perpendicular a una línia de referència.
     METODE_RECTA = 'recta'
     METODE_VORA = 'vora'
-    METODE_CHOICES = [(METODE_RECTA, 'Distància recta'), (METODE_VORA, 'Longitud per vora')]
+    METODE_ORTOGONAL = 'ortogonal'
+    METODE_CHOICES = [
+        (METODE_RECTA, 'Distància recta'),
+        (METODE_VORA, 'Longitud per vora'),
+        (METODE_ORTOGONAL, 'Caiguda ortogonal'),
+    ]
     metode = models.CharField(max_length=10, choices=METODE_CHOICES, default=METODE_RECTA)
+
+    #: 🔑 UNA decisió, escrita dues vegades — i per això hi ha un validador i no dos camps
+    #: independents. `metode` és el que veuen l'API i la UI (el selector de mètode);
+    #: `definicio_mesura['mode']` és la FORMA de la recepta que el motor ha de saber llegir.
+    #: Per al mètode ortogonal totes dues han de dir 'ortogonal' alhora: un `metode`
+    #: ortogonal amb una recepta de dos punts (o al revés) seria una fila que es contradiu
+    #: a ella mateixa, i el motor n'hauria de triar una de les dues en silenci.
+    METODES_TRIPLETA = {METODE_ORTOGONAL}
+
+    @classmethod
+    def mode_esperat(cls, metode: str) -> str:
+        """Quina forma de recepta exigeix aquest mètode. Buit = qualsevol de les de dos punts."""
+        return cls.MODE_ORTOGONAL if metode in cls.METODES_TRIPLETA else ''
 
     creat_per = models.ForeignKey(
         'accounts.UserProfile', on_delete=models.SET_NULL, null=True, blank=True,
