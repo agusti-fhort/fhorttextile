@@ -329,11 +329,39 @@ class PortesEntregaTest(BaseM1):
         self.assertIsNotNone(r.tancada_el)
         self.assertFalse(r.tasques.exclude(status='Done').exists())
 
-    def test_post_entrega_sense_destinatari_dona_400_amb_codi(self):
+    def test_post_entrega_sense_destinatari_dona_400_de_forma(self):
+        """La FORMA la valida el serializer; el FET, el servei. Aquí el rebuig és de forma."""
         r = self._ronda_amb_feina()
         resp = self._client().post(f'/api/v1/rondes/{r.pk}/entrega/', {}, format='json')
         self.assertEqual(resp.status_code, 400)
+        self.assertIn('destinatari', resp.data)
+        r.refresh_from_db()
+        self.assertIsNone(r.tancada_el)      # un 400 de forma no tanca res
+
+    def test_post_entrega_amb_data_impossible_dona_400_i_no_desa_res(self):
+        """`data` arriba com a TEXT: sense validar-la, el model la desaria sense parsejar."""
+        r = self._ronda_amb_feina()
+        resp = self._client().post(f'/api/v1/rondes/{r.pk}/entrega/',
+                                   {'destinatari': 'X', 'data': 'ahir a la tarda'}, format='json')
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('data', resp.data)
+        self.assertFalse(Entrega.objects.exists())
+
+    def test_post_entrega_dues_vegades_dona_400_amb_codi_de_fet(self):
+        r = self._ronda_amb_feina()
+        self._entrega(r)
+        resp = self._client().post(f'/api/v1/rondes/{r.pk}/entrega/',
+                                   {'destinatari': 'un altre'}, format='json')
+        self.assertEqual(resp.status_code, 400)
         self.assertEqual(resp.data['code'], 'entrega_invalida')
+
+    def test_patch_ok_client_amb_data_impossible_dona_400(self):
+        e = self._entrega(self._ronda_amb_feina())
+        resp = self._client().patch(f'/api/v1/entregues/{e.pk}/ok-client/',
+                                    {'data_ok': 'quan sigui'}, format='json')
+        self.assertEqual(resp.status_code, 400)
+        e.refresh_from_db()
+        self.assertIsNone(e.data_ok)
 
     def test_post_entrega_sobre_una_ronda_inexistent_dona_404(self):
         self.assertEqual(self._client().post('/api/v1/rondes/999999/entrega/',

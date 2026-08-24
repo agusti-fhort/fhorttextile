@@ -1775,7 +1775,13 @@ def entrega_ronda_view(request, ronda_id):
     except Ronda.DoesNotExist:
         return Response({'error': 'Ronda no trobada.'}, status=http_status.HTTP_404_NOT_FOUND)
 
-    dades = request.data or {}
+    # La FORMA la valida el serializer i el FET el decideix el servei. `data` arriba com a text
+    # per HTTP: passar-la crua al model la desaria sense parsejar (o petaria en cru, segons el
+    # backend). Aquí ja arriba `datetime` o ja s'ha rebutjat amb el 400 de sempre de DRF.
+    forma = EntregaSerializer(data=request.data or {})
+    if not forma.is_valid():
+        return Response(forma.errors, status=http_status.HTTP_400_BAD_REQUEST)
+    dades = forma.validated_data
     try:
         entrega = informar_entrega(ronda, destinatari=dades.get('destinatari'),
                                    descripcio=dades.get('descripcio') or '',
@@ -1799,6 +1805,8 @@ def entrega_ok_client_view(request, entrega_id):
 
     El senyal MANUAL i posterior: el client diu que li ha arribat bé. No toca la ronda.
     """
+    from rest_framework import serializers
+
     from .models import Entrega
     from .serializers_b import EntregaSerializer
     from .services_r import EntregaError, informar_ok_client
@@ -1812,9 +1820,14 @@ def entrega_ok_client_view(request, entrega_id):
     except Entrega.DoesNotExist:
         return Response({'error': 'Entrega no trobada.'}, status=http_status.HTTP_404_NOT_FOUND)
 
+    data_ok = (request.data or {}).get('data_ok') or None
+    if data_ok is not None:
+        try:
+            data_ok = serializers.DateTimeField().to_internal_value(data_ok)
+        except ValidationError as e:
+            return Response({'data_ok': e.detail}, status=http_status.HTTP_400_BAD_REQUEST)
     try:
-        entrega = informar_ok_client(entrega, profile=profile,
-                                     data_ok=(request.data or {}).get('data_ok') or None)
+        entrega = informar_ok_client(entrega, profile=profile, data_ok=data_ok)
     except EntregaError as e:
         return Response({'error': str(e), 'code': 'ok_client_invalid'},
                         status=http_status.HTTP_400_BAD_REQUEST)
