@@ -94,6 +94,10 @@ export default function TallerPatro() {
   // quants clics vol i com es diu cadascun, i la guia i la recepta surten d'aquí.
   const [metodes, setMetodes] = useState([])
   const [metodeSel, setMetodeSel] = useState('')
+  // Les OPCIONS triades del mètode viu (`{eix: 'H'}`…). Un diccionari i no un estat per
+  // opció: quines n'hi ha ho diu el servidor, i una variable per cadascuna voldria dir
+  // saber-les aquí.
+  const [opcionsSel, setOpcionsSel] = useState({})
   const [nomTram, setNomTram] = useState('')
   const [creantTram, setCreantTram] = useState(false)
   const [tramRessaltat, setTramRessaltat] = useState(null)
@@ -289,6 +293,14 @@ export default function TallerPatro() {
     () => metodes.find(m => m.codi === metodeSel) || null,
     [metodes, metodeSel])
   const ancoresPom = metodeActiu?.ancores || ['a', 'b']
+  // `useMemo` i no un `||` pelat: entra a les dependències de `valorOpcio`, i un objecte
+  // literal nou a cada render li canviaria la identitat sempre.
+  const opcionsPom = useMemo(() => metodeActiu?.opcions || {}, [metodeActiu])
+
+  /** El valor triat d'una opció, o el primer que el vocabulari en dona (que és el defecte). */
+  const valorOpcio = useCallback(
+    (nom) => opcionsSel[nom] ?? (opcionsPom[nom]?.[0] ?? ''),
+    [opcionsSel, opcionsPom])
 
   // Clicar una fila PENDENT de la llista de treball ÉS l'ordre de col·locar aquell POM:
   // no obre cap cercador, perquè ja se sap quin POM és. El canvas passa a guiar.
@@ -301,6 +313,7 @@ export default function TallerPatro() {
     // tres clics per a una amplada. Es torna al primer del vocabulari, que és el per defecte
     // del model.
     setMetodeSel(metodes[0]?.codi || '')
+    setOpcionsSel({})
     setMode('pom')
   }
 
@@ -388,6 +401,10 @@ export default function TallerPatro() {
       // quedi enrere sense que ningú ho vegi.
       const recepta = { mode: metodeActiu?.mode || 'points' }
       ancoresPom.forEach((clau, i) => { recepta[clau] = punts[i].id })
+      // I les opcions del mètode, si en té. Van a la recepta i no a un camp propi perquè
+      // formen part del QUÈ es mesura: l'eix d'una cota no és una preferència de dibuix, és
+      // la meitat de la pregunta.
+      Object.keys(opcionsPom).forEach(nom => { recepta[nom] = valorOpcio(nom) })
 
       if (pomEditId) {
         // REOBERT (T5a): es RECALCULA sobre el MATEIX PatternPOM. Esborrar-lo i crear-ne un
@@ -889,6 +906,12 @@ export default function TallerPatro() {
     netejarSeleccio()
     setPomEditId(pom.id)
     if (pom.metode) setMetodeSel(pom.metode)
+    // Les opcions que la recepta ja porta: reobrir una cota en V i que el selector digués
+    // AUTO seria oferir-se a canviar-la sense dir-ho.
+    setOpcionsSel(Object.fromEntries(
+      Object.keys(conegut.opcions || {})
+        .filter(nom => def[nom] !== undefined)
+        .map(nom => [nom, def[nom]])))
     setOmbra({
       mena: 'pom',
       pomMaster: pom.pom_master,
@@ -1259,9 +1282,19 @@ export default function TallerPatro() {
               {metodes.length > 1 && (
                 <SelectorMetode
                   t={t} metodes={metodes} triat={metodeSel}
+                  opcions={opcionsPom} valorOpcio={valorOpcio}
+                  onOpcio={(nom, valor) => {
+                    setOpcionsSel(o => ({ ...o, [nom]: valor }))
+                    // Canviar l'eix a mig gest no invalida els clics: les àncores són les
+                    // mateixes i el que canvia és què se'n projecta. No es reinicia res.
+                  }}
                   onTria={codi => {
                     setMetodeSel(codi)
                     setPuntsPom([])
+                    // Les opcions són DEL mètode: un eix triat per a una cota no vol dir res
+                    // per a una caiguda, i arrossegar-lo faria que el vocabulari nou nasqués
+                    // amb un valor que no és seu.
+                    setOpcionsSel({})
                     // I l'ombra de la reobertura se'n va amb els punts: dibuixava les àncores
                     // del mètode VELL, i amb un recompte diferent deixava dos punts de fons
                     // mentre el comptador en demanava tres. D'on es ve deixa de ser rellevant
@@ -1579,6 +1612,9 @@ const ICONA_METODE = {
   recta: 'ti-arrows-horizontal',
   vora: 'ti-vector-spline',
   ortogonal: 'ti-corner-down-right',
+  // `ti-ruler-measure` NO: ja és el botó del mode POM a la barra d'eines. `ti-dimensions`
+  // és el glif de cota de tota la vida i no el fa servir ningú més al repo.
+  projeccio: 'ti-dimensions',
 }
 
 /**
@@ -1589,7 +1625,13 @@ const ICONA_METODE = {
  * feina: dos punts posats per a una recta no són les dues primeres àncores d'una caiguda,
  * i deixar-los-hi hauria fet que el tercer clic ancorés una cosa que ningú no ha marcat.
  */
-function SelectorMetode({ t, metodes, triat, onTria, pas, ancores }) {
+/** La clau i18n d'un valor d'opció. El buit té nom («auto») perquè una clau no pot acabar
+ *  en punt: el vocabulari serveix `''` per a l'automàtic i aquí es bateja per poder-lo dir. */
+const clauValor = (valor) => valor || 'auto'
+
+function SelectorMetode({
+  t, metodes, triat, onTria, pas, ancores, opcions = {}, valorOpcio, onOpcio,
+}) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap',
@@ -1622,6 +1664,34 @@ function SelectorMetode({ t, metodes, triat, onTria, pas, ancores }) {
           )
         })}
       </div>
+
+      {/* LES OPCIONS del mètode viu (avui, l'eix d'una cota de projecció). El bucle no sap
+          quantes n'hi ha ni com es diuen: les serveix el vocabulari, i el dia que un mètode
+          en porti una segona, surt sola. */}
+      {Object.entries(opcions).map(([nom, valors]) => (
+        <div key={nom} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+          <span>{t(`pattern.taller.opcio.${nom}`)}</span>
+          {valors.map(v => {
+            const actiu = valorOpcio(nom) === v
+            return (
+              <button
+                key={clauValor(v)} aria-pressed={actiu}
+                onClick={() => onOpcio(nom, v)}
+                title={t(`pattern.taller.opcio_ajuda.${nom}.${clauValor(v)}`)}
+                style={{
+                  display: 'flex', alignItems: 'center', cursor: 'pointer',
+                  color: 'var(--text-main)',
+                  background: actiu ? 'var(--gold)' : 'var(--panel)',
+                  border: `1px solid ${actiu ? 'var(--gold)' : 'var(--line)'}`,
+                  ...METRICA_EINA_COMPACTA,
+                }}
+              >
+                {t(`pattern.taller.opcio_valor.${nom}.${clauValor(v)}`)}
+              </button>
+            )
+          })}
+        </div>
+      ))}
 
       {/* El comptador només per als gestos llargs: amb dos clics, la frase de l'avís ja ho diu
           tot i una fila de xips seria soroll. */}

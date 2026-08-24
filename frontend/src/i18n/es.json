@@ -4438,12 +4438,14 @@
       "metode": {
         "recta": "Recta",
         "vora": "Por borde",
-        "ortogonal": "Caída"
+        "ortogonal": "Caída",
+        "projeccio": "Cota"
       },
       "metode_ajuda": {
         "recta": "Distancia recta entre dos puntos, como una cinta tensada.",
         "vora": "Longitud siguiendo el borde entre dos puntos, como una cinta que recorre la curva.",
-        "ortogonal": "Distancia perpendicular de un punto a la línea que marcan dos anclajes (por ejemplo, la caída desde el nivel HPS)."
+        "ortogonal": "Distancia perpendicular de un punto a la línea que marcan dos anclajes (por ejemplo, la caída desde el nivel HPS).",
+        "projeccio": "Distancia entre dos puntos proyectada sobre el eje horizontal o vertical del plano, como una cota de CAD."
       },
       "ancora": {
         "a": "el punto A",
@@ -4464,7 +4466,24 @@
       "pt_ref_b": "Ref B",
       "pt_p": "Cae",
       "err_metode_desconegut": "Este POM usa un método de medida que la pantalla no conoce ({{metode}}). Recarga el taller antes de reabrirlo.",
-      "err_sense_vocabulari": "No se han podido leer los métodos de medida. Recarga el taller antes de reabrir un POM."
+      "err_sense_vocabulari": "No se han podido leer los métodos de medida. Recarga el taller antes de reabrir un POM.",
+      "opcio": {
+        "eix": "Eje"
+      },
+      "opcio_valor": {
+        "eix": {
+          "auto": "Auto",
+          "H": "Horizontal",
+          "V": "Vertical"
+        }
+      },
+      "opcio_ajuda": {
+        "eix": {
+          "auto": "El eje en el que los dos puntos tienen más recorrido.",
+          "H": "Horizontal DEL PLANO. Ojo: si la pieza está girada en el patrón, no es el ancho de la prenda.",
+          "V": "Vertical DEL PLANO. Ojo: si la pieza está girada en el patrón, no es el largo de la prenda."
+        }
+      }
     },
     "loading": "Cargando el patrón…",
     "empty_title": "Todavía no hay ningún patrón",

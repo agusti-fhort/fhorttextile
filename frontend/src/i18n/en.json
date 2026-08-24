@@ -4438,12 +4438,14 @@
       "metode": {
         "recta": "Straight",
         "vora": "Along edge",
-        "ortogonal": "Drop"
+        "ortogonal": "Drop",
+        "projeccio": "Dimension"
       },
       "metode_ajuda": {
         "recta": "Straight distance between two points, like a taut tape.",
         "vora": "Length following the edge between two points, like a tape tracing the curve.",
-        "ortogonal": "Perpendicular distance from a point to the line set by two anchors (for example, the drop from HPS level)."
+        "ortogonal": "Perpendicular distance from a point to the line set by two anchors (for example, the drop from HPS level).",
+        "projeccio": "Distance between two points projected onto the horizontal or vertical axis of the plan, like a CAD dimension."
       },
       "ancora": {
         "a": "point A",
@@ -4464,7 +4466,24 @@
       "pt_ref_b": "Ref B",
       "pt_p": "Drop",
       "err_metode_desconegut": "This POM uses a measurement method the screen does not know ({{metode}}). Reload the workshop before reopening it.",
-      "err_sense_vocabulari": "The measurement methods could not be read. Reload the workshop before reopening a POM."
+      "err_sense_vocabulari": "The measurement methods could not be read. Reload the workshop before reopening a POM.",
+      "opcio": {
+        "eix": "Axis"
+      },
+      "opcio_valor": {
+        "eix": {
+          "auto": "Auto",
+          "H": "Horizontal",
+          "V": "Vertical"
+        }
+      },
+      "opcio_ajuda": {
+        "eix": {
+          "auto": "The axis along which the two points travel furthest.",
+          "H": "Horizontal OF THE PLAN. Careful: if the piece sits rotated on the pattern, this is not the garment width.",
+          "V": "Vertical OF THE PLAN. Careful: if the piece sits rotated on the pattern, this is not the garment length."
+        }
+      }
     },
     "loading": "Loading pattern…",
     "empty_title": "No pattern yet",

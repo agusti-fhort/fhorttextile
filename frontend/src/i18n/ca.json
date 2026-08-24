@@ -4438,12 +4438,14 @@
       "metode": {
         "recta": "Recta",
         "vora": "Per vora",
-        "ortogonal": "Caiguda"
+        "ortogonal": "Caiguda",
+        "projeccio": "Cota"
       },
       "metode_ajuda": {
         "recta": "Distància recta entre dos punts, com una cinta estirada.",
         "vora": "Longitud resseguint la vora entre dos punts, com una cinta que segueix la corba.",
-        "ortogonal": "Distància perpendicular d'un punt a la línia que marquen dues àncores (per exemple, la caiguda des del nivell HPS)."
+        "ortogonal": "Distància perpendicular d'un punt a la línia que marquen dues àncores (per exemple, la caiguda des del nivell HPS).",
+        "projeccio": "Distància entre dos punts projectada sobre l'eix horitzontal o el vertical del pla, com una cota de CAD."
       },
       "ancora": {
         "a": "el punt A",
@@ -4464,7 +4466,24 @@
       "pt_ref_b": "Ref B",
       "pt_p": "Cau",
       "err_metode_desconegut": "Aquest POM fa servir un mètode de mesura que la pantalla no coneix ({{metode}}). Recarrega el taller abans de reobrir-lo.",
-      "err_sense_vocabulari": "No s'han pogut llegir els mètodes de mesura. Recarrega el taller abans de reobrir un POM."
+      "err_sense_vocabulari": "No s'han pogut llegir els mètodes de mesura. Recarrega el taller abans de reobrir un POM.",
+      "opcio": {
+        "eix": "Eix"
+      },
+      "opcio_valor": {
+        "eix": {
+          "auto": "Auto",
+          "H": "Horitzontal",
+          "V": "Vertical"
+        }
+      },
+      "opcio_ajuda": {
+        "eix": {
+          "auto": "L'eix on els dos punts tenen més recorregut.",
+          "H": "Horitzontal DEL PLA. Compte: si la peça seu girada al patró, no és l'amplada de la prenda.",
+          "V": "Vertical DEL PLA. Compte: si la peça seu girada al patró, no és el llarg de la prenda."
+        }
+      }
     },
     "loading": "Carregant el patró…",
     "empty_title": "Encara no hi ha cap patró",
