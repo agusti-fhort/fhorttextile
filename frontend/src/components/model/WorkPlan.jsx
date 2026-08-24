@@ -5,13 +5,15 @@ import Badge from '../ui/Badge'
 import Modal from '../ui/Modal'
 import TempsDeclaratForm from './TempsDeclaratForm'
 import RondaPla from './RondaPla'
+import TaskCardCompacta from './TaskCardCompacta'
 import EntregaDialog from './EntregaDialog'
 import OkClientDialog from './OkClientDialog'
 import { models, modelTasks, taskTypes } from '../../api/endpoints'
 import { formatMinutes } from '../../utils/format'
 import { taskTypeLabel } from '../../utils/taskType'
 import { destiDeTasca } from '../../utils/destiTasca'
-import { agrupaPerRonda, potObrirVolta, RONDA_ENTREGADA } from '../../utils/rondes'
+import { agrupaPerRonda, RONDA_ENTREGADA } from '../../utils/rondes'
+import { TASK_ICON, STATUS_VARIANT, TRANSPORT, isOutOfCharge } from '../../utils/tascaPla'
 
 // Pla de treball — PEÇA P3 + P4a (Q4 crescut): l'encàrrec del model com a procés.
 // Consumeix dashboard.tasques (compositor enriquit a P1, JA ordenat canònic) — NO reordena.
@@ -40,58 +42,25 @@ const API = import.meta.env.VITE_API_URL || ''
 // `utils/destiTasca`. Aquí només cal creuar la tasca amb el seu tipus per `code` — el compositor
 // del dashboard no porta `eina`/`mode`, o sigui que el catàleg es demana a part i es creua.
 
-// task_type.code → icona Tabler (no hi havia mapa compartit; design system).
-const TASK_ICON = {
-  pattern_digit: 'ti-vector', pattern_cad: 'ti-vector-bezier', pattern_hand: 'ti-pencil',
-  pattern_review: 'ti-eye-check', pom: 'ti-ruler-2', size_check: 'ti-ruler-measure',
-  tech_sheet: 'ti-file-text', bom: 'ti-list-details', scaling: 'ti-resize',
-  marking: 'ti-layout-grid', Audit: 'ti-checklist',
-}
+// 🔑 ELS MAPES D'AQUESTA SECCIÓ VIUEN ARA A `utils/tascaPla` (M2 · CODA). El Dashboard pinta les
+// tasques de dues maneres —aquesta targeta i la COMPACTA de dins dels contenidors de ronda— i la
+// llei de la casa diu que es dupliqui la PRESENTACIÓ i es comparteixi la LÒGICA. Això és la
+// lògica: icona, variant d'estat, transport per estat i el predicat de fora d'encàrrec. Aquest
+// component no ha canviat ni una línia de JSX; només d'on li arriben.
 
-// status → variant del Badge del design system (mateix criteri que el dashboard F1).
-const STATUS_VARIANT = { Done: 'ok', InProgress: 'gold', Paused: 'warn', Pending: 'gray' }
-
-// Transport actiu per estat. Aquest és avui l'ÚNIC transport de la casa: l'ACTIONS de
-// KanbanTasks que aquest mapa emmirallava ja no existeix (la pàgina Kanban global es va jubilar
-// a fc98cab6), i cap altra superfície pinta play/pause/stop. No hi ha res amb què sincronitzar.
-//
-// play = Pending/Paused/Done (start/resume/reopen); en InProgress només es reactiva si hi ha eina
-// per navegar-hi. pause = InProgress (només té sentit sobre feina en curs).
-// stop = InProgress i PAUSED. A Paused no és una transició nova —`Paused → Done` segueix
-// prohibida a la màquina d'estats (decisió Agus: NO es toca)— sinó un GEST: play+stop encadenat
-// (`handleStop`). Pending NO en té: tancar una tasca mai començada és «cancel·lar», una altra
-// cosa que aquest sprint no decideix.
-const TRANSPORT = {
-  Pending:    { play: true,  pause: false, stop: false },
-  Paused:     { play: true,  pause: false, stop: true  },
-  InProgress: { play: false, pause: true,  stop: true  },
-  Done:       { play: true,  pause: false, stop: false },
-}
-
-// Fora d'encàrrec / fora de recepta: extra marcat al backend amb `off_recipe=True` (B4a).
-// Activa el filet grana. NOMÉS marca.
-//
-// 🚨 **M2 · `origen === 'ad_hoc'` SURT D'AQUEST PREDICAT, i el motiu és una llei nova.** Des d'M1-bis
-// **totes** les tasques que crea `obrir_ronda` neixen `ad_hoc` A POSTA —és el que les deixa
-// conviure amb la `prevista` del mateix tipus sota la unique parcial (`services_r`, nota de la
-// funció)—, o sigui que a partir de la R2 el joc REPLICAT sencer entrava aquí i cada volta nova
-// es pintava amb el filet grana i el rètol «fora d'encàrrec». Mesurat a la QA de pantalla del
-// banc: les dues tasques de la R2 marcades, i cap ho és.
-//
-// I no és una excepció que M2 s'inventi: és el MATEIX raonament que el backend ja va escriure a
-// `_NO_ES_REPLICA` («l'únic camp que literalment vol dir *això no és de la recepta* és
-// `off_recipe`»), i és el que les dues superfícies comercials —`WorkOrderDetail`, `OrderDetail`—
-// ja feien servir soles. Aquesta era l'única lectura de la casa que hi sumava `origen`.
-function isOutOfCharge(task) { return task?.off_recipe === true }
 
 const containerStyle = { background: 'transparent', width: '100%' }
 const cardsGrid = { display: 'flex', flexWrap: 'wrap', gap: 12 }
 // A6 · NOMÉS PELL. `.lblc` de la maqueta: 10px MAJÚSCULES amb tracking .08em i pes 600.
 const sectionTitle = {
   fontSize: 'var(--fs-label)', lineHeight: '12px', color: 'var(--text-soft)', fontWeight: 600,
-  textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10,
+  textTransform: 'uppercase', letterSpacing: '.08em',
 }
-const footerWrap = { width: '100%', marginTop: 14 }
+// `.sec` del mockup — el marge inferior passa d'aquí (abans el portava el rètol tot sol).
+const secRow = {
+  display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+  gap: 12, flexWrap: 'wrap', marginBottom: 10,
+}
 
 function TransportBtn({ icon, active, title, onClick }) {
   return (
@@ -279,9 +248,11 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
   // frontend de temps_consumit_min quadra EXACTAMENT amb el rollup de l'albarà (ambdós sumen els
   // minuts de timers consolidats de TOTES les tasques del model; el compositor no scopa) → suma
   // local, zero crides noves (P5 PAS 0.2). Degradació amb gràcia: 0 tasques → 0% / 0h 00m.
-  const total = list.length
-  const done = list.filter(task => task.status === 'Done').length
-  const pct = total ? Math.round((100 * done) / total) : 0
+  // El PROGRÉS GLOBAL («n/m tasques fetes · %» i la seva barra) se'n va del Dashboard (M2 · CODA,
+  // decisió d'Agus): amb el pla repartit per voltes, el progrés que vol dir alguna cosa és el de
+  // cada capçalera de ronda, i un percentatge sobre TOTES les tasques del model barrejava voltes
+  // entregades amb la vigent. El TEMPS acumulat sí que es queda —és un fet del model sencer, no
+  // d'una volta— i puja a la capçalera de secció, que és on el mockup el posa.
   const totalMin = list.reduce((s, task) => s + (task.temps_consumit_min || 0), 0)
 
   // M2 — LES VOLTES, ja agregades. La lògica és compartida amb el Registre (`utils/rondes`):
@@ -427,9 +398,9 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
   // vol una tasca que la volta anterior no tenia l'obre pel seu camí de sempre— i per això la
   // porta no ha d'aplicar cap allow-list: el joc replicat no és una tria de qui obre.
   //
-  // El botó només es pinta si NO hi ha cap volta oberta, que és el guard d'`obrir_ronda`
-  // (`potObrirVolta`): fer-lo visible i deixar que el backend contesti 400 seria oferir un gest
-  // que la pantalla ja sabia que no es podia fer.
+  // El botó es pinta SEMPRE (M2 · CODA): si el gest no toca, qui ho diu és el servidor i el seu
+  // motiu va al toast. Amagar-lo estalviava un 400 i, a canvi, deixava l'usuari sense saber si li
+  // faltava permís, si la pantalla s'havia trencat o si simplement no tocava.
   function obreVolta() {
     if (obrintVolta) return
     setObrintVolta(true)
@@ -453,7 +424,18 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
 
   return (
     <section style={containerStyle}>
-      <div style={sectionTitle}>{t('model_sheet.dashboard.workplan.title')}</div>
+      {/* `.sec` del mockup: el rètol a l'esquerra i el TEMPS ACUMULAT SOBRE EL MODEL a la dreta,
+          alineats a la línia de base. El temps és l'únic número global que sobreviu: és un fet
+          del model sencer i no el diu cap capçalera de volta. */}
+      <div style={secRow}>
+        <span style={sectionTitle}>{t('model_sheet.dashboard.workplan.title')}</span>
+        <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)' }}>
+          {t('model_sheet.dashboard.workplan.time_total')}:{' '}
+          <span style={{ fontFamily: 'var(--mono)', color: 'var(--text-main)' }}>
+            {formatMinutes(totalMin)}
+          </span>
+        </span>
+      </div>
       {/* §8c — estat buit: frase en --text-faint CURSIVA, mai caixa buida muda. */}
       {list.length === 0 ? (
         <div style={{ borderWidth: 1, borderStyle: 'dashed', borderColor: 'var(--line)',
@@ -470,8 +452,11 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
             obert={obert(bloc)} onToggle={() => commuta(bloc)}
             onEntregar={() => setEntregant(bloc)}
             onOkClient={() => setOkClient(bloc.entrega)}>
+            {/* Dins d'una volta, la targeta COMPACTA de la maqueta: quatre o cinc hi caben en
+                una fila sota la capçalera, que és el que fa llegible el pla per rondes. La gran
+                es queda per al pla PLA (model sense voltes), just a sota. */}
             {bloc.tasques.map(task => (
-              <TaskCard key={task.id} task={task} mine={isMine(task)}
+              <TaskCardCompacta key={task.id} task={task} mine={isMine(task)}
                 hasToolRoute={Boolean(desti(task))}
                 segellada={bloc.estat === RONDA_ENTREGADA}
                 onPlay={handlePlay} onPause={handlePause} onStop={handleStop}
@@ -489,10 +474,18 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
         </div>
       )}
 
-      {/* «+ NOVA RONDA» · només quan no n'hi ha cap d'oberta (guard d'`obrir_ronda`), i mai en
-          un model que encara no ha fet cap gest de treball: la R1 neix sola del primer gest
-          (M1-bis · FIT-4) i un botó aquí faria creure que s'ha de declarar. */}
-      {perVoltes && potObrirVolta(rondes) && (
+      {/* «+ NOVA RONDA» — la banda puntejada del mockup, a sota de l'última ronda i **SEMPRE
+          VISIBLE** (M2 · CODA, decisió d'Agus).
+          🔑 **La visibilitat no es condiciona al client.** Abans es pintava només si cap volta
+          era oberta —el guard d'`obrir_ronda` llegit per endavant— i això feia desaparèixer el
+          botó sense dir per què: qui no el trobava no sabia si li faltava permís, si la pantalla
+          s'havia trencat o si el gest no tocava. Ara el gest s'ofereix sempre i **qui el refusa
+          és el servidor, amb el seu motiu** («aquest model ja té una ronda oberta; tanca-la
+          abans d'obrir-ne una altra»), que és el que `obreVolta` ja porta al toast.
+          Segueix vivint dins del pla PER VOLTES: «a sota de l'última ronda» demana que n'hi hagi
+          alguna, i en un model sense cap la R1 neix sola del primer gest (M1-bis · FIT-4) —un
+          botó allà faria creure que s'ha de declarar. */}
+      {perVoltes && (
         <button type="button" onClick={obreVolta} disabled={obrintVolta}
           style={{
             width: '100%', padding: 10, marginTop: 2, marginBottom: 6,
@@ -513,24 +506,6 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
         </div>
       )}
 
-      {/* Peu (§1): barra de progrés (% Done) + temps acumulat sobre el model (ample total) */}
-      <div style={footerWrap}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
-                      gap: 12, flexWrap: 'wrap', marginBottom: 6, fontSize: 'var(--fs-label)',
-                      color: 'var(--text-soft)' }}>
-          <span>{t('model_sheet.dashboard.workplan.progress_label', { done, total })} · {pct}%</span>
-          <span>{t('model_sheet.dashboard.workplan.time_total')}:{' '}
-            <span style={{ fontFamily: 'var(--mono)', color: 'var(--text-main)' }}>{formatMinutes(totalMin)}</span>
-          </span>
-        </div>
-        {/* `.prog` de la maqueta: 6px de canal en --line-soft, sense vora, píndola. El farciment
-            és --ok: la barra diu QUANT S'HA FET, i el fet és verd a tot el sistema. */}
-        <div style={{ height: 6, borderRadius: 'var(--r-pill)', background: 'var(--line-soft)',
-                      overflow: 'hidden' }}>
-          <div style={{ width: `${pct}%`, height: '100%', background: 'var(--ok)',
-                        transition: 'width 200ms' }} />
-        </div>
-      </div>
       {declarant && (
         <TempsDeclaratForm
           tasca={declarant}

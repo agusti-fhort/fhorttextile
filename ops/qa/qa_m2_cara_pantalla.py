@@ -187,6 +187,36 @@ def main():
         crit('el peu diu la llei del segell',
              'segellades' in cos and 'ronda nova' in cos)
 
+        # ── CODA · ELS QUATRE RETOCS DE FIDELITAT AL MOCKUP ────────────────────────────────
+        #
+        # ① La targeta COMPACTA dins dels contenidors: es mesura per la MIDA del botó de
+        #    transport (20px al mockup compacte; 26 a la targeta gran), que és l'única diferència
+        #    que no es pot confondre amb res més.
+        botons = pagina.locator("xpath=//button[@title='Iniciar' or @title='Pausar' "
+                                "or @title='Finalitzar']")
+        amples = [botons.nth(i).bounding_box()['width'] for i in range(botons.count())]
+        crit('① dins de la volta, el transport és el COMPACTE (20px, no 26)',
+             bool(amples) and all(a == 20 for a in amples), sorted(set(amples)))
+
+        # ② La barra de progrés GLOBAL se'n va; el temps acumulat es queda a la capçalera.
+        crit('② la barra global («n/m tasques fetes · %») ja no hi és',
+             'tasques fetes' not in cos, [l for l in cos.splitlines() if 'tasques fetes' in l])
+        crit('② …i el temps acumulat sobre el model segueix dit',
+             'Temps acumulat sobre el model' in cos)
+        titol = pagina.get_by_text('PLA DE TREBALL').first.bounding_box()
+        temps = pagina.get_by_text('Temps acumulat sobre el model').first.bounding_box()
+        crit('② …a la MATEIXA fila que el rètol de secció i a la seva dreta (`.sec`)',
+             abs(titol['y'] - temps['y']) < 12 and temps['x'] > titol['x'],
+             (round(titol['y']), round(temps['y'])))
+
+        # ③ «+ Nova ronda» SEMPRE visible: aquest model TÉ una volta oberta, que és exactament
+        #    l'estat en què abans el botó desapareixia.
+        crit('③ «+ Nova ronda» es pinta encara que hi hagi una volta OBERTA',
+             '+ Nova ronda' in cos and 'En curs' in cos)
+
+        # ④ Cap menú «···» a cap capçalera de ronda.
+        crit('④ cap menú «···» a les capçaleres de ronda', '···' not in cos)
+
         # ── B · L'ENTREGA I EL SEU RASTRE ───────────────────────────────────────────────────
         # El model 0001 s'ha entregat al fum HTTP, que corre abans: aquí es LLEGEIX el resultat.
         print("\n── B · la línia d'entrega i el rastre FIT-8 ──")
@@ -205,8 +235,8 @@ def main():
              'OK client' in cos)
         crit('FIT-8 · el rastre de la rectificació es veu AL COSTAT del nom de la volta',
              'rectificació' in cos, )
-        crit('i la volta vigent ofereix «+ Nova ronda» només si no n\'hi ha cap d\'oberta',
-             ('+ Nova ronda' in cos) == (('En curs' not in cos)), '+ Nova ronda' in cos)
+        crit('«+ Nova ronda» s\'ofereix sempre, també amb una volta oberta (CODA ③)',
+             '+ Nova ronda' in cos)
 
         # La volta entregada neix PLEGADA (derivat de l'estat). Desplegant-la s'ha de veure la
         # feina en fade i SENSE transport: és la meitat visual d'FIT-2 que el text no pot dir.
