@@ -144,9 +144,21 @@ class Ronda(models.Model):
       · `correccio`   = ho refem nosaltres (feina de reparació)
     La decisió comercial NO viu aquí: aquest camp és el fet, no la tarifa.
 
-    `seq` és el número de volta **dins del model** (la ronda 1 és implícita: tota la feina
-    històrica té `ModelTask.ronda = NULL`). No hi ha cap backfill i no n'hi ha d'haver: inventar
-    una fila Ronda per a 101 tasques que mai no van ser una «volta» seria escriure història.
+    `seq` és el número de volta **dins del model**, i **comença a 1**.
+
+    🔄 **LA LLEI HA CANVIAT (M1-bis · FIT-4, Agus 24/08).** Fins avui la R1 era **implícita**:
+    no existia com a fila i es reconeixia perquè les seves tasques tenien `ronda = NULL`. Ara
+    **la R1 neix sola del PRIMER GEST DE TREBALL** —programar, assignar, o entrar-hi i
+    executar—, amb `seq=1` i sense que ningú l'hagi de declarar. Qui la crea és
+    `services_r.ronda_del_gest`, i és l'ÚNICA volta que es crea sola: la 2 i següents segueixen
+    volent el gest explícit de `obrir_ronda`.
+
+    ⛔ **I LA PROHIBICIÓ DE BACKFILL ES MANTÉ — FINS AL RETROACTIU (M5).** L'obertura automàtica
+    **només mira endavant**: no adopta res. Les tasques que avui tenen `ronda = NULL` s'hi queden,
+    i en un model amb feina prèvia el primer gest nou crea la R1 amb **només la tasca d'aquell
+    gest** a dins. Inventar ara una fila Ronda per a 101 tasques que mai no van ser una «volta»
+    seguiria sent escriure història; el dia que es faci, es farà **com a acte declarat** al
+    retroactiu de M5, no com a efecte secundari d'una migració.
 
     Oberta = `tancada_el IS NULL`. N'hi pot haver **una de sola** oberta per model, i qui ho
     imposa és `obrir_ronda` (`services_r`), no la BD: tancar-la és un acte humà i una constraint

@@ -32,7 +32,10 @@ class ModelTaskSerializer(serializers.ModelSerializer):
     Els sis camps derivats responen sis preguntes concretes, totes read-only:
 
       · `es_vigent`      — és AQUESTA la tasca que `tasca_vigent` resol per al seu code?
-      · `ronda_seq`      — de quina volta és (null = la 1a, implícita)
+      · `ronda_seq`      — de quina volta és. **null ja no vol dir «la 1a»** (M1-bis · FIT-4):
+                           la R1 és una fila com les altres i neix del primer gest. `null` =
+                           feina d'abans del canvi de llei, o feina nascuda amb totes les
+                           voltes del model tancades (espera un +Ronda explícit).
       · `albaranada`     — té línia en albarà EMÈS? (la paret de D-5; cara C del modal)
       · `obert_per`/`_nom` — QUI la té oberta ara, segons el TRAM (no segons `assignee`)
       · `es_lliurable`   — el seu tipus produeix lliurable (F2.7)

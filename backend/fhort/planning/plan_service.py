@@ -320,9 +320,16 @@ def assign_batch(*, model_ids, assignacions, actor=None, now=None):
                         needs_estimate.append({'task_code': code, 'fase': tt.fase})
                     omesos.append({'model_id': mid, 'task_type_code': code, 'motiu': 'needs_estimate'})
                     continue
+                # M1-bis · FIT-4 — el wizard d'assignació CREA la tasca quan no hi és, i crear-la
+                # és el gest de treball: si el model encara no té cap volta, aquesta la fa néixer
+                # (R1). El lot sencer ja corre dins d'un `transaction.atomic()` per xunk.
+                # ⚠️ Quan la tasca JA existeix (la branca `elif` de sota) NO es toca la seva ronda:
+                # assignar no és crear, i moure-la seria migrar feina entre voltes (FIT-6).
+                from fhort.tasks.services_r import ronda_del_gest
                 mt = ModelTask.objects.create(model_id=mid, task_type=tt, order=order,
                                               status='Pending', origen='prevista',
-                                              estimated_minutes=est)
+                                              estimated_minutes=est,
+                                              ronda=ronda_del_gest(model))
                 creats += 1
             elif mt.assignee_id and mt.assignee_id != profile.id:
                 old_assignee = mt.assignee   # tècnic anterior desplaçat

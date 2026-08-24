@@ -6,6 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.filters import OrderingFilter, SearchFilter
 from django_filters.rest_framework import DjangoFilterBackend
+from django.db import transaction
 from django.db.models import Count, Q, ProtectedError, Min
 from django.db.models.functions import Coalesce
 
@@ -28,7 +29,7 @@ from .services_d import (advance_phase_gate, advance_phases_chain, regress_phase
 from .services_e import (request_production, set_production_status,
                          ProductionError, has_delivered_production)
 from .services_g import lookup_estimated_minutes
-from .services_r import tasca_vigent
+from .services_r import ronda_del_gest, tasca_vigent
 
 
 class TaskTypeViewSet(viewsets.ReadOnlyModelViewSet):
@@ -288,9 +289,13 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
             return Response({'error': 'TaskType no trobat o inactiu.'},
                             status=status.HTTP_404_NOT_FOUND)
         order = ModelTask.objects.filter(model=model).count()
-        task = ModelTask.objects.create(
-            model=model, task_type=tt, order=order, status='Pending',
-            origen='ad_hoc', off_recipe=True, work_order=wo)
+        # M1-bis · FIT-4 — un extra també és un GEST DE TREBALL: si el model encara no té cap
+        # volta, aquesta la fa néixer (R1). Atòmic: no pot quedar la tasca sense la seva ronda.
+        with transaction.atomic():
+            task = ModelTask.objects.create(
+                model=model, task_type=tt, order=order, status='Pending',
+                origen='ad_hoc', off_recipe=True, work_order=wo,
+                ronda=ronda_del_gest(model))
         return Response(ModelTaskSerializer(task).data, status=status.HTTP_201_CREATED)
 
     def perform_create(self, serializer):
@@ -344,14 +349,20 @@ def define_model_tasks_view(request, model_id):
     created = []
     base_order = (ModelTask.objects.filter(model_id=model_id)
                   .count())  # afegeix al final de l'ordre existent
-    for i, t in enumerate(types):
-        if t.id in existing:
-            continue
-        est = lookup_estimated_minutes(model, t)   # snapshot del temps estimat (None si no n'hi ha)
-        mt = ModelTask.objects.create(model_id=model_id, task_type=t,
-                                      order=base_order + i, status='Pending',
-                                      origen='prevista', estimated_minutes=est)
-        created.append(mt.id)
+    # M1-bis · FIT-4 — definir la feina d'un model ÉS el gest de programació, i és el primer que
+    # rep un model nou. La ronda es resol UN COP per a tot el lot: totes les tasques d'aquesta
+    # crida són del mateix gest i han d'anar a la mateixa volta.
+    with transaction.atomic():
+        ronda = ronda_del_gest(model)
+        for i, t in enumerate(types):
+            if t.id in existing:
+                continue
+            est = lookup_estimated_minutes(model, t)   # snapshot del temps estimat (None si no n'hi ha)
+            mt = ModelTask.objects.create(model_id=model_id, task_type=t,
+                                          order=base_order + i, status='Pending',
+                                          origen='prevista', estimated_minutes=est,
+                                          ronda=ronda)
+            created.append(mt.id)
     return Response({'created_ids': created, 'skipped_existing': sorted(existing)},
                     status=status.HTTP_201_CREATED)
 
@@ -578,9 +589,14 @@ def open_model_task_view(request, model_id):
     if task is None:
         order = ModelTask.objects.filter(model=model).count()
         est = lookup_estimated_minutes(model, tt)
-        task = ModelTask.objects.create(model=model, task_type=tt, order=order,
-                                        status='Pending', origen='prevista',
-                                        estimated_minutes=est)
+        # M1-bis · FIT-4 — entrar-hi i executar és el gest de treball més directe de tots.
+        # ⚠️ NOMÉS quan la tasca es CREA. Si `tasca_vigent` n'ha trobat una, aquella tasca ja té
+        # la ronda que li toca i moure-la seria migrar feina entre voltes: FIT-6 ho prohibeix.
+        with transaction.atomic():
+            task = ModelTask.objects.create(model=model, task_type=tt, order=order,
+                                            status='Pending', origen='prevista',
+                                            estimated_minutes=est,
+                                            ronda=ronda_del_gest(model))
         created = True
     # ── J · R3 · ENTRAR NO ENDÚ NI REOBRE ────────────────────────────────────────────────────
     #
@@ -1643,10 +1659,13 @@ def crono_declarat_view(request, model_id):
         if accio != 'engegar':
             return Response({'error': 'Aquesta tasca no té cap crono.'},
                             status=http_status.HTTP_404_NOT_FOUND)
-        task = ModelTask.objects.create(
-            model=model, task_type=tt, order=ModelTask.objects.filter(model=model).count(),
-            status='Pending', origen='prevista',
-            estimated_minutes=lookup_estimated_minutes(model, tt))
+        # M1-bis · FIT-4 — engegar el crono d'una externa és treballar-hi: mateix gest, mateixa llei.
+        with transaction.atomic():
+            task = ModelTask.objects.create(
+                model=model, task_type=tt, order=ModelTask.objects.filter(model=model).count(),
+                status='Pending', origen='prevista',
+                estimated_minutes=lookup_estimated_minutes(model, tt),
+                ronda=ronda_del_gest(model))
 
     def _tram_per_id():
         """El tram sobre el qual s'actua. Sempre d'AQUESTA tasca: un id de fora no val."""
@@ -1715,6 +1734,12 @@ def obrir_ronda_view(request, model_id):
     codes = dades.get('codes') or []
     # Els codes han de ser executables per qui obre la ronda: la mateixa allow-list que
     # `open-task`. Obrir una volta és crear feina, i no es crea feina que un mateix no pot fer.
+    #
+    # M1-bis · FIT-4 — I EL GUARD ES QUEDA NOMÉS AMB EL QUE ES DEMANA. El joc REPLICAT de la volta
+    # anterior no passa per aquí a posta: no és una tria de qui obre, és el que el model ja
+    # arrossega. Amb el guard aplicat també a la rèplica, un PM que no executi (posem) `pattern_cad`
+    # no podria obrir cap volta d'un model que en va fer —o sigui que la porta de +Ronda quedaria
+    # tancada precisament per a qui l'ha de fer servir.
     permesos = get_allowed_task_types(request.user)
     fora = [c for c in codes if c not in permesos]
     if fora:
@@ -1739,23 +1764,27 @@ def obrir_ronda_view(request, model_id):
     return Response({'ronda_id': ronda.pk if ronda else None,
                      'seq': ronda.seq if ronda else None,
                      'motiu': motiu,
+                     # M1-bis — què ha entrat per rèplica i què s'ha quedat pel camí perquè el
+                     # catàleg l'ha desactivat. La UI de M2 ho ha de poder dir en veu alta.
+                     'codes_replicats': getattr(ronda, '_codes_replicats', []),
+                     'codes_omesos': getattr(ronda, '_codes_omesos', []),
+                     # …i què s'ha ADOPTAT del buit entre voltes (feina que ja existia i que
+                     # aquesta volta recull). No són tasques noves: la UI no les pot pintar igual.
+                     'codes_adoptats': getattr(ronda, '_codes_adoptats', []),
                      'tasques': [t.id for t in tasques]},
                     status=http_status.HTTP_201_CREATED)
 
 
 # ── M1 · FIT-1 + FIT-13 · LES PORTES DE L'ENTREGA ───────────────────────────────────────────
 #
-# 🚩 PERMISOS — TODO DECLARAT, i el motiu és un fet del cens, no una preferència.
-# El brief demana «la mateixa capability que avui governa `tancar_ronda`». **No n'hi ha cap**:
-# `tancar_ronda` no té ni una sola crida de producte a tot `backend/fhort` (només tests), o
-# sigui que mai ha tingut porta HTTP i per tant mai ha tingut capability. La germana més propera
-# és `obrir_ronda_view`, gated `_ExecuteTasks` (EXECUTE_TASKS) + allow-list de `task_type`.
-# Aquí NO se n'inventa cap: `IsAuthenticated`, i que l'Agus decideixi de qui és aquest gest
-# —perquè informar una entrega s'assembla més a un acte de PM (define_tasks / gates) que a
-# executar una tasca, i triar-ho jo seria decidir una política de permisos per omissió.
+# ✅ PERMISOS — RESOLT (decisió d'Agus, M1-bis 24/08): **`_ExecuteTasks`, la mateixa que obre**.
+# «Qui pot treballar pot entregar.» El TODO d'M1 queda retirat: hi vaig deixar `IsAuthenticated`
+# perquè `tancar_ronda` no havia tingut mai porta HTTP i per tant cap capability que heretar, i
+# la conseqüència era que la porta que TANCA la ronda era més oberta que la que l'obre. Ara les
+# dues van amb `EXECUTE_TASKS` i aquella asimetria desapareix.
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])   # TODO(M1): capability pendent de decisió (v. nota ↑)
+@permission_classes([_ExecuteTasks])
 def entrega_ronda_view(request, ronda_id):
     """POST /api/v1/rondes/<ronda_id>/entrega/  ·  {destinatari, descripcio?, data?}
 
@@ -1799,7 +1828,7 @@ def entrega_ronda_view(request, ronda_id):
 
 
 @api_view(['PATCH'])
-@permission_classes([IsAuthenticated])   # TODO(M1): capability pendent de decisió (v. nota ↑)
+@permission_classes([_ExecuteTasks])
 def entrega_ok_client_view(request, entrega_id):
     """PATCH /api/v1/entregues/<entrega_id>/ok-client/  ·  {data_ok?}
 
