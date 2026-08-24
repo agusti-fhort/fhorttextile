@@ -330,6 +330,66 @@ class ReplicacioTest(BaseFit4):
         self.assertEqual(resp.data['seq'], 2)
 
 
+class GenealogiaMareTest(ReplicacioTest):
+    """CODA · DECISIÓ 3 — la `mare` apunta a la VOLTA ANTERIOR, no a la base.
+
+    🚨 El defecte que aquests tests tanquen venia d'M1 i era invisible mentre no hi hagués una R3:
+    amb totes les voltes tancades, `tasca_vigent` cau a la regla 2 i retorna la tasca `prevista`
+    —la de la R1—, de manera que la `mare` de la R3 saltava la R2 sencera. El `help_text` del camp
+    deia una cosa i el codi en feia una altra.
+    """
+
+    def _per_code(self, ronda):
+        return {t.task_type.code: t for t in ronda.tasques.select_related('task_type')}
+
+    def test_la_R2_te_per_mare_la_tasca_homologa_de_la_R1(self):
+        r2 = obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, [], profile=self.prof)
+        r1, filles = self._per_code(self.r1), self._per_code(r2)
+        for code in ('pom', 'tech_sheet'):
+            self.assertEqual(filles[code].mare_id, r1[code].pk, code)
+
+    def test_la_cadena_R1_R2_R3_no_salta_cap_volta(self):
+        r2 = obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, [], profile=self.prof)
+        tancar_ronda(r2, profile=self.prof)
+        r3 = obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, [], profile=self.prof)
+
+        r1, dos, tres = self._per_code(self.r1), self._per_code(r2), self._per_code(r3)
+        for code in ('pom', 'tech_sheet'):
+            # El salt de la R3 va a la R2…
+            self.assertEqual(tres[code].mare_id, dos[code].pk, code)
+            # …i NO a la R1, que era el defecte.
+            self.assertNotEqual(tres[code].mare_id, r1[code].pk, code)
+        # I la cadena sencera es pot recórrer cap enrere fins a la R1.
+        self.assertEqual(tres['pom'].mare.mare_id, r1['pom'].pk)
+        self.assertIsNone(tres['pom'].mare.mare.mare_id)
+
+    def test_un_code_que_la_volta_anterior_no_tenia_neix_sense_mare(self):
+        """«No n'hi havia» és una dada. No s'encadena amb voltes més velles."""
+        TaskType.objects.get_or_create(code='bom', defaults={'name': 'BOM',
+                                                             'fase': 'Dev. tècnic'})
+        r2 = obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, ['bom'], profile=self.prof)
+        self.assertIsNone(self._per_code(r2)['bom'].mare_id)
+
+    def test_un_code_que_neix_a_la_R2_encadena_a_la_R3(self):
+        TaskType.objects.get_or_create(code='bom', defaults={'name': 'BOM',
+                                                             'fase': 'Dev. tècnic'})
+        r2 = obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, ['bom'], profile=self.prof)
+        tancar_ronda(r2, profile=self.prof)
+        r3 = obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, [], profile=self.prof)
+        self.assertEqual(self._per_code(r3)['bom'].mare_id, self._per_code(r2)['bom'].pk)
+
+    def test_entre_una_correccio_i_la_seva_mare_mana_la_correccio(self):
+        """Mateix criteri que la regla 4 de `tasca_vigent`: es repeteix l'esmena."""
+        from fhort.tasks.services_r import obrir_correccio
+        r2 = obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, [], profile=self.prof)
+        _, correccions = obrir_correccio(self.model, ['pom'], profile=self.prof)
+        esmena = correccions[0]
+        self.assertEqual(esmena.ronda_id, r2.pk)      # la correcció viu dins de la volta
+        tancar_ronda(r2, profile=self.prof)
+        r3 = obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, [], profile=self.prof)
+        self.assertEqual(self._per_code(r3)['pom'].mare_id, esmena.pk)
+
+
 # ── LA CAPABILITY DE L'ENTREGA ──────────────────────────────────────────────────────────────
 
 class CapabilityEntregaTest(BaseFit4):

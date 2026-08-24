@@ -161,9 +161,41 @@ def codes_a_replicar(ronda):
 
 
 def _ronda_anterior(model):
-    """La darrera volta del model (la que la nova ha de replicar), o None."""
+    """La volta TANCADA de `seq` més alta, o None. És «la volta anterior» del model.
+
+    El filtre `tancada_el__isnull=False` és explícit i no redundant, encara que l'únic cridador
+    (`obrir_ronda`) ja rebutgi els models amb una volta oberta: aquesta funció decideix **de quina
+    volta es replica el joc i contra quina es resol la `mare`**, i deixar-ho depenent d'un guard
+    que viu en una altra funció és com es fabriquen els defectes que sobreviuen a un refactor.
+    """
     from .models import Ronda
-    return Ronda.objects.filter(model=model).order_by('-seq').first()
+    return (Ronda.objects.filter(model=model, tancada_el__isnull=False)
+            .order_by('-seq').first())
+
+
+def mare_homologa(ronda_anterior, code):
+    """La tasca de `code` de la VOLTA ANTERIOR — la `mare` de la que ara es crearà.
+
+    🚨 **PER QUÈ NO ES FA AMB `tasca_vigent`** (defecte heretat d'M1, corregit aquí). Quan
+    `obrir_ronda` s'executa **totes les voltes són tancades** —és el seu propi guard—, i llavors
+    `tasca_vigent` cau a la **regla 2**: `Q(origen='prevista') | Q(motiu='correccio', ronda NULL)`.
+    Aquell filtre retorna la tasca **base**, que amb la llei nova és la de la **R1**. Resultat: la
+    `mare` de la R3 apuntava a la R1 i **la cadena saltava totes les voltes intermèdies**. El
+    `help_text` del camp deia «la tasca homònima de la volta anterior» i el codi en donava una
+    altra.
+
+    Ara es resol contra la volta anterior i prou. **Si no hi ha homòloga, `None`**: no s'encadena
+    amb voltes més velles, perquè «la volta anterior no en tenia» és una dada, i inventar-hi una
+    àvia com si fos la mare seria tornar a mentir en una altra direcció.
+
+    Entre diverses tasques del mateix code dins d'aquella volta mana **la més recent** (`-id`),
+    que és el mateix criteri que la regla 4 de `tasca_vigent`: quan hi ha una correcció i la tasca
+    que corregeix, el que s'ha de repetir és l'esmena, no allò que es va esmenar.
+    """
+    if ronda_anterior is None:
+        return None
+    return (ronda_anterior.tasques.filter(task_type__code=code)
+            .order_by('-id').first())
 
 
 def obrir_ronda(model, motiu, tasques_codes, *, profile=None):
@@ -172,7 +204,8 @@ def obrir_ronda(model, motiu, tasques_codes, *, profile=None):
     Aquesta és la sortida de D-5. Una tasca amb línia en albarà EMÈS no es reobre mai —
     `transition_task` la protegeix i ha de seguir fent-ho, perquè el que s'ha facturat s'ha
     facturat. El que es fa és **feina nova amb identitat pròpia**: una `Ronda`, i sota seu una
-    `ModelTask` per code, cadascuna apuntant amb `mare` a la tasca homònima de la volta anterior.
+    `ModelTask` per code, cadascuna apuntant amb `mare` a la tasca homònima de la volta anterior
+    —**la de seq més alta tancada**, no la base: v. `mare_homologa`.
 
     `motiu`: `Ronda.MOTIU_NOVA_MOSTRA`. Les CORRECCIONS ja no passen per aquí (S-20): no obren
     volta, i tenen porta pròpia a `obrir_correccio`.
@@ -206,7 +239,8 @@ def obrir_ronda(model, motiu, tasques_codes, *, profile=None):
     # s'HI SUMA, no el substitueix: la proposta replicada no es pot «desmarcar», perquè FIT-4 diu
     # que les replicades «es poden NO EXECUTAR» — la manera de no fer-ne una és no fer-la, no
     # treure-la de la volta. L'ordre és el de la volta anterior, i els extres van al final.
-    replicats = codes_a_replicar(_ronda_anterior(model))
+    anterior = _ronda_anterior(model)
+    replicats = codes_a_replicar(anterior)
     codes = list(dict.fromkeys(replicats + demanats))
     if not codes:
         raise RondaError('Una ronda sense cap tasca no és una ronda.')
@@ -224,10 +258,10 @@ def obrir_ronda(model, motiu, tasques_codes, *, profile=None):
     if not codes:
         raise RondaError('Cap de les tasques de la volta anterior segueix activa al catàleg.')
 
-    # Les MARES es resolen ABANS de crear la Ronda, i el motiu és mecànic: un cop la ronda
-    # existeix, `tasca_vigent` ja resol per ella i retornaria les filles (o None). Aquí encara
-    # resol pel criteri vell, que és exactament «la tasca de la volta anterior».
-    mares = {code: tasca_vigent(model, code) for code in codes}
+    # Les MARES surten de la VOLTA ANTERIOR, una per code (v. `mare_homologa`). Abans es
+    # demanaven a `tasca_vigent`, que aquí sempre cau a la regla 2 i retorna la tasca base —o
+    # sigui la de la R1—, de manera que la cadena saltava les voltes intermèdies a partir de la R3.
+    mares = {code: mare_homologa(anterior, code) for code in codes}
 
     with transaction.atomic():
         seguent = (Ronda.objects.filter(model=model)
