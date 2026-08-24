@@ -38,7 +38,7 @@ from django_tenants.utils import schema_context                        # noqa: E
 from fhort.accounts.models import UserProfile                          # noqa: E402
 from fhort.auth_jwt import TenantTokenObtainPairSerializer             # noqa: E402
 from fhort.models_app.models import Model                              # noqa: E402
-from fhort.tasks.models import ModelTask, Ronda                        # noqa: E402
+from fhort.tasks.models import Entrega, ModelTask, Ronda               # noqa: E402
 
 BASE = os.environ.get('BASE', 'http://127.0.0.1:8131')
 HOST = 'staging.fhorttextile.tech'
@@ -167,6 +167,13 @@ def main():
     crit('un model viu hi segueix, i la seva fila diu la darrera volta',
          fila is not None and fila.get('ronda') is not None, fila and fila.get('ronda'))
 
+    # 🔒 CODA · LA 4a COLUMNA ÉS UN FET D'ENTREGA. `QA-M1-0002` és el cas de la captura D1: tot
+    # Done, però amb la volta OBERTA. Abans queia a «Entregats»; ara torna a les columnes de
+    # feina, i el xip diu per què.
+    crit('tot Done amb la volta OBERTA ja NO és la 4a columna',
+         fila.get('kanban_state') == 'pending' and fila['ronda']['estat'] == 'oberta',
+         (fila.get('kanban_state'), fila['ronda']['estat'], fila['counts']))
+
     # ── 3 · REOBRIR i la paret d'FIT-11 ─────────────────────────────────────────────────────
     print('\n── 3 · reobrir (FIT-11) ──')
     st, cos = crida('POST', f'/api/v1/models/{amb_volta}/reobrir/',
@@ -199,8 +206,30 @@ def main():
     crit('un model OBERT no es jubila de cop', st == 400 and cos.get('code') == 'no_acabat',
          (st, cos.get('code')))
 
-    crida('POST', f'/api/v1/models/{amb_volta}/tancar/', {'motiu': 'tret_de_cataleg'},
-          token=token)
+    # 🔒 CODA — la via del CATÀLEG no entrega. Es torna a obrir volta abans de tancar per
+    # mesurar-ho amb una volta VIVA a sobre, que és quan la diferència existeix.
+    st, cos = crida('POST', f'/api/v1/models/{amb_volta}/obrir-ronda/',
+                    {'motiu': 'nova_mostra', 'codes': ['pom']}, token=token)
+    crit('s\'obre una volta nova per provar la via del catàleg', st == 201, st)
+    with schema_context(TENANT):
+        entregues_abans = Entrega.objects.filter(ronda__model_id=amb_volta).count()
+    st, cos = crida('POST', f'/api/v1/models/{amb_volta}/tancar/',
+                    {'motiu': 'tret_de_cataleg'}, token=token)
+    crit('l\'avís del catàleg diu que NO caldrà entrega',
+         st == 409 and cos.get('requereix_entrega') is False, (st, cos.get('requereix_entrega')))
+    st, cos = crida('POST', f'/api/v1/models/{amb_volta}/tancar/',
+                    {'motiu': 'tret_de_cataleg', 'confirmar': True}, token=token)
+    crit('tret_de_cataleg tanca SENSE destinatari i sense entrega',
+         st == 200 and cos.get('entrega') is None, (st, cos.get('entrega')))
+    with schema_context(TENANT):
+        entregues_despres = Entrega.objects.filter(ronda__model_id=amb_volta).count()
+        ultima = Ronda.objects.filter(model_id=amb_volta).order_by('-seq').first()
+        vives_ultima = ModelTask.objects.filter(ronda=ultima).exclude(status='Done').count()
+    crit('…cap fila d\'Entrega nova (FIT-1: registra fets que han passat)',
+         entregues_despres == entregues_abans, (entregues_abans, entregues_despres))
+    crit('…però la volta SÍ que ha quedat tancada, i sense feina viva',
+         ultima.tancada_el is not None and vives_ultima == 0,
+         (ultima.tancada_el, vives_ultima))
     st, cos = crida('POST', f'/api/v1/models/{amb_volta}/jubilar/',
                     {'motiu': 'QA · temporada tancada'}, token=token)
     crit('d\'ACABAT a JUBILAT, 200', st == 200 and cos.get('estat') == 'jubilat',

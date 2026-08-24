@@ -86,6 +86,23 @@ def crit(nom, cond, detall=''):
     print(f"  {'OK  ' if cond else 'FAIL'} {nom}{(' · ' + str(detall)) if detall else ''}")
 
 
+def crida_api(cami, *, token, cos=None):
+    """Una crida DIRECTA al backend, fora del navegador. La fa servir la mesura de la 4a
+    columna per executar l'ACTE d'entrega entre dues lectures de la pantalla: el gest té porta
+    pròpia a la fitxa (M2) i pitjar-lo aquí hauria mesurat aquell diàleg, no la columna."""
+    dades = json.dumps(cos).encode() if cos is not None else None
+    r = urllib.request.Request(BACKEND + cami, data=dades,
+                               method='POST' if cos is not None else 'GET')
+    r.add_header('Host', 'staging.fhorttextile.tech')
+    r.add_header('Content-Type', 'application/json')
+    r.add_header('Authorization', 'Bearer ' + token)
+    try:
+        with urllib.request.urlopen(r, timeout=60) as resp:
+            return json.loads(resp.read() or b'null')
+    except urllib.error.HTTPError as e:
+        return json.loads(e.read() or b'null')
+
+
 def fes_handler(token):
     def handler(route):
         req = route.request
@@ -129,6 +146,8 @@ def main():
     if 'QA-M1-0004' not in banc:
         raise SystemExit('Falta el banc: corre `banc_m1_rondes.py --remunta`.')
     amb_volta = banc['QA-M1-0004']     # R1 tancada + R2 OBERTA → el flux estrella
+    del_cataleg = banc['QA-M1-0001']   # R1 OBERTA amb feina viva → la via del catàleg (CODA)
+    tot_fet = banc['QA-M1-0002']       # tot Done amb la volta OBERTA → el cas de la captura D1
     print(f'bundle={DIST} · backend={BACKEND} · banc {sorted(banc)}\n')
 
     with sync_playwright() as p:
@@ -221,6 +240,42 @@ def main():
              and 'Tancar model' not in menu)
         pagina.keyboard.press('Escape')
 
+        # ── B-bis · LA VIA DEL CATÀLEG: tancar SENSE entregar (CODA) ───────────────────────
+        print('\n── B-bis · tret de catàleg: es tanca sense declarar cap entrega ──')
+        pagina.goto(f'{BASE}/models/{del_cataleg}?tab=Dashboard', wait_until='networkidle',
+                    timeout=60000)
+        pagina.wait_for_timeout(2000)
+        pagina.get_by_role('button', name='Accions').first.click()
+        pagina.wait_for_timeout(400)
+        pagina.get_by_text('Tancar model').first.click()
+        pagina.wait_for_timeout(600)
+        # ⚠️ El selector va per l'OPCIÓ i no per `select` a seques: la pàgina en té dos (el
+        # d'idioma de la barra és el primer del DOM) i Playwright agafava aquell.
+        pagina.select_option("select:has(option[value='tret_de_cataleg'])", 'tret_de_cataleg')
+        pagina.wait_for_timeout(200)
+        pagina.get_by_role('button', name='Tancar', exact=True).first.click()
+        pagina.wait_for_timeout(1800)
+        pagina.screenshot(path=str(CAPTURES / 'm3_b3_avis_tret_de_cataleg.png'))
+        avis = pagina.inner_text('body')
+        avis_min = avis.lower()
+        bolca('m3_avis_tret', avis)
+        crit('🔒 l\'avís de la via del catàleg diu que NO es declararà cap entrega',
+             'sense declarar cap entrega' in avis_min,
+             [l for l in avis.splitlines() if 'entrega' in l.lower()][:2])
+        crit('…i NO demana destinatari (no s\'envia res a ningú)', 'destinatari' not in avis_min)
+        pagina.get_by_role('button', name='Tancar la volta i el model').first.click()
+        pagina.wait_for_timeout(2500)
+        pagina.goto(f'{BASE}/models/{del_cataleg}?tab=Dashboard', wait_until='networkidle',
+                    timeout=60000)
+        pagina.wait_for_timeout(2500)
+        cos = pagina.inner_text('body')
+        pagina.screenshot(path=str(CAPTURES / 'm3_b4_tret_de_cataleg_tancat.png'), full_page=True)
+        crit('el model queda ACABAT i el banner ho diu amb el motiu del client',
+             'Tret de catàleg' in cos, [l for l in cos.splitlines() if 'catàleg' in l][:2])
+        crit('…la volta hi és TANCADA i sense cap línia d\'entrega',
+             'Tancada' in cos and 'Entrega ' not in cos,
+             [l for l in cos.splitlines() if 'Entrega' in l][:2])
+
         # ── C · LA LLISTA: tres vistes, tres filtres exactes ───────────────────────────────
         print('\n── C · les vistes de /models ──')
         pagina.goto(f'{BASE}/models?vista=acabats', wait_until='networkidle', timeout=60000)
@@ -250,6 +305,36 @@ def main():
         crit('i les targetes porten el xip de la darrera volta',
              'volta oberta' in cos or 'entregada' in cos or 'tancada' in cos,
              [l for l in cos.splitlines() if l.strip().startswith('R')][:3])
+
+        # 🔒 CODA — LA COLUMNA, MESURADA PER DINS. `QA-M1-0002` és el cas de la captura D1: tot
+        # Done amb la volta OBERTA. Abans queia a «Entregats»; ara ha de ser a una columna de
+        # feina. Es mira DINS del contenidor de cada columna i no al `body` sencer: al body hi
+        # són tots i la mesura sortiria verda digués el que digués.
+        def columna(nom):
+            return pagina.locator(
+                f"xpath=//span[normalize-space()='{nom}']/ancestor::div[2]").first.inner_text()
+        entregats, pendents = columna('Entregats'), columna('Pendents')
+        crit('🔒 tot Done amb la volta OBERTA ja NO és a «Entregats»',
+             'QA-M1-0002' not in entregats, entregats.replace('\n', ' · ')[:160])
+        crit('…i sí que és a una columna de FEINA, amb el xip que ho explica',
+             'QA-M1-0002' in pendents and 'volta oberta' in pendents,
+             pendents.replace('\n', ' · ')[:160])
+
+        # 🔒 …I ARA L'ACTE. El MATEIX model, abans i després d'informar l'entrega: si la columna
+        # fos un recompte de tasques no es mouria (els comptadors no canvien —ja era tot Done—),
+        # i es mou. És la mesura que diu que la 4a columna és un FET i no una aritmètica.
+        r = crida_api(f'/api/v1/models/{tot_fet}/rondes/', token=token)
+        oberta = next((x for x in r if x.get('tancada_el') is None), None)
+        crit('el model de la mesura arriba amb la volta oberta', oberta is not None)
+        crida_api(f"/api/v1/rondes/{oberta['id']}/entrega/", token=token,
+                  cos={'destinatari': 'QA · pantalla', 'descripcio': 'mesura de la 4a columna'})
+        pagina.goto(f'{BASE}/', wait_until='networkidle', timeout=60000)
+        pagina.wait_for_timeout(3000)
+        pagina.screenshot(path=str(CAPTURES / 'm3_d2_board_entregat.png'), full_page=True)
+        entregats = columna('Entregats')
+        crit('🔒 en informar l\'ENTREGA, el mateix model passa a «Entregats»',
+             'QA-M1-0002' in entregats and 'entregada' in entregats,
+             entregats.replace('\n', ' · ')[:160])
 
         navegador.close()
 

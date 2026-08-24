@@ -1024,7 +1024,9 @@
         "acabat": "Acabado",
         "jubilat": "Jubilado"
       },
-      "banner_ajuda": "este modelo se consulta; para volver a trabajar en él, reábrelo."
+      "banner_ajuda": "este modelo se consulta; para volver a trabajar en él, reábrelo.",
+      "ronda_oberta_avis_tret": "La ronda R{{n}} está abierta. Al cerrar el modelo se cerrará esta vuelta y el trabajo que quede vivo, SIN declarar ninguna entrega: el cliente ha dicho que la pieza no se producirá y no se ha enviado nada.",
+      "tancar_volta_i_model": "Cerrar la vuelta y el modelo"
     }
   },
   "model_wizard": {

@@ -100,7 +100,8 @@ export default function ActionsMenu({ targets, model, selectionSet = null, onCha
     }
     // M3 — el tancament comença SEMPRE sense `ronda`: la volta oberta no es dedueix al client,
     // la diu el servidor amb el 409. Preguntar-ho abans hauria estat una segona font de veritat.
-    if (kind === 'tancar_model') setForm({ motiu: 'acabat', ronda: null, destinatari: '', descripcio: '' })
+    if (kind === 'tancar_model') setForm({ motiu: 'acabat', ronda: null, requereix_entrega: true,
+                                           destinatari: '', descripcio: '' })
     if (kind === 'reobrir_model' || kind === 'jubilar_model') setForm({ motiu_text: '' })
     if (kind === 'production') setForm({ supplier_id: '', phase: defaultPhase, expected_at: '', notes: '' })
     if (kind === 'fitting') {
@@ -242,9 +243,13 @@ export default function ActionsMenu({ targets, model, selectionSet = null, onCha
     setBusy(true)
     const cos = { motiu: form.motiu || 'acabat' }
     if (form.ronda) {
-      cos.confirmar_entrega = true
-      cos.destinatari = form.destinatari || ''
-      cos.descripcio = form.descripcio || ''
+      cos.confirmar = true
+      // El destinatari i la descripció són de l'ACTE D'ENTREGA: només viatgen quan n'hi ha
+      // d'haver una. Enviar-los a la via del catàleg hauria estat demanar-los per res.
+      if (form.requereix_entrega) {
+        cos.destinatari = form.destinatari || ''
+        cos.descripcio = form.descripcio || ''
+      }
     }
     modelsApi.tancar(single.id, cos)
       .then(r => {
@@ -258,8 +263,11 @@ export default function ActionsMenu({ targets, model, selectionSet = null, onCha
         const dades = e.response?.data || {}
         if (dades.code === 'ronda_oberta' && dades.ronda) {
           // Segona cara del MATEIX diàleg (no un segon modal): la pregunta arriba amb el número
-          // de la volta i el formulari passa a demanar el que l'entrega necessita.
-          setForm(f => ({ ...f, ronda: dades.ronda, destinatari: f.destinatari || '' }))
+          // de la volta. QUINA pregunta és la diu el servidor amb `requereix_entrega` — les dues
+          // vies no pregunten el mateix, i el client no ho ha de deduir del motiu pel seu compte.
+          setForm(f => ({ ...f, ronda: dades.ronda,
+                          requereix_entrega: dades.requereix_entrega !== false,
+                          destinatari: f.destinatari || '' }))
           return
         }
         onFeedback({ type: 'err', text: dades.error || 'error' })
@@ -496,25 +504,36 @@ export default function ActionsMenu({ targets, model, selectionSet = null, onCha
       {modal === 'tancar_model' && (
         <Modal title={t('model_sheet.cicle.tancar')}
           confirmLabel={busy ? t('model_sheet.working')
-                             : (form.ronda ? t('model_sheet.cicle.confirmar_i_tancar')
-                                           : t('model_sheet.cicle.tancar_confirm'))}
+                             : (!form.ronda ? t('model_sheet.cicle.tancar_confirm')
+                                : form.requereix_entrega ? t('model_sheet.cicle.confirmar_i_tancar')
+                                                         : t('model_sheet.cicle.tancar_volta_i_model'))}
           cancelLabel={t('model_sheet.cancel')}
-          confirmDisabled={busy || (Boolean(form.ronda) && !(form.destinatari || '').trim())}
+          confirmDisabled={busy || (Boolean(form.ronda) && form.requereix_entrega
+                                    && !(form.destinatari || '').trim())}
           onConfirm={runTancarModel} onCancel={() => !busy && setModal(null)}>
           {form.ronda ? (
             <>
+              {/* Dues preguntes diferents, i el servidor diu quina toca. Amb «tret de catàleg»
+                  NO es demana destinatari: no s'entrega res (FIT-1), i un camp obligatori per a
+                  un acte que no passa hauria bloquejat un tancament legítim. */}
               <div style={warnBox}>
-                {t('model_sheet.cicle.ronda_oberta_avis', { n: form.ronda.seq })}
+                {t(form.requereix_entrega ? 'model_sheet.cicle.ronda_oberta_avis'
+                                          : 'model_sheet.cicle.ronda_oberta_avis_tret',
+                   { n: form.ronda.seq })}
               </div>
-              <Row label={t('model_sheet.cicle.destinatari') + ' *'}>
-                <input style={fullSel} value={form.destinatari || ''} autoFocus
-                  onChange={e => setForm(f => ({ ...f, destinatari: e.target.value }))} />
-              </Row>
-              <Row label={t('model_sheet.cicle.descripcio')}>
-                <textarea style={{ ...fullSel, minHeight: 50, resize: 'vertical' }}
-                  value={form.descripcio || ''}
-                  onChange={e => setForm(f => ({ ...f, descripcio: e.target.value }))} />
-              </Row>
+              {form.requereix_entrega && (
+                <>
+                  <Row label={t('model_sheet.cicle.destinatari') + ' *'}>
+                    <input style={fullSel} value={form.destinatari || ''} autoFocus
+                      onChange={e => setForm(f => ({ ...f, destinatari: e.target.value }))} />
+                  </Row>
+                  <Row label={t('model_sheet.cicle.descripcio')}>
+                    <textarea style={{ ...fullSel, minHeight: 50, resize: 'vertical' }}
+                      value={form.descripcio || ''}
+                      onChange={e => setForm(f => ({ ...f, descripcio: e.target.value }))} />
+                  </Row>
+                </>
+              )}
             </>
           ) : (
             <>

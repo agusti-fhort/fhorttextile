@@ -1024,7 +1024,9 @@
         "acabat": "Finished",
         "jubilat": "Retired"
       },
-      "banner_ajuda": "this model is read-only; reopen it to work on it again."
+      "banner_ajuda": "this model is read-only; reopen it to work on it again.",
+      "ronda_oberta_avis_tret": "Round R{{n}} is open. Closing the model closes this round and the work still live in it, WITHOUT reporting any delivery: the client said the piece will not be produced and nothing was sent.",
+      "tancar_volta_i_model": "Close the round and the model"
     }
   },
   "model_wizard": {
