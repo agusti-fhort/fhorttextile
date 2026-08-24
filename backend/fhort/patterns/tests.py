@@ -22,6 +22,7 @@ import logging
 import math
 import re
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.db import connection
@@ -61,10 +62,12 @@ from fhort.patterns.engine.geometry import (
 from fhort.patterns.engine.grading_projection import (
     GradingContextError,
     GradingNotApproved,
+    POMPreview,
+    SizePreview,
     preview_per_talla,
     project,
 )
-from fhort.patterns.engine.operations import POMSpec, PointRef, move_points
+from fhort.patterns.engine.operations import MoveIssue, POMSpec, PointRef, move_points
 from fhort.patterns.engine.measure import MeasureError, eix_dominant, resoldre
 from fhort.patterns.engine.roundtrip import compare, compare_grade_tables
 from fhort.patterns.engine.dart_detection import (
@@ -135,7 +138,7 @@ from fhort.patterns.annotation_views import (PatternPOMViewSet, PatternSegmentVi
                                              SewProposalRejectionViewSet, SewRelationSerializer,
                                              SewRelationViewSet, SewToleranceAcceptanceViewSet,
                                              comprovar_costura)
-from fhort.patterns.export import ExportBlocked, build_export
+from fhort.patterns.export import ExportBlocked, _problemes_escalat, build_export
 from fhort.patterns.services import CONFIRM_TEXT_CA
 from fhort.patterns import annotation_views
 from fhort.patterns.models import (DartProposalRejection, ExportAcknowledgement, PatternFile,
@@ -2884,6 +2887,324 @@ class SewCosidorAMBTallTest(unittest.TestCase):
             self.assertAlmostEqual(pc.x, pt.x, places=6)
 
         self.assertEqual(res.informe.punts_cosit_propagats, 2)
+
+
+class OrdresSobreLaLiniaDeCositTest(unittest.TestCase):
+    """S8/FIX — una ordre que aterra sobre la línia de COSIT ha d'arribar a la niada.
+
+    Aquest és el defecte que va deixar la niada del 837 a zero moviments amb tots els verds
+    posats: `_propagar_al_cosit` re-derivava el cosit sencer del tall i, pel camí,
+    esborrava qualsevol ordre que el cosit portés de seu. I ancorar un POM sobre la línia
+    de cosit no és cap raresa —al 837 ho fan 26 dels 27 extrems—, o sigui que el motor
+    graduava exactament res.
+
+    El banc de `SewCosidorAMBTallTest` no ho podia veure: mou `PointRef('P', 0, 2)`, que és
+    la vora **0**, el TALL. Aquest ho mou per la vora 1, el COSIT, que és el cas real.
+    """
+
+    #: Marge de costura del fixture, en mm. És la invariant que ha d'aguantar a totes les
+    #: talles: si el cosit no segueix el tall, aquesta xifra deixa de ser constant.
+    MARGE_MM = 10.0
+
+    def _peca(self, has_sew: bool = True) -> PieceData:
+        """Un rectangle obert: tall a y=0, cosit 10 mm endins. Girs als extrems, corba al mig."""
+        tall = (
+            PointData(0.0, 0.0, PointKind.TURN),
+            PointData(50.0, 0.0, PointKind.CURVE),
+            PointData(100.0, 0.0, PointKind.TURN),
+        )
+        cosit = (
+            PointData(0.0, self.MARGE_MM, PointKind.TURN),
+            PointData(50.0, self.MARGE_MM, PointKind.CURVE),
+            PointData(100.0, self.MARGE_MM, PointKind.TURN),
+        )
+        return PieceData(
+            nom_block='P',
+            boundaries=(
+                BoundaryData(role=LayerRole.CUT, layer='1', points=tall, closed=False),
+                BoundaryData(role=LayerRole.SEW, layer='14', points=cosit, closed=False),
+            ),
+            has_sew=has_sew,
+        )
+
+    #: El POM que la fitxa gradua, ancorat als dos girs de la línia de COSIT.
+    POM_AL_COSIT = POMSpec(
+        pom_code='W', nom='Width', peca='P',
+        ref_a=PointRef('P', 1, 0), ref_b=PointRef('P', 1, 2),
+        metode='recta', pom_id=1,
+    )
+
+    # ── 1. El cas real: POM ancorat sobre el cosit ───────────────────────────
+
+    def test_ordre_sobre_el_cosit_mou_les_DUES_linies_i_la_remesura_clava_el_delta(self):
+        """Creixem 20 mm pel costat dret. Han de moure's el cosit I el tall, i el POM ha de
+        mesurar 20 mm més. Abans d'aquest fix es movia CAP dels dos i el POM no creixia."""
+        doc = PatternDocument(pieces=(self._peca(),))
+        res = move_points(
+            doc, {PointRef('P', 1, 2): (20.0, 0.0)}, poms=(self.POM_AL_COSIT,))
+
+        peca = res.document.piece('P')
+        tall, cosit = peca.boundaries[0], peca.boundaries[1]
+
+        # El gir del COSIT s'ha mogut — que és el que es demanava.
+        self.assertAlmostEqual(cosit.points[2].x, 120.0, places=6)
+        # I el seu company del TALL també: l'ordre s'ha normalitzat cap allà.
+        self.assertAlmostEqual(tall.points[2].x, 120.0, places=6)
+
+        # El marge de costura es conserva a tot arreu: la invariant de la decisió.
+        for pt, pc in zip(tall.points, cosit.points):
+            self.assertAlmostEqual(pc.y - pt.y, self.MARGE_MM, places=6)
+            self.assertAlmostEqual(pc.x, pt.x, places=6)
+
+        # La RE-MESURA clava el delta: el POM feia 10 cm i n'ha de fer 12.
+        lectura = {p.pom_code: p for p in res.informe.poms}['W']
+        self.assertAlmostEqual(lectura.valor_cm, 12.0, places=6)
+
+        # I l'informe ho diu: una ordre normalitzada, cap problema.
+        self.assertEqual(res.informe.punts_cosit_normalitzats, 1)
+        self.assertFalse(
+            [a for a in res.informe.avisos if a.codi.startswith('ordre_cosit_')])
+
+    def test_el_moviment_del_cosit_sobreviu_a_totes_les_talles_del_size_run(self):
+        """No és un cas puntual: el mateix ha de passar amb qualsevol delta, i el marge
+        s'ha de conservar a totes les talles (que és el que un patronista comprova)."""
+        doc = PatternDocument(pieces=(self._peca(),))
+        for delta_mm in (5.0, 20.0, -8.0, 45.0):
+            with self.subTest(delta_mm=delta_mm):
+                res = move_points(
+                    doc, {PointRef('P', 1, 2): (delta_mm, 0.0)}, poms=(self.POM_AL_COSIT,))
+                peca = res.document.piece('P')
+                tall, cosit = peca.boundaries[0], peca.boundaries[1]
+                self.assertAlmostEqual(cosit.points[2].x, 100.0 + delta_mm, places=6)
+                self.assertAlmostEqual(tall.points[2].x, 100.0 + delta_mm, places=6)
+                for pt, pc in zip(tall.points, cosit.points):
+                    self.assertAlmostEqual(pc.y - pt.y, self.MARGE_MM, places=6)
+                lectura = {p.pom_code: p for p in res.informe.poms}['W']
+                self.assertAlmostEqual(lectura.valor_cm, (100.0 + delta_mm) / 10.0, places=6)
+
+    # ── 2. El conflicte: mai en silenci ──────────────────────────────────────
+
+    def test_ordre_en_conflicte_entre_tall_i_cosit_es_diu_en_VEU_ALTA(self):
+        """Dues ordres incompatibles sobre el mateix parell tall/cosit. Les dues línies han
+        de moure's juntes per conservar el marge, o sigui que una de les dues no es pot
+        complir — i no s'endevina quina mana: es diu i no s'aplica."""
+        doc = PatternDocument(pieces=(self._peca(),))
+        res = move_points(doc, {
+            PointRef('P', 0, 2): (20.0, 0.0),    # el TALL vol créixer 20
+            PointRef('P', 1, 2): (35.0, 0.0),    # el COSIT en vol 35
+        }, poms=(self.POM_AL_COSIT,))
+
+        conflictes = [a for a in res.informe.avisos
+                      if a.codi == 'ordre_cosit_en_conflicte']
+        self.assertEqual(len(conflictes), 1)
+
+        # El missatge ha de portar les DUES xifres i el nom del POM: una adreça pelada
+        # («vora 1, ordre 2») no li diu res a qui exporta.
+        avis = conflictes[0]
+        self.assertIn('POM W', avis.missatge)
+        self.assertIn('35.00', avis.missatge)
+        self.assertIn('20.00', avis.missatge)
+        self.assertEqual(avis.detall['ordre_tall'], 2)
+
+        # I no s'ha aplicat cap de les dues a mitges: mana el tall, que és qui té l'ordre
+        # pròpia, i el cosit el segueix (marge conservat).
+        peca = res.document.piece('P')
+        tall, cosit = peca.boundaries[0], peca.boundaries[1]
+        self.assertAlmostEqual(tall.points[2].x, 120.0, places=6)
+        self.assertAlmostEqual(cosit.points[2].x, 120.0, places=6)
+        self.assertEqual(res.informe.punts_cosit_normalitzats, 0)
+
+    def test_ordre_IDENTICA_a_les_dues_bandes_es_FUSIONA_sense_cridar(self):
+        """El mateix desplaçament demanat pel tall i pel cosit no és cap contradicció: és
+        la mateixa ordre dita dues vegades. Es fusiona, i callar aquí és legítim."""
+        doc = PatternDocument(pieces=(self._peca(),))
+        res = move_points(doc, {
+            PointRef('P', 0, 2): (20.0, 0.0),
+            PointRef('P', 1, 2): (20.0, 0.0),
+        }, poms=(self.POM_AL_COSIT,))
+
+        self.assertFalse([a for a in res.informe.avisos
+                          if a.codi.startswith('ordre_cosit_')])
+        peca = res.document.piece('P')
+        self.assertAlmostEqual(peca.boundaries[0].points[2].x, 120.0, places=6)
+        self.assertAlmostEqual(peca.boundaries[1].points[2].x, 120.0, places=6)
+
+    def test_ordre_del_cosit_sense_company_al_tall_es_diu_i_no_sinventa_res(self):
+        """Un cosit tan lluny del tall que no s'hi pot aparellar. No s'inventa cap company:
+        es diu que aquell moviment no entrarà a la niada."""
+        lluny = replace(
+            self._peca(),
+            boundaries=(
+                BoundaryData(role=LayerRole.CUT, layer='1', closed=False, points=(
+                    PointData(0.0, 0.0, PointKind.TURN),
+                    PointData(100.0, 0.0, PointKind.TURN),
+                )),
+                # 500 mm endins: molt més enllà de TOL_PARELLA_COSIT_MM (30 mm).
+                BoundaryData(role=LayerRole.SEW, layer='14', closed=False, points=(
+                    PointData(0.0, 500.0, PointKind.TURN),
+                    PointData(100.0, 500.0, PointKind.TURN),
+                )),
+            ),
+        )
+        doc = PatternDocument(pieces=(lluny,))
+        res = move_points(doc, {PointRef('P', 1, 1): (20.0, 0.0)})
+
+        orfes = [a for a in res.informe.avisos if a.codi == 'ordre_cosit_sense_company']
+        self.assertEqual(len(orfes), 1)
+        self.assertEqual(res.informe.punts_cosit_normalitzats, 0)
+
+    # ── 3. La peça sense cosit: res no ha de canviar ─────────────────────────
+
+    def test_peca_SENSE_sew_es_comporta_exactament_com_abans(self):
+        """`has_sew=False` és l'únic interruptor de tota aquesta capa. Amb ell abaixat, ni
+        es normalitza ni es propaga: l'ordre s'aplica on l'han posada i prou."""
+        doc = PatternDocument(pieces=(self._peca(has_sew=False),))
+        res = move_points(
+            doc, {PointRef('P', 1, 2): (20.0, 0.0)}, poms=(self.POM_AL_COSIT,))
+
+        peca = res.document.piece('P')
+        tall, cosit = peca.boundaries[0], peca.boundaries[1]
+
+        # El cosit s'ha mogut sol; el tall NO s'ha assabentat de res.
+        self.assertAlmostEqual(cosit.points[2].x, 120.0, places=6)
+        self.assertAlmostEqual(tall.points[2].x, 100.0, places=6)
+        self.assertEqual(res.informe.punts_cosit_normalitzats, 0)
+        self.assertEqual(res.informe.punts_cosit_propagats, 0)
+
+    def test_el_TALL_segueix_manant_igual_que_abans_de_la_normalitzacio(self):
+        """Guarda de no-regressió del camí que ja funcionava: una ordre sobre el TALL es
+        comporta exactament com a `SewCosidorAMBTallTest`, sense que la normalització hi
+        posi ni tregui res."""
+        doc = PatternDocument(pieces=(self._peca(),))
+        res = move_points(doc, {PointRef('P', 0, 2): (20.0, 0.0)})
+
+        peca = res.document.piece('P')
+        tall, cosit = peca.boundaries[0], peca.boundaries[1]
+        self.assertAlmostEqual(tall.points[2].x, 120.0, places=6)
+        self.assertAlmostEqual(cosit.points[2].x, 120.0, places=6)
+        self.assertEqual(res.informe.punts_cosit_normalitzats, 0)
+        self.assertEqual(res.informe.punts_cosit_propagats, 2)
+
+    # ── 4. L'ancoratge sobre CORBA no es toca (residu A5, anotat i no arreglat) ──
+
+    def test_ancoratge_sobre_CORBA_del_cosit_conserva_el_seu_moviment(self):
+        """Decisió d'aquest sprint: les ordres sobre punts de CORBA NO es normalitzen.
+
+        No és neutralitat: normalitzar-les seria PERDRE-LES. Un gir del cosit recupera del
+        tall exactament el que li hem donat (els aparella la mateixa regla); una corba, no
+        —la propagació re-deriva el cosit dels girs i la corba hi torna a fluir. Mesurat al
+        837 talla M: normalitzant la corba, el POM C creix 1,50 cm dels 3,00 que mana el
+        grading; deixant-la on és, creix 3,00 clavats.
+        """
+        doc = PatternDocument(pieces=(self._peca(),))
+        res = move_points(doc, {PointRef('P', 1, 1): (0.0, 7.0)})
+
+        peca = res.document.piece('P')
+        # La corba del cosit conserva el seu moviment...
+        self.assertAlmostEqual(peca.boundaries[1].points[1].y, self.MARGE_MM + 7.0, places=6)
+        # ...i no se n'ha traslladat res al tall.
+        self.assertAlmostEqual(peca.boundaries[0].points[1].y, 0.0, places=6)
+        self.assertEqual(res.informe.punts_cosit_normalitzats, 0)
+
+
+class ProblemesDEscalatTest(unittest.TestCase):
+    """S8/FIX — el que l'escalat NO ha pogut fer, dit amb la xifra al davant.
+
+    Fins ara l'única pista que un POM no creixia el que tocava era una columna de ⚠ a la
+    taula de pre-reconeixement, que és la gramàtica d'un error de mesura i no la d'una
+    limitació coneguda del motor. Qui exporta ha de poder llegir la diferència.
+    """
+
+    def _doc(self) -> PatternDocument:
+        punts = (
+            PointData(0.0, 0.0, PointKind.TURN),
+            PointData(50.0, 0.0, PointKind.CURVE),
+            PointData(100.0, 0.0, PointKind.TURN),
+        )
+        return PatternDocument(pieces=(PieceData(
+            nom_block='P',
+            boundaries=(BoundaryData(
+                role=LayerRole.CUT, layer='1', points=punts, closed=False),),
+        ),))
+
+    #: Ancorat a un gir i a una CORBA: el cas d'A i de C al 837.
+    POM_AMB_CORBA = POMSpec(
+        pom_code='A', nom='Chest', peca='P',
+        ref_a=PointRef('P', 0, 0), ref_b=PointRef('P', 0, 1), pom_id=1,
+    )
+    #: Ancorat als dos girs: el cas d'E, S i E1.
+    POM_DE_GIRS = POMSpec(
+        pom_code='S', nom='Shoulder', peca='P',
+        ref_a=PointRef('P', 0, 0), ref_b=PointRef('P', 0, 2), pom_id=2,
+    )
+
+    def _preview(self, pom_code, talla, desviament, llegit, manat):
+        return POMPreview(
+            pom_code=pom_code, peca='P', valor_cm=llegit, delta_llegit_cm=llegit,
+            delta_spec_cm=manat, desviament_cm=desviament,
+        )
+
+    def _projeccio_amb_avisos(self, avisos):
+        return SimpleNamespace(avisos=tuple(avisos))
+
+    def test_el_residu_es_diu_amb_la_XIFRA_i_a_la_talla_on_mes_es_nota(self):
+        """La talla que surt al missatge ha de ser la pitjor, no la primera: un residu de
+        0,07 cm a la M i de 4,5 cm a la XL són la mateixa causa i una decisió diferent."""
+        previews = (
+            SizePreview(talla='M', es_base=False, bbox=(0, 0, 0, 0), costures=(),
+                        poms=(self._preview('A', 'M', -1.5, 1.5, 3.0),)),
+            SizePreview(talla='XL', es_base=False, bbox=(0, 0, 0, 0), costures=(),
+                        poms=(self._preview('A', 'XL', -4.5, 4.5, 9.0),)),
+        )
+        linies = _problemes_escalat(
+            self._doc(), (self.POM_AMB_CORBA,), self._projeccio_amb_avisos([]), previews)
+
+        self.assertEqual(len(linies), 1)
+        self.assertIn('POM A', linies[0])
+        self.assertIn('XL', linies[0])
+        self.assertIn('-4.500', linies[0])
+        self.assertIn('CORBA', linies[0])
+        self.assertIn('extrem b', linies[0])
+
+    def test_un_POM_de_girs_NO_sacusa_a_la_corba(self):
+        """Si els dos extrems són girs, la causa és el repartiment simètric de la projecció
+        v1 i no la propagació al cosit. Dir-ne «corba» seria enviar l'Agus a mirar on no és."""
+        previews = (
+            SizePreview(talla='XL', es_base=False, bbox=(0, 0, 0, 0), costures=(),
+                        poms=(self._preview('S', 'XL', 3.359, 5.759, 2.4),)),
+        )
+        linies = _problemes_escalat(
+            self._doc(), (self.POM_DE_GIRS,), self._projeccio_amb_avisos([]), previews)
+
+        self.assertEqual(len(linies), 1)
+        self.assertIn('REPARTIMENT', linies[0])
+        self.assertNotIn('CORBA', linies[0])
+
+    def test_un_residu_per_sota_de_la_tolerancia_no_diu_res(self):
+        """Mig mil·límetre és més fi que el que una taula de tall distingeix. Omplir la
+        llista de soroll faria que ningú no la llegís."""
+        previews = (
+            SizePreview(talla='M', es_base=False, bbox=(0, 0, 0, 0), costures=(),
+                        poms=(self._preview('S', 'M', 0.004, 3.004, 3.0),)),
+        )
+        self.assertEqual(
+            _problemes_escalat(self._doc(), (self.POM_DE_GIRS,),
+                               self._projeccio_amb_avisos([]), previews),
+            (),
+        )
+
+    def test_el_mateix_conflicte_a_cinc_talles_es_diu_UNA_vegada(self):
+        """El motor es queixa del mateix punt a cada talla. Cinc vegades la mateixa frase
+        no informa cinc vegades més: ofega les altres quatre coses de la llista."""
+        avis = MoveIssue(
+            'ordre_cosit_en_conflicte', 'El punt 2 de la línia de cosit…', peca='P',
+            detall={'vora': 1, 'ordre': 2, 'ordre_tall': 2},
+        )
+        linies = _problemes_escalat(
+            self._doc(), (), self._projeccio_amb_avisos([avis] * 5), ())
+
+        self.assertEqual(len(linies), 1)
+        self.assertIn('[P]', linies[0])
 
 
 class EscalatTestBase(PatternsAPITestBase):
