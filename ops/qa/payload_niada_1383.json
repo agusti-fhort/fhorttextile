@@ -1,0 +1,1684 @@
+{
+ "pattern_file_id": 20,
+ "model_id": 1383,
+ "versions": [
+  {
+   "id": 201,
+   "nom": "Propagació conscient",
+   "data": "2026-08-21T20:24:56.542062+00:00",
+   "version_number": 9,
+   "is_active": true,
+   "specs": 105,
+   "estalitud": {
+    "estat": "fresca",
+    "avisa": false,
+    "motiu": "Segellada el 24/08/2026 15:00 i cap canvi de base registrat des de llavors.",
+    "canvis_base": 0,
+    "primer_canvi": null,
+    "ultim_canvi": null,
+    "generated_from": 1,
+    "measurements_version": 1,
+    "poms_afectats": []
+   }
+  }
+ ],
+ "preview": {
+  "talles": [
+   {
+    "talla": "XS",
+    "es_base": false,
+    "bbox_cm": [
+     89.1,
+     70.3,
+     254.4,
+     212.0
+    ],
+    "ok": false,
+    "poms": [
+     {
+      "pom_code": "E7",
+      "peca": "837.CUELLO",
+      "valor_cm": 2.64,
+      "delta_llegit_cm": 0.0,
+      "delta_spec_cm": 0.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 2.5,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "A",
+      "peca": "837.DELANTERO",
+      "valor_cm": 43.28,
+      "delta_llegit_cm": -1.0,
+      "delta_spec_cm": -2.0,
+      "desviament_cm": 0.998365,
+      "valor_spec_cm": 42.0,
+      "ok": false,
+      "error": ""
+     },
+     {
+      "pom_code": "B",
+      "peca": "837.DELANTERO",
+      "valor_cm": 44.09,
+      "delta_llegit_cm": -2.0,
+      "delta_spec_cm": -2.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 44.0,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "C",
+      "peca": "837.DELANTERO",
+      "valor_cm": 52.57,
+      "delta_llegit_cm": -1.0,
+      "delta_spec_cm": -2.0,
+      "desviament_cm": 1.0,
+      "valor_spec_cm": 52.0,
+      "ok": false,
+      "error": ""
+     },
+     {
+      "pom_code": "D",
+      "peca": "837.DELANTERO",
+      "valor_cm": 57.75,
+      "delta_llegit_cm": -1.5,
+      "delta_spec_cm": -1.5,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 57.5,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "E",
+      "peca": "837.DELANTERO",
+      "valor_cm": 36.87,
+      "delta_llegit_cm": 0.0,
+      "delta_spec_cm": 0.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 37.0,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "F",
+      "peca": "837.DELANTERO",
+      "valor_cm": 110.77,
+      "delta_llegit_cm": 0.0,
+      "delta_spec_cm": 0.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 110.5,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "S",
+      "peca": "837.DELANTERO",
+      "valor_cm": 21.63,
+      "delta_llegit_cm": -0.73,
+      "delta_spec_cm": 0.0,
+      "desviament_cm": -0.725438,
+      "valor_spec_cm": 22.0,
+      "ok": false,
+      "error": ""
+     },
+     {
+      "pom_code": "SLT",
+      "peca": "837.DELANTERO",
+      "valor_cm": 31.56,
+      "delta_llegit_cm": 0.0,
+      "delta_spec_cm": 0.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 31.5,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "E1",
+      "peca": "837.ESPALDA",
+      "valor_cm": 7.67,
+      "delta_llegit_cm": 0.0,
+      "delta_spec_cm": 0.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 7.6,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "G1",
+      "peca": "837.ESPALDA",
+      "valor_cm": 2.0,
+      "delta_llegit_cm": 0.0,
+      "delta_spec_cm": 0.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 2.0,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "S2",
+      "peca": "837.ESPALDA",
+      "valor_cm": 22.03,
+      "delta_llegit_cm": 0.0,
+      "delta_spec_cm": 0.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 22.0,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "J1",
+      "peca": "837.MANGA",
+      "valor_cm": 12.19,
+      "delta_llegit_cm": -0.25,
+      "delta_spec_cm": -0.25,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 11.75,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "U",
+      "peca": "837.TAPETA",
+      "valor_cm": 16.52,
+      "delta_llegit_cm": 0.0,
+      "delta_spec_cm": 0.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 16.5,
+      "ok": true,
+      "error": ""
+     }
+    ],
+    "costures": [
+     {
+      "sew_id": 51,
+      "casa": true,
+      "missatge": "Casa: els dos costats fan 7.6 cm.",
+      "desviament_cm": 0.03
+     },
+     {
+      "sew_id": 52,
+      "casa": true,
+      "missatge": "Casa: els dos costats fan 7.7 cm.",
+      "desviament_cm": 0.0
+     },
+     {
+      "sew_id": 53,
+      "casa": false,
+      "missatge": "El tram [0.1782–0.3356] de la vora 1 no correspon a cap tram de gir a gir de la geometria actual: la costura es va declarar sobre una altra versió del patró.",
+      "desviament_cm": null
+     },
+     {
+      "sew_id": 54,
+      "casa": false,
+      "missatge": "El tram [0.6644–0.8218] de la vora 1 no correspon a cap tram de gir a gir de la geometria actual: la costura es va declarar sobre una altra versió del patró.",
+      "desviament_cm": null
+     },
+     {
+      "sew_id": 55,
+      "casa": false,
+      "missatge": "El tram [0.3694–0.6312] de la vora 1 no correspon a cap tram de gir a gir de la geometria actual: la costura es va declarar sobre una altra versió del patró.",
+      "desviament_cm": null
+     },
+     {
+      "sew_id": 56,
+      "casa": false,
+      "missatge": "NO casa: el costat A fa 30.3 cm i el B 30.1 cm (0.2 cm de diferència).",
+      "desviament_cm": 0.17
+     },
+     {
+      "sew_id": 57,
+      "casa": false,
+      "missatge": "El tram [0.0615–0.1286] de la vora 1 no correspon a cap tram de gir a gir de la geometria actual: la costura es va declarar sobre una altra versió del patró.",
+      "desviament_cm": null
+     },
+     {
+      "sew_id": 58,
+      "casa": false,
+      "missatge": "El tram [0.5903–0.7618] de la vora 1 no correspon a cap tram de gir a gir de la geometria actual: la costura es va declarar sobre una altra versió del patró.",
+      "desviament_cm": null
+     }
+    ]
+   },
+   {
+    "talla": "S",
+    "es_base": true,
+    "bbox_cm": [
+     89.1,
+     70.3,
+     254.4,
+     212.0
+    ],
+    "ok": false,
+    "poms": [
+     {
+      "pom_code": "E7",
+      "peca": "837.CUELLO",
+      "valor_cm": 2.64,
+      "delta_llegit_cm": 0.0,
+      "delta_spec_cm": 0.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 2.5,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "A",
+      "peca": "837.DELANTERO",
+      "valor_cm": 44.28,
+      "delta_llegit_cm": 0.0,
+      "delta_spec_cm": 0.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 44.0,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "B",
+      "peca": "837.DELANTERO",
+      "valor_cm": 46.09,
+      "delta_llegit_cm": 0.0,
+      "delta_spec_cm": 0.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 46.0,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "C",
+      "peca": "837.DELANTERO",
+      "valor_cm": 53.57,
+      "delta_llegit_cm": 0.0,
+      "delta_spec_cm": 0.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 54.0,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "D",
+      "peca": "837.DELANTERO",
+      "valor_cm": 59.25,
+      "delta_llegit_cm": 0.0,
+      "delta_spec_cm": 0.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 59.0,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "E",
+      "peca": "837.DELANTERO",
+      "valor_cm": 36.87,
+      "delta_llegit_cm": 0.0,
+      "delta_spec_cm": 0.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 37.0,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "F",
+      "peca": "837.DELANTERO",
+      "valor_cm": 110.77,
+      "delta_llegit_cm": 0.0,
+      "delta_spec_cm": 0.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 110.5,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "S",
+      "peca": "837.DELANTERO",
+      "valor_cm": 22.36,
+      "delta_llegit_cm": 0.0,
+      "delta_spec_cm": 0.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 22.0,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "SLT",
+      "peca": "837.DELANTERO",
+      "valor_cm": 31.56,
+      "delta_llegit_cm": 0.0,
+      "delta_spec_cm": 0.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 31.5,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "E1",
+      "peca": "837.ESPALDA",
+      "valor_cm": 7.67,
+      "delta_llegit_cm": 0.0,
+      "delta_spec_cm": 0.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 7.6,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "G1",
+      "peca": "837.ESPALDA",
+      "valor_cm": 2.0,
+      "delta_llegit_cm": 0.0,
+      "delta_spec_cm": 0.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 2.0,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "S2",
+      "peca": "837.ESPALDA",
+      "valor_cm": 22.03,
+      "delta_llegit_cm": 0.0,
+      "delta_spec_cm": 0.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 22.0,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "J1",
+      "peca": "837.MANGA",
+      "valor_cm": 12.44,
+      "delta_llegit_cm": 0.0,
+      "delta_spec_cm": 0.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 12.0,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "U",
+      "peca": "837.TAPETA",
+      "valor_cm": 16.52,
+      "delta_llegit_cm": 0.0,
+      "delta_spec_cm": 0.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 16.5,
+      "ok": true,
+      "error": ""
+     }
+    ],
+    "costures": [
+     {
+      "sew_id": 51,
+      "casa": true,
+      "missatge": "Casa: els dos costats fan 7.6 cm.",
+      "desviament_cm": 0.03
+     },
+     {
+      "sew_id": 52,
+      "casa": true,
+      "missatge": "Casa: els dos costats fan 7.7 cm.",
+      "desviament_cm": 0.0
+     },
+     {
+      "sew_id": 53,
+      "casa": false,
+      "missatge": "El tram [0.1782–0.3356] de la vora 1 no correspon a cap tram de gir a gir de la geometria actual: la costura es va declarar sobre una altra versió del patró.",
+      "desviament_cm": null
+     },
+     {
+      "sew_id": 54,
+      "casa": false,
+      "missatge": "El tram [0.6644–0.8218] de la vora 1 no correspon a cap tram de gir a gir de la geometria actual: la costura es va declarar sobre una altra versió del patró.",
+      "desviament_cm": null
+     },
+     {
+      "sew_id": 55,
+      "casa": false,
+      "missatge": "El tram [0.3694–0.6312] de la vora 1 no correspon a cap tram de gir a gir de la geometria actual: la costura es va declarar sobre una altra versió del patró.",
+      "desviament_cm": null
+     },
+     {
+      "sew_id": 56,
+      "casa": false,
+      "missatge": "NO casa: el costat A fa 30.3 cm i el B 30.1 cm (0.2 cm de diferència).",
+      "desviament_cm": 0.17
+     },
+     {
+      "sew_id": 57,
+      "casa": false,
+      "missatge": "El tram [0.0615–0.1286] de la vora 1 no correspon a cap tram de gir a gir de la geometria actual: la costura es va declarar sobre una altra versió del patró.",
+      "desviament_cm": null
+     },
+     {
+      "sew_id": 58,
+      "casa": false,
+      "missatge": "El tram [0.5903–0.7618] de la vora 1 no correspon a cap tram de gir a gir de la geometria actual: la costura es va declarar sobre una altra versió del patró.",
+      "desviament_cm": null
+     }
+    ]
+   },
+   {
+    "talla": "M",
+    "es_base": false,
+    "bbox_cm": [
+     88.1,
+     70.3,
+     254.4,
+     212.0
+    ],
+    "ok": false,
+    "poms": [
+     {
+      "pom_code": "E7",
+      "peca": "837.CUELLO",
+      "valor_cm": 2.64,
+      "delta_llegit_cm": 0.0,
+      "delta_spec_cm": 0.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 2.5,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "A",
+      "peca": "837.DELANTERO",
+      "valor_cm": 45.86,
+      "delta_llegit_cm": 1.58,
+      "delta_spec_cm": 3.0,
+      "desviament_cm": -1.422773,
+      "valor_spec_cm": 47.0,
+      "ok": false,
+      "error": ""
+     },
+     {
+      "pom_code": "B",
+      "peca": "837.DELANTERO",
+      "valor_cm": 49.09,
+      "delta_llegit_cm": 3.0,
+      "delta_spec_cm": 3.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 49.0,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "C",
+      "peca": "837.DELANTERO",
+      "valor_cm": 55.07,
+      "delta_llegit_cm": 1.5,
+      "delta_spec_cm": 3.0,
+      "desviament_cm": -1.5,
+      "valor_spec_cm": 57.0,
+      "ok": false,
+      "error": ""
+     },
+     {
+      "pom_code": "D",
+      "peca": "837.DELANTERO",
+      "valor_cm": 62.25,
+      "delta_llegit_cm": 3.0,
+      "delta_spec_cm": 3.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 62.0,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "E",
+      "peca": "837.DELANTERO",
+      "valor_cm": 37.4,
+      "delta_llegit_cm": 0.53,
+      "delta_spec_cm": 0.6,
+      "desviament_cm": -0.071487,
+      "valor_spec_cm": 37.6,
+      "ok": false,
+      "error": ""
+     },
+     {
+      "pom_code": "F",
+      "peca": "837.DELANTERO",
+      "valor_cm": 112.77,
+      "delta_llegit_cm": 2.0,
+      "delta_spec_cm": 2.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 112.5,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "S",
+      "peca": "837.DELANTERO",
+      "valor_cm": 24.23,
+      "delta_llegit_cm": 1.87,
+      "delta_spec_cm": 0.8,
+      "desviament_cm": 1.07363,
+      "valor_spec_cm": 22.8,
+      "ok": false,
+      "error": ""
+     },
+     {
+      "pom_code": "SLT",
+      "peca": "837.DELANTERO",
+      "valor_cm": 31.56,
+      "delta_llegit_cm": 0.0,
+      "delta_spec_cm": 0.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 31.5,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "E1",
+      "peca": "837.ESPALDA",
+      "valor_cm": 7.79,
+      "delta_llegit_cm": 0.12,
+      "delta_spec_cm": 0.3,
+      "desviament_cm": -0.17992,
+      "valor_spec_cm": 7.9,
+      "ok": false,
+      "error": ""
+     },
+     {
+      "pom_code": "G1",
+      "peca": "837.ESPALDA",
+      "valor_cm": 2.0,
+      "delta_llegit_cm": 0.0,
+      "delta_spec_cm": 0.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 2.0,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "S2",
+      "peca": "837.ESPALDA",
+      "valor_cm": 22.38,
+      "delta_llegit_cm": 0.35,
+      "delta_spec_cm": 0.8,
+      "desviament_cm": -0.446977,
+      "valor_spec_cm": 22.8,
+      "ok": false,
+      "error": ""
+     },
+     {
+      "pom_code": "J1",
+      "peca": "837.MANGA",
+      "valor_cm": 12.69,
+      "delta_llegit_cm": 0.25,
+      "delta_spec_cm": 0.25,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 12.25,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "U",
+      "peca": "837.TAPETA",
+      "valor_cm": 16.52,
+      "delta_llegit_cm": 0.0,
+      "delta_spec_cm": 0.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 16.5,
+      "ok": true,
+      "error": ""
+     }
+    ],
+    "costures": [
+     {
+      "sew_id": 51,
+      "casa": false,
+      "missatge": "NO casa: el costat A fa 7.9 cm i el B 7.8 cm (0.1 cm de diferència).",
+      "desviament_cm": 0.14
+     },
+     {
+      "sew_id": 52,
+      "casa": false,
+      "missatge": "NO casa: el costat A fa 8.1 cm i el B 7.7 cm (0.4 cm de diferència).",
+      "desviament_cm": 0.41
+     },
+     {
+      "sew_id": 53,
+      "casa": false,
+      "missatge": "El tram [0.1782–0.3356] de la vora 1 no correspon a cap tram de gir a gir de la geometria actual: la costura es va declarar sobre una altra versió del patró.",
+      "desviament_cm": null
+     },
+     {
+      "sew_id": 54,
+      "casa": false,
+      "missatge": "El tram [0.6644–0.8218] de la vora 1 no correspon a cap tram de gir a gir de la geometria actual: la costura es va declarar sobre una altra versió del patró.",
+      "desviament_cm": null
+     },
+     {
+      "sew_id": 55,
+      "casa": false,
+      "missatge": "El tram [0.3694–0.6312] de la vora 1 no correspon a cap tram de gir a gir de la geometria actual: la costura es va declarar sobre una altra versió del patró.",
+      "desviament_cm": null
+     },
+     {
+      "sew_id": 56,
+      "casa": false,
+      "missatge": "NO casa: el costat A fa 30.3 cm i el B 30.1 cm (0.2 cm de diferència).",
+      "desviament_cm": 0.17
+     },
+     {
+      "sew_id": 57,
+      "casa": false,
+      "missatge": "El tram [0.0615–0.1286] de la vora 1 no correspon a cap tram de gir a gir de la geometria actual: la costura es va declarar sobre una altra versió del patró.",
+      "desviament_cm": null
+     },
+     {
+      "sew_id": 58,
+      "casa": false,
+      "missatge": "El tram [0.5903–0.7618] de la vora 1 no correspon a cap tram de gir a gir de la geometria actual: la costura es va declarar sobre una altra versió del patró.",
+      "desviament_cm": null
+     }
+    ]
+   },
+   {
+    "talla": "L",
+    "es_base": false,
+    "bbox_cm": [
+     87.1,
+     70.3,
+     254.4,
+     212.0
+    ],
+    "ok": false,
+    "poms": [
+     {
+      "pom_code": "E7",
+      "peca": "837.CUELLO",
+      "valor_cm": 2.64,
+      "delta_llegit_cm": 0.0,
+      "delta_spec_cm": 0.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 2.5,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "A",
+      "peca": "837.DELANTERO",
+      "valor_cm": 47.44,
+      "delta_llegit_cm": 3.16,
+      "delta_spec_cm": 6.0,
+      "desviament_cm": -2.842397,
+      "valor_spec_cm": 50.0,
+      "ok": false,
+      "error": ""
+     },
+     {
+      "pom_code": "B",
+      "peca": "837.DELANTERO",
+      "valor_cm": 52.09,
+      "delta_llegit_cm": 6.0,
+      "delta_spec_cm": 6.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 52.0,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "C",
+      "peca": "837.DELANTERO",
+      "valor_cm": 56.57,
+      "delta_llegit_cm": 3.0,
+      "delta_spec_cm": 6.0,
+      "desviament_cm": -3.0,
+      "valor_spec_cm": 60.0,
+      "ok": false,
+      "error": ""
+     },
+     {
+      "pom_code": "D",
+      "peca": "837.DELANTERO",
+      "valor_cm": 65.25,
+      "delta_llegit_cm": 6.0,
+      "delta_spec_cm": 6.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 65.0,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "E",
+      "peca": "837.DELANTERO",
+      "valor_cm": 37.93,
+      "delta_llegit_cm": 1.06,
+      "delta_spec_cm": 1.2,
+      "desviament_cm": -0.138955,
+      "valor_spec_cm": 38.2,
+      "ok": false,
+      "error": ""
+     },
+     {
+      "pom_code": "F",
+      "peca": "837.DELANTERO",
+      "valor_cm": 114.77,
+      "delta_llegit_cm": 4.0,
+      "delta_spec_cm": 4.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 114.5,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "S",
+      "peca": "837.DELANTERO",
+      "valor_cm": 26.16,
+      "delta_llegit_cm": 3.8,
+      "delta_spec_cm": 1.6,
+      "desviament_cm": 2.201167,
+      "valor_spec_cm": 23.6,
+      "ok": false,
+      "error": ""
+     },
+     {
+      "pom_code": "SLT",
+      "peca": "837.DELANTERO",
+      "valor_cm": 31.56,
+      "delta_llegit_cm": 0.0,
+      "delta_spec_cm": 0.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 31.5,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "E1",
+      "peca": "837.ESPALDA",
+      "valor_cm": 7.93,
+      "delta_llegit_cm": 0.26,
+      "delta_spec_cm": 0.6,
+      "desviament_cm": -0.344328,
+      "valor_spec_cm": 8.2,
+      "ok": false,
+      "error": ""
+     },
+     {
+      "pom_code": "G1",
+      "peca": "837.ESPALDA",
+      "valor_cm": 2.0,
+      "delta_llegit_cm": 0.0,
+      "delta_spec_cm": 0.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 2.0,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "S2",
+      "peca": "837.ESPALDA",
+      "valor_cm": 22.73,
+      "delta_llegit_cm": 0.71,
+      "delta_spec_cm": 1.6,
+      "desviament_cm": -0.893827,
+      "valor_spec_cm": 23.6,
+      "ok": false,
+      "error": ""
+     },
+     {
+      "pom_code": "J1",
+      "peca": "837.MANGA",
+      "valor_cm": 12.94,
+      "delta_llegit_cm": 0.5,
+      "delta_spec_cm": 0.5,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 12.5,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "U",
+      "peca": "837.TAPETA",
+      "valor_cm": 16.52,
+      "delta_llegit_cm": 0.0,
+      "delta_spec_cm": 0.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 16.5,
+      "ok": true,
+      "error": ""
+     }
+    ],
+    "costures": [
+     {
+      "sew_id": 51,
+      "casa": false,
+      "missatge": "NO casa: el costat A fa 8.2 cm i el B 7.9 cm (0.3 cm de diferència).",
+      "desviament_cm": 0.29
+     },
+     {
+      "sew_id": 52,
+      "casa": false,
+      "missatge": "NO casa: el costat A fa 8.5 cm i el B 7.7 cm (0.9 cm de diferència).",
+      "desviament_cm": 0.86
+     },
+     {
+      "sew_id": 53,
+      "casa": false,
+      "missatge": "El tram [0.1782–0.3356] de la vora 1 no correspon a cap tram de gir a gir de la geometria actual: la costura es va declarar sobre una altra versió del patró.",
+      "desviament_cm": null
+     },
+     {
+      "sew_id": 54,
+      "casa": false,
+      "missatge": "El tram [0.6644–0.8218] de la vora 1 no correspon a cap tram de gir a gir de la geometria actual: la costura es va declarar sobre una altra versió del patró.",
+      "desviament_cm": null
+     },
+     {
+      "sew_id": 55,
+      "casa": false,
+      "missatge": "El tram [0.3694–0.6312] de la vora 1 no correspon a cap tram de gir a gir de la geometria actual: la costura es va declarar sobre una altra versió del patró.",
+      "desviament_cm": null
+     },
+     {
+      "sew_id": 56,
+      "casa": false,
+      "missatge": "NO casa: el costat A fa 30.3 cm i el B 30.1 cm (0.2 cm de diferència).",
+      "desviament_cm": 0.17
+     },
+     {
+      "sew_id": 57,
+      "casa": false,
+      "missatge": "El tram [0.0615–0.1286] de la vora 1 no correspon a cap tram de gir a gir de la geometria actual: la costura es va declarar sobre una altra versió del patró.",
+      "desviament_cm": null
+     },
+     {
+      "sew_id": 58,
+      "casa": false,
+      "missatge": "El tram [0.5903–0.7618] de la vora 1 no correspon a cap tram de gir a gir de la geometria actual: la costura es va declarar sobre una altra versió del patró.",
+      "desviament_cm": null
+     }
+    ]
+   },
+   {
+    "talla": "XL",
+    "es_base": false,
+    "bbox_cm": [
+     86.6,
+     70.3,
+     254.4,
+     212.0
+    ],
+    "ok": false,
+    "poms": [
+     {
+      "pom_code": "E7",
+      "peca": "837.CUELLO",
+      "valor_cm": 2.64,
+      "delta_llegit_cm": 0.0,
+      "delta_spec_cm": 0.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 2.5,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "A",
+      "peca": "837.DELANTERO",
+      "valor_cm": 49.02,
+      "delta_llegit_cm": 4.74,
+      "delta_spec_cm": 9.0,
+      "desviament_cm": -4.259178,
+      "valor_spec_cm": 53.0,
+      "ok": false,
+      "error": ""
+     },
+     {
+      "pom_code": "B",
+      "peca": "837.DELANTERO",
+      "valor_cm": 55.09,
+      "delta_llegit_cm": 9.0,
+      "delta_spec_cm": 9.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 55.0,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "C",
+      "peca": "837.DELANTERO",
+      "valor_cm": 58.07,
+      "delta_llegit_cm": 4.5,
+      "delta_spec_cm": 9.0,
+      "desviament_cm": -4.5,
+      "valor_spec_cm": 63.0,
+      "ok": false,
+      "error": ""
+     },
+     {
+      "pom_code": "D",
+      "peca": "837.DELANTERO",
+      "valor_cm": 68.25,
+      "delta_llegit_cm": 9.0,
+      "delta_spec_cm": 9.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 68.0,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "E",
+      "peca": "837.DELANTERO",
+      "valor_cm": 38.47,
+      "delta_llegit_cm": 1.6,
+      "delta_spec_cm": 1.8,
+      "desviament_cm": -0.202572,
+      "valor_spec_cm": 38.8,
+      "ok": false,
+      "error": ""
+     },
+     {
+      "pom_code": "F",
+      "peca": "837.DELANTERO",
+      "valor_cm": 115.77,
+      "delta_llegit_cm": 5.0,
+      "delta_spec_cm": 5.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 115.5,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "S",
+      "peca": "837.DELANTERO",
+      "valor_cm": 28.12,
+      "delta_llegit_cm": 5.76,
+      "delta_spec_cm": 2.4,
+      "desviament_cm": 3.359016,
+      "valor_spec_cm": 24.4,
+      "ok": false,
+      "error": ""
+     },
+     {
+      "pom_code": "SLT",
+      "peca": "837.DELANTERO",
+      "valor_cm": 31.56,
+      "delta_llegit_cm": 0.0,
+      "delta_spec_cm": 0.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 31.5,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "E1",
+      "peca": "837.ESPALDA",
+      "valor_cm": 8.08,
+      "delta_llegit_cm": 0.41,
+      "delta_spec_cm": 0.9,
+      "desviament_cm": -0.494005,
+      "valor_spec_cm": 8.5,
+      "ok": false,
+      "error": ""
+     },
+     {
+      "pom_code": "G1",
+      "peca": "837.ESPALDA",
+      "valor_cm": 2.0,
+      "delta_llegit_cm": 0.0,
+      "delta_spec_cm": 0.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 2.0,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "S2",
+      "peca": "837.ESPALDA",
+      "valor_cm": 23.09,
+      "delta_llegit_cm": 1.06,
+      "delta_spec_cm": 2.4,
+      "desviament_cm": -1.340562,
+      "valor_spec_cm": 24.4,
+      "ok": false,
+      "error": ""
+     },
+     {
+      "pom_code": "J1",
+      "peca": "837.MANGA",
+      "valor_cm": 13.19,
+      "delta_llegit_cm": 0.75,
+      "delta_spec_cm": 0.75,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 12.75,
+      "ok": true,
+      "error": ""
+     },
+     {
+      "pom_code": "U",
+      "peca": "837.TAPETA",
+      "valor_cm": 16.52,
+      "delta_llegit_cm": 0.0,
+      "delta_spec_cm": 0.0,
+      "desviament_cm": 0.0,
+      "valor_spec_cm": 16.5,
+      "ok": true,
+      "error": ""
+     }
+    ],
+    "costures": [
+     {
+      "sew_id": 51,
+      "casa": false,
+      "missatge": "NO casa: el costat A fa 8.5 cm i el B 8.1 cm (0.4 cm de diferència).",
+      "desviament_cm": 0.43
+     },
+     {
+      "sew_id": 52,
+      "casa": false,
+      "missatge": "NO casa: el costat A fa 8.8 cm i el B 7.7 cm (1.1 cm de diferència).",
+      "desviament_cm": 1.11
+     },
+     {
+      "sew_id": 53,
+      "casa": false,
+      "missatge": "El tram [0.1782–0.3356] de la vora 1 no correspon a cap tram de gir a gir de la geometria actual: la costura es va declarar sobre una altra versió del patró.",
+      "desviament_cm": null
+     },
+     {
+      "sew_id": 54,
+      "casa": false,
+      "missatge": "El tram [0.6644–0.8218] de la vora 1 no correspon a cap tram de gir a gir de la geometria actual: la costura es va declarar sobre una altra versió del patró.",
+      "desviament_cm": null
+     },
+     {
+      "sew_id": 55,
+      "casa": false,
+      "missatge": "El tram [0.3694–0.6312] de la vora 1 no correspon a cap tram de gir a gir de la geometria actual: la costura es va declarar sobre una altra versió del patró.",
+      "desviament_cm": null
+     },
+     {
+      "sew_id": 56,
+      "casa": false,
+      "missatge": "NO casa: el costat A fa 30.3 cm i el B 30.1 cm (0.2 cm de diferència).",
+      "desviament_cm": 0.17
+     },
+     {
+      "sew_id": 57,
+      "casa": false,
+      "missatge": "El tram [0.0615–0.1286] de la vora 1 no correspon a cap tram de gir a gir de la geometria actual: la costura es va declarar sobre una altra versió del patró.",
+      "desviament_cm": null
+     },
+     {
+      "sew_id": 58,
+      "casa": false,
+      "missatge": "El tram [0.5903–0.7618] de la vora 1 no correspon a cap tram de gir a gir de la geometria actual: la costura es va declarar sobre una altra versió del patró.",
+      "desviament_cm": null
+     }
+    ]
+   }
+  ],
+  "omissions": [
+   {
+    "codi": "spec_sense_pom",
+    "pom_code": "E5",
+    "missatge": "El POM E5 té grading a la versió però no està ancorat a cap punt del patró: no mou res. (Ancorar-l'hi el faria entrar a la niada.)"
+   },
+   {
+    "codi": "spec_sense_pom",
+    "pom_code": "EK",
+    "missatge": "El POM EK té grading a la versió però no està ancorat a cap punt del patró: no mou res. (Ancorar-l'hi el faria entrar a la niada.)"
+   },
+   {
+    "codi": "spec_sense_pom",
+    "pom_code": "EK1",
+    "missatge": "El POM EK1 té grading a la versió però no està ancorat a cap punt del patró: no mou res. (Ancorar-l'hi el faria entrar a la niada.)"
+   },
+   {
+    "codi": "spec_sense_pom",
+    "pom_code": "EK2",
+    "missatge": "El POM EK2 té grading a la versió però no està ancorat a cap punt del patró: no mou res. (Ancorar-l'hi el faria entrar a la niada.)"
+   },
+   {
+    "codi": "spec_sense_pom",
+    "pom_code": "I",
+    "missatge": "El POM I té grading a la versió però no està ancorat a cap punt del patró: no mou res. (Ancorar-l'hi el faria entrar a la niada.)"
+   },
+   {
+    "codi": "spec_sense_pom",
+    "pom_code": "J",
+    "missatge": "El POM J té grading a la versió però no està ancorat a cap punt del patró: no mou res. (Ancorar-l'hi el faria entrar a la niada.)"
+   },
+   {
+    "codi": "spec_sense_pom",
+    "pom_code": "SF",
+    "missatge": "El POM SF té grading a la versió però no està ancorat a cap punt del patró: no mou res. (Ancorar-l'hi el faria entrar a la niada.)"
+   }
+  ],
+  "problemes_poms": [
+   "El POM E5 és una cota de PROJECCIÓ sobre un eix: es mesura sobre el patró, però encara no es gradua. El seu delta ha de créixer sobre l'eix de la cota i la projecció v1 el reparteix al llarg de la recta entre els dos punts, que no és la mateixa direcció. No entrarà a la niada.",
+   "El POM EK és una cota de PROJECCIÓ sobre un eix: es mesura sobre el patró, però encara no es gradua. El seu delta ha de créixer sobre l'eix de la cota i la projecció v1 el reparteix al llarg de la recta entre els dos punts, que no és la mateixa direcció. No entrarà a la niada.",
+   "El POM EK1 és una cota de PROJECCIÓ sobre un eix: es mesura sobre el patró, però encara no es gradua. El seu delta ha de créixer sobre l'eix de la cota i la projecció v1 el reparteix al llarg de la recta entre els dos punts, que no és la mateixa direcció. No entrarà a la niada.",
+   "El POM EK2 és una cota de PROJECCIÓ sobre un eix: es mesura sobre el patró, però encara no es gradua. El seu delta ha de créixer sobre l'eix de la cota i la projecció v1 el reparteix al llarg de la recta entre els dos punts, que no és la mateixa direcció. No entrarà a la niada.",
+   "El POM SF és una cota de PROJECCIÓ sobre un eix: es mesura sobre el patró, però encara no es gradua. El seu delta ha de créixer sobre l'eix de la cota i la projecció v1 el reparteix al llarg de la recta entre els dos punts, que no és la mateixa direcció. No entrarà a la niada.",
+   "El POM I és una cota de PROJECCIÓ sobre un eix: es mesura sobre el patró, però encara no es gradua. El seu delta ha de créixer sobre l'eix de la cota i la projecció v1 el reparteix al llarg de la recta entre els dos punts, que no és la mateixa direcció. No entrarà a la niada."
+  ],
+  "problemes_costures": [],
+  "problemes_escalat": [
+   "La niada del POM A no aterra al delta que el grading mana: a la talla XL creix +4.741 cm quan n'havia de créixer +9.000 (diferència -4.259 cm). La causa és coneguda: el POM ancora sobre un punt de CORBA (extrem b), i el lliurable només porta regla als punts de gir i als piquets — el moviment d'aquell extrem no arriba al fitxer i el CAD del client el fa fluir.",
+   "La niada del POM C no aterra al delta que el grading mana: a la talla XL creix +4.500 cm quan n'havia de créixer +9.000 (diferència -4.500 cm). La causa és coneguda: el POM ancora sobre un punt de CORBA (extrem a), i el lliurable només porta regla als punts de gir i als piquets — el moviment d'aquell extrem no arriba al fitxer i el CAD del client el fa fluir.",
+   "La niada del POM E no aterra al delta que el grading mana: a la talla XL creix +1.597 cm quan n'havia de créixer +1.800 (diferència -0.203 cm). Els dos extrems són punts de gir: el que no aterra és el REPARTIMENT —la projecció v1 reparteix el delta simètricament al llarg de la recta a→b— i no la propagació al cosit.",
+   "La niada del POM E1 no aterra al delta que el grading mana: a la talla XL creix +0.406 cm quan n'havia de créixer +0.900 (diferència -0.494 cm). Els dos extrems són punts de gir: el que no aterra és el REPARTIMENT —la projecció v1 reparteix el delta simètricament al llarg de la recta a→b— i no la propagació al cosit.",
+   "La niada del POM S no aterra al delta que el grading mana: a la talla XL creix +5.759 cm quan n'havia de créixer +2.400 (diferència +3.359 cm). Els dos extrems són punts de gir: el que no aterra és el REPARTIMENT —la projecció v1 reparteix el delta simètricament al llarg de la recta a→b— i no la propagació al cosit.",
+   "La niada del POM S2 no aterra al delta que el grading mana: a la talla XL creix +1.059 cm quan n'havia de créixer +2.400 (diferència -1.341 cm). La causa és coneguda: el POM ancora sobre un punt de CORBA (extrem a), i el lliurable només porta regla als punts de gir i als piquets — el moviment d'aquell extrem no arriba al fitxer i el CAD del client el fa fluir."
+  ],
+  "regles": 36,
+  "autovalidacio": {
+   "ok": true,
+   "resum": "✅ Autovalidació: 3840 punts rellegits sense cap desviació (màx. 0.000 µm), 37/37 regles idèntiques, cens immòbil (4116 entitats a les dues voltes).",
+   "punts_comparats": 3840,
+   "desviacio_maxima_um": 0.0
+  },
+  "text_gate": "Aquest fitxer ha estat generat automàticament. Cal obrir-lo al teu CAD i verificar geometria, costures i grading abans de tallar."
+ },
+ "llista": [
+  {
+   "id": 20,
+   "model": 1383,
+   "garment_type_item": null,
+   "source_asset": null,
+   "versio": 3,
+   "is_current": true,
+   "versio_anterior": 19,
+   "nom_fitxer": "837 CORS 194 VESTIT M3-4 AGUS.DXF",
+   "mida_bytes": 349485,
+   "checksum": "dc988255c26d7e84d22a237e2f935571d9efa70ad5221eab525b68041cc3f9dd",
+   "mimetype": "application/octet-stream",
+   "nom_rul": "",
+   "mida_rul_bytes": 0,
+   "te_rul": false,
+   "font_cad": "polypattern",
+   "escala_mm": 1.0,
+   "unitats_metode": "geometry",
+   "unitats_confianca": "low",
+   "pujat_per": 1,
+   "data_pujada": "2026-08-24T10:11:39.589263+02:00",
+   "download_url": null,
+   "download_rul_url": null,
+   "render_url": null
+  },
+  {
+   "id": 19,
+   "model": 1383,
+   "garment_type_item": null,
+   "source_asset": null,
+   "versio": 2,
+   "is_current": false,
+   "versio_anterior": 18,
+   "nom_fitxer": "837  VESTIT M3-4 s cost.DXF",
+   "mida_bytes": 166084,
+   "checksum": "66ebd3263ca5c55bd0586c6ef80cbd967f87b58a0105bbe57f04db39a3765f41",
+   "mimetype": "application/octet-stream",
+   "nom_rul": "",
+   "mida_rul_bytes": 0,
+   "te_rul": false,
+   "font_cad": "polypattern",
+   "escala_mm": 1.0,
+   "unitats_metode": "geometry",
+   "unitats_confianca": "low",
+   "pujat_per": 1,
+   "data_pujada": "2026-08-23T19:13:03.907715+02:00",
+   "download_url": null,
+   "download_rul_url": null,
+   "render_url": null
+  },
+  {
+   "id": 18,
+   "model": 1383,
+   "garment_type_item": null,
+   "source_asset": null,
+   "versio": 1,
+   "is_current": false,
+   "versio_anterior": null,
+   "nom_fitxer": "837  VESTIT s opcio cost.DXF",
+   "mida_bytes": 166085,
+   "checksum": "6c2126bec64799af59279a529080e83f27f6033e0a7290752b5e71944fe2ec9e",
+   "mimetype": "application/octet-stream",
+   "nom_rul": "837  VESTIT s opcio cost.RUL",
+   "mida_rul_bytes": 235,
+   "te_rul": true,
+   "font_cad": "polypattern",
+   "escala_mm": 1.0,
+   "unitats_metode": "geometry",
+   "unitats_confianca": "low",
+   "pujat_per": 1,
+   "data_pujada": "2026-08-23T19:11:01.311458+02:00",
+   "download_url": null,
+   "download_rul_url": null,
+   "render_url": null
+  }
+ ],
+ "detall": {
+  "id": 20,
+  "model": 1383,
+  "garment_type_item": null,
+  "source_asset": null,
+  "versio": 3,
+  "is_current": true,
+  "versio_anterior": 19,
+  "nom_fitxer": "837 CORS 194 VESTIT M3-4 AGUS.DXF",
+  "mida_bytes": 349485,
+  "checksum": "dc988255c26d7e84d22a237e2f935571d9efa70ad5221eab525b68041cc3f9dd",
+  "mimetype": "application/octet-stream",
+  "nom_rul": "",
+  "mida_rul_bytes": 0,
+  "te_rul": false,
+  "font_cad": "polypattern",
+  "escala_mm": 1.0,
+  "unitats_metode": "geometry",
+  "unitats_confianca": "low",
+  "empremta": {
+   "autor": "PolyPattern",
+   "unitats": {
+    "metode": "geometry",
+    "confianca": "low",
+    "evidencia": "factors plausibles alhora (mm, 1/10mm); s'assumeix mm",
+    "factor_to_mm": 1.0
+   },
+   "font_cad": "polypattern",
+   "dxf_version": "AC1009",
+   "text_height": 10.0,
+   "aama_version": "",
+   "header_buida": true,
+   "tables_buida": true,
+   "cens_entitats": {
+    "LINE": 5,
+    "TEXT": 363,
+    "POINT": 3840,
+    "INSERT": 5,
+    "POLYLINE": 10
+   },
+   "capes_presents": [
+    "1",
+    "2",
+    "3",
+    "4",
+    "7",
+    "8",
+    "14"
+   ],
+   "ordre_seccions": [
+    "HEADER",
+    "TABLES",
+    "BLOCKS",
+    "ENTITIES"
+   ],
+   "doc_text_anchor": [
+    50.0,
+    50.0
+   ],
+   "textos_document": [
+    "Author: PolyPattern",
+    "GRADE RULE TABLE:837 CORS 194 VESTIT M3-4 AGUS",
+    "Units: Metric",
+    "Sample Size: S",
+    "Style Name: M.837.GEN"
+   ],
+   "capes_declarades": [
+    "0",
+    "Defpoints"
+   ],
+   "separador_decimal": {
+    "text": ".",
+    "coordenades": "."
+   },
+   "capes_desconegudes": [],
+   "entitats_no_interpretades": []
+  },
+  "grade_table": null,
+  "pujat_per": 1,
+  "data_pujada": "2026-08-24T10:11:39.589263+02:00",
+  "pieces": [
+   {
+    "id": 91,
+    "nom_block": "837.CUELLO",
+    "rol": "837.CUELLO",
+    "contorns": [
+     {
+      "role": "cut",
+      "index": 0,
+      "layer": "1",
+      "closed": true
+     },
+     {
+      "role": "sew",
+      "index": 1,
+      "layer": "14",
+      "closed": true
+     }
+    ],
+    "grain": {
+     "x1": 2492.88,
+     "x2": 2524.687,
+     "y1": 1485.5,
+     "y2": 1485.5
+    },
+    "metadata": {
+     "size": "S",
+     "extra": {},
+     "anchor": [
+      2434.5,
+      1485.5
+     ],
+     "material": "Principal",
+     "quantity": 1.1,
+     "piece_name": "837.CUELLO"
+    },
+    "doblec_original": null,
+    "has_sew": true,
+    "has_fold": false,
+    "unknown_layers": [],
+    "punts_per_capa": {
+     "notch": 8,
+     "turn": 20,
+     "curve": 1196
+    },
+    "bounding_box_mm": {
+     "min_x": 2339.205,
+     "min_y": 1359.112,
+     "max_x": 2530.014,
+     "max_y": 1612.188,
+     "ample": 190.8090000000002,
+     "alt": 253.07600000000002
+    },
+    "total_punts": 1216,
+    "piece_role": {
+     "id": 6,
+     "slug": "collar",
+     "classe": "banda",
+     "nom": {
+      "en": "Collar",
+      "ca": "Coll",
+      "es": "Cuello"
+     }
+    },
+    "nom": "",
+    "lateralitat": "",
+    "ordinal": null,
+    "estat_peca": "produccio",
+    "rol_origen": "assignat"
+   },
+   {
+    "id": 92,
+    "nom_block": "837.DELANTERO",
+    "rol": "837.DELANTERO",
+    "contorns": [
+     {
+      "role": "cut",
+      "index": 0,
+      "layer": "1",
+      "closed": true
+     },
+     {
+      "role": "sew",
+      "index": 1,
+      "layer": "14",
+      "closed": true
+     }
+    ],
+    "grain": {
+     "x1": 1001.713,
+     "x2": 1666.057,
+     "y1": 1054.0,
+     "y2": 1054.0
+    },
+    "metadata": {
+     "size": "S",
+     "extra": {},
+     "anchor": [
+      1460.0,
+      1053.0
+     ],
+     "material": "Principal",
+     "quantity": 1.0,
+     "piece_name": "837.DELANTERO"
+    },
+    "doblec_original": null,
+    "has_sew": true,
+    "has_fold": false,
+    "unknown_layers": [],
+    "punts_per_capa": {
+     "notch": 12,
+     "turn": 56,
+     "curve": 916
+    },
+    "bounding_box_mm": {
+     "min_x": 890.99,
+     "min_y": 730.63,
+     "max_x": 2028.671,
+     "max_y": 1375.73,
+     "ample": 1137.681,
+     "alt": 645.1
+    },
+    "total_punts": 972,
+    "piece_role": {
+     "id": 1,
+     "slug": "front",
+     "classe": "cos",
+     "nom": {
+      "en": "Front",
+      "ca": "Davant",
+      "es": "Delantero"
+     }
+    },
+    "nom": "",
+    "lateralitat": "",
+    "ordinal": null,
+    "estat_peca": "produccio",
+    "rol_origen": "assignat"
+   },
+   {
+    "id": 93,
+    "nom_block": "837.ESPALDA",
+    "rol": "837.ESPALDA",
+    "contorns": [
+     {
+      "role": "cut",
+      "index": 0,
+      "layer": "1",
+      "closed": true
+     },
+     {
+      "role": "sew",
+      "index": 1,
+      "layer": "14",
+      "closed": true
+     }
+    ],
+    "grain": {
+     "x1": 1054.923,
+     "x2": 1876.461,
+     "y1": 1798.0,
+     "y2": 1798.0
+    },
+    "metadata": {
+     "size": "S",
+     "extra": {},
+     "anchor": [
+      1487.0,
+      1797.0
+     ],
+     "material": "Principal",
+     "quantity": 1.0,
+     "piece_name": "837.ESPALDA"
+    },
+    "doblec_original": null,
+    "has_sew": true,
+    "has_fold": false,
+    "unknown_layers": [],
+    "punts_per_capa": {
+     "notch": 8,
+     "turn": 48,
+     "curve": 872
+    },
+    "bounding_box_mm": {
+     "min_x": 917.996,
+     "min_y": 1475.463,
+     "max_x": 2055.508,
+     "max_y": 2120.226,
+     "ample": 1137.5119999999997,
+     "alt": 644.7630000000001
+    },
+    "total_punts": 920,
+    "piece_role": {
+     "id": 2,
+     "slug": "back",
+     "classe": "cos",
+     "nom": {
+      "en": "Back",
+      "ca": "Esquena",
+      "es": "Espalda"
+     }
+    },
+    "nom": "",
+    "lateralitat": "",
+    "ordinal": null,
+    "estat_peca": "produccio",
+    "rol_origen": "assignat"
+   },
+   {
+    "id": 94,
+    "nom_block": "837.MANGA",
+    "rol": "837.MANGA",
+    "contorns": [
+     {
+      "role": "cut",
+      "index": 0,
+      "layer": "1",
+      "closed": true
+     },
+     {
+      "role": "sew",
+      "index": 1,
+      "layer": "14",
+      "closed": true
+     }
+    ],
+    "grain": {
+     "x1": 2140.733,
+     "x2": 2486.429,
+     "y1": 877.5,
+     "y2": 877.5
+    },
+    "metadata": {
+     "size": "S",
+     "extra": {},
+     "anchor": [
+      2313.5,
+      876.5
+     ],
+     "material": "Principal",
+     "quantity": 1.1,
+     "piece_name": "837.MANGA"
+    },
+    "doblec_original": null,
+    "has_sew": true,
+    "has_fold": false,
+    "unknown_layers": [],
+    "punts_per_capa": {
+     "notch": 8,
+     "turn": 18,
+     "curve": 586
+    },
+    "bounding_box_mm": {
+     "min_x": 2083.117,
+     "min_y": 702.946,
+     "max_x": 2544.051,
+     "max_y": 1051.102,
+     "ample": 460.93399999999974,
+     "alt": 348.15600000000006
+    },
+    "total_punts": 604,
+    "piece_role": {
+     "id": 4,
+     "slug": "sleeve",
+     "classe": "maniga",
+     "nom": {
+      "en": "Sleeve",
+      "ca": "Màniga",
+      "es": "Manga"
+     }
+    },
+    "nom": "",
+    "lateralitat": "",
+    "ordinal": null,
+    "estat_peca": "produccio",
+    "rol_origen": "assignat"
+   },
+   {
+    "id": 95,
+    "nom_block": "837.TAPETA",
+    "rol": "837.TAPETA",
+    "contorns": [
+     {
+      "role": "cut",
+      "index": 0,
+      "layer": "1",
+      "closed": true
+     },
+     {
+      "role": "sew",
+      "index": 1,
+      "layer": "14",
+      "closed": true
+     }
+    ],
+    "grain": {
+     "x1": 1992.921,
+     "x2": 2132.767,
+     "y1": 1346.5,
+     "y2": 1346.5
+    },
+    "metadata": {
+     "size": "S",
+     "extra": {},
+     "anchor": [
+      2071.0,
+      1346.5
+     ],
+     "material": "Principal",
+     "quantity": 1.1,
+     "piece_name": "837.TAPETA"
+    },
+    "doblec_original": null,
+    "has_sew": true,
+    "has_fold": false,
+    "unknown_layers": [],
+    "punts_per_capa": {
+     "notch": 8,
+     "turn": 16,
+     "curve": 68
+    },
+    "bounding_box_mm": {
+     "min_x": 1969.597,
+     "min_y": 1310.775,
+     "max_x": 2171.821,
+     "max_y": 1382.334,
+     "ample": 202.22399999999993,
+     "alt": 71.55899999999997
+    },
+    "total_punts": 84,
+    "piece_role": {
+     "id": 20,
+     "slug": "placket",
+     "classe": "banda",
+     "nom": {
+      "en": "Placket",
+      "ca": "Tapeta",
+      "es": "Tapeta"
+     }
+    },
+    "nom": "",
+    "lateralitat": "",
+    "ordinal": null,
+    "estat_peca": "produccio",
+    "rol_origen": "assignat"
+   }
+  ],
+  "download_url": null,
+  "download_rul_url": null,
+  "render_url": null
+ }
+}
