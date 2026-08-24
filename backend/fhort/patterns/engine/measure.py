@@ -15,12 +15,22 @@ Tres modes, i cap dels dos últims és un caprici: el patronatge real els necess
                   a la línia. És el que demanen les mesures «des del nivell HPS» (escot
                   davant, caiguda d'espatlla, profunditat de sisa), que no són ni una
                   recta entre dos punts del patró ni una longitud per vora.
+  · `projeccio` — la COTA D'EIX. Dues àncores i un eix (H o V): el valor és |Δ| de la
+                  projecció sobre aquell eix. És el que un CAD dibuixa quan acota una
+                  amplada o una alçada, i el que mesura una cinta estesa recta sobre la
+                  taula.
 
 I dos mètodes de mesurar, que no són intercanviables: la distància RECTA entre dos punts
 (el que mesura una cinta estirada) i la longitud PER VORA (el que mesura una cinta que
 resegueix la corba). Una sisa recta i una sisa resseguida es diferencien en centímetres.
 `POMMaster` no diu quin toca —no té camp per dir-ho—, així que el mètode es desa a
 `PatternPOM.metode` i per defecte és RECTA, dit i no assumit.
+
+⚠️ **`ortogonal` i `projeccio` semblen contradir-se, i no.** La primera evita els eixos del
+full i la segona hi viu. Són dues preguntes diferents sobre la mateixa geometria: «quant cau
+respecte del NIVELL DE LA PEÇA» i «quant ocupa en amplada SOBRE LA TAULA». Qui tria és el
+patronista, i el que no pot passar és que el motor decideixi per ell — per això són dos
+mètodes i no un amb una bandera.
 
 ⚠️ **La caiguda ortogonal NO és ΔY.** Restar coordenades seria molt més curt i estaria
 malament dues vegades: en una peça que al plànol seu girada, els eixos del full no són
@@ -47,6 +57,11 @@ MM_PER_CM = 10.0
 #: res, i normalitzar-hi un vector dona un número sense sentit (o un NaN).
 TOL_REFERENCIA_MM = 1e-6
 
+#: Els eixos d'una cota de projecció. `''` és AUTO: el motor tria el de més recorregut.
+EIX_AUTO = ''
+EIX_H = 'H'
+EIX_V = 'V'
+
 
 class MeasureError(PatternEngineError):
     """La recepta no es pot resoldre sobre aquesta geometria."""
@@ -55,7 +70,7 @@ class MeasureError(PatternEngineError):
 @dataclass(frozen=True)
 class MeasureResult:
     valor_cm: float
-    metode: str                       # 'recta' | 'vora' | 'ortogonal'
+    metode: str                       # 'recta' | 'vora' | 'ortogonal' | 'projeccio'
     punts: tuple[tuple[float, float], ...]   # els punts que la mesura toca, en mm
     derivat: bool = False             # ha calgut calcular algun punt que no existeix?
 
@@ -95,7 +110,55 @@ def resoldre(
             _punt(definicio.get('p'), punts_per_id, 'p'),
         )
 
+    if mode == 'projeccio':
+        return _projeccio(
+            _punt(definicio.get('a'), punts_per_id, 'a'),
+            _punt(definicio.get('b'), punts_per_id, 'b'),
+            definicio.get('eix', EIX_AUTO) or EIX_AUTO,
+        )
+
     raise MeasureError(f"Mode de mesura desconegut: '{mode}'.")
+
+
+def eix_dominant(a, b) -> str:
+    """L'eix on aquests dos punts tenen més recorregut. El d'AUTO.
+
+    Empat exacte → horitzontal. És arbitrari i està escrit a posta: una regla que ho
+    resolgui sempre igual és preferible a una que depengui de com hagi arrodonit el CAD.
+    Un empat de debò (una diagonal a 45° perfectes) no és cap cota real; qui la vulgui,
+    que triï l'eix a mà, que és exactament per a això que la sub-opció existeix.
+    """
+    return EIX_H if abs(b[0] - a[0]) >= abs(b[1] - a[1]) else EIX_V
+
+
+def _projeccio(a, b, eix: str) -> MeasureResult:
+    """|Δ| de la projecció d'a→b sobre l'eix horitzontal o el vertical.
+
+    El SEGMENT que es torna no és a→b: és la cota, i una cota d'eix és paral·lela al seu
+    eix. Es dibuixa a l'alçada (o a l'abscissa) MITJANA dels dos punts, que la deixa entre
+    tots dos en lloc d'enganxada a un —la posició fina la mana després el desplaçament de
+    presentació, que és l'únic que l'ha de manar.
+
+    `derivat=True`: els dos extrems del segment són punts calculats. Un d'ells cau sobre
+    una àncora només per casualitat, quan els dos punts ja compartien coordenada.
+    """
+    if eix not in (EIX_AUTO, EIX_H, EIX_V):
+        raise MeasureError(
+            f"Eix de projecció desconegut: '{eix}'. Ha de ser '{EIX_H}', '{EIX_V}' o buit "
+            f"(automàtic)."
+        )
+    if eix == EIX_AUTO:
+        eix = eix_dominant(a, b)
+
+    if eix == EIX_H:
+        mig_y = (a[1] + b[1]) / 2.0
+        p0, p1 = (a[0], mig_y), (b[0], mig_y)
+    else:
+        mig_x = (a[0] + b[0]) / 2.0
+        p0, p1 = (mig_x, a[1]), (mig_x, b[1])
+
+    llarg = hypot(p1[0] - p0[0], p1[1] - p0[1])
+    return MeasureResult(llarg / MM_PER_CM, 'projeccio', (p0, p1), derivat=True)
 
 
 def _ortogonal(ref_a, ref_b, p) -> MeasureResult:
