@@ -374,7 +374,7 @@ def model_task_log_view(request, model_id):
     de les ModelTask del model, ordenat per data/hora desc. Font: TaskTransition."""
     qs = (TaskTransition.objects
           .filter(model_task__model_id=model_id)
-          .select_related('model_task__task_type', 'by')
+          .select_related('model_task__task_type', 'model_task__ronda', 'by')
           .order_by('-at'))
     log = [{
         'id': tr.id,
@@ -385,6 +385,14 @@ def model_task_log_view(request, model_id):
         # null = gest del tècnic; slug = el guard que ha actuat. Sense això el log diria que la
         # pausa la va fer `by`, que en una auto-pausa és fals.
         'auto': tr.auto,
+        # M2 · LA CARA DE FIT-8 — el rastre de la reobertura post-entrega ja s'escrivia (M1 · §6)
+        # i **no sortia per cap porta**: la dada existia i no es podia llegir. `nota` no és null
+        # NOMÉS quan la tasca pertany a una volta amb entrega informada
+        # (`_nota_reobertura_post_entrega`), o sigui que la seva PRESÈNCIA ja és el marcador: el
+        # comptador de rectificacions es compta, no es dedueix parsejant la frase.
+        # `ronda_seq` l'hi acompanya per agrupar-lo per volta sense haver de llegir el text.
+        'nota': tr.nota,
+        'ronda_seq': tr.model_task.ronda.seq if tr.model_task.ronda_id else None,
         'at': tr.at.isoformat(),
     } for tr in qs[:300]]
     return Response({'log': log}, status=status.HTTP_200_OK)
