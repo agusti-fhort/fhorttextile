@@ -420,3 +420,170 @@ dels dos a git).
 - El KPI «Rectificacions» de l'albarà compta **totes** les `Done→InProgress` del model; el rastre
   d'FIT-8 només les **post-entrega**. Són dues xifres diferents amb noms semblants i ara conviuen
   a la mateixa pantalla. No he unificat res: la primera és d'abans i té consumidors.
+
+---
+---
+
+# CODA · fidelitat al mockup al Dashboard
+
+> Annex al mateix document (no és un fitxer nou). Mateixa branca **`m2-cara-rondes`**, mateix
+> worktree, **cap push**, **cap fitxer de backend** i per tant **cap test** (llei del gate).
+> **Decisió d'ubicació d'Agus, fixada: el contenidor de rondes viu AL DASHBOARD.**
+> Contracte visual: el mateix `docs/maquetes/proposta_A_v2_pla_treball.html`.
+
+Quatre retocs demanats. **Tres han demanat codi; el quart ja estava fet** — v. C4.
+
+---
+
+## C1 · ① LA TARGETA COMPACTA DE TASCA
+
+`frontend/src/components/model/TaskCardCompacta.jsx` — la `.tasca` del mockup: nom ·
+temps/obertures · transport petit · pastilla d'estat. Prou més densa que la gran perquè quatre o
+cinc hi càpiguen en una fila sota la capçalera de la volta, que és el que fa llegible el pla per
+rondes.
+
+### La vàlvula d'escapament, aplicada tal com mana la llei
+
+| Capa | Què s'ha fet |
+|---|---|
+| **PRESENTACIÓ** | **DUPLICADA.** Fitxer nou amb el seu JSX i les seves mides, i un `TransportMini` propi de 20×20 |
+| **LÒGICA** | **COMPARTIDA de debò** a **`frontend/src/utils/tascaPla.js`**: `TASK_ICON`, `STATUS_VARIANT`, `TRANSPORT`, `isOutOfCharge` i `lecturaDeTasca(task, {mine, hasToolRoute})` — les quatre preguntes que totes dues targetes han de respondre igual (quins botons tenen sentit · si el Play és viu · si és d'altri · si és fora d'encàrrec) |
+
+🔒 **La targeta gran NO s'ha tocat.** Mesurat, no afirmat: el `git diff` de `WorkPlan.jsx` entre
+l'acta d'M2 i aquest HEAD **no conté ni una línia del JSX de `TaskCard`**. Els únics canvis del
+fitxer són l'import nou, el punt de crida de dins del contenidor de ronda, i que els mapes ara
+li arriben del mòdul en comptes d'estar declarats a sobre. Segueix pintant **el pla PLA** dels
+models sense voltes.
+
+**Per què no s'ha extret res:** unificar les dues targetes hauria volgut una sola amb un mode
+`compacta`, i aquell component ja embolica el handoff, el temps declarat, el segell i tres
+renderings (§5). Un booleà més per damunt seria justament el que la llei prohibeix forçar.
+
+**Mides.** Del mockup, amb els tokens de la casa: farciment `8px 10px`, mínim 190px, nom a
+`--fs-body` en pes 600, meta a `--fs-caption` en `--text-soft`, transport de 20×20.
+⚠️ **El radi 8 del mockup no és de l'escala de la casa** (6 · 12 · 999) i baixa a **`--r-ctrl`**
+(6), que és el veí i el que ja porten els controls. És l'única mida del mockup que no es pot
+seguir al peu de la lletra sense inventar un valor fora d'escala.
+
+**Una regla que NO ha canviat:** el mockup posa el nom del tècnic a la línia de meta. La targeta
+compacta el diu **amb la mateixa condició que la gran** (només quan la tasca no és meva i té
+assignat), no amb una de nova: la compactació és presentació i no havia de moure cap llei.
+
+---
+
+## C2 · ② FORA LA BARRA DE PROGRÉS GLOBAL
+
+Se'n va el peu sencer del pla: «n/m tasques fetes · %» **i la seva barra**. Amb el pla repartit
+per voltes, un percentatge sobre TOTES les tasques del model **barrejava voltes entregades amb la
+vigent** i no responia cap pregunta que la capçalera de cada ronda no respongui ja millor.
+
+El **temps acumulat sobre el model** es queda —és un fet del model sencer, no d'una volta— i puja
+a la `.sec` del mockup: rètol a l'esquerra, temps a la dreta, alineats a la línia de base.
+**Mesurat al fum**, no mirat: les dues caixes comparteixen `y` (198 ≡ 198) i el temps és a la
+dreta del rètol.
+
+`model_sheet.dashboard.workplan.progress_label` queda òrfena i **se'n va dels tres idiomes
+alhora**: la paritat ca/en/es es manté per retirada igual que es manté per addició.
+
+### ⚠️ Conseqüència declarada, i és MESURADA
+
+Un model **sense cap volta** es pinta pla i **ara no té cap indicador de progrés al Dashboard**:
+no hi ha capçaleres de ronda que el diguin i la barra global ja no hi és. A `fhort`, avui:
+
+| Models amb tasques | Sense cap `Ronda` (es pinten PLANS) | Amb almenys una |
+|---|---|---|
+| **7** | **4** | 3 |
+
+La població s'apaga sola —tot model que rebi un gest neix amb R1 (M1-bis · FIT-4)— però **avui és
+majoria**. 🚩 Si el vols conservar en aquest cas, és **una condició d'una línia**
+(`{!perVoltes && <peu/>}`); no l'he posada perquè el retoc demana retirar la barra sense
+condicions.
+
+---
+
+## C3 · ③ «+ NOVA RONDA» SEMPRE VISIBLE
+
+Banda puntejada a sota de l'última ronda, **sense condició de client**. Abans es pintava només si
+cap volta era oberta —el guard d'`obrir_ronda` llegit per endavant— i el botó **desapareixia
+sense dir per què**: qui no el trobava no sabia si li faltava permís, si la pantalla s'havia
+trencat o si el gest no tocava.
+
+Ara el gest s'ofereix sempre i **qui el refusa és el servidor, amb el seu motiu**: `obrir_ronda`
+respon `400 ronda_invalida` amb *«aquest model ja té una ronda oberta; tanca-la abans d'obrir-ne
+una altra»*, i `obreVolta` ja portava el missatge del servidor al toast (no ha calgut clau nova).
+
+**Segueix vivint dins del pla PER VOLTES**, i això no és una condició amagada: «a sota de
+l'última ronda» demana que n'hi hagi alguna. En un model sense cap volta la R1 **neix sola del
+primer gest** (M1-bis · FIT-4) i un botó allà faria creure que s'ha de declarar.
+
+`potObrirVolta` es queda sense cap lector i **se'n va d'`utils/rondes.js`**: un helper que ja no
+s'usa és una regla esperant que algú la torni a aplicar.
+
+---
+
+## C4 · ④ EL MENÚ «···» — **ja no hi era**
+
+**Cap codi. Cap commit.** El menú «···» del mockup **no s'ha construït mai**: M2 el va deixar
+fora i ho va declarar a §9.1 d'aquesta acta (*«el mockup el dibuixa i no en diu cap acció; un menú
+amb accions inventades hauria estat redisseny, un botó buit, soroll»*). La decisió de la sessió 9
+—cap menú buit, tornarà amb M3— **ratifica el que ja hi havia**, i el que canvia és l'estat de la
+pregunta oberta: 🚩 el punt 2 del §13 (*«digues què hi va»*) queda **TANCAT**: hi anirà quan M3
+porti accions.
+
+Ho verifica el fum igualment (`④ cap menú «···» a les capçaleres de ronda`), perquè una absència
+que ningú no mesura és una absència que torna sola.
+
+---
+
+## C5 · GATE
+
+| Control | Resultat |
+|---|---|
+| `npm run build` | **VERD** |
+| `eslint` sobre els fitxers tocats | **0 errors** · 1 warning **preexistent** (la dependència `token` del `useEffect` del `/me/`) |
+| Fitxers de backend tocats | **CAP** → **cap test**, com mana el brief |
+| Fum de pantalla · `ops/qa/qa_m2_cara_pantalla.py` | **30 OK · 0 FAIL** (26 abans + **4 nous, un per retoc**) |
+| Fum HTTP · `ops/qa/qa_m2_cara_http.py` | **41 OK · 0 FAIL** (cap contracte tocat; corregut per no deixar-lo sense mesurar) |
+| Banc | `[QA-M1]`, remuntat. **Model 1383: no s'hi ha entrat** |
+| Servei | `ftt-staging.service` **NO reiniciat**. Gunicorn propi a `:8124`, **aturat al tancament** |
+
+### Les quatre assercions noves, i com mesuren
+
+| # | Asserció | Com |
+|---|---|---|
+| ① | *dins de la volta, el transport és el COMPACTE (20px, no 26)* | **`bounding_box()` de cada botó de transport**: la mida és l'única diferència entre les dues targetes que no es pot confondre amb res més. Mesurat: tots a **20** |
+| ② | *la barra global ja no hi és* · *el temps segueix dit* · *a la MATEIXA fila que el rètol i a la seva dreta* | absència del text + **comparació de `y` i `x` de les dues caixes** (198 ≡ 198). Que el text hi sigui no prova que sigui on el mockup el posa |
+| ③ | *«+ Nova ronda» es pinta encara que hi hagi una volta OBERTA* | sobre el model del banc amb **R2 viva**, que és exactament l'estat en què abans desapareixia |
+| ④ | *cap menú «···» a les capçaleres de ronda* | absència mesurada |
+
+**Captures** (a `ops/qa/captures/`, gitignorades): `m2_pla_dues_voltes.png` ← **la del retoc**,
+amb les dues voltes en targeta compacta, el temps a la capçalera, la banda puntejada i cap
+«···» · `m2_pla_entregada.png` · `m2_pla_segellada_oberta.png` · `m2_registre.png` ·
+`m2_registre_amb_entrega.png`.
+
+---
+
+## C6 · COMMITS
+
+| Hash | Retoc | Concern |
+|---|---|---|
+| `ccda7b3b` | ① | `feat(model)`: la targeta COMPACTA de tasca dins dels contenidors de ronda |
+| `0d2681e9` | ② | `refactor(model)`: fora la barra de progrés GLOBAL del pla; el temps puja a la capçalera |
+| `b2076276` | ③ | `feat(model)`: «+ Nova ronda» sempre visible; qui refusa el gest és el servidor |
+| *(HEAD)* | ④ + acta | `docs(ordres)`: la CODA d'M2 — **aquest annex** |
+
+**Tres commits de codi i no quatre**, perquè el retoc ④ no en demanava cap (C4). `git add` de
+paths explícits; arbre de sortida net.
+
+---
+
+## C7 · ESTAT DEL §13 DESPRÉS DE LA CODA
+
+| # | Estat ara |
+|---|---|
+| 🚩 1 · «objectiu» i «tancament projectat» | ⏳ **segueix obert** — dades de planificació, fora d'M2 |
+| 🚩 2 · el menú «···» | ✅ **TANCAT** — cap menú buit; tornarà amb M3 (C4) |
+| 🚩 3 · `isOutOfCharge` sense `origen` | ⏳ **segueix pendent de ratificar**. El predicat ha canviat de casa (ara viu a `utils/tascaPla`) i el segueixen les DUES targetes: ratificar-lo val ara per les dues |
+| 🚩 4 · `TaskLog.jsx` és codi mort | ⏳ obert |
+| ⚠️ 5 · `ObrirTascaDialog` diu de menys | ⏳ obert |
+| 🚩 **NOU** · el pla PLA es queda **sense cap progrés** (C2) | **decisió teva**: una línia si el vols |
