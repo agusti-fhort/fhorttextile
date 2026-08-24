@@ -94,6 +94,26 @@ class RondaTest(TenantTestCase):
         with self.assertRaises(RondaError):
             obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, ['pom'])
 
+    def test_el_refus_de_la_segona_ronda_diu_QUINA_volta_bloqueja(self):
+        """M2 · CODA-BIS — el missatge és el que arriba a l'usuari, i ha de ser accionable.
+
+        El guard ja hi era; el que no hi era és QUÈ fer-hi. Deia només «tanca-la», i això amagava
+        la sortida normal —una volta es tanca **entregant-la** (FIT-13), i «tancar» sol no té cap
+        porta pròpia— i tampoc deia QUINA volta bloqueja, que en un model amb història és
+        justament el que no se sap. Aquest text viatja fins al toast de «+ Nova ronda», que és
+        visible sempre precisament perquè el motiu el digui el servidor.
+        """
+        oberta = obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, ['pom'])
+        with self.assertRaises(RondaError) as cm:
+            obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, ['pom'])
+        missatge = str(cm.exception)
+        self.assertIn(f'R{oberta.seq}', missatge,
+                      'El refús no diu quina volta bloqueja.')
+        self.assertIn('entrega', missatge.lower(),
+                      'El refús no diu la sortida normal (entregar-la).')
+        # …i el refús no ha deixat cap volta nova a mitges.
+        self.assertEqual(Ronda.objects.filter(model=self.model).count(), 1)
+
     def test_obrir_ronda_ja_no_accepta_una_correccio(self):
         """S-20 — la correcció té porta pròpia; per aquí ja no passa."""
         with self.assertRaises(RondaError):
