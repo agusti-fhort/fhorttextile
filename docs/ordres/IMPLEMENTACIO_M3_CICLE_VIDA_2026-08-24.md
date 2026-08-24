@@ -12,7 +12,7 @@
 |---|---|
 | Worktree | **`/var/www/ftt-m3cv`**, branca **`m3-cicle-vida`**, creada de `dev` a `d6368482` |
 | Per què worktree | `dev` a `/var/www/ftt-staging` té feina viva d'altres fils i **índex compartit** ([[ftt-commit-sense-pathspec-endu-el-stage-alie]]). ⚠️ El worktree `/var/www/ftt-m3cv` **NO és** el `/var/www/ftt-m3` que ja existia: aquell és la branca `dev-m3` d'un sprint DIFERENT (Gantt de projecte) i no s'ha tocat |
-| HEAD d'arribada | **7 commits** (6 de feina + el merge de `dev`), **cap push** |
+| HEAD d'arribada | **9 commits** (7 de feina + l'acta + el merge de `dev`), **cap push** |
 | Base i `dev` | `dev` **va avançar durant l'sprint** (M2-codes, 5 commits). S'ha fet `git merge dev` al final: la branca ja porta la base que el brief demanava (`M2+codes`) i els solapaments de `WorkPlan.jsx` i i18n ja estan resolts aquí, no els hereta el merge d'Agus |
 | `.env`, `venv`, `node_modules` | **enllaçats** al tree principal (`ln -s`), no copiats. No entren a git |
 | Servei compartit | ⚠️ **`ftt-staging.service` NO reiniciat.** Els fums corren contra un **gunicorn propi** del worktree a `127.0.0.1:8131` |
@@ -22,6 +22,9 @@
 ### Els commits
 
 ```
+ae993668 fix(board): un `?estat=` mal escrit no obre el board als models acabats
+aae4199f docs(ordres): l'acta d'M3 — el cicle de vida del model
+   (merge de `dev` · M2-codes)
 609e3092 qa(m3): els dos fums del cicle de vida — HTTP (25 OK) i PANTALLA (20 OK, amb captures)
 56445fea feat(cara): M3 · el cicle de vida a la pantalla — Accions, banner, vistes i xip de volta
 8866a900 feat(board): FASE 4 · el board per-model, ronda-aware — i una ATURADA declarada
@@ -260,7 +263,7 @@ pinten igual.
 
 ### 7.1 · `manage.py check` — net després de **cada** commit.
 
-### 7.2 · Bloc RONDA + els tests NOUS · **`Ran 233 tests` · `OK`**
+### 7.2 · Bloc RONDA + els tests NOUS · **`Ran 236 tests` · `OK`** (correguda POST-merge)
 
 ```
 venv/bin/python manage.py test \
@@ -286,6 +289,10 @@ venv/bin/python manage.py test \
 Aquest bloc és el que el R13 marca com a **«assumeixen que `Done→InProgress` és legal»** (§b del
 cens), que és exactament el que la paret d'FIT-11 podia trencar. **No en trenca cap**: el guard
 només dispara quan existeix una volta POSTERIOR, i cap d'aquells tests en fabrica.
+
+(La correguda de PRE-merge en donava 233; els 3 de diferència són els que M2-codes va afegir a
+`test_ronda`. Després del darrer retoc del board s'han tornat a córrer els tres fitxers d'M3:
+**`Ran 58 tests` · `OK`**.)
 
 `settings_m3` només canvia el NOM de la BD de test (`test_ftt_m3_cicle`): `test_ftt_staging` és
 compartida entre sessions concurrents i cadascuna destrueix la de l'altra.
