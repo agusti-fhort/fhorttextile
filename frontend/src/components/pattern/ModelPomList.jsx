@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatDelta, formatLen, titleLen } from '../../utils/format'
 
@@ -24,9 +24,28 @@ import { formatDelta, formatLen, titleLen } from '../../utils/format'
  * Un número vermell obliga a endevinar si és vermell perquè està fora o perquè és important;
  * un xip vermell al costat d'un número negre ho diu.
  */
-export default function ModelPomList({ files, pomActiu, onColocar, onAfegirFora, unit = 'CM' }) {
+export default function ModelPomList({
+  files, poms = [], pomActiu, pomSelId = null, onColocar, onAfegirFora,
+  onReobre, onEsborra, onAssenyala, unit = 'CM',
+}) {
   const { t, i18n } = useTranslation()
   const [obert, setObert] = useState(null)
+  const [menu, setMenu] = useState(null)
+
+  // El POM ancorat sencer, pel seu id. Les files de la fitxa només porten un resum de cada
+  // ancoratge (`pattern_pom`, peça, valor, Δ); reobrir-ne un vol la RECEPTA i el mètode, que
+  // viuen a la llista d'ancorats. Per això el panell rep les dues coses i les creua aquí.
+  const pomPerId = useMemo(() => new Map(poms.map(p => [p.id, p])), [poms])
+
+  // ELS ANCORATS QUE NO SÓN A LA FITXA. La llista de treball recorre les Mesures del model,
+  // o sigui que un POM ancorat per la via secundària —el que la fitxa no demana— no hi surt
+  // per cap banda. Amb dos panells es veia al de l'altre costat; amb un de sol, fondre'ls
+  // sense això l'hauria fet DESAPARÈIXER, que és el pitjor que pot fer una fusió de llistes.
+  const forans = useMemo(() => {
+    const deLaFitxa = new Set(
+      files.flatMap(f => (f.ancoratges || []).map(a => a.pattern_pom)))
+    return poms.filter(p => !deLaFitxa.has(p.id))
+  }, [files, poms])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -38,12 +57,40 @@ export default function ModelPomList({ files, pomActiu, onColocar, onAfegirFora,
         <Fila
           key={f.base_measurement} t={t} lang={i18n.language} f={f} unit={unit}
           actiu={pomActiu?.base_measurement === f.base_measurement}
+          pomSelId={pomSelId}
           onColocar={() => onColocar(f)}
           obert={obert === f.base_measurement}
           onInfo={() => setObert(o => (o === f.base_measurement ? null : f.base_measurement))}
           onTanca={() => setObert(null)}
+          menuObert={menu === f.base_measurement}
+          onMenu={() => setMenu(m => (m === f.base_measurement ? null : f.base_measurement))}
+          onTancaMenu={() => setMenu(null)}
+          pomPerId={pomPerId}
+          onReobre={onReobre} onEsborra={onEsborra} onAssenyala={onAssenyala}
         />
       ))}
+
+      {/* Els ancorats que la fitxa no demana. Van al final i amb rètol propi: són feina
+          legítima, però no són la llista de treball. */}
+      {forans.length > 0 && (
+        <>
+          <p style={{
+            margin: '0.5rem 0 0', fontSize: 'var(--fs-caption)', color: 'var(--text-soft)',
+          }}>
+            {t('pattern.taller.pom_outside_group', { n: forans.length })}
+          </p>
+          {forans.map(p => (
+            <FilaForana
+              key={p.id} t={t} p={p} unit={unit}
+              sel={pomSelId === p.id}
+              menuObert={menu === `f${p.id}`}
+              onMenu={() => setMenu(m => (m === `f${p.id}` ? null : `f${p.id}`))}
+              onTancaMenu={() => setMenu(null)}
+              onReobre={onReobre} onEsborra={onEsborra} onAssenyala={onAssenyala}
+            />
+          ))}
+        </>
+      )}
 
       {/* Via SECUNDÀRIA: el POM que no és a la fitxa. Existeix (algú vol mesurar una cosa
           que la fitxa no demana), però no mana la pantalla: la feina és la llista. */}
@@ -79,7 +126,11 @@ function enIdioma(camps, lang) {
   return camps[codi] || camps.en || camps.ca || ''
 }
 
-function Fila({ t, lang, f, actiu, onColocar, unit, obert, onInfo, onTanca }) {
+function Fila({
+  t, lang, f, actiu, onColocar, unit, obert, onInfo, onTanca,
+  menuObert, onMenu, onTancaMenu, pomPerId, pomSelId,
+  onReobre, onEsborra, onAssenyala,
+}) {
   const colocat = f.ancorat
 
   // L'estat de la Δ: només es jutja si es POT jutjar. `dins_tolerancia` ve a null quan la
@@ -239,6 +290,178 @@ function Fila({ t, lang, f, actiu, onColocar, unit, obert, onInfo, onTanca }) {
       </button>
 
       <BotoInfo t={t} lang={lang} f={f} obert={obert} onInfo={onInfo} onTanca={onTanca} />
+      <MenuAccions
+        t={t} obert={menuObert} onObre={onMenu} onTanca={onTancaMenu}
+        accions={[
+          !colocat && {
+            icona: 'ti-crosshair', text: t('pattern.taller.act_place'),
+            fes: onColocar,
+          },
+          ...(f.ancoratges || []).map(anc => {
+            const pom = pomPerId?.get(anc.pattern_pom)
+            const on = (f.ancoratges.length > 1 || !colocat) ? ` · ${anc.peca}` : ''
+            return [
+              onAssenyala && {
+                icona: pomSelId === anc.pattern_pom ? 'ti-eye-off' : 'ti-eye',
+                text: (pomSelId === anc.pattern_pom
+                  ? t('pattern.taller.act_unpoint') : t('pattern.taller.act_point')) + on,
+                fes: () => onAssenyala(anc.pattern_pom),
+              },
+              pom && onReobre && {
+                icona: 'ti-pencil', text: t('pattern.taller.act_reanchor') + on,
+                fes: () => onReobre(pom),
+              },
+              onEsborra && {
+                icona: 'ti-trash', perillosa: true,
+                text: t('pattern.taller.act_delete') + on,
+                fes: () => onEsborra(anc.pattern_pom),
+              },
+            ]
+          }).flat(),
+        ]}
+      />
+    </div>
+  )
+}
+
+/**
+ * Un POM ancorat que la FITXA NO DEMANA (la via secundària).
+ *
+ * No té valor d'espec ni Δ ni veredicte, i no en pot tenir: no hi ha res amb què comparar-lo.
+ * Ensenya el que sí que se'n sap —què mesura, sobre quina peça— i les mateixes accions.
+ */
+function FilaForana({
+  t, p, unit, sel, menuObert, onMenu, onTancaMenu, onReobre, onEsborra, onAssenyala,
+}) {
+  return (
+    <div style={{
+      position: 'relative',
+      background: sel ? 'var(--sel)' : 'var(--panel)',
+      border: `1px solid ${sel ? 'var(--gold)' : 'var(--line)'}`,
+      borderLeft: '3px solid var(--text-soft)',
+      borderRadius: 4, display: 'flex', alignItems: 'center',
+      padding: '0.3rem 0.5rem', gap: '0.5rem',
+    }}>
+      <i className="ti ti-circle-check" style={{ color: 'var(--text-soft)', flexShrink: 0 }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontSize: 'var(--fs-body)', fontWeight: 600, fontFamily: 'var(--mono)',
+        }}>
+          {p.pom_code}
+        </div>
+        <div style={{
+          fontSize: 'var(--fs-caption)', color: 'var(--text-soft)',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
+          {[p.pom_nom, p.peca].filter(Boolean).join(' · ')}
+        </div>
+      </div>
+      <span
+        title={titleLen(p.valor_mesurat_cm)}
+        style={{
+          fontFamily: 'var(--mono)', fontSize: 'var(--fs-body)', fontWeight: 600,
+          color: 'var(--text-main)', flexShrink: 0,
+        }}
+      >
+        {p.valor_mesurat_cm != null
+          ? formatLen(p.valor_mesurat_cm, unit)
+          : t('pattern.pom_unmeasured')}
+      </span>
+      <MenuAccions
+        t={t} obert={menuObert} onObre={onMenu} onTanca={onTancaMenu}
+        accions={[
+          onAssenyala && {
+            icona: sel ? 'ti-eye-off' : 'ti-eye',
+            text: sel ? t('pattern.taller.act_unpoint') : t('pattern.taller.act_point'),
+            fes: () => onAssenyala(p.id),
+          },
+          onReobre && {
+            icona: 'ti-pencil', text: t('pattern.taller.act_reanchor'),
+            fes: () => onReobre(p),
+          },
+          onEsborra && {
+            icona: 'ti-trash', perillosa: true, text: t('pattern.taller.act_delete'),
+            fes: () => onEsborra(p.id),
+          },
+        ]}
+      />
+    </div>
+  )
+}
+
+/**
+ * TOTES les accions d'una fila, en un sol lloc.
+ *
+ * Abans n'hi havia d'escampades: col·locar era la fila sencera i esborrar/reobrir vivien a
+ * l'ALTRE panell, el d'ancorats, amb la seva pròpia selecció. Amb un panell únic, la fila
+ * ha de poder-ho fer tot — i «tot» amb una fila estreta vol dir un desplegable, no sis
+ * icones que no hi caben.
+ *
+ * Amb DOS ancoratges del mateix POM (l'amplada de pit mesurada al davant i a l'esquena) les
+ * accions es repeteixen per peça i el rètol ho diu: són dues mesures diferents, no dues
+ * versions de la mateixa.
+ */
+function MenuAccions({ t, obert, onObre, onTanca, accions }) {
+  const box = useRef(null)
+  const vives = (accions || []).filter(Boolean)
+
+  useEffect(() => {
+    if (!obert) return undefined
+    const perTecla = e => { if (e.key === 'Escape') onTanca() }
+    const perClic = e => { if (box.current && !box.current.contains(e.target)) onTanca() }
+    document.addEventListener('keydown', perTecla)
+    document.addEventListener('mousedown', perClic)
+    return () => {
+      document.removeEventListener('keydown', perTecla)
+      document.removeEventListener('mousedown', perClic)
+    }
+  }, [obert, onTanca])
+
+  if (!vives.length) return null
+
+  return (
+    <div ref={box} style={{ position: 'relative', flexShrink: 0 }}>
+      <button
+        onClick={onObre}
+        aria-expanded={obert}
+        aria-label={t('pattern.taller.act_menu')}
+        title={t('pattern.taller.act_menu')}
+        style={{
+          background: 'none', border: 'none', cursor: 'pointer', padding: '0.2rem 0.35rem',
+          color: obert ? 'var(--gold)' : 'var(--text-soft)', display: 'flex',
+        }}
+      >
+        <i className="ti ti-dots-vertical" />
+      </button>
+      {obert && (
+        <div
+          role="menu"
+          style={{
+            position: 'absolute', top: '100%', right: 0, zIndex: 20, minWidth: 190,
+            background: 'var(--panel)', border: '1px solid var(--line)',
+            borderRadius: 'var(--r-ctrl)', padding: 4,
+            boxShadow: '0 4px 16px rgba(0,0,0,0.10)',
+            display: 'flex', flexDirection: 'column', gap: 2,
+          }}
+        >
+          {vives.map((a, i) => (
+            <button
+              key={i} role="menuitem"
+              onClick={() => { onTanca(); a.fes() }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '0.4rem', textAlign: 'left',
+                background: 'none', border: 'none', cursor: 'pointer',
+                borderRadius: 4, padding: '0.3rem 0.5rem',
+                fontSize: 'var(--fs-caption)',
+                color: a.perillosa ? 'var(--err)' : 'var(--text-main)',
+              }}
+            >
+              <i className={`ti ${a.icona}`} />
+              {a.text}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

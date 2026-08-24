@@ -4487,7 +4487,14 @@
       "err_cota_moure": "The dimension position could not be saved. Please try again.",
       "cota_delete_title": "Delete this dimension?",
       "cota_delete_body": "This removes the POM's anchoring on the pattern. The sheet measurement is not touched, and the POM can be placed again.",
-      "cota_delete_ok": "Delete dimension"
+      "cota_delete_ok": "Delete dimension",
+      "act_menu": "Actions",
+      "act_place": "Place on pattern",
+      "act_reanchor": "Re-anchor",
+      "act_delete": "Delete dimension",
+      "act_point": "Point out on pattern",
+      "act_unpoint": "Stop pointing out",
+      "pom_outside_group": "Anchored but not on the sheet ({{n}})"
     },
     "loading": "Loading pattern…",
     "empty_title": "No pattern yet",

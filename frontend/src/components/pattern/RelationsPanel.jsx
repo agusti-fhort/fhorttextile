@@ -25,19 +25,18 @@ import Modal from '../ui/Modal'
  * selecció no travessa mai els blocs.
  */
 export default function RelationsPanel({
-  poms, sews, pinces, segments, tramsPerId, unit = 'CM',
+  sews, pinces, segments, tramsPerId, unit = 'CM',
   propostes = [], descartatsProp = null,
   cercades = false, buscant = false, onBuscaPropostes, onNetejaPropostes,
   rebuigs = [], onDesfaRebuig,
   onConfirmaProposta, onRebutjaProposta, onRessaltaProposta,
   pincesProposades = [], descartatsPinca = null,
   onConfirmaPinca, onRebutjaPinca, onRessaltaPinca,
-  onEsborraPom, onReobrePom,
   onEsborraSew, onReobreSew, onReanomenaSew,
   onEsborraPinca, onReanomenaPinca,
   onReanomenaTram, onReobreTram, onEsborraTram,
   onAcceptaTolerancia, onDesacceptaTolerancia,
-  onRebutjaBlocProposta, onEsborraBlocPom, onEsborraBlocSew,
+  onRebutjaBlocProposta, onEsborraBlocSew,
   onEsborraBlocPinca, onEsborraBlocTram,
 }) {
   const { t } = useTranslation()
@@ -45,7 +44,6 @@ export default function RelationsPanel({
   // Una selecció per grup. Cinc `useSeleccio` i no un de sol amb cinc claus: el que fa que no
   // hi pugui haver mai un «esborra-ho tot» no és una comprovació, és que l'estat no existeix.
   const selProp = useSeleccio(propostes.map(p => p.clau.join('-')))
-  const selPom = useSeleccio(poms.map(p => p.id))
   const selSew = useSeleccio(sews.map(s => s.id))
   const selPinca = useSeleccio(pinces.map(p => p.id))
   const selTram = useSeleccio(segments.map(s => s.id))
@@ -137,61 +135,6 @@ export default function RelationsPanel({
           onRebutja={onRebutjaPinca}
           onRessalta={onRessaltaPinca}
         />
-      </Seccio>
-
-      <Seccio
-        titol={t('pattern.poms_anchored', { n: poms.length })}
-        accions={
-          <AccionsGrup
-            t={t} n={selPom.sel.size} total={poms.length}
-            onTots={selPom.tots}
-            onEsborra={() => demana(
-              'poms', [...selPom.sel], onEsborraBlocPom, selPom)}
-          />
-        }
-      >
-        <Informe t={t} retinguts={informes.poms} onTanca={() => tanca('poms')} />
-        {poms.length === 0 ? (
-          <Buit text={t('pattern.poms_empty')} />
-        ) : poms.map(p => (
-          <Fila key={p.id}>
-            <Casella
-              marcat={selPom.sel.has(p.id)}
-              onChange={() => selPom.alterna(p.id)}
-              etiqueta={t('pattern.taller.bulk_select_row')}
-            />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{
-                fontSize: 'var(--fs-body)', fontWeight: 600, fontFamily: 'var(--mono)',
-              }}>
-                {p.pom_code}
-              </div>
-              <div style={{
-                fontSize: 'var(--fs-caption)', color: 'var(--text-soft)',
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              }}>
-                {p.pom_nom} · {p.peca}
-              </div>
-            </div>
-            {/* La DADA no s'arrodoneix mai: el `title` porta el valor complet (T7c). */}
-            <span
-              title={titleLen(p.valor_mesurat_cm)}
-              style={{
-                fontFamily: 'var(--mono)', fontSize: 'var(--fs-body)',
-                color: p.valor_mesurat_cm == null ? 'var(--err)' : 'var(--text-main)',
-              }}
-            >
-              {p.valor_mesurat_cm != null
-                ? formatLen(p.valor_mesurat_cm, unit)
-                : t('pattern.pom_unmeasured')}
-            </span>
-            <BotoIcona
-              icona="ti-pencil" etiqueta={t('pattern.taller.reopen')}
-              onClick={() => onReobrePom(p)}
-            />
-            <BotoEsborra onClick={() => onEsborraPom(p.id)} etiqueta={t('app.delete')} />
-          </Fila>
-        ))}
       </Seccio>
 
       <Seccio
@@ -919,18 +862,6 @@ function Seccio({ titol, accions, children }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
         {children}
       </div>
-    </div>
-  )
-}
-
-function Fila({ children }) {
-  return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: '0.5rem',
-      border: '1px solid var(--line)', borderRadius: 4,
-      padding: '0.3rem 0.5rem', background: 'var(--panel)',
-    }}>
-      {children}
     </div>
   )
 }

@@ -4487,7 +4487,14 @@
       "err_cota_moure": "No s'ha pogut desar la posició de la cota. Torna-ho a provar.",
       "cota_delete_title": "Esborrar aquesta cota?",
       "cota_delete_body": "S'esborra l'ancoratge del POM sobre el patró. La mesura de la fitxa no es toca, i el POM es pot tornar a col·locar.",
-      "cota_delete_ok": "Esborrar la cota"
+      "cota_delete_ok": "Esborrar la cota",
+      "act_menu": "Accions",
+      "act_place": "Col·locar al patró",
+      "act_reanchor": "Re-ancorar",
+      "act_delete": "Esborrar la cota",
+      "act_point": "Assenyalar al patró",
+      "act_unpoint": "Deixar d'assenyalar",
+      "pom_outside_group": "Ancorats que no són a la fitxa ({{n}})"
     },
     "loading": "Carregant el patró…",
     "empty_title": "Encara no hi ha cap patró",

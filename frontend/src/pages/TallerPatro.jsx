@@ -843,7 +843,15 @@ export default function TallerPatro() {
     }
   }
 
-  const esborrarBlocPom = ids => enBloc(() => patterns.poms.bulkRemove(ids))
+  // 🚩 L'ESBORRAT EN BLOC DE POMS NO SOBREVIU A LA FUSIÓ DE PANELLS, i queda dit aquí perquè
+  // el client (`patterns.poms.bulkRemove` → `pattern-poms/bulk-delete/`) segueix existint i
+  // funcionant: el que ha desaparegut és la SUPERFÍCIE, no la capacitat.
+  //
+  // El motiu és de forma: el panell únic té una fila per MESURA DE LA FITXA, i un POM hi pot
+  // portar més d'un ancoratge (el pit, mesurat al davant i a l'esquena). Una casella per fila
+  // marcaria una fila d'espec, no un ancoratge, i «esborra els 3 marcats» hauria hagut de
+  // decidir sola quins dels ancoratges cauen. Tornar-hi vol una selecció per ANCORATGE, que
+  // és una peça pròpia i no aquest tram.
 
   // Costures i pinces comparteixen endpoint —una pinça ÉS una SewRelation— però no
   // selecció: al panell són dos grups, perquè esborrar costures i esborrar pinces són dues
@@ -1271,16 +1279,21 @@ export default function TallerPatro() {
           >
             <ModelPomList
               files={feina?.results || []}
+              poms={pomsAncorats}
               pomActiu={pomActiu}
+              pomSelId={pomSel}
               onColocar={colocarPOM}
               onAfegirFora={afegirPOMForaDeFitxa}
+              onReobre={reobrirPOM}
+              onEsborra={id => setEsborraCota(id)}
+              onAssenyala={id => setPomSel(v => (v === id ? null : id))}
               unit={unit}
             />
           </Contenidor>
 
           <Contenidor titol={t('pattern.taller.relations')} icona="ti-link" pes={1}>
             <RelationsPanel
-              poms={pomsAncorats} sews={costures} pinces={pinces} segments={trams}
+              sews={costures} pinces={pinces} segments={trams}
               tramsPerId={tramsPerId} unit={unit}
               propostes={propostes} descartatsProp={descartatsProp}
               cercades={cercades} buscant={buscant}
@@ -1293,7 +1306,6 @@ export default function TallerPatro() {
               onConfirmaPinca={confirmarPinca}
               onRebutjaPinca={rebutjarPinca}
               onRessaltaPinca={c => setPincaPropRessaltada(c ? c.clau.join('-') : null)}
-              onEsborraPom={esborrarPOM} onReobrePom={reobrirPOM}
               onEsborraSew={esborrarSew} onReobreSew={reobrirSew}
               onReanomenaSew={reanomenarSew}
               onEsborraPinca={esborrarPinca} onReanomenaPinca={reanomenarSew}
@@ -1302,7 +1314,6 @@ export default function TallerPatro() {
               onAcceptaTolerancia={acceptarTolerancia}
               onDesacceptaTolerancia={desacceptarTolerancia}
               onRebutjaBlocProposta={rebutjarBlocProposta}
-              onEsborraBlocPom={esborrarBlocPom}
               onEsborraBlocSew={esborrarBlocSew}
               onEsborraBlocPinca={esborrarBlocSew}
               onEsborraBlocTram={esborrarBlocTram}
