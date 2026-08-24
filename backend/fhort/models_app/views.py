@@ -964,7 +964,9 @@ def create_model_wizard(request):
             descripcio=descripcio or None,
             collection=collection or '',
             created_by=creator,
-            estat='Nou',
+            # M3 · FIT-9 — el vocabulari d'estat viu a `Model.ESTAT_CHOICES` i no s'escriu a mà:
+            # aquest literal deia `'Nou'` i el dia del repropòsit hauria escrit un valor mort.
+            estat=Model.ESTAT_NOU,
             data_objectiu=data_objectiu,
             **garment_fields,
         )

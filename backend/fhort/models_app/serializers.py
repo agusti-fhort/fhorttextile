@@ -426,8 +426,16 @@ class ModelDetailSerializer(serializers.ModelSerializer):
         # `fields='__all__'` l'hauria fet escrivible pel PATCH genèric i qualsevol client
         # hauria pogut escriure-hi una maduresa inventada que la UI pinta com si vingués de
         # l'estudi. L'únic escriptor legítim és `federation_service.sync_estat`.
+        # M3 · FIT-9/FIT-10 — `estat`, `motiu_tancament` i `data_tancament` SÓN DE L'ACTE, no
+        # del PATCH genèric. `fields='__all__'` els feia escrivibles: qualsevol client podia
+        # deixar un model a `acabat` sense motiu, sense autor, sense fila a
+        # `ModelEstatEsdeveniment` i sense passar pel guard de la ronda oberta (FIT-10). El
+        # cicle de vida entra només per `/api/v1/models/<id>/tancar/` i `/reobrir/`.
+        # (Cens FASE 0a: cap client escrivia `estat` per aquesta porta — ni el front, ni el
+        # backoffice, ni cap test. Tancar-la no retira res que s'estigui fent servir.)
         read_only_fields = ('codi_intern', 'data_entrada', 'created_at', 'created_by',
-                            'federacio_estat')
+                            'federacio_estat',
+                            'estat', 'motiu_tancament', 'data_tancament')
 
 
 
