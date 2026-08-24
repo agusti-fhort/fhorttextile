@@ -68,9 +68,21 @@ const TRANSPORT = {
   Done:       { play: true,  pause: false, stop: false },
 }
 
-// Fora d'encàrrec / fora de recepta: extra marcat al backend amb off_recipe=True (B4a), o
-// tasca iniciada fora de l'encàrrec (origen='ad_hoc'). Activa el filet grana. NOMÉS marca.
-function isOutOfCharge(task) { return task?.off_recipe === true || task?.origen === 'ad_hoc' }
+// Fora d'encàrrec / fora de recepta: extra marcat al backend amb `off_recipe=True` (B4a).
+// Activa el filet grana. NOMÉS marca.
+//
+// 🚨 **M2 · `origen === 'ad_hoc'` SURT D'AQUEST PREDICAT, i el motiu és una llei nova.** Des d'M1-bis
+// **totes** les tasques que crea `obrir_ronda` neixen `ad_hoc` A POSTA —és el que les deixa
+// conviure amb la `prevista` del mateix tipus sota la unique parcial (`services_r`, nota de la
+// funció)—, o sigui que a partir de la R2 el joc REPLICAT sencer entrava aquí i cada volta nova
+// es pintava amb el filet grana i el rètol «fora d'encàrrec». Mesurat a la QA de pantalla del
+// banc: les dues tasques de la R2 marcades, i cap ho és.
+//
+// I no és una excepció que M2 s'inventi: és el MATEIX raonament que el backend ja va escriure a
+// `_NO_ES_REPLICA` («l'únic camp que literalment vol dir *això no és de la recepta* és
+// `off_recipe`»), i és el que les dues superfícies comercials —`WorkOrderDetail`, `OrderDetail`—
+// ja feien servir soles. Aquesta era l'única lectura de la casa que hi sumava `origen`.
+function isOutOfCharge(task) { return task?.off_recipe === true }
 
 const containerStyle = { background: 'transparent', width: '100%' }
 const cardsGrid = { display: 'flex', flexWrap: 'wrap', gap: 12 }

@@ -21,7 +21,12 @@ import { agrupaPerRonda, RONDA_ENTREGADA, RONDA_TANCADA } from '../../utils/rond
 //
 // 🔒 El col·lapse es DERIVA (entregada = plegada, vigent = oberta) i no es desa enlloc.
 
-const AMPLADES = ['34%', '16%', '10%', '16%', '16%', '8%']
+// Amplades del mockup, amb UN retoc mesurat: la seva darrera columna anava al 8% i, dins del
+// `<main>` de l'app (que té la barra lateral al davant, no els 100vw de la maqueta), un nom de
+// tècnic hi surt tallat —«Agustí …»— i el recompte de la fila-resum també. Els 8 punts surten
+// d'INICI i FI, que porten una data curta i en tenien de sobres. La columna ampla de la maqueta
+// (TASCA, 34%) no es toca: és la que fixa la lectura.
+const AMPLADES = ['34%', '14%', '10%', '14%', '14%', '14%']
 
 const ESTAT_VARIANT = { [RONDA_ENTREGADA]: 'ok', [RONDA_TANCADA]: 'gray' }
 
@@ -44,7 +49,7 @@ const td = (extra) => ({
 
 const mono = { fontFamily: 'var(--mono)' }
 
-export default function RegistreRondes({ passos, rondes }) {
+export default function RegistreRondes({ passos, rondes, log }) {
   const { t, i18n } = useTranslation()
   const locale = localeDeIdioma(i18n.language)
   const [plegatManual, setPlegatManual] = useState({})
@@ -54,6 +59,7 @@ export default function RegistreRondes({ passos, rondes }) {
   const blocs = agrupaPerRonda(passos, rondes, {
     minutsDe: (p) => p.minutes ?? 0,
     esFeta: (p) => p.status === 'Done',
+    log,
   })
   const obert = (bloc) => plegatManual[bloc.clau] ?? bloc.obertPerDefecte
   const commuta = (bloc) => setPlegatManual(p => ({ ...p, [bloc.clau]: !obert(bloc) }))
@@ -127,7 +133,8 @@ export default function RegistreRondes({ passos, rondes }) {
                                   borderTop: '1px solid var(--line)' })}>
                     {orfe ? '—' : formatDataHora(bloc.fi, locale)}
                   </td>
-                  <td style={td({ background: 'var(--bg-page)', color: 'var(--text-soft)',
+                  <td title={t('rondes.n_tasques', { count: bloc.total })}
+                      style={td({ background: 'var(--bg-page)', color: 'var(--text-soft)',
                                   borderTop: '1px solid var(--line)' })}>
                     {t('rondes.n_tasques', { count: bloc.total })}
                   </td>
@@ -136,7 +143,8 @@ export default function RegistreRondes({ passos, rondes }) {
                 {desplegat && bloc.tasques.map((p, i) => (
                   <tr key={`${bloc.clau}-${i}`}>
                     {/* La sagnia diu de qui penja la fila; el fade, que la volta és segellada. */}
-                    <td style={td({ paddingLeft: 34, color: segellada ? 'var(--text-soft)' : undefined })}>
+                    <td title={p.task_type || undefined}
+                        style={td({ paddingLeft: 34, color: segellada ? 'var(--text-soft)' : undefined })}>
                       {p.task_type || '—'}
                     </td>
                     <td style={td()}>
@@ -147,7 +155,7 @@ export default function RegistreRondes({ passos, rondes }) {
                     <td style={td({ ...mono, textAlign: 'right' })}>{formatMinutes(p.minutes)}</td>
                     <td style={td(mono)}>{formatDataHora(p.started_at, locale)}</td>
                     <td style={td(mono)}>{formatDataHora(p.finished_at, locale)}</td>
-                    <td style={td({ color: 'var(--text-soft)' })}>{p.qui || '—'}</td>
+                    <td title={p.qui || undefined} style={td({ color: 'var(--text-soft)' })}>{p.qui || '—'}</td>
                   </tr>
                 ))}
 
@@ -155,7 +163,12 @@ export default function RegistreRondes({ passos, rondes }) {
                     casa. En plegar la volta, el seu resultat queda dit a la fila-resum. */}
                 {desplegat && bloc.entrega && (
                   <tr>
-                    <td style={td({ paddingLeft: 34, background: 'var(--sel)',
+                    {/* `title`: la descripció de l'entrega és TEXT LLIURE i la graella la talla
+                        amb el mateix `ellipsis` que el mockup. Truncar-la és correcte; no
+                        deixar-la llegir enlloc, no. */}
+                    <td title={[t('rondes.reg_entrega_a', { destinatari: bloc.entrega.destinatari }),
+                                bloc.entrega.descripcio].filter(Boolean).join(' · ')}
+                        style={td({ paddingLeft: 34, background: 'var(--sel)',
                                     borderTop: '1px solid var(--gold-border)' })}>
                       <i className="ti ti-package-export" aria-hidden="true"
                          style={{ color: 'var(--gold)', fontSize: 14, marginRight: 6 }} />
@@ -177,7 +190,8 @@ export default function RegistreRondes({ passos, rondes }) {
                     </td>
                     <td style={td({ ...mono, background: 'var(--sel)',
                                     borderTop: '1px solid var(--gold-border)' })}>—</td>
-                    <td style={td({ background: 'var(--sel)', color: 'var(--text-soft)',
+                    <td title={bloc.entrega.qui_informa_nom || undefined}
+                        style={td({ background: 'var(--sel)', color: 'var(--text-soft)',
                                     borderTop: '1px solid var(--gold-border)' })}>
                       {bloc.entrega.qui_informa_nom || '—'}
                     </td>

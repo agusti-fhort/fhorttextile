@@ -4,7 +4,7 @@ import StatCard from '../ui/StatCard'
 import Table from '../ui/Table'
 import RegistreRondes from './RegistreRondes'
 import { models } from '../../api/endpoints'
-import { formatMinutes } from '../../utils/format'
+import { formatMinutes, formatDataHora, localeDeIdioma } from '../../utils/format'
 
 const API = import.meta.env.VITE_API_URL || ''
 const MONO = 'IBM Plex Mono, monospace'
@@ -28,9 +28,11 @@ const fmtDateTime = (v) => v ? new Date(v).toLocaleString('ca-ES', { dateStyle: 
 // endpoint alimenta `TaskLog.jsx`, que no el munta ningú) i, a més, un log de TRANSICIONS no
 // pot dir ni el temps ni l'inici ni el fi d'una tasca. V. l'acta.
 export default function RegistreActivitatTab({ modelId }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const locale = localeDeIdioma(i18n.language)
   const [data, setData] = useState(null)
   const [rondes, setRondes] = useState([])
+  const [log, setLog] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showHistory, setShowHistory] = useState(false)
@@ -48,6 +50,12 @@ export default function RegistreActivitatTab({ modelId }) {
     models.rondes(modelId)
       .then(r => { if (alive) setRondes(Array.isArray(r?.data) ? r.data : []) })
       .catch(() => { if (alive) setRondes([]) })
+    // El LOG, per al rastre d'FIT-8. No surt de l'`history` de l'albarà: aquell no porta la
+    // `nota`, que és justament el marcador de «reoberta després d'entrega». Mateixa lectura que
+    // fa el Pla de treball, i el mateix comptador.
+    models.taskLog(modelId)
+      .then(r => { if (alive) setLog(r?.data?.log ?? []) })
+      .catch(() => { if (alive) setLog([]) })
     return () => { alive = false }
   }, [modelId])
 
@@ -112,8 +120,11 @@ export default function RegistreActivitatTab({ modelId }) {
         <StatCard icon="ti-package-export" label={t('rondes.reg_kpi_entregues')}
                   value={rondes.filter(r => r.entregada).length} />
         <StatCard icon="ti-rotate" label={t('albara.rectifications')} value={totals.rectifications ?? 0} />
+        {/* La data no cap a `--fs-display`: el mockup mateix li baixa el cos, i sense això
+            embolica a tres línies i desalinea la fila sencera de KPI. */}
         <StatCard icon="ti-clock-play" label={t('albara.meritedAt')}
-                  value={fmtDateTime(header?.merited_at)} />
+                  value={formatDataHora(header?.merited_at, locale)}
+                  valueStyle={{ fontSize: 'var(--fs-h2)', lineHeight: '24px' }} />
       </div>
 
       {/* 3. UNA SOLA GRAELLA, per rondes (mockup B v3) — substitueix la taula de passos. */}
@@ -123,7 +134,7 @@ export default function RegistreActivitatTab({ modelId }) {
                       marginBottom: 10 }}>
           {t('rondes.reg_titol')}
         </div>
-        <RegistreRondes passos={steps} rondes={rondes} />
+        <RegistreRondes passos={steps} rondes={rondes} log={log} />
       </div>
 
       {/* 4. Repartiment per tècnic */}
