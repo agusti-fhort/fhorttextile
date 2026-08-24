@@ -210,3 +210,93 @@ class FiltresIOrdreTest(BaseByModel):
         m = self._model()
         self._tasca(m, status='Pending')
         self.assertIsNotNone(self._fila(m, ordering='__injeccio__'))
+
+
+class BoardRondaAwareTest(BaseByModel):
+    """M3 · FASE 4 — el board després del canvi: qui en surt i què diu cada fila de la volta.
+
+    Els tests de dalt (`KanbanStateTest`) segueixen VERDS i sense tocar: la classificació de les
+    quatre columnes **no ha canviat** (v. l'aturada declarada al docstring de `kanban_state`).
+    El que canvia és la població del board i el que cada fila pot DIR."""
+
+    def setUp(self):
+        super().setUp()
+        from fhort.accounts.models import UserProfile   # noqa: F401  (ja creat a la base)
+        from fhort.tasks.services_r import obrir_ronda
+        self._obrir_ronda = obrir_ronda
+
+    def _acaba(self, model, motiu='acabat'):
+        from fhort.models_app.services_cicle import tancar_model
+        tancar_model(model, motiu=motiu, profile=self.prof)
+
+    # ── QUI HI ÉS ────────────────────────────────────────────────────────────
+    def test_un_model_ACABAT_surt_del_board(self):
+        m = self._model()
+        self._tasca(m, status='Pending')
+        self.assertIsNotNone(self._fila(m))
+        self._acaba(m)
+        self.assertIsNone(self._fila(m, all='true'))
+
+    def test_un_model_JUBILAT_tambe_en_surt(self):
+        from fhort.models_app.services_cicle import jubilar_model
+        m = self._model()
+        self._tasca(m, status='Pending')
+        self._acaba(m)
+        jubilar_model(m, profile=self.prof)
+        self.assertIsNone(self._fila(m, all='true'))
+
+    def test_pero_es_poden_demanar_EXPLICITAMENT(self):
+        """L'exclusió és el DEFAULT, no una paret: `?estat=acabat` els torna a ensenyar."""
+        m = self._model()
+        self._tasca(m, status='Pending')
+        self._acaba(m)
+        self.assertIsNotNone(self._fila(m, all='true', estat='acabat'))
+
+    def test_reobrir_el_torna_al_board(self):
+        from fhort.models_app.services_cicle import reobrir_model
+        m = self._model()
+        self._tasca(m, status='Pending')
+        self._acaba(m)
+        reobrir_model(m, profile=self.prof)
+        self.assertIsNotNone(self._fila(m))
+
+    # ── QUÈ DIU LA FILA ──────────────────────────────────────────────────────
+    def test_sense_cap_volta_la_fila_ho_diu_amb_null(self):
+        """Tot model llegat: `ronda` null no és una omissió, és «aquest model no en té»."""
+        m = self._model()
+        self._tasca(m, status='Pending')
+        self.assertIsNone(self._fila(m)['ronda'])
+
+    def test_amb_volta_oberta_la_fila_diu_seq_i_oberta(self):
+        m = self._model()
+        self._tasca(m, status='Pending')
+        r = self._obrir_ronda(m, 'nova_mostra', ['pom'], profile=self.prof)
+        fila = self._fila(m)
+        self.assertEqual(fila['ronda'], {'seq': r.seq, 'estat': 'oberta'})
+
+    def test_una_volta_ENTREGADA_es_distingeix_d_una_de_tancada_a_seques(self):
+        """Les tres que la BD pot donar. Pintar «entregada» una volta tancada sense entrega
+        seria mentir; és la mateixa distinció que M2 ja fa a la fitxa."""
+        from fhort.tasks.services_r import informar_entrega, tancar_ronda
+        entregat = self._model()
+        self._tasca(entregat, status='Pending')
+        r1 = self._obrir_ronda(entregat, 'nova_mostra', ['pom'], profile=self.prof)
+        informar_entrega(r1, destinatari='Brumà SL', profile=self.prof)
+
+        tancat = self._model()
+        self._tasca(tancat, status='Pending')
+        r2 = self._obrir_ronda(tancat, 'nova_mostra', ['pom'], profile=self.prof)
+        tancar_ronda(r2, profile=self.prof)
+
+        self.assertEqual(self._fila(entregat, all='true')['ronda']['estat'], 'entregada')
+        self.assertEqual(self._fila(tancat, all='true')['ronda']['estat'], 'tancada')
+
+    def test_la_fila_parla_de_la_DARRERA_volta_no_de_la_primera(self):
+        from fhort.tasks.services_r import informar_entrega
+        m = self._model()
+        self._tasca(m, status='Pending')
+        r1 = self._obrir_ronda(m, 'nova_mostra', ['pom'], profile=self.prof)
+        informar_entrega(r1, destinatari='X', profile=self.prof)
+        r2 = self._obrir_ronda(m, 'nova_mostra', ['pom'], profile=self.prof)
+        fila = self._fila(m)
+        self.assertEqual(fila['ronda'], {'seq': r2.seq, 'estat': 'oberta'})
