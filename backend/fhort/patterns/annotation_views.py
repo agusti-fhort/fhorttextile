@@ -79,6 +79,8 @@ class PatternPOMSerializer(serializers.ModelSerializer):
                     'Una mesura per landmark necessita el punt base i el punt final.')
         elif mode == PatternPOM.MODE_ORTOGONAL:
             self._valida_ortogonal(valor)
+        elif mode == PatternPOM.MODE_PROJECCIO:
+            self._valida_projeccio(valor)
         else:
             raise serializers.ValidationError(f"Mode de mesura desconegut: '{mode}'.")
         return valor
@@ -120,6 +122,35 @@ class PatternPOMSerializer(serializers.ModelSerializer):
         if valor['p'] in (valor['ref_a'], valor['ref_b']):
             raise serializers.ValidationError(
                 'El punt que cau és una de les àncores de referència: això mesuraria zero.')
+
+    @staticmethod
+    def _valida_projeccio(valor):
+        """Les dues àncores d'una cota d'eix, i l'eix.
+
+        · Sense les dues àncores no hi ha res a projectar.
+        · `a == b` mesuraria zero, igual que al mode de punts, i es rebota igual.
+        · L'eix ha de ser un dels del vocabulari. Buit és legítim i vol dir AUTO —el motor
+          tria el de més recorregut—, i per això `''` és a la llista i no una absència.
+
+        ⚠️ El que NO es rebutja és una cota amb |Δ| zero sobre l'eix triat (dos punts a la
+        mateixa abscissa acotats en horitzontal). És un zero geomètric legítim, i qui l'ha
+        de veure és qui miri la cota: el valor surt 0,00 i es veu. Rebutjar-lo aquí voldria
+        carregar la geometria dins del serializer, que és feina del motor.
+        """
+        falten = [k for k in PatternPOM.ANCORES_PER_METODE[PatternPOM.METODE_PROJECCIO]
+                  if valor.get(k) is None]
+        if falten:
+            raise serializers.ValidationError(
+                'Una cota de projecció necessita les dues àncores. '
+                f'Falten: {", ".join(falten)}.')
+        if valor['a'] == valor['b']:
+            raise serializers.ValidationError(
+                'Els dos extrems de la cota són el mateix punt: això mesuraria zero.')
+        eix = valor.get('eix', PatternPOM.EIX_AUTO) or PatternPOM.EIX_AUTO
+        if eix not in PatternPOM.EIXOS:
+            admesos = ' · '.join(e or '(automàtic)' for e in PatternPOM.EIXOS)
+            raise serializers.ValidationError(
+                f"Eix de projecció desconegut: «{eix}». Ha de ser un de: {admesos}.")
 
     def validate(self, dades):
         """El `metode` i la FORMA de la recepta han de dir el mateix.

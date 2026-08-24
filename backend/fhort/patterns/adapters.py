@@ -610,6 +610,22 @@ def pom_specs(pattern_file) -> tuple[tuple[POMSpec, ...], list[str]]:
                 )
                 continue
 
+            if mode == PatternPOM.MODE_PROJECCIO:
+                # Té DUES adreces, com una recta, o sigui que hi cabria: i és per això que
+                # cal dir-ho, perquè el que no encaixa no és la forma sinó la DIRECCIÓ. La
+                # projecció mana que el creixement vagi sobre l'EIX, i la projecció d'escalat
+                # mou els dos punts al llarg de a→b (`grading_projection.py:294-298`), que és
+                # una altra direcció sempre que la cota no sigui ja paral·la a l'eix. Fer-la
+                # passar donaria una niada que creix, però no per on la cota diu.
+                problemes.append(
+                    f'El POM {codi} és una cota de PROJECCIÓ sobre un eix: es mesura sobre '
+                    f'el patró, però encara no es gradua. El seu delta ha de créixer sobre '
+                    f"l'eix de la cota i la projecció v1 el reparteix al llarg de la recta "
+                    f'entre els dos punts, que no és la mateixa direcció. No entrarà a la '
+                    f'niada.'
+                )
+                continue
+
             if mode != 'points':
                 problemes.append(
                     f'El POM {codi} fa servir el mode de mesura «{mode}», que la projecció '
