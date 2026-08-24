@@ -1734,6 +1734,12 @@ def obrir_ronda_view(request, model_id):
     codes = dades.get('codes') or []
     # Els codes han de ser executables per qui obre la ronda: la mateixa allow-list que
     # `open-task`. Obrir una volta és crear feina, i no es crea feina que un mateix no pot fer.
+    #
+    # M1-bis · FIT-4 — I EL GUARD ES QUEDA NOMÉS AMB EL QUE ES DEMANA. El joc REPLICAT de la volta
+    # anterior no passa per aquí a posta: no és una tria de qui obre, és el que el model ja
+    # arrossega. Amb el guard aplicat també a la rèplica, un PM que no executi (posem) `pattern_cad`
+    # no podria obrir cap volta d'un model que en va fer —o sigui que la porta de +Ronda quedaria
+    # tancada precisament per a qui l'ha de fer servir.
     permesos = get_allowed_task_types(request.user)
     fora = [c for c in codes if c not in permesos]
     if fora:
@@ -1758,6 +1764,10 @@ def obrir_ronda_view(request, model_id):
     return Response({'ronda_id': ronda.pk if ronda else None,
                      'seq': ronda.seq if ronda else None,
                      'motiu': motiu,
+                     # M1-bis — què ha entrat per rèplica i què s'ha quedat pel camí perquè el
+                     # catàleg l'ha desactivat. La UI de M2 ho ha de poder dir en veu alta.
+                     'codes_replicats': getattr(ronda, '_codes_replicats', []),
+                     'codes_omesos': getattr(ronda, '_codes_omesos', []),
                      'tasques': [t.id for t in tasques]},
                     status=http_status.HTTP_201_CREATED)
 

@@ -125,6 +125,47 @@ def ronda_del_gest(model):
     return ronda
 
 
+#: M1-bis · FIT-4 — QUÈ NO ES REPLICA d'una volta a la següent.
+#:
+#: 🚩 **ATENCIÓ, AQUESTA LLISTA ÉS UNA INTERPRETACIÓ I ESTÀ PENDENT D'AGUS** (v. l'acta de M1-bis).
+#: El brief demana «no copiïs les tasques ad_hoc/lliures, només les de catàleg», i cap dels dos
+#: camps que semblen dir-ho serveix per a això:
+#:   · `origen`: **totes** les tasques que crea `obrir_ronda` neixen `ad_hoc` a posta (v. la nota
+#:     de la funció: és el que les deixa conviure amb la `prevista` sota la unique parcial). Filtrar
+#:     per `origen='prevista'` replicaria tot R1→R2 i **res** de R2→R3.
+#:   · `motiu='nova_mostra'`: marca les que va proposar la volta anterior, però **la R1 no en té cap**
+#:     —les seves tasques neixen dels gestos normals, amb `motiu` NULL—, o sigui que R1→R2 no
+#:     replicaria res.
+#: L'únic camp que literalment vol dir «això no és de la recepta» és `off_recipe`, i és el que
+#: s'usa. Les correccions no calen a la llista: es dedupliquen soles, perquè comparteixen el `code`
+#: de la tasca que corregeixen i la còpia va **per code**.
+_NO_ES_REPLICA = {'off_recipe': True}
+
+
+def codes_a_replicar(ronda):
+    """El JOC DE TASQUES d'una volta, en CODES (G9), per tornar-lo a proposar a la següent.
+
+    FIT-4: «R2+ … REPLIQUEN EL JOC DE TASQUES DE LA RONDA ANTERIOR com a proposta reexecutable».
+    Es replica **el joc**, no les tasques: codes, no files. Per això surt `dict.fromkeys` sobre
+    l'ordre de treball i no un `values_list` qualsevol — l'ordre de la volta nova ha de ser el de
+    l'anterior, i els duplicats (una correcció i la seva mare comparteixen code) col·lapsen sols.
+
+    Res del que es replica arrossega estat: ni temps, ni timers, ni assignació, ni notes. El que
+    viatja és **què s'ha de tornar a fer**, i prou.
+    """
+    if ronda is None:
+        return []
+    qs = (ronda.tasques.exclude(**_NO_ES_REPLICA)
+          .select_related('task_type').order_by('order', 'id'))
+    return list(dict.fromkeys(t.task_type.code for t in qs))
+
+
+def _ronda_anterior(model):
+    """La darrera volta del model (la que la nova ha de replicar), o None."""
+    from .models import Ronda
+    return Ronda.objects.filter(model=model).order_by('-seq').first()
+
+
 def obrir_ronda(model, motiu, tasques_codes, *, profile=None):
     """Obre una volta nova de feina sobre un model i li crea les tasques.
 
@@ -135,9 +176,13 @@ def obrir_ronda(model, motiu, tasques_codes, *, profile=None):
 
     `motiu`: `Ronda.MOTIU_NOVA_MOSTRA`. Les CORRECCIONS ja no passen per aquí (S-20): no obren
     volta, i tenen porta pròpia a `obrir_correccio`.
-    `tasques_codes`: slugs de `TaskType` (G9: mai ids). Els inactius i els inexistents s'ignoren
-    en silenci? NO — es rebutgen, perquè obrir una ronda a la qual li falta mitja feina és pitjor
-    que no obrir-la.
+
+    `tasques_codes`: slugs de `TaskType` (G9: mai ids), **ADDITIUS**. M1-bis · FIT-4 — la volta
+    neix amb el **joc de tasques de l'anterior** (`codes_a_replicar`) i el que es demana aquí s'hi
+    SUMA. Es pot cridar amb la llista buida: aquest és ara el cas normal d'un +Ronda que només vol
+    repetir la volta. Els codes DEMANATS inexistents o inactius es rebutgen (qui els demana s'ha
+    equivocat); els REPLICATS que hagin quedat inactius s'ometen i es reporten a
+    `ronda._codes_omesos`, perquè un canvi de catàleg no pot tombar una obertura.
 
     Les tasques neixen `origen='ad_hoc'`: és el que fa que la unique PARCIAL
     `uniq_prevista_model_tasktype` les deixi conviure amb la prevista del mateix tipus.
@@ -153,16 +198,31 @@ def obrir_ronda(model, motiu, tasques_codes, *, profile=None):
         raise RondaError('Una correcció no obre ronda: fes servir `obrir_correccio`.')
     if motiu not in dict(Ronda.MOTIU_CHOICES):
         raise RondaError(f'Motiu de ronda desconegut: {motiu!r}.')
-    codes = list(dict.fromkeys(tasques_codes or []))   # dedup preservant ordre
-    if not codes:
-        raise RondaError('Una ronda sense cap tasca no és una ronda.')
+    demanats = list(dict.fromkeys(tasques_codes or []))   # dedup preservant ordre
     if _ronda_oberta(model) is not None:
         raise RondaError('Aquest model ja té una ronda oberta; tanca-la abans d\'obrir-ne una altra.')
 
+    # M1-bis · FIT-4 — LA VOLTA NOVA NEIX AMB EL JOC DE L'ANTERIOR. El que el cridador demana
+    # s'HI SUMA, no el substitueix: la proposta replicada no es pot «desmarcar», perquè FIT-4 diu
+    # que les replicades «es poden NO EXECUTAR» — la manera de no fer-ne una és no fer-la, no
+    # treure-la de la volta. L'ordre és el de la volta anterior, i els extres van al final.
+    replicats = codes_a_replicar(_ronda_anterior(model))
+    codes = list(dict.fromkeys(replicats + demanats))
+    if not codes:
+        raise RondaError('Una ronda sense cap tasca no és una ronda.')
+
     tipus = {t.code: t for t in TaskType.objects.filter(code__in=codes, active=True)}
-    desconeguts = [c for c in codes if c not in tipus]
+    # Un code DEMANAT que no existeix o és inactiu segueix sent un rebuig dur: el cridador s'ha
+    # equivocat i ha de saber-ho. Un code REPLICAT que ha quedat inactiu des de la volta anterior
+    # NO pot tombar l'obertura —ningú no ha fet res malament, el catàleg ha canviat sota els peus—:
+    # s'omet i es diu quins, perquè ometre en silenci seria pitjor que no replicar.
+    desconeguts = [c for c in demanats if c not in tipus]
     if desconeguts:
         raise RondaError(f"Tipus de tasca inexistents o inactius: {', '.join(desconeguts)}.")
+    omesos = [c for c in codes if c not in tipus]
+    codes = [c for c in codes if c in tipus]
+    if not codes:
+        raise RondaError('Cap de les tasques de la volta anterior segueix activa al catàleg.')
 
     # Les MARES es resolen ABANS de crear la Ronda, i el motiu és mecànic: un cop la ronda
     # existeix, `tasca_vigent` ja resol per ella i retornaria les filles (o None). Aquí encara
@@ -182,6 +242,9 @@ def obrir_ronda(model, motiu, tasques_codes, *, profile=None):
                 ronda=ronda, mare=mares[code], motiu=motiu,
                 assignee=profile,
                 estimated_minutes=lookup_estimated_minutes(model, tt))
+    # Informatiu per a la porta HTTP: quins codes de la volta anterior s'han quedat pel camí.
+    ronda._codes_replicats = [c for c in replicats if c in tipus]
+    ronda._codes_omesos = omesos
     return ronda
 
 
