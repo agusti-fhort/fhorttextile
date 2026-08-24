@@ -4483,7 +4483,11 @@
           "H": "Horizontal OF THE PLAN. Careful: if the piece sits rotated on the pattern, this is not the garment width.",
           "V": "Vertical OF THE PLAN. Careful: if the piece sits rotated on the pattern, this is not the garment length."
         }
-      }
+      },
+      "err_cota_moure": "The dimension position could not be saved. Please try again.",
+      "cota_delete_title": "Delete this dimension?",
+      "cota_delete_body": "This removes the POM's anchoring on the pattern. The sheet measurement is not touched, and the POM can be placed again.",
+      "cota_delete_ok": "Delete dimension"
     },
     "loading": "Loading pattern…",
     "empty_title": "No pattern yet",

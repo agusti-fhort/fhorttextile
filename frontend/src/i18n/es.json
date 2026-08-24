@@ -4483,7 +4483,11 @@
           "H": "Horizontal DEL PLANO. Ojo: si la pieza está girada en el patrón, no es el ancho de la prenda.",
           "V": "Vertical DEL PLANO. Ojo: si la pieza está girada en el patrón, no es el largo de la prenda."
         }
-      }
+      },
+      "err_cota_moure": "No se ha podido guardar la posición de la cota. Inténtalo de nuevo.",
+      "cota_delete_title": "¿Borrar esta cota?",
+      "cota_delete_body": "Se borra el anclaje del POM sobre el patrón. La medida de la ficha no se toca, y el POM se puede volver a colocar.",
+      "cota_delete_ok": "Borrar la cota"
     },
     "loading": "Cargando el patrón…",
     "empty_title": "Todavía no hay ningún patrón",

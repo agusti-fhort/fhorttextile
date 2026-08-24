@@ -5,8 +5,9 @@ import { useTranslation } from 'react-i18next'
 
 import { etiquetaPeca } from './pieceText'
 import {
-  arcDirigit, bboxDePeces, capesPresents, escalaPerCabre, longitudVora,
-  peuPerpendicular, puntMesProper, puntsDelSegment, puntsPerKonva, situaPunt, tramMesProper,
+  arcDirigit, arcsEntrePunts, bboxDePeces, capesPresents, desplacaPolilinia, escalaPerCabre,
+  longitudVora, normalDe, peuPerpendicular, puntMesProper, puntsDeLaCotaProjeccio,
+  puntsDelSegment, puntsPerKonva, situaPunt, tramMesProper,
 } from './patternGeometry'
 import { formatLen, formatLenNum } from '../../utils/format'
 
@@ -94,6 +95,12 @@ export default function PatternViewer({
   // regla pròpia («pinça 3, la resta 2»), que era una segona còpia de la del taller i es va
   // quedar enrere el dia que un mètode en va voler tres. Ara la rep.
   ancoresPom = ['a', 'b'],
+  // ── La COTA seleccionada al canvas, i què se'n pot fer. Sense `onSeleccionaPom` les
+  // cotes no escolten el ratolí (és el visor read-only del tab del model); sense `onMouPom`
+  // no s'arrosseguen.
+  pomSel = null,
+  onSeleccionaPom = null,
+  onMouPom = null,
   onClicPunt = null,
   // Els trams que la costura en curs ja té a cada costat (per pintar-los del seu color).
   segmentsA = [], segmentsB = [],
@@ -447,9 +454,14 @@ export default function PatternViewer({
               />
             ))}
 
-            {/* Els POMs ja ancorats: la mesura, dibuixada sobre la geometria que mesura. */}
+            {/* Els POMs ja ancorats, dibuixats com a COTES sobre la geometria que mesuren. */}
             {pieces.flatMap(piece => (piece.poms || []).map(pom => (
-              <PomKonva key={`pom-${pom.id}`} piece={piece} pom={pom} zoom={zoom} unit={unit} />
+              <PomKonva
+                key={`pom-${pom.id}`} piece={piece} pom={pom} zoom={zoom} unit={unit}
+                sel={pomSel === pom.id}
+                onSelecciona={onSeleccionaPom}
+                onMou={onMouPom}
+              />
             )))}
 
             {/* Els trams DECLARATS, sobre la geometria. Es pinten SEMPRE: són el vocabulari
@@ -727,35 +739,98 @@ export default function PatternViewer({
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Un POM ancorat, dibuixat sobre la geometria que mesura.
+ * Un POM ancorat, dibuixat com el que és: una COTA.
  *
- * La línia de mesura és la MATEIXA cosa que la capa FTT-POM exportarà al DXF (S2): el que
- * el patronista veurà al seu CAD és això mateix. Aquí i allà, la mesura es dibuixa on és.
+ * Fins ara es dibuixava la línia de la mesura, damunt de la geometria i prou. Una cota de
+ * CAD no és això: és una línia paral·lela, separada de la peça, amb dos TESTIMONIS
+ * puntejats que la lliguen als punts que acota. La diferència no és estètica — amb tres
+ * mesures que comparteixen un extrem, les línies s'apilen sobre el mateix vèrtex i ja no
+ * es pot llegir cap.
+ *
+ * · recta i cota d'eix → la cota va paral·lela a l'eix de la mesura.
+ * · caiguda → paral·lela a la caiguda, i el testimoni de baix surt de la línia de referència
+ *   (el peu de la perpendicular hi seu).
+ * · longitud per vora → la cota és la VORA desplaçada, no la corda: acotar amb una recta una
+ *   magnitud que ressegueix una corba seria dibuixar una altra xifra.
+ *
+ * **Es pot arrossegar**, i el desplaçament es desa (`cota_offset_mm`). El drag va CONSTRET a
+ * la normal: una cota de CAD s'allunya i s'apropa, no llisca — i així el que es desa és un
+ * sol número amb sentit geomètric, no una posició absoluta que caducaria el dia que algú
+ * recol·loqui una àncora.
  */
-function PomKonva({ piece, pom, zoom, unit }) {
-  const punts = puntsDeLaMesura(piece, pom)
-  if (punts.length < 2) return null
-  const mig = {
-    x: (punts[0].x + punts[punts.length - 1].x) / 2,
-    y: (punts[0].y + punts[punts.length - 1].y) / 2,
+function PomKonva({ piece, pom, zoom, unit, sel = false, onSelecciona, onMou }) {
+  const g = geometriaDeLaCota(piece, pom)
+  if (!g) return null
+
+  const { origens, cota, normal } = g
+  const cap = cota[0]
+  const cua = cota[cota.length - 1]
+  const mig = cota[Math.floor(cota.length / 2)]
+  const arrossegable = !!onMou
+  const col = sel ? KONVA_COL.tramSel : KONVA_COL.pom
+
+  // El drag es projecta sobre la normal: el que arriba al servidor és quant s'ha separat la
+  // cota de la mesura, no on ha anat a parar el ratolí.
+  const nomesNormal = (posa) => {
+    const d = posa.x * normal.x + (-posa.y) * normal.y
+    return { x: normal.x * d, y: -(normal.y * d) }
   }
+
   return (
-    <Group listening={false}>
+    <Group
+      draggable={arrossegable}
+      onDragMove={arrossegable ? (e) => {
+        const p = nomesNormal({ x: e.target.x(), y: e.target.y() })
+        e.target.position(p)
+      } : undefined}
+      onDragEnd={arrossegable ? (e) => {
+        const d = e.target.x() * normal.x + (-e.target.y()) * normal.y
+        // El grup torna a l'origen: la posició nova arriba per `cota_offset_mm` quan el
+        // servidor confirma. Deixar-l'hi la sumaria dues vegades al render següent.
+        e.target.position({ x: 0, y: 0 })
+        if (Math.abs(d) > 1e-6) onMou(pom, (pom.cota_offset_mm || 0) + d)
+      } : undefined}
+      onMouseDown={onSelecciona ? (e) => { e.cancelBubble = true } : undefined}
+      onClick={onSelecciona ? (e) => { e.cancelBubble = true; onSelecciona(pom) } : undefined}
+      onTap={onSelecciona ? (e) => { e.cancelBubble = true; onSelecciona(pom) } : undefined}
+      listening={!!(onSelecciona || arrossegable)}
+    >
+      {/* TESTIMONIS: del punt acotat fins una mica més enllà de la línia de cota, puntejats
+          i fins, com al CAD. Només quan la cota s'ha separat: a offset zero seria una línia
+          de longitud zero sobre ella mateixa. */}
+      {origens.map((o, i) => {
+        const fi = i === 0 ? cap : cua
+        if (Math.hypot(fi.x - o.x, fi.y - o.y) < 1e-6) return null
+        return (
+          <Line
+            key={`t${i}`}
+            points={[o.x, -o.y, fi.x, -fi.y]}
+            stroke={col} strokeWidth={0.8 / zoom}
+            dash={[1.5 / zoom, 2.5 / zoom]}
+            listening={false} perfectDrawEnabled={false}
+          />
+        )
+      })}
+
+      {/* La LÍNIA DE COTA. Amb `hitStrokeWidth` generós: una línia d'1,8 px no es pot
+          agafar amb el ratolí, i una cota que s'ha d'encertar al píxel no és arrossegable. */}
       <Line
-        points={punts.flatMap(p => [p.x, -p.y])}
-        stroke={KONVA_COL.pom} strokeWidth={1.8 / zoom}
+        points={cota.flatMap(p => [p.x, -p.y])}
+        stroke={col} strokeWidth={(sel ? 2.6 : 1.8) / zoom}
+        hitStrokeWidth={12 / zoom}
         perfectDrawEnabled={false}
       />
-      {punts.map((p, i) => (
-        <Circle key={i} x={p.x} y={-p.y} r={3 / zoom} fill={KONVA_COL.pom}
-                perfectDrawEnabled={false} />
+      {[cap, cua].map((p, i) => (
+        <Circle key={i} x={p.x} y={-p.y} r={3 / zoom} fill={col}
+                listening={false} perfectDrawEnabled={false} />
       ))}
       <Text
         x={mig.x} y={-mig.y - 14 / zoom}
         text={`${pom.pom_code}${pom.valor_mesurat_cm != null
           ? ` ${formatLen(pom.valor_mesurat_cm, unit)}` : ''}`}
         fontSize={11 / zoom}
-        fill={KONVA_COL.pom}
+        fill={col}
+        listening={false}
         perfectDrawEnabled={false}
       />
     </Group>
@@ -823,20 +898,15 @@ function PincaKonva({ pinca, zoom, unit }) {
   )
 }
 
-/** Els punts que una recepta de mesura toca (el landmark es resol al servidor).
+/** La polilínia que una recepta de mesura RECORRE. La longitud d'això ÉS el valor.
  *
- * Una recepta ORTOGONAL no porta `a`/`b` sinó `ref_a`/`ref_b`/`p`, i llegint-hi només les
- * dues primeres claus el POM sortia amb la llista buida i **no es dibuixava gens**: el
- * patronista el col·locava, en veia el valor a la llista de treball, i sobre la peça no hi
- * havia res. La lectura natural d'això és «no s'ha desat».
+ * Una recepta ORTOGONAL no porta `a`/`b` sinó `ref_a`/`ref_b`/`p`, i una de PROJECCIÓ acota
+ * sobre un eix: llegint-hi només les dues primeres claus el POM sortia amb la llista buida i
+ * **no es dibuixava gens**. La lectura natural d'això és «no s'ha desat».
  *
- * El que es dibuixa és el segment (peu → p): la polilínia la longitud de la qual ÉS el
- * valor, la mateixa que el motor torna a `MeasureResult.punts`. La línia de referència no
- * s'hi pinta perquè no forma part de la mesura.
- *
- * ⚠️ Per a la caiguda, aquesta línia NO és el que la capa FTT-POM exportarà —el mode
- * ortogonal encara no entra a la niada (`adapters.pom_specs`)—, a diferència de la recta i
- * la longitud per vora, on la promesa de la capçalera de `PomKonva` sí que es compleix.
+ * ⚠️ Per a la caiguda i per a la cota, aquesta línia NO és el que la capa FTT-POM exportarà
+ * —cap dels dos modes entra encara a la niada (`adapters.pom_specs`)—, a diferència de la
+ * recta i la longitud per vora.
  */
 function puntsDeLaMesura(piece, pom) {
   const def = pom.definicio_mesura || {}
@@ -844,14 +914,58 @@ function puntsDeLaMesura(piece, pom) {
   for (const b of piece.boundaries || []) {
     for (const p of b.points || []) perId.set(p.id, p)
   }
+
   if (def.mode === 'ortogonal') {
     const p = perId.get(def.p)
     const peu = peuPerpendicular(perId.get(def.ref_a), perId.get(def.ref_b), p)
     return peu && p ? [peu, p] : []
   }
+
   const a = perId.get(def.a) || perId.get(def.landmark)
   const b = perId.get(def.b)
-  return a && b ? [a, b] : []
+  if (!a || !b) return []
+
+  if (def.mode === 'projeccio') return puntsDeLaCotaProjeccio(a, b, def.eix || '')
+
+  // LONGITUD PER VORA: la mesura ressegueix la vora, i dibuixar-hi la CORDA seria dibuixar
+  // una altra magnitud. S'agafa l'arc CURT entre els dos punts, que és el que el motor
+  // mesura (`engine/measure._cami_per_vora`).
+  if (pom.metode === 'vora') {
+    for (const boundary of piece.boundaries || []) {
+      const pts = boundary.points || []
+      const ia = pts.findIndex(q => q.id === a.id)
+      const ib = pts.findIndex(q => q.id === b.id)
+      if (ia < 0 || ib < 0) continue
+      const arc = arcsEntrePunts(boundary, ia, ib)[0]
+      if (arc?.punts?.length >= 2) return arc.punts
+    }
+  }
+
+  return [a, b]
+}
+
+/**
+ * La COTA d'un POM: què es dibuixa i on.
+ *
+ * Una cota de CAD no és la línia de la mesura: és una línia PARAL·LELA, separada, amb dos
+ * testimonis que la lliguen als punts que acota. Per això aquí surten tres coses i no una:
+ * els ORÍGENS (d'on surten els testimonis), la línia de COTA (ja desplaçada) i la NORMAL
+ * (la direcció en què el desplaçament es compta, que és la que el drag ha de respectar).
+ *
+ * El desplaçament és `cota_offset_mm` i és PRESENTACIÓ: no toca ni pot tocar el valor.
+ * A zero, la cota seu sobre la mesura —exactament on es dibuixava abans que això existís.
+ */
+function geometriaDeLaCota(piece, pom) {
+  const base = puntsDeLaMesura(piece, pom)
+  if (base.length < 2) return null
+  const normal = normalDe(base[0], base[base.length - 1])
+  if (!normal) return null
+  const off = pom.cota_offset_mm || 0
+  return {
+    origens: [base[0], base[base.length - 1]],
+    cota: desplacaPolilinia(base, off),
+    normal,
+  }
 }
 
 function PecaKonva({ piece, zoom, sel, atenuada, visible, mostraPunts, anotant, onClick }) {

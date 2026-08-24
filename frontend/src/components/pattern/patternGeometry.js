@@ -61,6 +61,66 @@ export function peuPerpendicular(a, b, p) {
   return { x: a.x + t * vx, y: a.y + t * vy }
 }
 
+/**
+ * Els dos extrems de la COTA d'una projecció sobre un eix.
+ *
+ * Mirall de `engine/measure._projeccio`, i aquí pel mateix motiu que `peuPerpendicular`: el
+ * canvas ha de saber dibuixar el que el servidor mesura sense una anada i tornada. La xifra
+ * que val segueix sent la del servidor.
+ *
+ * `eix` buit = AUTO, l'eix de més recorregut, amb l'empat a l'horitzontal (com el motor).
+ */
+export function puntsDeLaCotaProjeccio(a, b, eix = '') {
+  if (!a || !b) return []
+  const quin = eix || (Math.abs(b.x - a.x) >= Math.abs(b.y - a.y) ? 'H' : 'V')
+  if (quin === 'H') {
+    const y = (a.y + b.y) / 2
+    return [{ x: a.x, y }, { x: b.x, y }]
+  }
+  const x = (a.x + b.x) / 2
+  return [{ x, y: a.y }, { x, y: b.y }]
+}
+
+/** El vector unitari perpendicular a a→b, girat +90°. `null` si els punts coincideixen. */
+export function normalDe(a, b) {
+  if (!a || !b) return null
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  const l = Math.hypot(dx, dy)
+  if (l <= 1e-9) return null
+  return { x: -dy / l, y: dx / l }
+}
+
+/**
+ * Una polilínia DESPLAÇADA en paral·lel a ella mateixa, `off` mm cap al costat de la normal.
+ *
+ * Cada vèrtex es mou per la seva normal LOCAL —la mitjana de les dels dos segments que hi
+ * toquen—, que és el que fa que una corba desplaçada segueixi sent paral·lela a l'original
+ * i no una còpia inclinada. Amb dos punts es redueix a moure'ls tots dos per la mateixa
+ * normal, que és el cas de la recta.
+ *
+ * No és un offset de corba EXACTE (no resol autointerseccions als colzes tancats), i no cal
+ * que ho sigui: això dibuixa una cota, no genera una trajectòria de tall.
+ */
+export function desplacaPolilinia(punts, off) {
+  const n = punts.length
+  if (n < 2) return punts
+  if (!off) return punts
+
+  const normals = []
+  for (let i = 0; i < n - 1; i++) normals.push(normalDe(punts[i], punts[i + 1]))
+
+  return punts.map((p, i) => {
+    const abans = normals[i - 1]
+    const despres = normals[i]
+    const nx = ((abans?.x || 0) + (despres?.x || 0))
+    const ny = ((abans?.y || 0) + (despres?.y || 0))
+    const l = Math.hypot(nx, ny)
+    if (l <= 1e-9) return p
+    return { x: p.x + (nx / l) * off, y: p.y + (ny / l) * off }
+  })
+}
+
 export function distancia(ax, ay, bx, by) {
   return Math.hypot(bx - ax, by - ay)
 }

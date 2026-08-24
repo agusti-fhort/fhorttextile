@@ -14,6 +14,7 @@ import POMPicker from '../components/pattern/POMPicker'
 import SewEditor from '../components/pattern/SewEditor'
 import SegmentEditor from '../components/pattern/SegmentEditor'
 import Contenidor from '../components/ui/Contenidor'
+import Modal from '../components/ui/Modal'
 import { grauVisual, textCobertura, textEstat } from '../components/pattern/sewText'
 import { formatLen } from '../utils/format'
 import { useUnit } from './fittingShared'
@@ -110,6 +111,12 @@ export default function TallerPatro() {
   // ── W4b/T5. REOBRIR per editar. Amb un id posat, el gest no crea res nou: RECALCULA sobre
   // la mateixa fila. Mai esborrar-i-crear — les costures referencien els trams, i els POMs
   // porten la seva història.
+  // La COTA assenyalada al canvas. És selecció de PANTALLA, no d'edició: no obre res, només
+  // diu «aquesta», i és el que dona sentit a la tecla Supr.
+  const [pomSel, setPomSel] = useState(null)
+  // La cota que Supr ha assenyalat i que espera el vistiplau. Esborrar un ancoratge amb una
+  // tecla i sense preguntar seria l'única acció destructiva del Taller sense confirmació.
+  const [esborraCota, setEsborraCota] = useState(null)
   const [pomEditId, setPomEditId] = useState(null)
   const [tramEditId, setTramEditId] = useState(null)
   const [sewEditId, setSewEditId] = useState(null)
@@ -334,13 +341,31 @@ export default function TallerPatro() {
 
   const veredicteVist = () => setVeredicte(null)
 
-  // Esc surt. I la tecla d'INVERTIR (←/→/F) gira l'arc que s'està previsualitzant, abans de
+  // Esc surt. La tecla d'INVERTIR (←/→/F) gira l'arc que s'està previsualitzant, abans de
   // fixar-lo: dos punts d'una vora tancada defineixen dos camins, i el que el cursor no digui
-  // ho ha de poder dir el teclat. Només mentre hi ha un arc viu — una tecla que no fa res quan
-  // no toca ensenya a no fer-ne cas.
+  // ho ha de poder dir el teclat. I Supr esborra la cota assenyalada. Tot tres, només mentre
+  // toca — una tecla que no fa res quan no toca ensenya a no fer-ne cas.
+  //
+  // 🚨 **EL GUARD DE `e.target`, QUE FALTAVA.** Aquest listener és GLOBAL, i sense mirar d'on
+  // ve la tecla, escriure una «f» al nom d'un tram girava l'arc que s'estava previsualitzant
+  // — el bug conegut de la tecla F. La malaltia no és de la F: és del listener, i per això la
+  // porta es posa una sola vegada i val per a les tres tecles. Supr hi entrava de cap: el
+  // Taller té camps de text oberts (nom de tram, nom de costura) i esborrar caràcters hi
+  // hauria esborrat cotes.
+  //
+  // Escape en queda FORA a posta: cancel·lar el gest des d'un camp de text és el que la
+  // pantalla anuncia («Esc per sortir») i el que qualsevol espera.
   useEffect(() => {
     const onKey = (e) => {
       if (e.key === 'Escape') { cancelar(); return }
+      if (esCampDeText(e.target)) return
+
+      if ((e.key === 'Delete' || e.key === 'Backspace') && pomSel != null) {
+        e.preventDefault()
+        setEsborraCota(pomSel)
+        return
+      }
+
       const potInvertir = (mode === 'seg' || mode === 'pinca') && puntsPom.length > 0
       if (!potInvertir) return
       if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key.toLowerCase() === 'f') {
@@ -350,7 +375,7 @@ export default function TallerPatro() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [cancelar, mode, puntsPom])
+  }, [cancelar, mode, puntsPom, pomSel])
 
   const onClicPunt = (iman) => {
     const punt = iman.punt
@@ -388,6 +413,34 @@ export default function TallerPatro() {
       // En mode TRAM i PINÇA no es crea res encara: falta el nom, i el vistiplau.
       return nous
     })
+  }
+
+  /**
+   * Arrossegar una cota: desa ON SEU, mai QUANT MESURA.
+   *
+   * El canvas s'actualitza abans que el servidor respongui —una cota que torna al seu lloc i
+   * hi salta mig segon després no s'assembla a arrossegar res— i, si el desat falla, la
+   * geometria es rellegeix sencera: val més que la cota reculi que no que la pantalla digui
+   * una posició que la BD no té.
+   */
+  const mouCota = async (pom, offset) => {
+    setGeometria(g => (g ? {
+      ...g,
+      pieces: (g.pieces || []).map(pc => ({
+        ...pc,
+        poms: (pc.poms || []).map(
+          q => (q.id === pom.id ? { ...q, cota_offset_mm: offset } : q)),
+      })),
+    } : g))
+    try {
+      await patterns.poms.update(pom.id, { cota_offset_mm: offset })
+    } catch {
+      setErrEina(t('pattern.taller.err_cota_moure'))
+      try {
+        const { data: geo } = await patterns.geometry(actual.id)
+        setGeometria(geo)
+      } catch { /* si tampoc es pot rellegir, l'error d'eina ja ho ha dit */ }
+    }
   }
 
   /** L'ancoratge, un de sol per a tots els camins: el guiat, el del picker, i el de REOBRIR. */
@@ -1386,6 +1439,9 @@ export default function TallerPatro() {
               mode={mode}
               puntsPom={puntsPom}
               ancoresPom={ancoresPom}
+              pomSel={pomSel}
+              onSeleccionaPom={p => setPomSel(v => (v === p.id ? null : p.id))}
+              onMouPom={tascaId ? mouCota : null}
               onClicPunt={onClicPunt}
               segmentsA={segmentsA}
               segmentsB={segmentsB}
@@ -1414,6 +1470,24 @@ export default function TallerPatro() {
               onCancel={() => { setPickerObert(false); setPuntsPom([]) }}
             />
           )}
+
+          {/* Supr sobre una cota assenyalada: es pregunta, sempre. És l'única acció
+              destructiva que es pot disparar amb una tecla, i una tecla no és una decisió. */}
+          {esborraCota != null && (
+            <Modal
+              title={t('pattern.taller.cota_delete_title')}
+              subtitle={t('pattern.taller.cota_delete_body')}
+              confirmLabel={t('pattern.taller.cota_delete_ok')}
+              cancelLabel={t('app.cancel')}
+              onCancel={() => setEsborraCota(null)}
+              onConfirm={() => {
+                const id = esborraCota
+                setEsborraCota(null)
+                setPomSel(null)
+                esborrarPOM(id).catch(() => setErrEina(t('pattern.err_pom')))
+              }}
+            />
+          )}
         </section>
       </main>
     </div>
@@ -1421,6 +1495,25 @@ export default function TallerPatro() {
 }
 
 const round2 = (v) => Math.round(v * 100) / 100
+
+/**
+ * La tecla ve d'un camp on algú està escrivint?
+ *
+ * La porta que faltava al listener global del Taller. Un `keydown` a `window` no sap res del
+ * focus, i sense preguntar-ho una drecera d'una sola lletra és una bomba: escriure el nom
+ * d'un tram girava l'arc (el bug de la tecla F), i Supr hauria esborrat cotes mentre algú
+ * corregia un nom.
+ *
+ * `isContentEditable` hi entra perquè no tot camp de text és un `<input>`, i el `role` de
+ * `textbox` perquè un component pot fer-ne un sense ser cap dels dos.
+ */
+function esCampDeText(target) {
+  if (!target) return false
+  const tag = (target.tagName || '').toUpperCase()
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+    || target.isContentEditable === true
+    || target.getAttribute?.('role') === 'textbox'
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 

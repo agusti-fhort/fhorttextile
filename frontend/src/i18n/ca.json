@@ -4483,7 +4483,11 @@
           "H": "Horitzontal DEL PLA. Compte: si la peça seu girada al patró, no és l'amplada de la prenda.",
           "V": "Vertical DEL PLA. Compte: si la peça seu girada al patró, no és el llarg de la prenda."
         }
-      }
+      },
+      "err_cota_moure": "No s'ha pogut desar la posició de la cota. Torna-ho a provar.",
+      "cota_delete_title": "Esborrar aquesta cota?",
+      "cota_delete_body": "S'esborra l'ancoratge del POM sobre el patró. La mesura de la fitxa no es toca, i el POM es pot tornar a col·locar.",
+      "cota_delete_ok": "Esborrar la cota"
     },
     "loading": "Carregant el patró…",
     "empty_title": "Encara no hi ha cap patró",
