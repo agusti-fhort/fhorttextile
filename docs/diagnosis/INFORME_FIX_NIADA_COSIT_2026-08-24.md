@@ -17,11 +17,11 @@ la xifra al davant en comptes de sortir com una columna de ⚠ sense explicació
 
 | | abans | després |
 |---|---|---|
-| Regles a la taula (RUL) | 1 (només `REGLA_ZERO`) | **37** (36 actives) |
+| Regles a la taula (RUL) | 1 (només `REGLA_ZERO`) | **39** (38 actives) |
 | Punts moguts · M/L/XL | 0 | **984** |
 | Punts moguts · XS | 0 | 467 |
 | POMs que claven el delta | 0 de 14 | **8 de 14** |
-| Autovalidació | «1/1 regles idèntiques» (verd sobre el no-res) | **37/37**, 3.840 punts, 0,000 µm |
+| Autovalidació | «1/1 regles idèntiques» (verd sobre el no-res) | **39/39**, 3.840 punts, 0,000 µm |
 | Problemes d'escalat dits | cap | **6, amb xifra i causa** |
 
 ---
@@ -125,6 +125,12 @@ queden ja hi eren i són els de la projecció v1, no els de la propagació al co
 | `npm run build` | **verd** (987 ms) — i staging serveix `frontend/dist`, o sigui que ja hi és |
 | `npx eslint src` | **0 errors** (273 warnings preexistents; l'única d'`ExportModal.jsx` és a la línia 70, que no s'ha tocat) |
 | `build_export(PF20, GV201)` sencer | 502.748 B de DXF + 2.877 B de RUL, autovalidació ✅ |
+
+> **Correcció (24/08, sprint del writer).** Aquesta taula deia «37 regles · 37/37» perquè la
+> xifra es va prendre d'una execució ANTERIOR a l'últim canvi del sprint (la propagació que
+> respecta els ancoratges propis del cosit). Amb el codi entregat en són **39 · 38 actives ·
+> 39/39**: recuperar l'ancoratge de corba mou dos piquets més, i un piquet que es mou és una
+> regla nova. La resta de la taula es manté.
 | smoke de navegador | **19 ✓ · 0 ✗** |
 
 ### El smoke de navegador (llei «build verd ≠ front viu»)
@@ -140,7 +146,7 @@ la pantalla la pinta.
 
 El que passa: ① el modal ofereix la GV201 (v9, 105 specs) · ② la taula pinta 5 talles × 14
 POMs · ③ B, D, F i J1 sense cap ⚠ a cap talla · ④ la base (S) neta · ⑤ els 6 residus a la
-llista amb la xifra i la causa · ⑥ 36 regles actives i autovalidació 37/37 · ⑦ cap error de
+llista amb la xifra i la causa · ⑥ 38 regles actives i autovalidació 39/39 · ⑦ cap error de
 consola. Captura: `ops/qa/captures/niada_cosit_modal.png`.
 
 ### Els tests (ESCRITS, no executats)
