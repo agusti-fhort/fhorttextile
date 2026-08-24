@@ -49,7 +49,9 @@ from fhort.patterns.engine.ftt_pom_layer import (
 from fhort.patterns.engine.geometry import (
     BoundaryData,
     Confidence,
+    Fingerprint,
     GradeRuleData,
+    GradeTable,
     LayerRole,
     NotchData,
     PatternDocument,
@@ -63,10 +65,14 @@ from fhort.patterns.engine.grading_projection import (
     GradingContextError,
     GradingNotApproved,
     POMPreview,
+    PRIMERA_REGLA_MOBIL,
+    REGLA_ZERO,
     SizePreview,
+    _taula,
     preview_per_talla,
     project,
 )
+from fhort.patterns.engine.ports import GradedPOMDelta, GradingSnapshot
 from fhort.patterns.engine.operations import MoveIssue, POMSpec, PointRef, move_points
 from fhort.patterns.engine.measure import MeasureError, eix_dominant, resoldre
 from fhort.patterns.engine.roundtrip import compare, compare_grade_tables
@@ -138,7 +144,8 @@ from fhort.patterns.annotation_views import (PatternPOMViewSet, PatternSegmentVi
                                              SewProposalRejectionViewSet, SewRelationSerializer,
                                              SewRelationViewSet, SewToleranceAcceptanceViewSet,
                                              comprovar_costura)
-from fhort.patterns.export import ExportBlocked, _problemes_escalat, build_export
+from fhort.patterns.export import (ExportBlocked, _problemes_capcalera,
+                                   _problemes_escalat, build_export)
 from fhort.patterns.services import CONFIRM_TEXT_CA
 from fhort.patterns import annotation_views
 from fhort.patterns.models import (DartProposalRejection, ExportAcknowledgement, PatternFile,
@@ -3205,6 +3212,237 @@ class ProblemesDEscalatTest(unittest.TestCase):
 
         self.assertEqual(len(linies), 1)
         self.assertIn('[P]', linies[0])
+
+
+class CompatibilitatPolyPatternTest(unittest.TestCase):
+    """S8/WRITER — el fitxer ha de ser graduable pel CAD, no només fidel.
+
+    La niada del 1383 s'obria al PolyPattern amb geometria perfecta i **no desplegava les
+    talles**. Comparant-la amb el fitxer que el mateix CAD exporta d'aquest patró
+    (`837 CORS 194 VESTIT M3-4 AGUS.DXF`, que és l'origen de PF20) van sortir tres
+    diferències estructurals; aquesta classe les fixa una per una.
+
+    El banc que mesura el fitxer sencer contra la referència és
+    `ops/qa/banc_niada_vs_polypattern.py`; això són els guardians unitaris.
+    """
+
+    ES_REGLA = re.compile(r'#\s*\d+')
+
+    # ── El fixture: una peça amb tall i cosit, girs, corba i piquets ─────────
+
+    def _peca(self) -> PieceData:
+        tall = (
+            PointData(0.0, 0.0, PointKind.TURN, grade_rule=2),
+            PointData(50.0, 0.0, PointKind.CURVE),          # les corbes NO porten regla
+            PointData(100.0, 0.0, PointKind.TURN, grade_rule=1),
+        )
+        cosit = (
+            PointData(0.0, 10.0, PointKind.TURN, grade_rule=2),
+            PointData(50.0, 10.0, PointKind.CURVE),
+            PointData(100.0, 10.0, PointKind.TURN, grade_rule=1),
+        )
+        return PieceData(
+            nom_block='P',
+            boundaries=(
+                BoundaryData(role=LayerRole.CUT, layer='1', points=tall, closed=False),
+                BoundaryData(role=LayerRole.SEW, layer='14', points=cosit, closed=False),
+            ),
+            notches=(
+                NotchData(25.0, 0.0, grade_rule=1),
+                NotchData(75.0, 0.0, grade_rule=3),
+            ),
+            has_sew=True,
+        )
+
+    def _regles_emeses(self, doc=None):
+        """Els TEXT `# n` del DXF que emetem → [(capa, numero, (x, y))].
+
+        Es llegeix el fitxer CRU i no amb `AAMAReader` a posta: el que es mesura és què hi
+        ha al fitxer, i llegir-lo amb el nostre propi reader compararia la nostra idea del
+        fitxer amb la nostra idea del fitxer.
+        """
+        doc = doc if doc is not None else PatternDocument(pieces=(self._peca(),))
+        cru = AAMAWriter().write(doc, perfil='polypattern').decode('utf-8', 'replace')
+        linies = cru.splitlines()
+        fora, cur = [], None
+        for i in range(0, len(linies) - 1, 2):
+            codi, valor = linies[i].strip(), linies[i + 1].strip()
+            if codi == '0':
+                if cur and cur.get('t') and self.ES_REGLA.fullmatch(cur['t']):
+                    fora.append((cur.get('c'), int(cur['t'].split('#')[1]),
+                                 (cur.get('x'), cur.get('y'))))
+                cur = {}
+            elif cur is not None:
+                if codi == '8':
+                    cur['c'] = valor
+                elif codi == '1':
+                    cur['t'] = valor
+                elif codi in ('10', '20'):
+                    try:
+                        cur['x' if codi == '10' else 'y'] = round(float(valor), 4)
+                    except ValueError:
+                        pass
+        return fora
+
+    # ── ① CAP PUNT ORFE ──────────────────────────────────────────────────────
+
+    def test_cap_punt_de_gir_es_queda_sense_el_seu_TEXT_de_regla(self):
+        """Al fitxer del CAD, els 158 punts de gir porten els seus 158 TEXT: cap orfe.
+
+        Un punt de gir sense número no és «un punt que no es mou»: és un punt que el CAD
+        no sap què fer-ne. El que no es mou porta la regla de REPÒS, que és una altra cosa
+        i es diu explícitament.
+        """
+        regles = self._regles_emeses()
+        capa2 = [r for r in regles if r[0] == '2']
+        girs = [(p.x, p.y) for b in self._peca().boundaries
+                for p in b.points if p.kind is PointKind.TURN]
+        self.assertEqual(len(capa2), len(girs))
+        self.assertEqual({r[2] for r in capa2}, {(round(x, 4), round(y, 4))
+                                                 for x, y in girs})
+
+    def test_cap_piquet_es_queda_sense_el_seu_TEXT_de_regla(self):
+        regles = self._regles_emeses()
+        capa4 = [r for r in regles if r[0] == '4']
+        self.assertEqual(len(capa4), len(self._peca().notches))
+        self.assertEqual(sorted(r[1] for r in capa4), [1, 3])
+
+    def test_els_punts_de_CORBA_segueixen_sense_regla(self):
+        """No es graden: flueixen, i és el CAD del client qui els fa fluir. Posar-los regla
+        seria dir-li que no ho faci."""
+        corbes = {(50.0, 0.0), (50.0, 10.0)}
+        self.assertFalse([r for r in self._regles_emeses() if r[2] in corbes])
+
+    # ── ② EL COSIT, A LES SEVES CAPES ────────────────────────────────────────
+
+    def test_el_gir_del_COSIT_porta_el_numero_a_les_capes_2_8_i_14(self):
+        """La llei mesurada al fitxer del CAD: un gir de la línia de cosit porta el seu
+        número TRES vegades —capes 2, 8 i 14— a la mateixa coordenada (79 punts de 79).
+
+        Emetre'n només el de la capa 2 és el que deixava el cosit sense grading DINS el
+        fitxer: el moviment hi era, però el CAD el busca a les capes del cosit.
+        """
+        regles = self._regles_emeses()
+        for punt, numero in (((0.0, 10.0), 2), ((100.0, 10.0), 1)):
+            capes = sorted(r[0] for r in regles if r[2] == punt)
+            self.assertEqual(capes, ['14', '2', '8'], f'punt {punt}')
+            self.assertEqual({r[1] for r in regles if r[2] == punt}, {numero})
+
+    def test_el_gir_del_TALL_nomes_en_porta_un(self):
+        """El complement del test anterior: no s'omple el fitxer de números per si de cas.
+        Un gir del contorn de tall porta el seu a la capa 2 i prou."""
+        regles = self._regles_emeses()
+        for punt in ((0.0, 0.0), (100.0, 0.0)):
+            self.assertEqual([r[0] for r in regles if r[2] == punt], ['2'], f'punt {punt}')
+
+    # ── ③ LA NUMERACIÓ ───────────────────────────────────────────────────────
+
+    def _snapshot(self):
+        return GradingSnapshot(
+            grading_version_id=1, approved=True, base_size_label='S',
+            size_run=('S', 'M', 'L'),
+            deltas=(GradedPOMDelta(pom_id=1, pom_code='W', size_label='M',
+                                   value_cm=11.0, delta_cm=1.0, rule_applied='LINEAR'),
+                    GradedPOMDelta(pom_id=1, pom_code='W', size_label='L',
+                                   value_cm=12.0, delta_cm=2.0, rule_applied='LINEAR')),
+        )
+
+    def test_la_numeracio_comenca_a_1_i_la_regla_1_es_la_de_REPOS(self):
+        """El CAD numera `DELTA 1…238` i les peces que no graduen porten `# 1` a tot arreu:
+        per a ell la 1 ÉS la regla de repòs i el zero no és cap número de regla. Emetre
+        `DELTA 0` és oferir-li una taula que comença per una regla que no existeix."""
+        self.assertEqual(REGLA_ZERO, 1)
+        self.assertEqual(PRIMERA_REGLA_MOBIL, 2)
+
+        doc = PatternDocument(pieces=(self._peca(),))
+        pom = POMSpec(pom_code='W', nom='Width', peca='P',
+                      ref_a=PointRef('P', 1, 0), ref_b=PointRef('P', 1, 2), pom_id=1)
+        proj = project(doc, self._snapshot(), (pom,))
+
+        self.assertEqual(min(proj.grade_table.regles), 1)
+        self.assertNotIn(0, proj.grade_table.regles)
+        self.assertEqual(proj.grade_table.regles[1].deltes,
+                         {t: (0.0, 0.0) for t in ('S', 'M', 'L')})
+        self.assertFalse([n for n in proj.regles_per_punt.values() if n < 1])
+
+    def test_el_rul_no_emet_cap_DELTA_0(self):
+        doc = PatternDocument(pieces=(self._peca(),))
+        pom = POMSpec(pom_code='W', nom='Width', peca='P',
+                      ref_a=PointRef('P', 1, 0), ref_b=PointRef('P', 1, 2), pom_id=1)
+        proj = project(doc, self._snapshot(), (pom,))
+        rul = RULWriter().write(proj.grade_table).decode('utf-8')
+        self.assertNotIn('RULE: DELTA 0 ', rul)
+        self.assertIn('RULE: DELTA 1 ', rul)
+
+    # ── ④ LA CAPÇALERA DEL RUL ───────────────────────────────────────────────
+
+    def _doc_amb_capcalera(self, textos):
+        return PatternDocument(
+            pieces=(self._peca(),),
+            fingerprint=Fingerprint(textos_document=tuple(textos)),
+        )
+
+    def test_la_capcalera_surt_SENCERA_i_en_ordre(self):
+        """El RUL del CAD obre amb version + AUTHOR + UNITS + GRADE RULE TABLE. El nostre
+        n'emetia només `UNITS:`, perquè les altres tres eren condicionals i el patró venia
+        sense RUL d'origen (`grade_table` a NULL): no hi havia d'on copiar-les."""
+        doc = self._doc_amb_capcalera(
+            ['Author: PolyPattern', 'GRADE RULE TABLE:837 CORS 194 VESTIT M3-4 AGUS'])
+        taula = _taula(doc, self._snapshot(), {1: GradeRuleData(numero=1, deltes={})})
+        linies = RULWriter().write(taula).decode('utf-8').splitlines()
+
+        self.assertEqual(linies[:4], [
+            'version ANSI/AAMA-292-B',
+            'AUTHOR: FHORT Textile Tech',
+            'UNITS: METRIC',
+            'GRADE RULE TABLE:837 CORS 194 VESTIT M3-4 AGUS',
+        ])
+
+    def test_LAUTOR_es_el_NOSTRE_i_no_el_del_CAD_dorigen(self):
+        """Decisió d'Agus (24/08): el RUL el signem nosaltres. No l'ha escrit el
+        PolyPattern —l'hem escrit amb el grading de l'FTT— i signar-lo amb el nom del CAD
+        del client seria dir una cosa falsa sobre qui respon del fitxer."""
+        doc = self._doc_amb_capcalera(['Author: PolyPattern 11.0.1'])
+        taula = _taula(doc, self._snapshot(), {1: GradeRuleData(numero=1, deltes={})})
+        self.assertEqual(taula.autor, 'FHORT Textile Tech')
+        self.assertNotIn('PolyPattern', RULWriter().write(taula).decode('utf-8'))
+
+    def test_el_nom_de_la_taula_es_COPIA_del_dxf_i_mai_sinventa(self):
+        """Ha de ser EL MATEIX al DXF que emetem i al RUL germà: si no coincideixen, el CAD
+        té una taula i un fitxer que no parlen de la mateixa cosa."""
+        doc = self._doc_amb_capcalera(['GRADE RULE TABLE:UN NOM QUALSEVOL'])
+        taula = _taula(doc, self._snapshot(), {})
+        self.assertEqual(taula.nom, 'UN NOM QUALSEVOL')
+
+    def test_sense_nom_al_dxf_no_sen_inventa_cap_i_es_DIU(self):
+        """Un nom inventat és pitjor que cap. La línia no surt, i qui exporti ho llegeix a
+        la llista de problemes del modal."""
+        doc = self._doc_amb_capcalera(['Author: PolyPattern'])
+        taula = _taula(doc, self._snapshot(), {})
+        self.assertEqual(taula.nom, '')
+        self.assertNotIn('GRADE RULE TABLE', RULWriter().write(taula).decode('utf-8'))
+
+        problemes = _problemes_capcalera(SimpleNamespace(grade_table=taula))
+        self.assertEqual(len(problemes), 1)
+        self.assertIn('GRADE RULE TABLE', problemes[0])
+
+    def test_amb_nom_no_hi_ha_res_a_dir(self):
+        taula = _taula(self._doc_amb_capcalera(['GRADE RULE TABLE:X']),
+                       self._snapshot(), {})
+        self.assertEqual(_problemes_capcalera(SimpleNamespace(grade_table=taula)), ())
+
+    # ── La invariant que no es pot perdre ────────────────────────────────────
+
+    def test_els_TEXT_nous_no_toquen_la_geometria(self):
+        """Tres números en comptes d'un és més fitxer, no més patró. El round-trip ha de
+        seguir tornant la mateixa geometria."""
+        original = PatternDocument(pieces=(self._peca(),))
+        tornat = AAMAReader().read(AAMAWriter().write(original, perfil='polypattern'))
+        peca = tornat.piece('P')
+        for bv, bn in zip(original.piece('P').boundaries, peca.boundaries):
+            for a, b in zip(bv.points, bn.points):
+                self.assertAlmostEqual(a.x, b.x, places=6)
+                self.assertAlmostEqual(a.y, b.y, places=6)
 
 
 class EscalatTestBase(PatternsAPITestBase):
