@@ -4568,8 +4568,6 @@
     "pom_search": "Search a POM by code or name…",
     "pom_none": "No POM found.",
     "pom_unmeasured": "not measured",
-    "poms_anchored": "Anchored POMs ({{n}})",
-    "poms_empty": "No POM anchored yet. Enter “Mark POM” mode to start.",
     "sews": "Seams ({{n}})",
     "sews_empty": "No seam declared.",
     "sew_type": {

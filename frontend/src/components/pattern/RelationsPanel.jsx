@@ -10,15 +10,20 @@ import Modal from '../ui/Modal'
 /**
  * RELACIONS — el que s'ha declarat sobre el patró, editable.
  *
- * Quatre famílies: POMs ancorats · Costures · PINCES · Trams declarats. Els missatges es
- * construeixen AQUÍ a partir de les xifres del servidor, no es mostren els del servidor: el
- * backend els escriu en català pla (no són claus i18n) i el gate demana ca/en/es. La frase del
- * servidor es conserva com a `title` — hi ha matís que val la pena poder llegir sencer.
+ * Tres famílies: Costures · PINCES · Trams declarats. Els missatges es construeixen AQUÍ a
+ * partir de les xifres del servidor, no es mostren els del servidor: el backend els escriu en
+ * català pla (no són claus i18n) i el gate demana ca/en/es. La frase del servidor es conserva
+ * com a `title` — hi ha matís que val la pena poder llegir sencer.
  *
- * **Aquí és d'on es REOBRE** (W4b/T5). Les tres entitats es corregeixen amb el mateix gest amb
- * què es van crear, al canvas, i sobre la MATEIXA fila: un POM reobert es recalcula, no es
- * torna a ancorar; un tram es recol·loca, no s'esborra i es refà. La diferència no és de
- * matís: les costures referencien els trams, i refer-los les buidaria en silenci.
+ * ⚠️ **Els POMs ancorats ja no viuen aquí.** Eren la quarta família i van marxar al panell
+ * únic de POMs (`ModelPomList`), on la fila de la fitxa i la de l'ancoratge són la mateixa i
+ * les accions caben totes en un desplegable. Aquí en queda el buit a posta, perquè qui vingui
+ * a buscar-los sàpiga on han anat.
+ *
+ * **Aquí és d'on es REOBRE** el que hi queda (W4b/T5). Les entitats es corregeixen amb el
+ * mateix gest amb què es van crear, al canvas, i sobre la MATEIXA fila: un tram es recol·loca,
+ * no s'esborra i es refà. La diferència no és de matís: les costures referencien els trams, i
+ * refer-los les buidaria en silenci.
  *
  * **I d'aquí és d'on s'esborra en BLOC** (QA-TALLER E · T3). Cada grup porta la seva pròpia
  * selecció, la seva pròpia paperera i el seu propi informe: v. `seleccio.jsx` per què la

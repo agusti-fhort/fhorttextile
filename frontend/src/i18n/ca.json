@@ -4568,8 +4568,6 @@
     "pom_search": "Cerca un POM pel codi o pel nom…",
     "pom_none": "Cap POM trobat.",
     "pom_unmeasured": "sense mesura",
-    "poms_anchored": "POMs ancorats ({{n}})",
-    "poms_empty": "Cap POM ancorat encara. Entra en mode «Marcar POM» per començar.",
     "sews": "Costures ({{n}})",
     "sews_empty": "Cap costura declarada.",
     "sew_type": {

@@ -407,7 +407,14 @@ function MenuAccions({ t, obert, onObre, onTanca, accions }) {
 
   useEffect(() => {
     if (!obert) return undefined
-    const perTecla = e => { if (e.key === 'Escape') onTanca() }
+    // `stopPropagation`: el Taller té un listener d'Escape a `window` que CANCEL·LA el gest
+    // de col·locació. Sense aturar-hi la tecla, tancar aquest menú amb Esc també avortaria
+    // l'ancoratge que s'estigués fent — dues coses per una tecla, i només una demanada.
+    const perTecla = e => {
+      if (e.key !== 'Escape') return
+      e.stopPropagation()
+      onTanca()
+    }
     const perClic = e => { if (box.current && !box.current.contains(e.target)) onTanca() }
     document.addEventListener('keydown', perTecla)
     document.addEventListener('mousedown', perClic)
