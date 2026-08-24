@@ -1741,3 +1741,112 @@ def obrir_ronda_view(request, model_id):
                      'motiu': motiu,
                      'tasques': [t.id for t in tasques]},
                     status=http_status.HTTP_201_CREATED)
+
+
+# ── M1 · FIT-1 + FIT-13 · LES PORTES DE L'ENTREGA ───────────────────────────────────────────
+#
+# 🚩 PERMISOS — TODO DECLARAT, i el motiu és un fet del cens, no una preferència.
+# El brief demana «la mateixa capability que avui governa `tancar_ronda`». **No n'hi ha cap**:
+# `tancar_ronda` no té ni una sola crida de producte a tot `backend/fhort` (només tests), o
+# sigui que mai ha tingut porta HTTP i per tant mai ha tingut capability. La germana més propera
+# és `obrir_ronda_view`, gated `_ExecuteTasks` (EXECUTE_TASKS) + allow-list de `task_type`.
+# Aquí NO se n'inventa cap: `IsAuthenticated`, i que l'Agus decideixi de qui és aquest gest
+# —perquè informar una entrega s'assembla més a un acte de PM (define_tasks / gates) que a
+# executar una tasca, i triar-ho jo seria decidir una política de permisos per omissió.
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])   # TODO(M1): capability pendent de decisió (v. nota ↑)
+def entrega_ronda_view(request, ronda_id):
+    """POST /api/v1/rondes/<ronda_id>/entrega/  ·  {destinatari, descripcio?, data?}
+
+    Informa l'entrega d'una ronda. **I amb això la tanca** (FIT-13), i el tancament tanca la
+    feina viva de la volta (FIT-6) — tot dins la mateixa transacció.
+    """
+    from .models import Ronda
+    from .serializers_b import EntregaSerializer
+    from .services_r import EntregaError, RondaError, informar_entrega
+
+    profile = getattr(request.user, 'profile', None)
+    if profile is None:
+        return Response({'error': 'Usuari sense perfil en aquest tenant.', 'code': 'no_profile'},
+                        status=http_status.HTTP_403_FORBIDDEN)
+    try:
+        ronda = Ronda.objects.get(pk=ronda_id)
+    except Ronda.DoesNotExist:
+        return Response({'error': 'Ronda no trobada.'}, status=http_status.HTTP_404_NOT_FOUND)
+
+    # La FORMA la valida el serializer i el FET el decideix el servei. `data` arriba com a text
+    # per HTTP: passar-la crua al model la desaria sense parsejar (o petaria en cru, segons el
+    # backend). Aquí ja arriba `datetime` o ja s'ha rebutjat amb el 400 de sempre de DRF.
+    forma = EntregaSerializer(data=request.data or {})
+    if not forma.is_valid():
+        return Response(forma.errors, status=http_status.HTTP_400_BAD_REQUEST)
+    dades = forma.validated_data
+    try:
+        entrega = informar_entrega(ronda, destinatari=dades.get('destinatari'),
+                                   descripcio=dades.get('descripcio') or '',
+                                   data=dades.get('data') or None, profile=profile)
+    except EntregaError as e:
+        return Response({'error': str(e), 'code': 'entrega_invalida'},
+                        status=http_status.HTTP_400_BAD_REQUEST)
+    except RondaError as e:
+        # El tancament forçat (FIT-6) ha topat amb una paret: l'entrega NO s'ha escrit (la
+        # transacció d'`informar_entrega` és una sola) i el client ha de saber que el motiu és
+        # la feina de la volta, no la forma de l'entrega.
+        return Response({'error': str(e), 'code': 'ronda_no_tancable'},
+                        status=http_status.HTTP_409_CONFLICT)
+    return Response(EntregaSerializer(entrega).data, status=http_status.HTTP_201_CREATED)
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])   # TODO(M1): capability pendent de decisió (v. nota ↑)
+def entrega_ok_client_view(request, entrega_id):
+    """PATCH /api/v1/entregues/<entrega_id>/ok-client/  ·  {data_ok?}
+
+    El senyal MANUAL i posterior: el client diu que li ha arribat bé. No toca la ronda.
+    """
+    from rest_framework import serializers
+
+    from .models import Entrega
+    from .serializers_b import EntregaSerializer
+    from .services_r import EntregaError, informar_ok_client
+
+    profile = getattr(request.user, 'profile', None)
+    if profile is None:
+        return Response({'error': 'Usuari sense perfil en aquest tenant.', 'code': 'no_profile'},
+                        status=http_status.HTTP_403_FORBIDDEN)
+    try:
+        entrega = Entrega.objects.get(pk=entrega_id)
+    except Entrega.DoesNotExist:
+        return Response({'error': 'Entrega no trobada.'}, status=http_status.HTTP_404_NOT_FOUND)
+
+    data_ok = (request.data or {}).get('data_ok') or None
+    if data_ok is not None:
+        try:
+            data_ok = serializers.DateTimeField().to_internal_value(data_ok)
+        except ValidationError as e:
+            return Response({'data_ok': e.detail}, status=http_status.HTTP_400_BAD_REQUEST)
+    try:
+        entrega = informar_ok_client(entrega, profile=profile, data_ok=data_ok)
+    except EntregaError as e:
+        return Response({'error': str(e), 'code': 'ok_client_invalid'},
+                        status=http_status.HTTP_400_BAD_REQUEST)
+    return Response(EntregaSerializer(entrega).data, status=http_status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def rondes_del_model_view(request, model_id):
+    """GET /api/v1/models/<model_id>/rondes/ — les voltes del model, amb la seva entrega.
+
+    Sense aquesta porta l'Entrega seria una dada que no es pot llegir: `ronda_oberta` (a
+    `models_app`) no la pot ensenyar mai, perquè una ronda entregada és una ronda TANCADA.
+    """
+    from .models import Ronda
+    from .serializers_b import RondaSerializer
+
+    if not Model.objects.filter(pk=model_id).exists():
+        return Response({'error': 'Model no trobat.'}, status=http_status.HTTP_404_NOT_FOUND)
+    qs = (Ronda.objects.filter(model_id=model_id)
+          .select_related('entrega__qui_informa', 'entrega__qui_informa_ok').order_by('seq'))
+    return Response(RondaSerializer(qs, many=True).data, status=http_status.HTTP_200_OK)

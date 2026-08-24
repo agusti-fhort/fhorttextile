@@ -50,7 +50,9 @@ try:
                                      crono_declarat_view,
                                      claim_task_view, assign_model_view, unassign_model_view,
                                      model_task_log_view, open_model_task_view,
-                                     sortir_sense_escriptura_view)
+                                     sortir_sense_escriptura_view,
+                                     entrega_ronda_view, entrega_ok_client_view,
+                                     rondes_del_model_view)
     from django.urls import path as _path_b
     _sprintb_paths = [
         _path_b('models/<int:model_id>/define-tasks/', define_model_tasks_view),
@@ -69,6 +71,12 @@ try:
         _path_b('models/<int:model_id>/open-task/', open_model_task_view),
         # F2.1 — la porta de la RONDA (el servei hi era des de F1.1, la porta no).
         _path_b('models/<int:model_id>/obrir-ronda/', obrir_ronda_view),
+        # M1 · FIT-1/FIT-13 — l'ENTREGA: informar-la tanca la ronda, i l'ok del client és un
+        # senyal manual i posterior. La lectura de les voltes (amb entrega niuada) va a part
+        # perquè una ronda entregada és tancada i `ronda_oberta` no la pot ensenyar mai.
+        _path_b('rondes/<int:ronda_id>/entrega/', entrega_ronda_view),
+        _path_b('entregues/<int:entrega_id>/ok-client/', entrega_ok_client_view),
+        _path_b('models/<int:model_id>/rondes/', rondes_del_model_view),
         # Tram 2 — assignar/desassignar model a tècnic (compute de cua sencera). define_tasks.
         _path_b('models/<int:model_id>/assign/', assign_model_view),
         _path_b('models/<int:model_id>/unassign/', unassign_model_view),

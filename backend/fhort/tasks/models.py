@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 
 
 class TimerEntrada(models.Model):
@@ -176,6 +177,67 @@ class Ronda(models.Model):
         return f'{self.model_id} · ronda {self.seq} ({self.motiu})'
 
 
+class Entrega(models.Model):
+    """M1 · FIT-1 — L'ACTE d'entregar una ronda: qui ho diu, quan, a qui i què.
+
+    Fins avui «la volta ja s'ha lliurat» es **deduïa** (`services_r.ronda_lliurable`: totes les
+    tasques `es_lliurable` de la ronda a `Done`). Deduir-ho respon «ja hi és tot?», que no és la
+    mateixa pregunta que «s'ha enviat?»: una fitxa acabada i no enviada dona `True`, i una volta
+    enviada a mitges no en dona cap. L'entrega passa a **DECLARAR-SE** amb un acte datat, i
+    `ronda_lliurable` es queda com el que sempre va poder ser: el senyal PREVI («ja es pot
+    marcar entregable»), no la definició d'entregada.
+
+    🔑 **ÉS UN EVENT INFORMAT, NO UN ARTEFACTE CONTROLAT** (FIT-1). Per això no hi ha **cap FK a
+    `ModelFitxer`, a la fitxa ni al patró**: el que s'ha enviat es diu amb paraules
+    (`descripcio`), perquè l'enviament passa fora de l'eina —un correu, un WeTransfer, una
+    caixa— i lligar-hi un document faria que l'acte només es pogués informar quan l'eina hagués
+    generat l'artefacte. El destinatari, pel mateix motiu, és **text lliure** i no un FK a
+    `Customer`: s'entrega a persones i a adreces, no sempre al client que factura.
+
+    `data` l'aporta qui informa (per defecte ara) i `created_at` diu quan es va ESCRIURE la
+    fila: informar dilluns una entrega de divendres és el cas normal, i les dues dates no poden
+    ser el mateix camp.
+
+    `ok_client` és un senyal **MANUAL i POSTERIOR** (`data_ok` + `qui_informa_ok`, tots dos
+    nullables): el client ha dit que li ha arribat bé. No es dedueix de res i no té cap efecte
+    sobre la ronda —quan arriba, la ronda ja fa estona que és tancada.
+
+    **Una entrega per ronda** (decisió 25 del fil): `OneToOneField`, que és el que la casa ja fa
+    servir per a aquest patró (`ConsumptionRecord.model`, `ConsumptionRecord.garment_set`,
+    `WorkOrder.source_quote`, `UserProfile.user`) — a `fhort` no hi ha ni un sol
+    `UniqueConstraint` d'un camp sol sobre un FK. Reentregar és entregar una ALTRA volta.
+    """
+    ronda = models.OneToOneField('Ronda', on_delete=models.CASCADE, related_name='entrega')
+    data = models.DateTimeField(
+        default=timezone.now,
+        help_text="Quan es va entregar, segons qui ho informa. Per defecte ara.")
+    destinatari = models.CharField(
+        max_length=200,
+        help_text='A qui se li ha entregat. TEXT LLIURE: no és el client que factura.')
+    qui_informa = models.ForeignKey('accounts.UserProfile', on_delete=models.SET_NULL,
+                                    null=True, blank=True, related_name='entregues_informades',
+                                    help_text="Qui informa l'acte. SET_NULL: esborrar un usuari "
+                                              'no esborra la història.')
+    descripcio = models.TextField(
+        blank=True,
+        help_text="Què s'ha enviat, dit amb paraules. TEXT LLIURE: no hi ha cap artefacte lligat.")
+    # ── El senyal posterior del client. MANUAL: ningú no el dedueix. ────────────────────────
+    data_ok = models.DateTimeField(null=True, blank=True,
+                                   help_text='null = el client encara no ha dit res.')
+    qui_informa_ok = models.ForeignKey('accounts.UserProfile', on_delete=models.SET_NULL,
+                                       null=True, blank=True, related_name='oks_informats')
+    created_at = models.DateTimeField(auto_now_add=True,
+                                      help_text="Quan es va ESCRIURE la fila (≠ `data`).")
+
+    class Meta:
+        ordering = ['-data']
+        verbose_name = 'Entrega'
+        verbose_name_plural = 'Entregues'
+
+    def __str__(self):
+        return f'entrega ronda {self.ronda_id} → {self.destinatari}'
+
+
 class ModelTask(models.Model):
     """Instància de tasca d'un model. Estats nous (Sprint B); temps/log a Sprint C."""
     STATUS_CHOICES = [('Pending', 'Pending'), ('Paused', 'Paused'),
@@ -269,6 +331,24 @@ class TaskTransition(models.Model):
     auto = models.CharField(max_length=32, null=True, blank=True,
                             help_text="Marca d'automatisme. null = gest humà del tècnic; "
                                       "slug del guard que ha actuat en cas contrari.")
+    # M1 · FIT-2 — EL RASTRE, i va AQUÍ i no a `ModelTask.motiu`.
+    #
+    # `ModelTask.motiu` és genealogia MUTABLE amb `choices` (`nova_mostra`/`correccio`): diu
+    # PER QUÈ EXISTEIX la tasca, i escriure-hi «reoberta després d'entrega» hi encabiria una
+    # frase que no és cap dels dos valors i, sobretot, **esborraria** el motiu de la volta —una
+    # dada que ningú no podria recuperar. `TaskTransition` és el **log immutable** (v. docstring
+    # de la classe): una fila per gest, que no es reescriu mai, i el rastre d'una reobertura ÉS
+    # un gest. Per això el rastre és una NOTA d'aquesta fila i no un camp de la tasca.
+    #
+    # I NO va a `auto`, encara que hi cabria: aquell camp significa «això no ho ha fet una
+    # persona» (null = gest humà), i reobrir una tasca entregada és exactament un gest humà —el
+    # segell és TOU i Done→InProgress segueix sent legal. Posar-l'hi faria mentir el log a
+    # canvi d'estalviar una columna.
+    #
+    # Text lliure i nullable: mirall de `GateEvent.notes`, la nota de l'altre log d'actes
+    # d'aquesta mateixa app. null = la immensa majoria de transicions, que no tenen res a dir.
+    nota = models.TextField(null=True, blank=True,
+                            help_text='Rastre en text del context del gest. null = res a dir.')
 
     class Meta:
         ordering = ['at']

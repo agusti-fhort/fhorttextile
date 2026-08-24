@@ -200,14 +200,154 @@ def obrir_correccio(model, tasques_codes, *, profile=None):
     return (fetes[0].ronda if fetes else None), fetes
 
 
-def tancar_ronda(ronda):
-    """Tanca una ronda (`tancada_el = ara`). Idempotent: tancar-ne una de tancada no fa res."""
+#: M1 · FIT-6 — l'ordre en què es tanquen les tasques vives d'una ronda. NO és cosmètic:
+#: cada entrada a `InProgress` dispara `_aplica_exclusio_tecnic`, que pausa la resta de feina
+#: oberta del MATEIX tècnic. Tancant primer el que ja és `InProgress` (un sol salt) i deixant les
+#: `Pending` per al final, l'exclusió no es dispara contra tasques que aquest mateix bucle
+#: acabarà de tancar de totes maneres, i el log no s'omple de pauses que ningú no ha fet.
+_ORDRE_TANCAMENT = {'InProgress': 0, 'Paused': 1, 'Pending': 2}
+
+
+def tanca_tasques_de_la_ronda(ronda, profile):
+    """FIT-6 · Tanca TOTES les tasques vives d'una ronda. Retorna les que ha tancat.
+
+    🔑 **PEL MECANISME ÚNIC, MAI UN `UPDATE` DIRECTE.** Cada tasca passa per `transition_task`
+    perquè la màquina d'estats VEGI el gest: si es tanquessin amb un `update(status='Done')`, no
+    hi hauria ni tram tancat, ni fila a `TaskTransition`, ni crida a `record_actual_time` — o
+    sigui que el Welford no veuria el tancament d'una tasca que SÍ que s'havia treballat, i el
+    log diria que aquella feina segueix viva.
+
+    ⚠️ **I PER AIXÒ SÓN DOS SALTS.** `ALLOWED` no té `Pending→Done` ni `Paused→Done`, i això és
+    una decisió d'Agus (Patró C, 28/07, fixada a `test_stop_encadenat`): el Stop sobre una tasca
+    pausada és **play+stop encadenat**, dues transicions legals en un sol gest. Aquí s'aplica el
+    mateix patró en comptes d'obrir cap camí nou a la taula — la màquina d'estats no es toca.
+
+    🔑 **EL WELFORD NO S'ENVERINA, I NO CAL CAP GUARD NOU PER A AIXÒ.** El tram que obre el salt
+    de cortesia neix `consulta=False` (`services_c._open_timer`) i, en tancar-se sense cap
+    `escriptura_at`, `_close_open_timer` el marca **`consulta=True`** — o sigui que queda fora de
+    `TRAMS_SANS` (`services_i`) i no suma ni un minut. Per a una tasca `Pending` que ningú no ha
+    tocat, `_real_minutes` segueix sent 0 i `record_actual_time` surt pel seu propi
+    `if x <= 0: return None`: **cap mostra**. Per a una que sí que s'ha treballat, els seus trams
+    reals hi són igualment i la mostra és la de sempre. La llei d'Agus —«el Welford no mesura res
+    d'una tasca que no s'ha executat»— ja la imposava el sistema; aquí només s'hi confia.
+
+    `profile` és OBLIGATORI quan hi ha feina viva: `TimerEntrada.tecnic` és NOT NULL i, sobretot,
+    tancar la feina d'algú és un ACTE i ha de tenir autor al log.
+    """
+    from .services_c import TransitionError, transition_task
+
+    vives = [t for t in ronda.tasques.exclude(status='Done').select_related('task_type')]
+    if not vives:
+        return []
+    if profile is None:
+        raise RondaError('Cal un tècnic per tancar les tasques vives de la ronda.')
+
+    tancades = []
+    for task in sorted(vives, key=lambda t: (_ORDRE_TANCAMENT.get(t.status, 9), t.pk)):
+        task.refresh_from_db()          # l'exclusió del tècnic pot haver-la mogut en una volta
+        if task.status == 'Done':
+            continue
+        try:
+            if task.status != 'InProgress':
+                transition_task(task, 'InProgress', profile)
+                task.refresh_from_db()
+            transition_task(task, 'Done', profile)
+        except TransitionError as e:
+            raise RondaError(f'No s\'ha pogut tancar la tasca {task.pk} '
+                             f'({task.task_type.code}): {e}')
+        tancades.append(task)
+    return tancades
+
+
+def tancar_ronda(ronda, *, profile=None):
+    """Tanca una ronda (`tancada_el = ara`) I TOTA la feina que hi penja. Idempotent.
+
+    M1 · FIT-6 — fins avui aquesta funció només segellava la data i deixava les tasques vives de
+    la volta exactament on eren. El resultat era feina que ja no era de ningú: en tancar-se la
+    ronda, `tasca_vigent` torna a resoldre per la PREVISTA (regla 2), de manera que aquelles
+    `Pending`/`Paused` seguien obertes al kanban i al Pla **sense que cap porta hi tornés a
+    entrar mai**. Ara la volta es tanca sencera.
+
+    🔒 **CAP TASCA MIGRA A LA RONDA SEGÜENT** (FIT-6). Tancar no és traspassar: la feina que no
+    s'ha fet en aquesta volta es tanca en aquesta volta, i si s'ha de refer, es refà obrint-ne
+    una de nova (`obrir_ronda` / `obrir_correccio`), que és el que deixa la genealogia escrita.
+
+    `profile`: qui tanca. Només és obligatori si queda feina viva — tancar una ronda ja acabada
+    (o ja tancada) segueix sent un no-op que no necessita autor.
+    """
+    from django.db import transaction
     from django.utils import timezone
 
     from .models import Ronda
-    Ronda.objects.filter(pk=ronda.pk, tancada_el__isnull=True).update(tancada_el=timezone.now())
+
+    with transaction.atomic():
+        tancades = tanca_tasques_de_la_ronda(ronda, profile)
+        Ronda.objects.filter(pk=ronda.pk, tancada_el__isnull=True).update(
+            tancada_el=timezone.now())
     ronda.refresh_from_db()
+    ronda._tasques_tancades = tancades    # informatiu per a qui ho vulgui dir a la resposta
     return ronda
+
+
+# ── M1 · FIT-1 + FIT-13 · L'ENTREGA ──────────────────────────────────────────
+
+class EntregaError(Exception):
+    """Rebuig d'una operació d'entrega (la ronda ja en té una, l'ok ja s'ha informat…)."""
+
+
+def informar_entrega(ronda, *, destinatari, profile, descripcio='', data=None):
+    """Declara que una ronda s'ha ENTREGAT. **I amb això la tanca** (FIT-13).
+
+    🔑 **L'ESTAT «ENTREGADA» ES DECLARA, NO ES DEDUEIX.** `ronda_lliurable` seguirà responent el
+    que sempre ha respost —«ja hi és tot?»— i es queda com el senyal PREVI que permet a la UI
+    oferir el gest («ja es pot marcar entregable»). El que diu que una volta s'ha entregat és
+    aquesta fila, escrita per una persona que ho sap perquè ho ha fet.
+
+    🔒 **L'ACTE TANCA LA RONDA, I EN LA MATEIXA TRANSACCIÓ** (FIT-13 · M1). Entregar i deixar la
+    volta oberta seria declarar que s'ha enviat una cosa que encara s'està fent; i fer-ho en dues
+    transaccions deixaria, el dia que la segona fallés, una entrega informada sobre una ronda
+    viva —l'estat que precisament no ha d'existir. O hi són totes dues o no hi és cap.
+    Com que tancar la ronda tanca la seva feina viva (FIT-6), `profile` és sempre obligatori
+    aquí: entregar és un acte, i el seu autor és qui també signa aquell tancament.
+
+    Retorna l'`Entrega` creada.
+    """
+    from django.db import transaction
+
+    from .models import Entrega
+
+    if profile is None:
+        raise EntregaError('Cal un perfil per informar una entrega.')
+    destinatari = (destinatari or '').strip()
+    if not destinatari:
+        raise EntregaError('Una entrega sense destinatari no diu res: cal dir a qui s\'ha entregat.')
+    if Entrega.objects.filter(ronda=ronda).exists():
+        raise EntregaError('Aquesta ronda ja té una entrega informada; una volta s\'entrega un cop.')
+
+    with transaction.atomic():
+        entrega = Entrega.objects.create(
+            ronda=ronda, destinatari=destinatari, descripcio=(descripcio or '').strip(),
+            qui_informa=profile, **({'data': data} if data is not None else {}))
+        tancar_ronda(ronda, profile=profile)
+    return entrega
+
+
+def informar_ok_client(entrega, *, profile, data_ok=None):
+    """El client ha dit que li ha arribat bé. Senyal MANUAL i POSTERIOR (FIT-1).
+
+    No es dedueix de res i no té cap efecte sobre la ronda: quan arriba, la ronda ja fa estona
+    que és tancada. S'informa **un sol cop**: és un fet, no un interruptor.
+    """
+    from django.utils import timezone
+
+    if profile is None:
+        raise EntregaError('Cal un perfil per informar l\'OK del client.')
+    if entrega.data_ok is not None:
+        raise EntregaError('L\'OK del client d\'aquesta entrega ja estava informat.')
+    entrega.data_ok = data_ok or timezone.now()
+    entrega.qui_informa_ok = profile
+    entrega.save(update_fields=['data_ok', 'qui_informa_ok'])
+    return entrega
 
 
 def ronda_lliurable(ronda):
