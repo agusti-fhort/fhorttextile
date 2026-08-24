@@ -188,6 +188,10 @@ def mare_homologa(ronda_anterior, code):
     amb voltes més velles, perquè «la volta anterior no en tenia» és una dada, i inventar-hi una
     àvia com si fos la mare seria tornar a mentir en una altra direcció.
 
+    ⚠️ **AQUESTA FUNCIÓ NO COBREIX EL MODEL SENSE CAP VOLTA.** Amb `ronda_anterior=None` no hi ha
+    res contra què resoldre, i qui decideix què fer llavors és `obrir_ronda` — v. la nota del
+    MODEL LLEGAT allà.
+
     Entre diverses tasques del mateix code dins d'aquella volta mana **la més recent** (`-id`),
     que és el mateix criteri que la regla 4 de `tasca_vigent`: quan hi ha una correcció i la tasca
     que corregeix, el que s'ha de repetir és l'esmena, no allò que es va esmenar.
@@ -302,7 +306,21 @@ def obrir_ronda(model, motiu, tasques_codes, *, profile=None):
     # Les MARES surten de la VOLTA ANTERIOR, una per code (v. `mare_homologa`). Abans es
     # demanaven a `tasca_vigent`, que aquí sempre cau a la regla 2 i retorna la tasca base —o
     # sigui la de la R1—, de manera que la cadena saltava les voltes intermèdies a partir de la R3.
-    mares = {code: mare_homologa(anterior, code) for code in codes}
+    #
+    # 🚩 EL MODEL LLEGAT, I ÉS UNA DESVIACIÓ DECLARADA DE LA LLETRA DE LA DECISIÓ 3. Quan el model
+    # **no té CAP volta** —tota la seva feina és `ronda=NULL`, que és la forma de tots els models
+    # d'abans del canvi de llei— no hi ha «volta anterior» contra què resoldre, i aplicar
+    # `mare=NULL` literalment **esborraria una genealogia que era CORRECTA**: la feina històrica
+    # ÉS la volta anterior d'aquell model, encara que no tingui fila. La decisió prohibeix
+    # «encadenar amb voltes MÉS VELLES», i aquí no n'hi ha cap per saltar-se.
+    #
+    # Per això, i només en aquest cas, es conserva el criteri d'abans (`tasca_vigent`, que hi cau
+    # a la regla 2 i retorna precisament la tasca base). Amb la llei nova aquest camí s'apaga sol:
+    # tot model que rebi un gest ja neix amb R1. Tres tests d'M1 (`test_la_filla_apunta_a_la_mare_
+    # homonima`) el fixen, i van ser el que va enxampar la regressió.
+    mares = {code: (mare_homologa(anterior, code) if anterior is not None
+                    else tasca_vigent(model, code))
+             for code in codes}
 
     with transaction.atomic():
         seguent = (Ronda.objects.filter(model=model)

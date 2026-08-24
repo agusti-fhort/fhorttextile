@@ -378,6 +378,30 @@ class GenealogiaMareTest(ReplicacioTest):
         r3 = obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, [], profile=self.prof)
         self.assertEqual(self._per_code(r3)['bom'].mare_id, self._per_code(r2)['bom'].pk)
 
+    def test_un_model_LLEGAT_sense_cap_volta_conserva_la_mare_historica(self):
+        """🚩 Desviació declarada de la lletra de la DECISIÓ 3, i el motiu és que la lletra hi
+        esborrava genealogia CORRECTA.
+
+        Un model d'abans del canvi de llei té tota la feina a `ronda=NULL` i **cap fila `Ronda`**.
+        Allà no hi ha «volta anterior» per saltar-se: la feina històrica ÉS la volta anterior. Amb
+        `mare=NULL` literal, el primer +Ronda d'aquests models perdria el lligam amb tot el que
+        s'havia fet. Tres tests d'M1 ho van enxampar; aquest ho deixa dit en veu alta.
+        """
+        from fhort.models_app.models import Model
+        llegat = Model.objects.create(
+            codi_intern='TF4-SS26-0009', codi_tenant='TF4', any=2026, temporada='SS',
+            sequencial=9, customer=self.customer, garment_type_item=self.item,
+            nom_prenda='Llegat')
+        historica = ModelTask.objects.create(model=llegat, task_type=self.tt_pom, order=0,
+                                             status='Done', origen='prevista')
+        self.assertFalse(Ronda.objects.filter(model=llegat).exists())
+
+        r = obrir_ronda(llegat, Ronda.MOTIU_NOVA_MOSTRA, ['pom'], profile=self.prof)
+        self.assertEqual(r.seq, 2)                      # la R1 llegada segueix sent implícita
+        self.assertEqual(r.tasques.get().mare_id, historica.pk)
+        historica.refresh_from_db()
+        self.assertIsNone(historica.ronda_id)           # i no s'adopta: (b) segueix sencera
+
     def test_entre_una_correccio_i_la_seva_mare_mana_la_correccio(self):
         """Mateix criteri que la regla 4 de `tasca_vigent`: es repeteix l'esmena."""
         from fhort.tasks.services_r import obrir_correccio
