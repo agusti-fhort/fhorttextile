@@ -98,6 +98,14 @@ class PatternPOMSerializer(serializers.ModelSerializer):
         · `p` és una de les dues referències — el punt cau sobre la seva pròpia línia i la
           caiguda mesura zero. És exactament el mateix error que el `a == b` del mode de
           punts, i es rebota igual.
+
+        ⚠️ **La porta és d'IDENTITAT, no de geometria, i l'abast és el que és.** Compara ids
+        de `PatternPoint`; dos punts DIFERENTS a les MATEIXES coordenades —i els DXF
+        importats en porten, de vèrtexs coincidents— hi passen. Llavors mana la llei de
+        `_mesurar`: el POM es desa amb `valor_mesurat_cm=None` i l'avís de `create`, que és
+        el que ja passa amb qualsevol recepta irresoluble. Tancar-ho aquí voldria dir
+        carregar la geometria dins del serializer per validar, que és feina del motor i no
+        de la porta.
         """
         falten = [k for k in PatternPOM.ANCORES_PER_METODE[PatternPOM.METODE_ORTOGONAL]
                   if valor.get(k) is None]

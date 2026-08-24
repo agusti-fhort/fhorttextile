@@ -1626,14 +1626,18 @@ function SelectorMetode({ t, metodes, triat, onTria, pas, ancores }) {
       {/* El comptador només per als gestos llargs: amb dos clics, la frase de l'avís ja ho diu
           tot i una fila de xips seria soroll. */}
       {ancores.length > 2 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+        // `role="list"`/`"listitem"`: un <span> pelat té rol implícit `generic`, i l'ARIA
+        // prohibeix el nom d'autor en aquest rol —o sigui que l'`aria-label` del xip no
+        // arribava a cap lector de pantalla i es llegia només el text de dins. `listitem`
+        // sí que l'admet. (`aria-current` és global i ja funcionava.)
+        <div role="list" style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
           {ancores.map((nom, i) => {
             const fet = i < pas
             const ara = i === pas
             const estat = ara ? 'ara' : fet ? 'fet' : 'pendent'
             return (
               <span
-                key={nom}
+                key={nom} role="listitem"
                 aria-current={ara ? 'step' : undefined}
                 aria-label={t(`pattern.taller.ancora_estat.${estat}`, {
                   ancora: t(`pattern.taller.ancora.${nom}`),
@@ -1649,6 +1653,12 @@ function SelectorMetode({ t, metodes, triat, onTria, pas, ancores }) {
                   // Sense `opacity`: apagar text de 10 px el deixava a 2,43:1. El que
                   // distingeix «fet» de «pendent» és l'icona, que no es compra amb contrast.
                   color: ara ? 'var(--text-main)' : 'var(--text-soft)',
+                  // El pes és el SEGON canal de «on soc». Els dos cromàtics que la norma
+                  // prescriu es queden, mesurats, per sota del llindar de visibilitat
+                  // (fons --sel vs --panel = 1,09:1 · filet --gold-border vs --line =
+                  // 1,29:1), i `ti-point` és el mateix glif que el del pas pendent. El pes
+                  // és la mateixa tècnica que la norma ja fa servir per compensar.
+                  fontWeight: ara ? 600 : 400,
                 }}
               >
                 <i className={`ti ${fet ? 'ti-check' : 'ti-point'}`} aria-hidden="true" />
