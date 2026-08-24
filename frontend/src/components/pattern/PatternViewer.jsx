@@ -188,21 +188,33 @@ export default function PatternViewer({
   }, [pieces, pecaIman, voraIman])
 
   // ── enquadrar ────────────────────────────────────────────────────────────
+  // 🚨 Les dependències són les QUATRE XIFRES de la capsa, no l'objecte.
+  //
+  // `bboxDePeces` en torna un de nou a cada crida, i `pieces` canvia d'identitat cada cop
+  // que el Taller reescriu la geometria —cosa que ara passa a cada arrossegada d'una cota,
+  // per l'actualització optimista. Amb l'objecte a les dependències, `encaixar` canviava
+  // d'identitat, l'efecte de sota tornava a disparar-se i **el llenç es reenquadrava sol**:
+  // fer zoom sobre un escot per separar tres cotes, moure'n una, i que el patró saltés a
+  // «encaixar-ho tot».
+  //
+  // Amb les xifres, l'enquadrat es refà quan canvia el que ha de fer-lo canviar —una versió
+  // nova del patró, una peça que entra o surt— i no quan es mou una línia de lloc.
+  const { minX, maxX, minY, maxY } = bbox
   const encaixar = useCallback(() => {
     const el = viewportRef.current
     if (!el) return
     const w = el.clientWidth
     const h = omplirAlcada ? el.clientHeight : ALCADA
     if (!w || !h) return
-    const z = clampZoom(escalaPerCabre(bbox, w, h))
+    const z = clampZoom(escalaPerCabre({ minX, maxX, minY, maxY }, w, h))
     setZoom(z)
     // El contingut es dibuixa en mm amb l'eix Y capgirat: el centrem al viewport.
     setPos({
-      x: w / 2 - ((bbox.minX + bbox.maxX) / 2) * z,
-      y: h / 2 + ((bbox.minY + bbox.maxY) / 2) * z,
+      x: w / 2 - ((minX + maxX) / 2) * z,
+      y: h / 2 + ((minY + maxY) / 2) * z,
     })
     setMida({ w, h })
-  }, [bbox, omplirAlcada])
+  }, [minX, maxX, minY, maxY, omplirAlcada])
 
   useEffect(() => { encaixar() }, [encaixar])
 
@@ -461,6 +473,8 @@ export default function PatternViewer({
                 sel={pomSel === pom.id}
                 onSelecciona={onSeleccionaPom}
                 onMou={onMouPom}
+                anotant={anotant}
+                maAlta={maAlta}
               />
             )))}
 
@@ -758,7 +772,11 @@ export default function PatternViewer({
  * sol número amb sentit geomètric, no una posició absoluta que caducaria el dia que algú
  * recol·loqui una àncora.
  */
-function PomKonva({ piece, pom, zoom, unit, sel = false, onSelecciona, onMou }) {
+function PomKonva({
+  piece, pom, zoom, unit, sel = false, onSelecciona, onMou,
+  anotant = false, maAlta = false,
+}) {
+  const boto = useRef(0)
   const g = geometriaDeLaCota(piece, pom)
   if (!g) return null
 
@@ -766,7 +784,21 @@ function PomKonva({ piece, pom, zoom, unit, sel = false, onSelecciona, onMou }) 
   const cap = cota[0]
   const cua = cota[cota.length - 1]
   const mig = cota[Math.floor(cota.length / 2)]
-  const arrossegable = !!onMou
+
+  // 🚨 **MENTRE S'ANOTA, LA COTA NO ESCOLTA RES**, i és la llei del fitxer: el tram declarat
+  // fa `listening={mode === 'sew' && ...}` i `PecaKonva` fa `!anotant && onTriaPeca(...)`.
+  // Sense això, el clic de l'IMANT —que és del `Stage`, no d'aquest shape— quedava mort a
+  // menys de 12 px de qualsevol cota: el patronista veia el marcador d'imant encès i el clic
+  // no ancorava res. I a offset 0, que és on neixen totes, la cota seu DAMUNT de les seves
+  // pròpies àncores; amb `metode='vora'`, damunt de tot un tros de contorn.
+  //
+  // `maAlta` (espai premut o pan en curs) hi entra pel mateix motiu: la sortida d'emergència
+  // del pan no pot ser justament el que es queda enganxat a una cota.
+  const viva = !anotant && !maAlta
+  const arrossegable = !!onMou && viva
+  // La tinta del TEXT no canvia amb la selecció: `tramSel` (#fb8500) sobre blanc mesura
+  // 2,48:1 i no arriba ni al llindar de component. L'èmfasi el porten la línia i els punts,
+  // que són traç i no lletra.
   const col = sel ? KONVA_COL.tramSel : KONVA_COL.pom
 
   // El drag es projecta sobre la normal: el que arriba al servidor és quant s'ha separat la
@@ -790,10 +822,31 @@ function PomKonva({ piece, pom, zoom, unit, sel = false, onSelecciona, onMou }) 
         e.target.position({ x: 0, y: 0 })
         if (Math.abs(d) > 1e-6) onMou(pom, (pom.cota_offset_mm || 0) + d)
       } : undefined}
-      onMouseDown={onSelecciona ? (e) => { e.cancelBubble = true } : undefined}
-      onClick={onSelecciona ? (e) => { e.cancelBubble = true; onSelecciona(pom) } : undefined}
+      onDragStart={arrossegable ? (e) => {
+        // Konva arrossega amb el botó del mig també (`dragButtons` per defecte és [0, 1]).
+        // El del mig és el pan del Taller: si comença damunt d'una cota, ha de panejar.
+        if (boto.current !== 0) e.target.stopDrag()
+      } : undefined}
+      onMouseDown={onSelecciona ? (e) => {
+        boto.current = e.evt?.button ?? 0
+        if (boto.current !== 0) return    // el pan del botó del mig ha d'arribar al Stage
+        e.cancelBubble = true
+      } : undefined}
+      onClick={onSelecciona ? (e) => {
+        if ((e.evt?.button ?? 0) !== 0) return
+        e.cancelBubble = true
+        onSelecciona(pom)
+      } : undefined}
       onTap={onSelecciona ? (e) => { e.cancelBubble = true; onSelecciona(pom) } : undefined}
-      listening={!!(onSelecciona || arrossegable)}
+      onMouseEnter={arrossegable ? (e) => {
+        const c = e.target.getStage()?.container()
+        if (c) c.style.cursor = 'move'      // res no deia que això s'arrossegués
+      } : undefined}
+      onMouseLeave={arrossegable ? (e) => {
+        const c = e.target.getStage()?.container()
+        if (c) c.style.cursor = ''
+      } : undefined}
+      listening={viva && !!(onSelecciona || onMou)}
     >
       {/* TESTIMONIS: del punt acotat fins una mica més enllà de la línia de cota, puntejats
           i fins, com al CAD. Només quan la cota s'ha separat: a offset zero seria una línia
@@ -817,7 +870,7 @@ function PomKonva({ piece, pom, zoom, unit, sel = false, onSelecciona, onMou }) 
       <Line
         points={cota.flatMap(p => [p.x, -p.y])}
         stroke={col} strokeWidth={(sel ? 2.6 : 1.8) / zoom}
-        hitStrokeWidth={12 / zoom}
+        hitStrokeWidth={Math.max(12 / zoom, 4)}
         perfectDrawEnabled={false}
       />
       {[cap, cua].map((p, i) => (
@@ -939,6 +992,10 @@ function puntsDeLaMesura(piece, pom) {
       const arc = arcsEntrePunts(boundary, ia, ib)[0]
       if (arc?.punts?.length >= 2) return arc.punts
     }
+    // Cap vora no passa pels dos punts. El servidor tampoc no ho pot mesurar i deixa el
+    // valor a null (`engine/measure._cami_per_vora`): dibuixar-hi la corda seria pintar una
+    // magnitud que ningú no ha demanat i que no és la que la fila diu.
+    return []
   }
 
   return [a, b]

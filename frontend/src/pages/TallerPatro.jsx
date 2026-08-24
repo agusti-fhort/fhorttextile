@@ -341,6 +341,25 @@ export default function TallerPatro() {
 
   const veredicteVist = () => setVeredicte(null)
 
+  // ⚠️ AQUESTS DOS VIUEN AQUÍ DALT, i pel mateix motiu que `llegirRebuigs` (v. la seva
+  // capçalera): `pomSelViu` entra a les dependències de l'efecte de teclat de sota, i les
+  // dependències s'avaluen DURANT el render. Declarats més avall, el render peta sencer
+  // contra la seva pròpia zona morta.
+  //
+  // Els POMs ancorats viuen a la geometria, penjats de la peça que mesuren. (El creuament
+  // amb la fitxa no es fa aquí: el fa el servidor, a `model-poms`. Fer-lo dues vegades i de
+  // dues maneres seria demanar que divergissin.)
+  const pomsAncorats = useMemo(() => (geometria?.pieces || []).flatMap(p =>
+    (p.poms || []).map(x => ({ ...x, peca: etiquetaPeca(p) }))), [geometria])
+
+  // I la cota assenyalada ha d'EXISTIR. Es comprova DERIVANT-HO i no netejant l'estat amb un
+  // efecte: si el POM desapareix —esborrat des d'una altra pestanya, o una versió nova del
+  // patró—, l'id mort deixa de pintar-se i Supr no hi arriba. Un efecte que fes
+  // `setPomSel(null)` faria el mateix amb un render de més i una cascada pel mig.
+  const pomSelViu = useMemo(
+    () => (pomsAncorats.some(p => p.id === pomSel) ? pomSel : null),
+    [pomsAncorats, pomSel])
+
   // Esc surt. La tecla d'INVERTIR (←/→/F) gira l'arc que s'està previsualitzant, abans de
   // fixar-lo: dos punts d'una vora tancada defineixen dos camins, i el que el cursor no digui
   // ho ha de poder dir el teclat. I Supr esborra la cota assenyalada. Tot tres, només mentre
@@ -357,12 +376,18 @@ export default function TallerPatro() {
   // pantalla anuncia («Esc per sortir») i el que qualsevol espera.
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key === 'Escape') { cancelar(); return }
+      if (e.key === 'Escape') {
+        // Amb la confirmació d'esborrat oberta, Escape és SEVA. Sense això, desdir-se'n
+        // deixava el modal obert i, de propina, avortava la col·locació que hi havia a sota.
+        if (esborraCota != null) { setEsborraCota(null); return }
+        cancelar()
+        return
+      }
       if (esCampDeText(e.target)) return
 
-      if ((e.key === 'Delete' || e.key === 'Backspace') && pomSel != null) {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && pomSelViu != null) {
         e.preventDefault()
-        setEsborraCota(pomSel)
+        setEsborraCota(pomSelViu)
         return
       }
 
@@ -375,7 +400,7 @@ export default function TallerPatro() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [cancelar, mode, puntsPom, pomSel])
+  }, [cancelar, mode, puntsPom, pomSelViu, esborraCota])
 
   const onClicPunt = (iman) => {
     const punt = iman.punt
@@ -1035,12 +1060,6 @@ export default function TallerPatro() {
     }
   }
 
-  // Els POMs ancorats, per al panell de RELACIONS: viuen a la geometria, penjats de la peça
-  // que mesuren. (El creuament amb la fitxa ja no es fa aquí: el fa el servidor, a
-  // `model-poms`. Fer-lo dues vegades i de dues maneres seria demanar que divergissin.)
-  const pomsAncorats = useMemo(() => (geometria?.pieces || []).flatMap(p =>
-    (p.poms || []).map(x => ({ ...x, peca: etiquetaPeca(p) }))), [geometria])
-
   /** La peça que conté un punt de la geometria. */
   const pecaDelPunt = useCallback((punt) => (geometria?.pieces || []).find(p =>
     (p.boundaries || []).some(v => (v.points || []).some(q => q.id === punt.id))),
@@ -1281,7 +1300,7 @@ export default function TallerPatro() {
               files={feina?.results || []}
               poms={pomsAncorats}
               pomActiu={pomActiu}
-              pomSelId={pomSel}
+              pomSelId={pomSelViu}
               onColocar={colocarPOM}
               onAfegirFora={afegirPOMForaDeFitxa}
               onReobre={reobrirPOM}
@@ -1450,7 +1469,7 @@ export default function TallerPatro() {
               mode={mode}
               puntsPom={puntsPom}
               ancoresPom={ancoresPom}
-              pomSel={pomSel}
+              pomSel={pomSelViu}
               onSeleccionaPom={p => setPomSel(v => (v === p.id ? null : p.id))}
               onMouPom={tascaId ? mouCota : null}
               onClicPunt={onClicPunt}

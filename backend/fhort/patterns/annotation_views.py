@@ -54,9 +54,9 @@ class PatternPOMSerializer(serializers.ModelSerializer):
         #
         # `cota_offset_mm` SÍ que ho és, i la frontera entre tots dos és tota la llei del
         # camp: el valor és una LECTURA de la geometria i el desplaçament és una PREFERÈNCIA
-        # de qui dibuixa. Un PATCH que només porti el desplaçament no recalcula res —el
-        # `_recalcular` de la vista rellegeix la geometria igualment i hi torna el mateix
-        # número—, i no hi ha cap camí perquè el desplaçament entri en cap càlcul.
+        # de qui dibuixa. Un PATCH que només porti el desplaçament **ni tan sols torna a
+        # mesurar** (v. `PatternPOMViewSet.CAMPS_DE_LA_MESURA`), i no hi ha cap camí perquè
+        # el desplaçament entri en cap càlcul.
         read_only_fields = ['valor_mesurat_cm', 'data_creacio', 'peca', 'pom_code', 'pom_nom']
 
     def get_pom_code(self, obj):
@@ -183,7 +183,11 @@ class PatternPOMSerializer(serializers.ModelSerializer):
         mode = recepta.get('mode', PatternPOM.MODE_POINTS)
 
         if not PatternPOM.mode_admes(metode, mode):
-            admesos = ' · '.join(PatternPOM.MODES_ACCEPTATS.get(metode, ()))
+            # El MATEIX defecte que fa servir `mode_admes`, i no un de propi: amb un `metode`
+            # desconegut, un `.get(metode, ())` deixava la frase dient «vol una recepta de
+            # mode «»» mentre el guard havia comparat contra `points`.
+            admesos = ' · '.join(
+                PatternPOM.MODES_ACCEPTATS.get(metode, (PatternPOM.MODE_POINTS,)))
             raise serializers.ValidationError(
                 {'metode': f"El mètode «{metode}» vol una recepta de mode «{admesos}», i "
                            f"la que ha arribat és de mode «{mode}»."})

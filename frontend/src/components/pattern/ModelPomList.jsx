@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { formatDelta, formatLen, titleLen } from '../../utils/format'
 
@@ -132,6 +133,10 @@ function Fila({
   onReobre, onEsborra, onAssenyala,
 }) {
   const colocat = f.ancorat
+  // Assenyalar una cota al canvas ha de ressaltar LA SEVA FILA. Sense això el lligam
+  // canvas↔llista quedava construït a mitges: la fila forana s'encenia i les de la fitxa
+  // —que són la majoria— no deien res.
+  const assenyalada = (f.ancoratges || []).some(a => a.pattern_pom === pomSelId)
 
   // L'estat de la Δ: només es jutja si es POT jutjar. `dins_tolerancia` ve a null quan la
   // fitxa no dona valor (plantilla sense mesura) — llavors hi ha xifra, però no veredicte.
@@ -148,9 +153,12 @@ function Fila({
     <div
       style={{
         position: 'relative',
-        background: actiu ? 'var(--sel)' : 'var(--panel)',
-        border: `1px solid ${actiu ? 'var(--gold)' : 'var(--line)'}`,
-        borderLeft: `3px solid ${colocat ? 'var(--ok)' : actiu ? 'var(--gold)' : 'var(--line)'}`,
+        background: (actiu || assenyalada) ? 'var(--sel)' : 'var(--panel)',
+        border: `1px solid ${(actiu || assenyalada) ? 'var(--gold)' : 'var(--line)'}`,
+        // NORMA §4: tota selecció porta filet d'or de 3px. Quan la fila NO està triada, el
+        // filet segueix fent la seva altra feina —dir si el POM ja és col·locat.
+        borderLeft: `3px solid ${(actiu || assenyalada) ? 'var(--gold)'
+          : colocat ? 'var(--ok)' : 'var(--line)'}`,
         borderRadius: 4,
         display: 'flex', alignItems: 'center',
       }}
@@ -293,16 +301,18 @@ function Fila({
       <MenuAccions
         t={t} obert={menuObert} onObre={onMenu} onTanca={onTancaMenu}
         accions={[
-          !colocat && {
-            icona: 'ti-crosshair', text: t('pattern.taller.act_place'),
-            fes: onColocar,
-          },
+          // ⚠️ «Col·locar» NO hi entra (NORMA §5.6: el menú ⋯ és per a accions ocasionals,
+          // MAI per a passos de flux). Col·locar és EL pas de flux d'aquesta pantalla, i la
+          // fila sencera ja és aquest botó: posar-l'hi hauria estat duplicar-lo i amagar-lo.
           ...(f.ancoratges || []).map(anc => {
             const pom = pomPerId?.get(anc.pattern_pom)
             const on = (f.ancoratges.length > 1 || !colocat) ? ` · ${anc.peca}` : ''
             return [
               onAssenyala && {
-                icona: pomSelId === anc.pattern_pom ? 'ti-eye-off' : 'ti-eye',
+                // `ti-focus-2` i no `ti-eye`: l'ull ja vol dir «visible / amagat» a tot el
+                // producte, i un ull barrat al costat d'una cota es llegiria com «amaga-la
+                // del canvas», que és el contrari del que fa.
+                icona: 'ti-focus-2',
                 text: (pomSelId === anc.pattern_pom
                   ? t('pattern.taller.act_unpoint') : t('pattern.taller.act_point')) + on,
                 fes: () => onAssenyala(anc.pattern_pom),
@@ -338,7 +348,9 @@ function FilaForana({
       position: 'relative',
       background: sel ? 'var(--sel)' : 'var(--panel)',
       border: `1px solid ${sel ? 'var(--gold)' : 'var(--line)'}`,
-      borderLeft: '3px solid var(--text-soft)',
+      // Igual que a `Fila`: seleccionada mana el filet d'or (NORMA §4); si no, el gris que
+      // diu que aquest ancoratge no és de la fitxa.
+      borderLeft: `3px solid ${sel ? 'var(--gold)' : 'var(--text-soft)'}`,
       borderRadius: 4, display: 'flex', alignItems: 'center',
       padding: '0.3rem 0.5rem', gap: '0.5rem',
     }}>
@@ -360,7 +372,10 @@ function FilaForana({
         title={titleLen(p.valor_mesurat_cm)}
         style={{
           fontFamily: 'var(--mono)', fontSize: 'var(--fs-body)', fontWeight: 600,
-          color: 'var(--text-main)', flexShrink: 0,
+          // El mateix vermell que a `Fila`: la mateixa condició al mateix panell no es pot
+          // pintar de dos colors.
+          color: p.valor_mesurat_cm == null ? 'var(--err)' : 'var(--text-main)',
+          flexShrink: 0,
         }}
       >
         {p.valor_mesurat_cm != null
@@ -371,7 +386,7 @@ function FilaForana({
         t={t} obert={menuObert} onObre={onMenu} onTanca={onTancaMenu}
         accions={[
           onAssenyala && {
-            icona: sel ? 'ti-eye-off' : 'ti-eye',
+            icona: 'ti-focus-2',
             text: sel ? t('pattern.taller.act_unpoint') : t('pattern.taller.act_point'),
             fes: () => onAssenyala(p.id),
           },
@@ -403,7 +418,43 @@ function FilaForana({
  */
 function MenuAccions({ t, obert, onObre, onTanca, accions }) {
   const box = useRef(null)
+  const [lloc, setLloc] = useState(null)
   const vives = (accions || []).filter(Boolean)
+
+  // 🚨 EL MENÚ SURT DEL PANELL PER UN PORTAL, i no és una floritura.
+  //
+  // El panell de POMs és una caixa d'scroll (`Contenidor` → `overflowY: 'auto'`), i el CSS
+  // diu que un `overflow-y` que no sigui `visible` força l'`overflow-x` a `auto`: la caixa
+  // RETALLA per tots quatre costats. Un `position: absolute` a dins hi queda tancat, i cap
+  // `zIndex` no en salva —el retall passa abans que l'apilament. Mesurat sobre aquest
+  // panell: un menú de tres ítems obert a una fila baixa cau 84 px fora de la caixa.
+  //
+  // Abans això era una molèstia; ara no ho és: amb la fusió de panells, aquest menú és
+  // l'ÚNICA porta a esborrar, re-ancorar i assenyalar. Un menú retallat és una funció que no
+  // existeix.
+  //
+  // Es reposiciona en obrir, i en scroll o resize es tanca en lloc de perseguir el botó:
+  // seguir-lo demanaria escoltar l'scroll de tots els avantpassats, i un menú que es tanca
+  // quan el terra es mou és el que qualsevol espera.
+  // La posició es pren al CLIC, no a un efecte: mesurar i obrir passen a la mateixa tanda i
+  // el menú neix ja col·locat. Fer-ho a un efecte volia dir un `setState` síncron a dins
+  // (render en cascada) i, el primer fotograma, un menú a la posició de l'anterior.
+  const obre = () => {
+    const r = box.current?.getBoundingClientRect()
+    if (r) setLloc({ dalt: r.bottom + 4, dreta: window.innerWidth - r.right })
+    onObre()
+  }
+
+  useEffect(() => {
+    if (!obert) return undefined
+    const tanca = () => onTanca()
+    window.addEventListener('scroll', tanca, true)
+    window.addEventListener('resize', tanca)
+    return () => {
+      window.removeEventListener('scroll', tanca, true)
+      window.removeEventListener('resize', tanca)
+    }
+  }, [obert, onTanca])
 
   useEffect(() => {
     if (!obert) return undefined
@@ -415,7 +466,13 @@ function MenuAccions({ t, obert, onObre, onTanca, accions }) {
       e.stopPropagation()
       onTanca()
     }
-    const perClic = e => { if (box.current && !box.current.contains(e.target)) onTanca() }
+    // El menú ja no viu dins de `box` (se n'ha anat pel portal), així que «a fora» s'ha de
+    // preguntar també a ell: sense això, clicar un ítem el tancaria abans d'executar-lo.
+    const perClic = e => {
+      if (box.current?.contains(e.target)) return
+      if (e.target.closest?.('[data-menu-accions]')) return
+      onTanca()
+    }
     document.addEventListener('keydown', perTecla)
     document.addEventListener('mousedown', perClic)
     return () => {
@@ -429,8 +486,9 @@ function MenuAccions({ t, obert, onObre, onTanca, accions }) {
   return (
     <div ref={box} style={{ position: 'relative', flexShrink: 0 }}>
       <button
-        onClick={onObre}
+        onClick={obre}
         aria-expanded={obert}
+        aria-haspopup="menu"
         aria-label={t('pattern.taller.act_menu')}
         title={t('pattern.taller.act_menu')}
         style={{
@@ -440,15 +498,17 @@ function MenuAccions({ t, obert, onObre, onTanca, accions }) {
       >
         <i className="ti ti-dots-vertical" />
       </button>
-      {obert && (
+      {obert && lloc && createPortal((
         <div
           role="menu"
+          data-menu-accions
           style={{
-            position: 'absolute', top: '100%', right: 0, zIndex: 20, minWidth: 190,
+            position: 'fixed', top: lloc.dalt, right: lloc.dreta, zIndex: 3000,
+            minWidth: 192,
             background: 'var(--panel)', border: '1px solid var(--line)',
             borderRadius: 'var(--r-ctrl)', padding: 4,
             boxShadow: '0 4px 16px rgba(0,0,0,0.10)',
-            display: 'flex', flexDirection: 'column', gap: 2,
+            display: 'flex', flexDirection: 'column', gap: 4,
           }}
         >
           {vives.map((a, i) => (
@@ -468,7 +528,7 @@ function MenuAccions({ t, obert, onObre, onTanca, accions }) {
             </button>
           ))}
         </div>
-      )}
+      ), document.body)}
     </div>
   )
 }
