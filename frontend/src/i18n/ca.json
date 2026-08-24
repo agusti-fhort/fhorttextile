@@ -4459,7 +4459,12 @@
         "fet": "{{ancora}}: fet",
         "ara": "{{ancora}}: toca ara",
         "pendent": "{{ancora}}: pendent"
-      }
+      },
+      "pt_ref_a": "Ref A",
+      "pt_ref_b": "Ref B",
+      "pt_p": "Cau",
+      "err_metode_desconegut": "Aquest POM fa servir un mètode de mesura que la pantalla no coneix ({{metode}}). Recarrega el taller abans de reobrir-lo.",
+      "err_sense_vocabulari": "No s'han pogut llegir els mètodes de mesura. Recarrega el taller abans de reobrir un POM."
     },
     "loading": "Carregant el patró…",
     "empty_title": "Encara no hi ha cap patró",

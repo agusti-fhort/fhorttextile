@@ -296,6 +296,11 @@ export default function TallerPatro() {
     setPomActiu(fila)
     setPuntsPom([])
     setPickerObert(false)
+    // El mètode NO s'arrossega d'un POM al següent: haver mesurat una caiguda no vol dir que
+    // la mesura següent en sigui una, i heretar-lo en silenci faria que el canvas demanés
+    // tres clics per a una amplada. Es torna al primer del vocabulari, que és el per defecte
+    // del model.
+    setMetodeSel(metodes[0]?.codi || '')
     setMode('pom')
   }
 
@@ -868,7 +873,19 @@ export default function TallerPatro() {
    */
   const reobrirPOM = (pom) => {
     const def = pom.definicio_mesura || {}
-    const claus = metodes.find(m => m.codi === pom.metode)?.ancores || ['a', 'b']
+    const conegut = metodes.find(m => m.codi === pom.metode)
+    // Sense el vocabulari no se sap quantes àncores vol aquest POM ni com es diuen, i el gest
+    // cauria al de dos punts: reobrir una caiguda per recol·locar-li un extrem li demanaria
+    // dos clics i n'enviaria una recepta de recta. Val més no obrir-lo i dir-ho.
+    if (metodes.length && !conegut) {
+      setErrEina(t('pattern.taller.err_metode_desconegut', { metode: pom.metode }))
+      return
+    }
+    if (!metodes.length) {
+      setErrEina(t('pattern.taller.err_sense_vocabulari'))
+      return
+    }
+    const claus = conegut.ancores
     netejarSeleccio()
     setPomEditId(pom.id)
     if (pom.metode) setMetodeSel(pom.metode)
@@ -1335,6 +1352,7 @@ export default function TallerPatro() {
               onTriaPeca={setPecaSel}
               mode={mode}
               puntsPom={puntsPom}
+              ancoresPom={ancoresPom}
               onClicPunt={onClicPunt}
               segmentsA={segmentsA}
               segmentsB={segmentsB}

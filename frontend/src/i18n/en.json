@@ -4459,7 +4459,12 @@
         "fet": "{{ancora}}: done",
         "ara": "{{ancora}}: current step",
         "pendent": "{{ancora}}: pending"
-      }
+      },
+      "pt_ref_a": "Ref A",
+      "pt_ref_b": "Ref B",
+      "pt_p": "Drop",
+      "err_metode_desconegut": "This POM uses a measurement method the screen does not know ({{metode}}). Reload the workshop before reopening it.",
+      "err_sense_vocabulari": "The measurement methods could not be read. Reload the workshop before reopening a POM."
     },
     "loading": "Loading pattern…",
     "empty_title": "No pattern yet",

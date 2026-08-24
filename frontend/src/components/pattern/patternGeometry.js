@@ -40,6 +40,27 @@ export function escalaPerCabre(bbox, ampleViewport, altViewport, marge = 40) {
   return Math.min((ampleViewport - marge) / w, (altViewport - marge) / h)
 }
 
+/**
+ * El PEU de la perpendicular de `p` sobre la recta que passa per `a` i `b`.
+ *
+ * El mateix càlcul que `engine/measure._ortogonal` fa al servidor, i aquí per la mateixa raó
+ * que la resta d'aquest fitxer existeix: el canvas ha de poder DIBUIXAR el que el servidor
+ * MESURA sense una anada i tornada per cada moviment del cursor. La xifra que val segueix
+ * sent la del servidor —aquí no se'n desa cap—; això només diu on va la línia.
+ *
+ * Torna `null` si les dues referències són el mateix punt: sense recta no hi ha
+ * perpendicular, exactament el mateix límit que el motor.
+ */
+export function peuPerpendicular(a, b, p) {
+  if (!a || !b || !p) return null
+  const vx = b.x - a.x
+  const vy = b.y - a.y
+  const base2 = vx * vx + vy * vy
+  if (base2 <= 1e-12) return null
+  const t = ((p.x - a.x) * vx + (p.y - a.y) * vy) / base2
+  return { x: a.x + t * vx, y: a.y + t * vy }
+}
+
 export function distancia(ax, ay, bx, by) {
   return Math.hypot(bx - ax, by - ay)
 }

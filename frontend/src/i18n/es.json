@@ -4459,7 +4459,12 @@
         "fet": "{{ancora}}: hecho",
         "ara": "{{ancora}}: toca ahora",
         "pendent": "{{ancora}}: pendiente"
-      }
+      },
+      "pt_ref_a": "Ref A",
+      "pt_ref_b": "Ref B",
+      "pt_p": "Cae",
+      "err_metode_desconegut": "Este POM usa un método de medida que la pantalla no conoce ({{metode}}). Recarga el taller antes de reabrirlo.",
+      "err_sense_vocabulari": "No se han podido leer los métodos de medida. Recarga el taller antes de reabrir un POM."
     },
     "loading": "Cargando el patrón…",
     "empty_title": "Todavía no hay ningún patrón",

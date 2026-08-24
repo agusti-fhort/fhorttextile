@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { etiquetaPeca } from './pieceText'
 import {
   arcDirigit, bboxDePeces, capesPresents, escalaPerCabre, longitudVora,
-  puntMesProper, puntsDelSegment, puntsPerKonva, situaPunt, tramMesProper,
+  peuPerpendicular, puntMesProper, puntsDelSegment, puntsPerKonva, situaPunt, tramMesProper,
 } from './patternGeometry'
 import { formatLen, formatLenNum } from '../../utils/format'
 
@@ -89,6 +89,11 @@ export default function PatternViewer({
   // ── mode d'anotació (S6). Sense aquestes props, el visor és el de S5: read-only.
   mode = 'view',                 // 'view' | 'pom' | 'seg' | 'pinca' | 'sew'
   puntsPom = [],                 // punts ja clicats (2 per a POM i tram; 3 per a una pinça)
+  // Els noms de les àncores que el gest de POM demana, EN ORDRE, tal com el backend els
+  // serveix ('a','b' · 'ref_a','ref_b','p'). El visor n'havia de deduir el recompte amb una
+  // regla pròpia («pinça 3, la resta 2»), que era una segona còpia de la del taller i es va
+  // quedar enrere el dia que un mètode en va voler tres. Ara la rep.
+  ancoresPom = ['a', 'b'],
   onClicPunt = null,
   // Els trams que la costura en curs ja té a cada costat (per pintar-los del seu color).
   segmentsA = [], segmentsB = [],
@@ -365,7 +370,7 @@ export default function PatternViewer({
 
   // La PRÈVIA: de l'últim punt fixat fins on és el cursor ara mateix. És el que substitueix
   // la tria d'arcs com a pas separat — es veu abans de clicar, i la tecla d'invertir el gira.
-  const maxPunts = mode === 'pinca' ? 3 : 2
+  const maxPunts = mode === 'pinca' ? 3 : mode === 'pom' ? ancoresPom.length : 2
   const previa = useMemo(() => {
     if (!segueixVora || !hover?.iman) return null
     if (puntsPom.length === 0 || puntsPom.length >= maxPunts) return null
@@ -611,21 +616,61 @@ export default function PatternViewer({
               </>
             )}
 
-            {/* Mode POM: la mesura que s'està marcant, i l'imant sota el cursor. */}
-            {mode === 'pom' && puntsPom.length >= 1 && (
-              <Line
-                points={[
-                  ...puntsPom.flatMap(p => [p.x, -p.y]),
-                  ...(puntsPom.length === 1 && hover?.iman
-                    ? [hover.iman.punt.x, -hover.iman.punt.y] : []),
-                ]}
-                stroke={KONVA_COL.pom}
-                strokeWidth={2 / zoom}
-                dash={[5 / zoom, 3 / zoom]}
-                listening={false}
-                perfectDrawEnabled={false}
-              />
-            )}
+            {/* Mode POM: la mesura que s'està marcant, i l'imant sota el cursor.
+
+                Amb DUES àncores la mesura és la línia entre els punts, i unir-los tots és
+                dir la veritat. Amb TRES no ho és: `ref_a → ref_b → p` dibuixa una ela que
+                no és cap caiguda. La forma honesta són dues línies —la de REFERÈNCIA entre
+                les dues primeres àncores, i la perpendicular des del punt que hi cau— i
+                això és el que es pinta. */}
+            {mode === 'pom' && puntsPom.length >= 1 && (() => {
+              const cursor = hover?.iman?.punt
+              if (ancoresPom.length <= 2) {
+                return (
+                  <Line
+                    points={[
+                      ...puntsPom.flatMap(p => [p.x, -p.y]),
+                      ...(puntsPom.length === 1 && cursor ? [cursor.x, -cursor.y] : []),
+                    ]}
+                    stroke={KONVA_COL.pom}
+                    strokeWidth={2 / zoom}
+                    dash={[5 / zoom, 3 / zoom]}
+                    listening={false}
+                    perfectDrawEnabled={false}
+                  />
+                )
+              }
+              // Amb tres àncores: la referència es tanca amb el cursor mentre es marca la
+              // segona; després, el cursor (o el punt ja fixat) penja de la línia.
+              const refA = puntsPom[0]
+              const refB = puntsPom[1] || (puntsPom.length === 1 ? cursor : null)
+              const cau = puntsPom[2] || (puntsPom.length === 2 ? cursor : null)
+              const peu = peuPerpendicular(refA, refB, cau)
+              return (
+                <>
+                  {refB && (
+                    <Line
+                      points={[refA.x, -refA.y, refB.x, -refB.y]}
+                      stroke={KONVA_COL.pom}
+                      strokeWidth={1 / zoom}
+                      dash={[2 / zoom, 4 / zoom]}
+                      listening={false}
+                      perfectDrawEnabled={false}
+                    />
+                  )}
+                  {peu && cau && (
+                    <Line
+                      points={[peu.x, -peu.y, cau.x, -cau.y]}
+                      stroke={KONVA_COL.pom}
+                      strokeWidth={2 / zoom}
+                      dash={[5 / zoom, 3 / zoom]}
+                      listening={false}
+                      perfectDrawEnabled={false}
+                    />
+                  )}
+                </>
+              )
+            })()}
 
             {/* EL PUNT FIXAT (T3a): marcador gran, halo, i l'etiqueta que no marxa fins que
                 el gest s'acaba. Abans era un cercle de 5 px que es perdia entre els vèrtexs
@@ -642,7 +687,7 @@ export default function PatternViewer({
                           strokeWidth={1.6 / zoom} perfectDrawEnabled={false} />
                   <Text
                     x={p.x + r * 1.6} y={-p.y - r * 2.4}
-                    text={etiquetaPunt(t, mode, i, maxPunts)}
+                    text={etiquetaPunt(t, mode, i, ancoresPom)}
                     fontSize={13 / zoom} fontStyle="bold" fill={col}
                     perfectDrawEnabled={false}
                   />
@@ -717,13 +762,18 @@ function PomKonva({ piece, pom, zoom, unit }) {
   )
 }
 
-/** L'etiqueta d'un punt fixat: A → B, o A → Vèrtex → B si s'està marcant una pinça. */
-function etiquetaPunt(t, mode, i, maxPunts) {
+/** L'etiqueta d'un punt fixat: la de la seva ÀNCORA, o A → Vèrtex → B si és una pinça.
+ *
+ * Deia «A» i «B» per a tot el que no fos una pinça, i amb tres àncores el tercer clic
+ * quedava etiquetat «B» com el segon: dos punts diferents amb el mateix rètol, mentre els
+ * xips del selector, tres pams més amunt, els anomenaven correctament.
+ */
+function etiquetaPunt(t, mode, i, ancores) {
   if (mode === 'pinca') {
     return t(['pattern.taller.pt_a', 'pattern.taller.pt_vertex', 'pattern.taller.pt_b'][i]
       || 'pattern.taller.pt_b')
   }
-  return t(i === 0 ? 'pattern.taller.pt_a' : 'pattern.taller.pt_b')
+  return t(`pattern.taller.pt_${ancores[i] || 'b'}`)
 }
 
 /**
@@ -773,12 +823,31 @@ function PincaKonva({ pinca, zoom, unit }) {
   )
 }
 
-/** Els punts que una recepta de mesura toca (mode `points`; el landmark es resol al servidor). */
+/** Els punts que una recepta de mesura toca (el landmark es resol al servidor).
+ *
+ * Una recepta ORTOGONAL no porta `a`/`b` sinó `ref_a`/`ref_b`/`p`, i llegint-hi només les
+ * dues primeres claus el POM sortia amb la llista buida i **no es dibuixava gens**: el
+ * patronista el col·locava, en veia el valor a la llista de treball, i sobre la peça no hi
+ * havia res. La lectura natural d'això és «no s'ha desat».
+ *
+ * El que es dibuixa és el segment (peu → p): la polilínia la longitud de la qual ÉS el
+ * valor, la mateixa que el motor torna a `MeasureResult.punts`. La línia de referència no
+ * s'hi pinta perquè no forma part de la mesura.
+ *
+ * ⚠️ Per a la caiguda, aquesta línia NO és el que la capa FTT-POM exportarà —el mode
+ * ortogonal encara no entra a la niada (`adapters.pom_specs`)—, a diferència de la recta i
+ * la longitud per vora, on la promesa de la capçalera de `PomKonva` sí que es compleix.
+ */
 function puntsDeLaMesura(piece, pom) {
   const def = pom.definicio_mesura || {}
   const perId = new Map()
   for (const b of piece.boundaries || []) {
     for (const p of b.points || []) perId.set(p.id, p)
+  }
+  if (def.mode === 'ortogonal') {
+    const p = perId.get(def.p)
+    const peu = peuPerpendicular(perId.get(def.ref_a), perId.get(def.ref_b), p)
+    return peu && p ? [peu, p] : []
   }
   const a = perId.get(def.a) || perId.get(def.landmark)
   const b = perId.get(def.b)
