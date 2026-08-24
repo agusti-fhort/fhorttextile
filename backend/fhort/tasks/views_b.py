@@ -1768,6 +1768,9 @@ def obrir_ronda_view(request, model_id):
                      # catàleg l'ha desactivat. La UI de M2 ho ha de poder dir en veu alta.
                      'codes_replicats': getattr(ronda, '_codes_replicats', []),
                      'codes_omesos': getattr(ronda, '_codes_omesos', []),
+                     # …i què s'ha ADOPTAT del buit entre voltes (feina que ja existia i que
+                     # aquesta volta recull). No són tasques noves: la UI no les pot pintar igual.
+                     'codes_adoptats': getattr(ronda, '_codes_adoptats', []),
                      'tasques': [t.id for t in tasques]},
                     status=http_status.HTTP_201_CREATED)
 

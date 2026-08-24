@@ -390,6 +390,120 @@ class GenealogiaMareTest(ReplicacioTest):
         self.assertEqual(self._per_code(r3)['pom'].mare_id, esmena.pk)
 
 
+class AdopcioDelBuitTest(ReplicacioTest):
+    """CODA · DECISIÓ 2 — la feina nascuda ENTRE dues voltes entra a la següent.
+
+    🔒 I NOMÉS AQUESTA. La frontera és temporal i exacta (`created_at > R(n).tancada_el`): tot el
+    que és anterior a la primera volta del model segueix `NULL` fins al retroactiu de M5. El dia
+    que algú eixampli el filtre «perquè sembla lògic», la sub-decisió (b) cau i M5 ja no podrà
+    distingir la feina d'abans del canvi de llei.
+    """
+
+    def _obre_al_buit(self, code):
+        """Un gest de treball amb totes les voltes tancades: neix `ronda=NULL` i espera."""
+        resp = self._client().post(f'/api/v1/models/{self.model.pk}/open-task/',
+                                   {'code': code}, format='json')
+        self.assertIn(resp.status_code, (200, 201), resp.data)
+        t = ModelTask.objects.get(pk=resp.data['task_id'])
+        self.assertIsNone(t.ronda_id, 'la tasca del buit hauria de néixer sense volta')
+        return t
+
+    def test_una_tasca_nascuda_al_buit_l_adopta_la_volta_seguent(self):
+        tt_bom, _ = TaskType.objects.get_or_create(
+            code='bom', defaults={'name': 'BOM', 'fase': 'Dev. tècnic'})
+        orfe = self._obre_al_buit('bom')
+        r2 = obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, [], profile=self.prof)
+        orfe.refresh_from_db()
+        self.assertEqual(orfe.ronda_id, r2.pk)
+        self.assertEqual(r2._codes_adoptats, ['bom'])
+
+    def test_l_adopcio_nomes_escriu_la_ronda(self):
+        """Entrar a una volta no és néixer-hi: ni motiu, ni mare, ni estat, ni order."""
+        TaskType.objects.get_or_create(code='bom', defaults={'name': 'BOM',
+                                                             'fase': 'Dev. tècnic'})
+        orfe = self._obre_al_buit('bom')
+        abans = (orfe.status, orfe.motiu, orfe.mare_id, orfe.order, orfe.origen,
+                 orfe.created_at)
+        obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, [], profile=self.prof)
+        orfe.refresh_from_db()
+        self.assertEqual((orfe.status, orfe.motiu, orfe.mare_id, orfe.order, orfe.origen,
+                          orfe.created_at), abans)
+
+    def test_el_code_adoptat_NO_es_replica_a_sobre(self):
+        """La volta no pot quedar amb dos germans del mateix code, un de viu i un de buit.
+
+        El cas és REAL i s'hi arriba sol: un code que a la volta anterior només va existir com a
+        `ad_hoc` (creat per `obrir_ronda`) no deixa cap `prevista` enrere, o sigui que en tancar-se
+        la volta `tasca_vigent` no en troba cap i `open-task` en CREA una de nova — al buit.
+        """
+        TaskType.objects.get_or_create(code='bom', defaults={'name': 'BOM',
+                                                             'fase': 'Dev. tècnic'})
+        r2 = obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, ['bom'], profile=self.prof)
+        tancar_ronda(r2, profile=self.prof)
+        orfe = self._obre_al_buit('bom')            # cap `prevista` de `bom`: se'n crea una
+
+        r3 = obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, [], profile=self.prof)
+        boms = list(r3.tasques.filter(task_type__code='bom'))
+        self.assertEqual(len(boms), 1, 'la volta ha quedat amb dos `bom`')
+        self.assertEqual(boms[0].pk, orfe.pk)
+        self.assertNotIn('bom', r3._codes_replicats)
+        # …i la resta del joc sí que es replica.
+        self.assertEqual(sorted(r3.tasques.values_list('task_type__code', flat=True)),
+                         ['bom', 'pom', 'tech_sheet'])
+
+    def test_un_extra_off_recipe_del_buit_s_adopta_pero_no_tapa_la_recepta(self):
+        """«Fora de la recepta» val als dos costats: no es replica, i tampoc no tapa la rèplica."""
+        extra = ModelTask.objects.create(model=self.model, task_type=self.tt_pom, order=95,
+                                         status='Pending', origen='ad_hoc', off_recipe=True)
+        self.assertIsNone(extra.ronda_id)
+        r2 = obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, [], profile=self.prof)
+        extra.refresh_from_db()
+        self.assertEqual(extra.ronda_id, r2.pk)                  # s'adopta…
+        self.assertIn('pom', r2._codes_replicats)                # …i el `pom` de la recepta hi és
+        self.assertEqual(r2.tasques.filter(task_type__code='pom').count(), 2)
+
+    def test_una_tasca_ANTERIOR_a_la_primera_volta_no_es_toca(self):
+        """La prohibició de backfill (sub-decisió b) segueix sencera."""
+        vella = ModelTask.objects.create(model=self.model, task_type=self.tt_pom, order=90,
+                                         status='Done', origen='ad_hoc')
+        ModelTask.objects.filter(pk=vella.pk).update(
+            created_at=self.r1.oberta_el - datetime.timedelta(days=30))
+        obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, [], profile=self.prof)
+        vella.refresh_from_db()
+        self.assertIsNone(vella.ronda_id)
+
+    def test_la_frontera_es_el_tancament_de_la_volta_anterior(self):
+        """Una NULL creada MENTRE la volta anterior era viva tampoc no s'adopta."""
+        durant = ModelTask.objects.create(model=self.model, task_type=self.tt_pom, order=91,
+                                          status='Done', origen='ad_hoc')
+        ModelTask.objects.filter(pk=durant.pk).update(
+            created_at=self.r1.tancada_el - datetime.timedelta(seconds=5))
+        obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, [], profile=self.prof)
+        durant.refresh_from_db()
+        self.assertIsNone(durant.ronda_id)
+
+    def test_una_volta_nomes_amb_feina_adoptada_es_valida(self):
+        """Amb tot el catàleg de la volta anterior desactivat, l'adopció sola ja és una ronda."""
+        TaskType.objects.get_or_create(code='bom', defaults={'name': 'BOM',
+                                                             'fase': 'Dev. tècnic'})
+        orfe = self._obre_al_buit('bom')
+        TaskType.objects.filter(pk__in=[self.tt_pom.pk, self.tt_fitxa.pk]).update(active=False)
+        r2 = obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, [], profile=self.prof)
+        orfe.refresh_from_db()
+        self.assertEqual(orfe.ronda_id, r2.pk)
+        self.assertEqual(sorted(r2._codes_omesos), ['pom', 'tech_sheet'])
+
+    def test_la_porta_http_diu_que_ha_adoptat(self):
+        TaskType.objects.get_or_create(code='bom', defaults={'name': 'BOM',
+                                                             'fase': 'Dev. tècnic'})
+        self._obre_al_buit('bom')
+        resp = self._client().post(f'/api/v1/models/{self.model.pk}/obrir-ronda/',
+                                   {'motiu': Ronda.MOTIU_NOVA_MOSTRA, 'codes': []},
+                                   format='json')
+        self.assertEqual(resp.status_code, 201, resp.data)
+        self.assertEqual(resp.data['codes_adoptats'], ['bom'])
+
+
 # ── LA CAPABILITY DE L'ENTREGA ──────────────────────────────────────────────────────────────
 
 class CapabilityEntregaTest(BaseFit4):

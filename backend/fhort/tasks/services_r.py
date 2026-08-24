@@ -198,6 +198,30 @@ def mare_homologa(ronda_anterior, code):
             .order_by('-id').first())
 
 
+def tasques_del_buit(model, ronda_anterior):
+    """CODA · DECISIÓ 2 — la feina nascuda al BUIT entre dues voltes, que la nova ha d'adoptar.
+
+    El buit existeix perquè `ronda_del_gest` retorna `None` quan totes les voltes són tancades
+    (cas 3): una tasca oberta llavors neix `ronda=NULL` i **espera**. Aquí s'acaba l'espera —
+    quan el PM obre la volta següent, aquella feina hi entra.
+
+    🔒 **NO ÉS UN BACKFILL, I LA FRONTERA ÉS TEMPORAL I EXACTA.** S'adopta només el que s'ha
+    creat **DESPRÉS** que la volta anterior es tanqués: `created_at > ronda_anterior.tancada_el`
+    (`Ronda.tancada_el` és el camp real; `ModelTask.created_at` és `auto_now_add`). Tot el que és
+    anterior —les `ronda=NULL` d'abans de la primera volta del model, que són l'històric sencer—
+    **no es toca**: segueix esperant el retroactiu de M5, i la sub-decisió (b) queda intacta.
+
+    Sense volta anterior no hi ha buit: un model que encara no n'ha tancat cap no té «després de».
+    """
+    from .models import ModelTask
+
+    if ronda_anterior is None or ronda_anterior.tancada_el is None:
+        return ModelTask.objects.none()
+    return (ModelTask.objects.filter(model=model, ronda__isnull=True,
+                                     created_at__gt=ronda_anterior.tancada_el)
+            .select_related('task_type').order_by('order', 'id'))
+
+
 def obrir_ronda(model, motiu, tasques_codes, *, profile=None):
     """Obre una volta nova de feina sobre un model i li crea les tasques.
 
@@ -209,6 +233,10 @@ def obrir_ronda(model, motiu, tasques_codes, *, profile=None):
 
     `motiu`: `Ronda.MOTIU_NOVA_MOSTRA`. Les CORRECCIONS ja no passen per aquí (S-20): no obren
     volta, i tenen porta pròpia a `obrir_correccio`.
+
+    CODA · DECISIÓ 2 — la volta nova **ADOPTA la feina del BUIT**: les tasques `ronda=NULL`
+    creades DESPRÉS del tancament de la volta anterior (v. `tasques_del_buit`). Els seus codes no
+    es repliquen —el que ja existeix no es proposa— i es reporten a `ronda._codes_adoptats`.
 
     `tasques_codes`: slugs de `TaskType` (G9: mai ids), **ADDITIUS**. M1-bis · FIT-4 — la volta
     neix amb el **joc de tasques de l'anterior** (`codes_a_replicar`) i el que es demana aquí s'hi
@@ -240,9 +268,22 @@ def obrir_ronda(model, motiu, tasques_codes, *, profile=None):
     # que les replicades «es poden NO EXECUTAR» — la manera de no fer-ne una és no fer-la, no
     # treure-la de la volta. L'ordre és el de la volta anterior, i els extres van al final.
     anterior = _ronda_anterior(model)
+    # DECISIÓ 2 — la feina del BUIT entra a aquesta volta. Es resol ABANS de res perquè decideix
+    # què NO cal replicar: si al buit algú ja ha obert el `pom`, la volta ja té el seu `pom` —i és
+    # feina VIVA, potser començada. Replicar-lo a sobre en fabricaria un segon de buit al costat
+    # del que s'està fent, i `tasca_vigent` hauria de triar entre dos germans dins de la mateixa
+    # volta. L'adopció mana sobre la proposta: el que ja existeix no es proposa.
+    adoptables = list(tasques_del_buit(model, anterior))
+    # ⚠️ QUI TAPA LA PROPOSTA I QUI NO. Un extra `off_recipe` nascut al buit **s'adopta igual**
+    # —és feina d'aquesta volta—, però **no tapa** la rèplica del seu code: `off_recipe` vol dir
+    # literalment «fora de la recepta», i que algú hagi fet un extra de `pom` no vol dir que la
+    # volta no hagi de fer el `pom` de la recepta. És la mateixa frontera que `_NO_ES_REPLICA`,
+    # llegida des de l'altre costat.
+    codes_adoptats = {t.task_type.code for t in adoptables if not t.off_recipe}
+
     replicats = codes_a_replicar(anterior)
-    codes = list(dict.fromkeys(replicats + demanats))
-    if not codes:
+    codes = [c for c in dict.fromkeys(replicats + demanats) if c not in codes_adoptats]
+    if not codes and not adoptables:
         raise RondaError('Una ronda sense cap tasca no és una ronda.')
 
     tipus = {t.code: t for t in TaskType.objects.filter(code__in=codes, active=True)}
@@ -255,7 +296,7 @@ def obrir_ronda(model, motiu, tasques_codes, *, profile=None):
         raise RondaError(f"Tipus de tasca inexistents o inactius: {', '.join(desconeguts)}.")
     omesos = [c for c in codes if c not in tipus]
     codes = [c for c in codes if c in tipus]
-    if not codes:
+    if not codes and not adoptables:
         raise RondaError('Cap de les tasques de la volta anterior segueix activa al catàleg.')
 
     # Les MARES surten de la VOLTA ANTERIOR, una per code (v. `mare_homologa`). Abans es
@@ -267,6 +308,11 @@ def obrir_ronda(model, motiu, tasques_codes, *, profile=None):
         seguent = (Ronda.objects.filter(model=model)
                    .order_by('-seq').values_list('seq', flat=True).first() or 1) + 1
         ronda = Ronda.objects.create(model=model, seq=seguent, motiu=motiu)
+        # L'adopció NOMÉS escriu `ronda`. Ni `motiu`, ni `mare`, ni `order`, ni l'estat: la tasca
+        # ja existeix, ja té la seva història i potser ja s'ha treballat. Entrar a una volta no és
+        # néixer-hi, i reescriure-li la genealogia seria inventar que la va proposar la ronda.
+        if adoptables:
+            ModelTask.objects.filter(pk__in=[t.pk for t in adoptables]).update(ronda=ronda)
         base_order = ModelTask.objects.filter(model=model).count()
         for i, code in enumerate(codes):
             tt = tipus[code]
@@ -279,6 +325,7 @@ def obrir_ronda(model, motiu, tasques_codes, *, profile=None):
     # Informatiu per a la porta HTTP: quins codes de la volta anterior s'han quedat pel camí.
     ronda._codes_replicats = [c for c in replicats if c in tipus]
     ronda._codes_omesos = omesos
+    ronda._codes_adoptats = sorted({t.task_type.code for t in adoptables})
     return ronda
 
 
