@@ -6,6 +6,7 @@ import { commerce } from '../api/endpoints'
 import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
 import { ClassificacioBadge } from '../components/commercial/estats'
+import Badge from '../components/ui/Badge'
 import PageMenu from '../components/ui/PageMenu'
 import { camp, forceBarra } from '../components/llista/ChromLlista'
 import PdfButton, { usePdfLang } from '../components/ui/PdfButton'
@@ -55,6 +56,74 @@ function groupByModel(lines) {
     blocks.get(key).lines.push(l)
   }
   return [...blocks.values()]
+}
+
+// M4 · FIT-12 — LA SAFATA S'AGRUPA PER VOLTA. El backend ja envia la volta amb cada ítem
+// (`it.ronda`) i l'índex ordenat del bloc (`g.rondes`); aquí només es reparteix. Els ítems que no
+// pengen de cap volta —despeses, deduccions de concepte lliure, i tota la feina anterior a la llei
+// de rondes— van a un calaix SENSE capçalera, que és el que la safata ja era abans d'M4: no se'ls
+// inventa cap volta.
+function repartirPerRonda(g) {
+  const solts = []
+  const perRonda = new Map()
+  for (const it of (g.items || [])) {
+    const rid = it.ronda?.id
+    if (rid == null) { solts.push(it); continue }
+    if (!perRonda.has(rid)) perRonda.set(rid, [])
+    perRonda.get(rid).push(it)
+  }
+  const blocs = (g.rondes || [])
+    .map(r => ({ ronda: r, items: perRonda.get(r.id) || [] }))
+    .filter(b => b.items.length > 0)
+  return { solts, blocs }
+}
+
+// La capçalera d'una volta dins la safata: quina volta és, si va FORA DE COMANDA i per què, i
+// entre quines dates es va fer. Les dates són el que FIT-12 demana per poder informar QUAN es va
+// fer cada volta; una volta encara oberta no en té de tancament i ho diu amb paraules.
+function CapcaleraRonda({ r, t }) {
+  const fmt = (iso) => (iso ? new Date(iso).toLocaleDateString() : null)
+  const inici = fmt(r.oberta_el)
+  const fi = fmt(r.tancada_el) || t('deliverynotes.ronda_oberta')
+  const perque = r.comanda
+    ? t('deliverynotes.ronda_perque', { n: r.seq, numeral: r.numeral_vigent, comanda: r.comanda })
+    : t('deliverynotes.ronda_perque_sense_comanda', { n: r.seq, numeral: r.numeral_vigent })
+  return (
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap',
+      padding: '6px 6px 4px', marginTop: 6, borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: 'var(--line)' }}>
+      <span style={{ fontFamily: MONO, fontWeight: 600, fontSize: 'var(--fs-body)' }}>
+        {t('deliverynotes.ronda_label', { n: r.seq })}
+      </span>
+      {/* §1 · el badge de la casa, variant `warn`: «fora de comanda» NO és una classificació
+          neutra (decisió 3 d'`estats.jsx`) sinó el fet que reclama la mirada del comercial —és
+          l'única raó per la qual aquesta volta surt agrupada. El «perquè» sencer va al `title`
+          i, quan hi cap, també a la línia de sota. */}
+      {r.fora_de_comanda && (
+        <Badge variant="warn" title={perque}>{t('deliverynotes.ronda_fora')}</Badge>
+      )}
+      <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)', fontFamily: MONO }}>
+        {inici} → {fi}
+      </span>
+      {r.fora_de_comanda && (
+        <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)', flexBasis: '100%' }}>
+          {perque}
+        </span>
+      )}
+    </div>
+  )
+}
+
+// Una fila de la safata. Extreta perquè el calaix «sense volta» i els blocs de volta pintin
+// EXACTAMENT la mateixa fila: agrupar no pot canviar què es veu de cada ítem.
+function ItemSafata({ it, k, picked, togglePick, t }) {
+  return (
+    <label style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 6px', cursor: 'pointer', borderRadius: 6 }}>
+      <input type="checkbox" checked={picked.has(k)} onChange={() => togglePick(it)} />
+      <ClassificacioBadge>{t(`deliverynotes.kind_${it.kind}`)}</ClassificacioBadge>
+      <span style={{ flex: 1, fontSize: 'var(--fs-body)' }}>{it.description}</span>
+      <span style={{ fontFamily: MONO, color: 'var(--text-soft)', fontSize: 'var(--fs-label)' }}>{money(it.proposed_price)}</span>
+    </label>
+  )
 }
 
 export default function DeliveryNoteDetail() {
@@ -395,17 +464,22 @@ export default function DeliveryNoteDetail() {
                       {g.model.codi_intern || t('deliverynotes.general_block')}
                       {g.model.nom_prenda && <span style={{ color: 'var(--text-soft)', fontWeight: 400 }}> · {g.model.nom_prenda}</span>}
                     </div>
-                    {g.items.map(it => {
-                      const k = itemKey(it)
+                    {(() => {
+                      const { solts, blocs } = repartirPerRonda(g)
                       return (
-                        <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 6px', cursor: 'pointer', borderRadius: 6 }}>
-                          <input type="checkbox" checked={picked.has(k)} onChange={() => togglePick(it)} />
-                          <ClassificacioBadge>{t(`deliverynotes.kind_${it.kind}`)}</ClassificacioBadge>
-                          <span style={{ flex: 1, fontSize: 'var(--fs-body)' }}>{it.description}</span>
-                          <span style={{ fontFamily: MONO, color: 'var(--text-soft)', fontSize: 'var(--fs-label)' }}>{money(it.proposed_price)}</span>
-                        </label>
+                        <>
+                          {solts.map(it => <ItemSafata key={itemKey(it)} it={it} k={itemKey(it)}
+                            picked={picked} togglePick={togglePick} t={t} />)}
+                          {blocs.map(b => (
+                            <div key={b.ronda.id}>
+                              <CapcaleraRonda r={b.ronda} t={t} />
+                              {b.items.map(it => <ItemSafata key={itemKey(it)} it={it} k={itemKey(it)}
+                                picked={picked} togglePick={togglePick} t={t} />)}
+                            </div>
+                          ))}
+                        </>
                       )
-                    })}
+                    })()}
                   </div>
                 )))}
             <div style={{ display: 'flex', gap: 8, marginTop: 12, position: 'sticky', bottom: 0, background: 'var(--panel)', paddingTop: 8 }}>
