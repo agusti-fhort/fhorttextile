@@ -38,7 +38,7 @@ mentre `tests/` no sigui un paquet.
   negativa. Tots els altres fitxers (tots PolyPattern) van en antihorari. És la prova que
   l'orientació del contorn és una propietat **del CAD d'origen** i que no es pot donar
   per bona (v. `docs/diagnosis/QA_TALLER_D_CONVENCIO_RECORREGUT_2026-08-25.md`).
-- **Per què cal:** porta **6 peces amb doblec** amb totes les topologies d'eix que
+- **Per què cal:** porta **8 peces amb doblec** amb totes les topologies d'eix que
   trencaven `unfold_piece` — tirades d'eix de 2, 3 i 5 punts, als extrems del bucle i al
   mig. La peça `14` és el cas canònic del defecte: desplegada pel llegat feia un llaç en
   vuit d'àrea |−52.511| mm² quan la peça en fa 105.000.
