@@ -2,6 +2,10 @@ backend/media/
 backend/logs/
 backend/staticfiles/
 backend/**/__pycache__/
+# El `**` d'aquí sobre només cobria `backend/`: un script d'`ops/` executat pel venv hi
+# deixa el seu `__pycache__` i sortia com a untracked (M5). Regla global.
+__pycache__/
+*.pyc
 backend/**/*.pyc
 backend/*.pyc
 frontend/node_modules
