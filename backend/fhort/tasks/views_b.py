@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from rest_framework.filters import OrderingFilter, SearchFilter
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db import transaction
-from django.db.models import Count, Q, ProtectedError, Min
+from django.db.models import Count, Q, ProtectedError, Min, OuterRef, Subquery
 from django.db.models.functions import Coalesce
 
 from rest_framework.exceptions import ValidationError
@@ -17,7 +17,7 @@ from fhort.accounts.capabilities import (HasCapability, DEFINE_TASKS, EXECUTE_TA
 from fhort.models_app.models import Model
 from .models import (TaskType, ModelTask, Supplier, Production,
                      GarmentTypeItem, GarmentTypeItemPart, TaskTimeEstimate,
-                     TaskTransition, Customer, TimeSeed)
+                     TaskTransition, Customer, TimeSeed, Ronda)
 from .serializers_b import (TaskTypeSerializer, ModelTaskSerializer,
                             SupplierSerializer, ProductionSerializer,
                             GarmentTypeItemSerializer, TaskTimeEstimateSerializer,
@@ -151,8 +151,30 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
         # NB: `.qs` d'un ModelFilter instanciat directament és lenient (valors invàlids
         # s'ignoren, no peta) — es preserva el comportament històric de by_model.
         from fhort.models_app.views import ModelFilter
-        model_ids = ModelFilter(qp, queryset=Model.objects.all(), request=request).qs.values('id')
-        qs = qs.filter(model_id__in=model_ids)
+        models_qs = ModelFilter(qp, queryset=Model.objects.all(), request=request).qs
+        # ── M3 · FASE 4 · FIT-9 — EL BOARD ÉS EL TAULER DELS MODELS VIUS ────────────────────
+        # Un model `acabat` o `jubilat` SURT del board: és exactament el que volen dir aquells
+        # dos estats («fora del tauler actiu, consultable» i «històric»). No s'amaga cap dada —
+        # la fitxa del model segueix sencera i les llistes els ensenyen amb filtre explícit—,
+        # el que es treu és el SOROLL d'una columna de feina acabada que no torna.
+        #
+        # ⚠️ I ES POT DEMANAR EXPLÍCITAMENT: `?estat=acabat` (o `jubilat`) els torna a ensenyar.
+        # L'exclusió és el DEFAULT, no una paret: qui pregunta per ells, els vol. Mateix criteri
+        # que `?inclou=` del catàleg («el que està EN ÚS no s'amaga mai»).
+        # Un `?estat=` que NO és cap de les choices s'ignora com l'ignora el filtre (regla
+        # lenient de C1), i llavors l'exclusió **torna a manar**: si no, un valor mal escrit
+        # obriria el board als acabats sense que ningú ho hagués demanat.
+        if (qp.get('estat') or '').strip() not in dict(Model.ESTAT_CHOICES):
+            models_qs = models_qs.exclude(estat__in=[Model.ESTAT_ACABAT, Model.ESTAT_JUBILAT])
+        qs = qs.filter(model_id__in=models_qs.values('id'))
+
+        # M3 · FASE 4 + CODA — LA VOLTA VIGENT DEL MODEL, per files i sense N+1. Ja no és
+        # només informativa: **`kanban_state` en depèn**. La 4a columna és ara un FET D'ENTREGA
+        # (darrera volta tancada AMB entrega i cap d'oberta), i això no es pot derivar dels
+        # comptadors de tasques — cal saber si aquella volta es va ENVIAR. La fila segueix
+        # portant-ho també cap a fora (`ronda: {seq, estat}`), que és el que deixa que la
+        # targeta digui «R3 entregada» i no una paraula que valgui per a tres casos diferents.
+        ultima_ronda = Ronda.objects.filter(model_id=OuterRef('model_id')).order_by('-seq')
 
         agg = (qs.values(
                    'model_id', 'model__codi_intern', 'model__nom_prenda', 'model__fase_actual',
@@ -169,6 +191,11 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
                    # del model (fallback a qualsevol tasca, per als models tot-Done amb all=true).
                    plan_start=Min('planned_start', filter=~Q(status='Done')),
                    plan_start_all=Min('planned_start'),
+                   # M3 · la darrera volta del model (seq, si és tancada i si té entrega). Tres
+                   # subqueries d'una fila cadascuna: el board segueix sent una sola consulta.
+                   ronda_seq=Subquery(ultima_ronda.values('seq')[:1]),
+                   ronda_tancada_el=Subquery(ultima_ronda.values('tancada_el')[:1]),
+                   ronda_entrega_id=Subquery(ultima_ronda.values('entrega__id')[:1]),
                ))
 
         # --- Ordenació: whitelist estricta; default si res vàlid ---
@@ -188,24 +215,74 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
         agg = agg.filter(plan_start_all__isnull=False)
 
         if qp.get('all') != 'true':
-            # Per defecte només models amb alguna tasca no-Done (HAVING sobre els comptadors).
-            agg = agg.filter(Q(pending__gt=0) | Q(paused__gt=0) | Q(in_progress__gt=0))
+            # Per defecte només models amb alguna tasca no-Done (HAVING sobre els comptadors)…
+            #
+            # M3 · CODA — …**i els que tenen una VOLTA OBERTA**, encara que no els quedi cap
+            # tasca viva. És la conseqüència directa de la llei nova: aquell model ja no cau a
+            # la 4a columna sinó a les d'estat de feina, i un model classificat «pendent» que la
+            # consulta per defecte amaga seria una fila que existeix a la columna i no a la
+            # llista. El que el filtre vol treure és la feina ACABADA, i una volta oberta no ho és.
+            agg = agg.filter(Q(pending__gt=0) | Q(paused__gt=0) | Q(in_progress__gt=0)
+                             | Q(ronda_seq__isnull=False, ronda_tancada_el__isnull=True))
 
-        def kanban_state(pending, paused, in_progress, done):
+        def kanban_state(row):
             """Estat-kanban derivat del model (única font de veritat al backend, Sprint 5 1c).
-            ∈ {pending, open, paused, done}. Ordre: feina viva mana sobre l'estàtica.
-              open    si in_progress>0
-              paused  si paused>0 i in_progress=0
-              pending si queda pendent (i res actiu/pausat)
-              done    si tot Done (cap pending/paused/in_progress)
-            Així el frontend no recalcula la classificació."""
-            if in_progress > 0:
+            ∈ {pending, open, paused, done}. Ordre: **la feina viva mana sobre tota la resta**.
+
+              open    si in_progress > 0
+              paused  si paused > 0 i cap en curs
+              pending si en queda alguna de pendent (i res actiu ni pausat)
+
+            …i quan no queda cap feina viva, mana **LA VOLTA** (M3 · CODA · decisió d'Agus):
+
+              done    la darrera volta és TANCADA i té ENTREGA (i per tant cap d'oberta)
+              done    el model NO TÉ CAP VOLTA  ← EXCEPCIÓ PRE-LLEI, v. sota
+              pending qualsevol altre cas amb volta: la volta és OBERTA, o es va tancar sense
+                      declarar cap entrega
+
+            🔒 **LA 4a COLUMNA ÉS UN FET D'ENTREGA, NO UN RECOMPTE DE TASQUES.** Fins ara hi
+            queia tot el que no tenia feina viva, i això barrejava dues coses ben diferents:
+            una volta ENTREGADA (feina que ja és a fora, esperant el retorn del client) i una
+            volta ACABADA DE TREBALLAR PERÒ NO ENVIADA, que és feina nostra i encara ho és. La
+            segona torna a les columnes d'estat de feina —el gest que falta és humà, no una
+            tasca— i el senyal de que ja es pot enviar el porta el badge LLIURABLE, que existeix
+            des d'F2.7 i diu exactament això.
+
+            ⏳ **L'EXCEPCIÓ PRE-LLEI ÉS AUTOEXTINGIBLE, i és el mateix patró que la barra de
+            progrés d'M2** (que torna només al pla SENSE voltes). Un model sense cap `Ronda` és
+            tot model LLEGAT: la prohibició de backfill d'M1-bis (vigent fins al retroactiu
+            d'M5) fa que la seva feina no pugui tenir volta, i per tant tampoc entrega. Aplicar-hi
+            la llei nova l'hauria empès a «pendent» per sempre —o l'hauria fet desaparèixer— per
+            una cosa que no és seva. Conserva la lectura vella (tot Done → 4a columna) i
+            **s'apaga sola**: el dia que el retroactiu li doni voltes, aquesta branca deixa de
+            trobar models i es pot retirar sense tocar res més.
+            """
+            if row['in_progress'] > 0:
                 return 'open'
-            if paused > 0:
+            if row['paused'] > 0:
                 return 'paused'
-            if pending > 0:
+            if row['pending'] > 0:
                 return 'pending'
-            return 'done'
+            # ── cap feina viva: mana la volta ────────────────────────────────────────────────
+            if row['ronda_seq'] is None:
+                return 'done'                     # ⏳ excepció pre-llei (model llegat)
+            # `ronda_*` és la volta de `seq` més ALT, i per la llei «una ronda oberta per model»
+            # (ratificada 24/08, `services_r.obrir_ronda`) una volta oberta només pot ser
+            # aquesta: si aquesta és tancada, no n'hi ha cap d'oberta. Per això no cal una quarta
+            # subconsulta per preguntar-ho.
+            if row['ronda_tancada_el'] is not None and row['ronda_entrega_id'] is not None:
+                return 'done'
+            return 'pending'
+
+        def ronda_estat(row):
+            """L'estat de la DARRERA volta del model — les tres que la BD pot donar, i cap més.
+            Són les mateixes tres que M2 ja pinta a la fitxa (§9.3 de la seva acta): una volta
+            pot estar tancada SENSE entrega, i pintar-la «entregada» seria mentir a seques."""
+            if row['ronda_seq'] is None:
+                return None
+            if row['ronda_tancada_el'] is None:
+                return 'oberta'
+            return 'entregada' if row['ronda_entrega_id'] is not None else 'tancada'
 
         def shape(row):
             return {
@@ -219,8 +296,7 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
                     'in_progress': row['in_progress'],
                     'done': row['done'],
                 },
-                'kanban_state': kanban_state(
-                    row['pending'], row['paused'], row['in_progress'], row['done']),
+                'kanban_state': kanban_state(row),
                 # Extres additius (la UI els pot etiquetar sense una segona crida):
                 'prioritat': row['model__prioritat'],
                 'temporada': row['model__temporada'],
@@ -229,6 +305,10 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
                 'responsable_id': row['model__responsable_id'],
                 # C4d — marcador "+": el model s'ha mogut sol al pla per un inici real.
                 'reanchored_by_start': row['model__reanchored_by_start'],
+                # M3 · FASE 4 — la darrera volta, perquè la 4a columna pugui dir QUÈ espera.
+                # `null` = aquest model no té cap volta (feina llegada): no és una omissió.
+                'ronda': (None if row['ronda_seq'] is None
+                          else {'seq': row['ronda_seq'], 'estat': ronda_estat(row)}),
             }
 
         page = self.paginate_queryset(agg)

@@ -997,7 +997,37 @@
     "pas_sense_mesures": "Cal gravar el POM per generar la taula de talles",
     "pas_sense_regles": "Cal definir la graduació per generar la taula de talles",
     "pas_sense_propagacio": "Cal propagar per generar la taula de talles",
-    "measure_set": "Mesurar set"
+    "measure_set": "Mesurar set",
+    "cicle": {
+      "tancar": "Tancar model",
+      "tancar_confirm": "Tancar",
+      "tancar_ajuda": "Tancar el model el treu del tauler actiu. Segueix consultable i es pot reobrir.",
+      "motiu": "Motiu",
+      "motiu_acabat": "Acabat (decisió interna)",
+      "motiu_tret_de_cataleg": "Tret de catàleg (el client no el produirà)",
+      "motiu_tret": "Tret de catàleg (el client no el produirà)",
+      "ronda_oberta_avis": "La ronda R{{n}} està oberta. Confirmar l'entrega i tancar-ho tot: s'informarà l'entrega d'aquesta volta i es tancarà la feina que hi queda viva.",
+      "confirmar_i_tancar": "Confirmar l'entrega i tancar",
+      "destinatari": "Destinatari",
+      "descripcio": "Què s'ha entregat",
+      "jubilar": "Jubilar model",
+      "jubilar_ajuda": "Jubilar l'arxiva: queda fora de les vistes normals i només es veu amb el filtre «jubilats».",
+      "reobrir": "Reobrir model",
+      "reobrir_ajuda": "El model torna al tauler. A dins es decideix si es rectifica la darrera volta o se n'obre una de nova.",
+      "motiu_lliure": "Motiu (opcional)",
+      "confirmar": "Confirmar",
+      "tancat_ok": "Model {{codi}} tancat.",
+      "jubilat_ok": "Model {{codi}} jubilat.",
+      "reobert_ok": "Model {{codi}} reobert.",
+      "estat_titol": "Estat del model",
+      "estat": {
+        "acabat": "Acabat",
+        "jubilat": "Jubilat"
+      },
+      "banner_ajuda": "aquest model es consulta; per tornar-hi a treballar, reobre’l.",
+      "ronda_oberta_avis_tret": "La ronda R{{n}} està oberta. En tancar el model es tancarà aquesta volta i la feina que hi queda viva, SENSE declarar cap entrega: el client ha dit que la peça no es produirà i no s'ha enviat res.",
+      "tancar_volta_i_model": "Tancar la volta i el model"
+    }
   },
   "model_wizard": {
     "customer": "Client",
@@ -1186,7 +1216,8 @@
     "col_deadline": "Deadline",
     "col_estat": "Estat",
     "estat_pendent": "Estat comercial: pendent del Kanban.",
-    "select_page": "Selecciona tota la pàgina"
+    "select_page": "Selecciona tota la pàgina",
+    "view_retired": "Models jubilats"
   },
   "models_filters": {
     "button": "Filtres",
@@ -2219,10 +2250,9 @@
       "SP": "SP · Especial"
     },
     "estats": {
-      "Nou": "Nou",
-      "EnCurs": "En curs",
-      "EnRevisio": "En revisió",
-      "Tancat": "Tancat"
+      "nou": "Nou",
+      "acabat": "Acabat",
+      "jubilat": "Jubilat"
     }
   },
   "model": {
@@ -2265,10 +2295,9 @@
       "codi_tenant_help": "3 caràcters · si està buit es deriva del codi client"
     },
     "estats": {
-      "Nou": "Nou",
-      "EnCurs": "En curs",
-      "EnRevisio": "En revisió",
-      "Tancat": "Tancat"
+      "nou": "Nou",
+      "acabat": "Acabat",
+      "jubilat": "Jubilat"
     },
     "prioritats": {
       "1": "Baixa",
@@ -3487,7 +3516,12 @@
         "pending": "Pendents",
         "open": "En curs",
         "paused": "Pausats",
-        "done": "Fets"
+        "done": "Entregats"
+      },
+      "ronda": {
+        "oberta": "volta oberta",
+        "entregada": "entregada",
+        "tancada": "tancada"
       }
     },
     "milestones": {

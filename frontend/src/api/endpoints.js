@@ -109,6 +109,14 @@ export const models = {
   // del model: una ronda entregada és una ronda TANCADA, i `Model.ronda_oberta` no en pot
   // ensenyar mai cap. Sense això l'Entrega seria una dada que no es pot llegir des d'enlloc.
   rondes: (id) => client.get(`/api/v1/models/${id}/rondes/`),
+  // M3 · FIT-9/10/11 — EL CICLE DE VIDA. Tres portes i no un `estat` a l'`update()` del model:
+  // el camp és read-only al serializer a posta (cada acte té precondicions, motiu i rastre).
+  // `tancar` amb una volta oberta contesta **409 `ronda_oberta`**: no és un error, és la
+  // PREGUNTA («la R{n} està oberta; confirmo l'entrega i ho tanco tot?»). La segona crida hi
+  // afegeix `confirmar_entrega` + `destinatari` i el servidor ho fa tot en una transacció.
+  tancar: (id, data) => client.post(`/api/v1/models/${id}/tancar/`, data),
+  reobrir: (id, data = {}) => client.post(`/api/v1/models/${id}/reobrir/`, data),
+  jubilar: (id, data = {}) => client.post(`/api/v1/models/${id}/jubilar/`, data),
   // Sprint B — CÒPIA model→model. Mirall de `materialitzar-poms` amb la font canviada (un altre
   // MODEL en comptes de l'ITEM). body: {pom_ids?, copy_values?, copy_run?, copy_grading?,
   // copy_files?} — totes les banderes per defecte certes. Mai trepitja el patrimoni del destí.

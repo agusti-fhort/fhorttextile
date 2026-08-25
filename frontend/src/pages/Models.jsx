@@ -18,6 +18,10 @@ const SEASONS = ['SS', 'FW', 'CO', 'SP']
 const PAGE_SIZE = 25
 // Tots els keys de filtre que viuen a la URL (font de veritat + contracte de conjunt C2). Barra:
 // search/fase_actual/temporada. Panell avançat: la resta.
+// M3 · FIT-9 — cada vista de la llista és un estat del cicle de vida, i prou.
+const VISTA_ESTAT = { curs: 'nou', acabats: 'acabat', jubilats: 'jubilat' }
+const VISTES_VALIDES = Object.keys(VISTA_ESTAT)
+
 const FILTER_KEYS = [
   'search', 'fase_actual', 'temporada', 'customer', 'collection', 'any',
   'garment_type__in', 'garment_type_item__in', 'garment_group_codi__in',
@@ -73,12 +77,19 @@ export default function Models() {
   const [searchInput, setSearchInput] = useState(search)
 
   // §8e · FILTRES RÀPIDS DE VISTA AL MENÚ: «els elements acabats NO es llisten per defecte».
-  // 🚩 PROVISIONAL-DOMINI — el criteri exacte de «model acabat» encara no existeix: l'estat
-  // comercial el mana el Kanban i el Kanban no hi és. Mentre no hi sigui, la vista «acabats»
-  // NO endevina res: no demana res al backend i ho diu escrit. Inventar-hi un criteri (fase
-  // TOP? `estat='Tancat'`? `data_tancament`?) seria posar una decisió de domini dins d'un tram
-  // de pell, i la llista de «en curs» quedaria amputada sense que ningú ho hagués decidit.
-  const vista = sp.get('vista') === 'acabats' ? 'acabats' : 'curs'
+  //
+  // ✅ M3 · FIT-9 — **EL CRITERI JA EXISTEIX I ÉS UN ACTE, NO UNA ENDEVINALLA.** Aquí hi havia
+  // una 🚩 PROVISIONAL-DOMINI: la vista «acabats» no demanava res al backend perquè «model
+  // acabat» no estava definit, i inventar-ne un criteri (fase TOP? `data_tancament`?) hauria
+  // estat posar una decisió de domini dins d'un tram de pell. Ara `Model.estat` ÉS el cicle de
+  // vida i cada valor hi arriba per un acte humà amb autor i motiu (`tancar_model`), de manera
+  // que cada vista és un filtre exacte i cap fila és inventada.
+  //
+  // 🔒 I la vista per defecte passa a demanar `estat=nou`: fins avui ensenyava TOT (no hi havia
+  // res a excloure). «Els elements acabats no es llisten per defecte» és, finalment, cert.
+  // El JUBILAT té vista pròpia perquè és el que la llei demana: fora de les vistes normals,
+  // visible **només amb filtre explícit**.
+  const vista = VISTES_VALIDES.includes(sp.get('vista')) ? sp.get('vista') : 'curs'
 
   // ORDENACIÓ a la URL (`ordering`), com la resta de l'estat de la llista: recarregar la
   // conserva i es pot enllaçar. Es guarda com el backend l'espera (`-camp`).
@@ -115,6 +126,11 @@ export default function Models() {
   const filterParams = useMemo(() => {
     const f = {}
     FILTER_KEYS.forEach(k => { const v = sp.get(k); if (v && v.trim()) f[k] = v.trim() })
+    // M3 — l'estat del cicle NO és un filtre més del panell: és la VISTA. Va aquí i no a
+    // `load()` perquè els comptadors laterals (fases, prendes) comptin el mateix que la
+    // graella ensenya; si no, la vista «acabats» tindria una llista d'acabats i uns
+    // comptadors de tot.
+    f.estat = VISTA_ESTAT[vista]
     return f
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spStr])
@@ -183,8 +199,6 @@ export default function Models() {
   }, [faseKey])
 
   const load = useCallback(() => {
-    // Vista «acabats»: cap criteri de domini → cap crida i cap fila inventada (v. `vista`).
-    if (vista === 'acabats') { setItems([]); setCount(0); setLoading(false); return }
     setLoading(true)
     modelsApi.list({ ...filterParams, ordering: aOrdering(ordre), page, page_size: PAGE_SIZE })
       .then(r => {
@@ -389,6 +403,7 @@ export default function Models() {
   const VISTES = [
     ['curs', t('models_list.view_active')],
     ['acabats', t('models_list.view_done')],
+    ['jubilats', t('models_list.view_retired')],
   ]
 
   return (
@@ -487,11 +502,7 @@ export default function Models() {
         )}
 
         {/* Llistat */}
-        {vista === 'acabats' ? (
-          <div style={buitCaixa}>
-            <span style={buit}>{t('models_list.done_pending')}</span>
-          </div>
-        ) : loading ? (
+        {loading ? (
           <div style={buitCaixa}><span style={buit}>{t('models_list.loading')}</span></div>
         ) : visibleItems.length === 0 ? (
           <div style={buitCaixa}>
