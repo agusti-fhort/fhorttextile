@@ -8,6 +8,7 @@ import BadgeLliurable from '../components/model/BadgeLliurable'
 import ModelsFilterPanel from '../components/model/ModelsFilterPanel'
 import { useFilterOptions, garmentTypeLabel, garmentGroupLabel } from '../components/model/filterOptions'
 import Badge from '../components/ui/Badge'
+import { EstatBadge } from '../components/commercial/estats'
 import Feedback from '../components/ui/Feedback'
 import PageMenu from '../components/ui/PageMenu'
 import TaulaLlista from '../components/ui/TaulaLlista'
@@ -382,14 +383,19 @@ export default function Models() {
       render: (m) => (m.fase_actual ? t(`model_sheet.dashboard.phase.${m.fase_actual}`, m.fase_actual) : '—'),
     },
     {
-      // 🚩 PROVISIONAL-DOMINI · l'ESTAT de la §8e és el COMERCIAL (el del Kanban: Començat
-      // neutre · En curs taronja · Acabat verd), i el Kanban no existeix. `Model.estat`
-      // (Nou/EnCurs/EnRevisio/Tancat) és l'estat INTERN i NO és aquest: pintar-lo aquí seria
-      // dir una cosa per una altra. La columna hi és, buida i amb el motiu escrit.
-      key: 'estat', label: t('models_list.col_estat'), min: 86, max: 100,
-      titolCap: t('models_list.estat_pendent'),
-      estil: { color: 'var(--text-faint)' },
-      render: () => '—',
+      // ✅ **LA COLUMNA JA DIU LA VERITAT (M5, 25/08).** Va néixer buida amb el motiu escrit
+      // (🚩 PROVISIONAL-DOMINI): l'estat de la §8e era el COMERCIAL, el Kanban no existia, i
+      // `Model.estat` era llavors l'intern (Nou/EnCurs/EnRevisio/Tancat) — pintar-lo hauria
+      // estat dir una cosa per una altra. **M3 · FIT-9 va canviar el camp**: avui `Model.estat`
+      // és el CICLE DE VIDA amb tres estats i cap més (`nou`/`acabat`/`jubilat`), és el criteri
+      // de domini de les tres vistes d'aquesta mateixa pantalla, i la llista ja el serveix.
+      //
+      // Es pinta amb el badge VIU (`commercial/estats`), amb els codis de `/vocabulari/` i el
+      // mapa de color de la §8e. **Cap estat nou**: els tres del domini, ni un més.
+      key: 'estat', label: t('models_list.col_estat'), min: 86, max: 100, sort: 'estat',
+      render: (m) => (m.estat
+        ? <EstatBadge clau="estats_model" codi={m.estat}>{t(`model.estats.${m.estat}`, m.estat)}</EstatBadge>
+        : '—'),
     },
     {
       key: 'del', amplada: 36,
@@ -521,9 +527,6 @@ export default function Models() {
               triada={(m) => rowChecked(m.id)}
               onObrir={intentMode ? (m) => rowToggle(m.id) : (m) => navigate(`/models/${m.id}`)}
             />
-            {/* §8c — l'estat buit d'una COLUMNA també s'explica; el silenci d'una columna de
-                guions és pitjor que la columna. */}
-            <div style={{ ...buit, margin: '-8px 0 16px 2px' }}>{t('models_list.estat_pendent')}</div>
           </>
         )}
 

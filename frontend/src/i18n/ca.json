@@ -1219,7 +1219,6 @@
     "col_entrada_model": "Entrada",
     "col_deadline": "Deadline",
     "col_estat": "Estat",
-    "estat_pendent": "Estat comercial: pendent del Kanban.",
     "select_page": "Selecciona tota la pàgina",
     "view_retired": "Models jubilats"
   },

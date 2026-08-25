@@ -1219,7 +1219,6 @@
     "col_entrada_model": "Entry",
     "col_deadline": "Deadline",
     "col_estat": "Status",
-    "estat_pendent": "Commercial status: pending the Kanban.",
     "select_page": "Select the whole page",
     "view_retired": "Retired models"
   },
