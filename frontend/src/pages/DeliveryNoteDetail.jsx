@@ -81,8 +81,14 @@ function repartirPerRonda(g) {
 // La capçalera d'una volta dins la safata: quina volta és, si va FORA DE COMANDA i per què, i
 // entre quines dates es va fer. Les dates són el que FIT-12 demana per poder informar QUAN es va
 // fer cada volta; una volta encara oberta no en té de tancament i ho diu amb paraules.
-function CapcaleraRonda({ r, t }) {
-  const fmt = (iso) => (iso ? new Date(iso).toLocaleDateString() : null)
+function CapcaleraRonda({ r, t, locale }) {
+  // La data va amb el LOCALE de l'app, no amb el del navegador. `toLocaleDateString()` pelat
+  // pinta 8/25/2026 al Chromium headless (mesurat al fum de pantalla) i pintaria el que el
+  // navegador de cadascú digués a producció, dins d'una pantalla que ja està en català.
+  const fmt = (iso) => (iso
+    ? new Date(iso).toLocaleDateString(locale || 'ca',
+        { day: '2-digit', month: '2-digit', year: 'numeric' })
+    : null)
   const inici = fmt(r.oberta_el)
   const fi = fmt(r.tancada_el) || t('deliverynotes.ronda_oberta')
   const perque = r.comanda
@@ -127,7 +133,7 @@ function ItemSafata({ it, k, picked, togglePick, t }) {
 }
 
 export default function DeliveryNoteDetail() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { id } = useParams()
   const navigate = useNavigate()
   const me = useAuthStore(s => s.user)
@@ -472,7 +478,7 @@ export default function DeliveryNoteDetail() {
                             picked={picked} togglePick={togglePick} t={t} />)}
                           {blocs.map(b => (
                             <div key={b.ronda.id}>
-                              <CapcaleraRonda r={b.ronda} t={t} />
+                              <CapcaleraRonda r={b.ronda} t={t} locale={i18n.language} />
                               {b.items.map(it => <ItemSafata key={itemKey(it)} it={it} k={itemKey(it)}
                                 picked={picked} togglePick={togglePick} t={t} />)}
                             </div>
