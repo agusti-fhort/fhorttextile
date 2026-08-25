@@ -4,7 +4,8 @@ backend/staticfiles/
 backend/**/__pycache__/
 backend/**/*.pyc
 backend/*.pyc
-frontend/node_modules/
+frontend/node_modules
+frontend-backoffice/node_modules
 frontend/dist/
 backend/.env
 frontend/.env
