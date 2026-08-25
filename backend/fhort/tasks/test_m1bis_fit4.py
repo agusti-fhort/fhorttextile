@@ -186,7 +186,10 @@ class NomesMiraEndavantTest(BaseFit4):
         self.assertEqual(list(r1.tasques.values_list('task_type__code', flat=True)),
                          ['tech_sheet'])
         self.vella.refresh_from_db()
-        self.assertIsNone(self.vella.ronda_id, 'la feina vella s\'ha adoptat: prohibit fins a M5')
+        self.assertIsNone(self.vella.ronda_id,
+                          "`ronda_del_gest` ha ADOPTAT feina vella: només mira endavant. "
+                          "(El passat el va resoldre el retroactiu de M5, com a acte declarat "
+                          "i d'una sola vegada — mai aquesta funció.)")
 
     def test_assignar_una_tasca_que_ja_existeix_no_li_toca_la_ronda(self):
         """Assignar no és crear. I moure-la seria migrar feina entre voltes (FIT-6)."""
@@ -417,10 +420,11 @@ class GenealogiaMareTest(ReplicacioTest):
 class AdopcioDelBuitTest(ReplicacioTest):
     """CODA · DECISIÓ 2 — la feina nascuda ENTRE dues voltes entra a la següent.
 
-    🔒 I NOMÉS AQUESTA. La frontera és temporal i exacta (`created_at > R(n).tancada_el`): tot el
-    que és anterior a la primera volta del model segueix `NULL` fins al retroactiu de M5. El dia
-    que algú eixampli el filtre «perquè sembla lògic», la sub-decisió (b) cau i M5 ja no podrà
-    distingir la feina d'abans del canvi de llei.
+    🔒 I NOMÉS AQUESTA. La frontera és temporal i exacta (`created_at > R(n).tancada_el`): el que
+    és anterior a la primera volta del model NO l'adopta aquest camí. Fins al 25/08 això deixava
+    feina a `NULL` que esperava el retroactiu de M5; **el retroactiu ja s'ha fet** i la frontera
+    segueix manant igual, perquè el que separa és «feina d'entre dues voltes» de «feina d'abans
+    de la primera», i eixamplar el filtre «perquè sembla lògic» tornaria a barrejar-les.
     """
 
     def _obre_al_buit(self, code):

@@ -48,8 +48,11 @@ class BaseFit11(TenantTestCase):
         self.model = Model.objects.create(
             codi_intern='T11-SS26-0001', codi_tenant='T11', any=2026, temporada='SS',
             sequencial=1, customer=self.customer, garment_type_item=self.item, nom_prenda='Peça')
-        # La feina LLEGADA: `ronda` NULL, com tot el que va néixer abans del canvi de llei
-        # (M1-bis manté la prohibició de backfill fins al retroactiu d'M5).
+        # La feina LLEGADA: `ronda` NULL. A la BD ja no en queda cap (el retroactiu de M5 la va
+        # adoptar tota, 25/08), però el FIXTURE la conserva a posta: el que aquest test mesura és
+        # que `mare_homologa` sap encadenar la genealogia quan la volta anterior no té fila, i
+        # aquell camí segueix viu al codi per a qualsevol tenant que encara no hagi passat el
+        # retroactiu.
         self.llegada = ModelTask.objects.create(model=self.model, task_type=self.tt_pom,
                                                 order=0, status='Done', origen='prevista')
 

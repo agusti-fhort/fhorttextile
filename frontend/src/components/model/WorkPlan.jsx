@@ -29,10 +29,11 @@ import { TASK_ICON, STATUS_VARIANT, TRANSPORT, isOutOfCharge } from '../../utils
 // col·lapse, i les targetes de sempre hi entren com a `children`. Cap gest de transport, cap
 // camí de Play i cap regla de handoff s'han tocat.
 //
-// 🔑 **UN MODEL SENSE CAP VOLTA ES PINTA COM ABANS D'M2**, pla i sense contenidors. No és una
-// branca de conveniència: és la forma de tot model LLEGAT (la prohibició de backfill d'M1-bis
-// segueix vigent fins al retroactiu de M5), i embolicar la seva feina en una ronda que no
-// existeix seria dibuixar una volta que ningú no ha obert.
+// 🔑 **UN MODEL SENSE CAP VOLTA ES PINTA PLA**, sense contenidors. Va néixer com la forma de tot
+// model LLEGAT, i des del retroactiu de M5 (25/08) **ja no n'hi ha cap**: tot model amb feina té
+// la seva volta. La branca es queda com a DEGRADACIÓ —si `rondes` no carrega, el pla s'ha de
+// seguir veient— i no com a cas de domini; el que sí que se'n va anar amb la població és la barra
+// de progrés global que la CODA-BIS hi havia tornat (v. la nota de `totalMin`).
 
 const API = import.meta.env.VITE_API_URL || ''
 
