@@ -590,7 +590,7 @@ def unfold_piece(piece: PieceData) -> PieceData:
         BoundaryData(
             role=b.role,
             layer=b.layer,
-            points=_mirror_points(b.points, fold),
+            points=_mirror_points(b.points, fold, closed=b.closed),
             closed=b.closed,
         )
         for b in piece.boundaries
@@ -647,11 +647,76 @@ def fold_piece(piece: PieceData) -> PieceData:
     )
 
 
-def _mirror_points(points: tuple[PointData, ...], fold: FoldData) -> tuple[PointData, ...]:
+def _bucle_des_del_doblec(
+    points: tuple[PointData, ...], fold: FoldData,
+) -> tuple[PointData, ...]:
+    """El MATEIX bucle tancat, girat perquè comenci i acabi a l'eix de doblec.
+
+    🚨 **Per què cal.** `_mirror_points` empelta la còpia reflectida al FINAL de la
+    llista, de manera que la còpia substitueix l'aresta de TANCAMENT (l'última cap a la
+    primera). Això només és correcte si aquella aresta de tancament és **la vora del
+    doblec**, és a dir si els dos punts de l'eix són el primer i l'últim del bucle.
+
+    I això no depèn de la peça: depèn **d'on el CAD va obrir la polilínia**, que és
+    arbitrari. Mesurat sobre el material real (v. `QA_TALLER_D_CONVENCIO_RECORREGUT`),
+    8 de 13 peces amb doblec obrien el bucle en un altre lloc, i el desplegat en sortia
+    creuat: la peça 14 del CALLIE feia un LLAÇ EN VUIT —àrea real 105 000 mm², i el
+    contorn en donava |−52 511| perquè els dos lòbuls es cancel·len.
+
+    Aquí es normalitza **la VISTA del bucle**, no la geometria: es tria per quin vèrtex
+    es llegeix, que en un bucle tancat és una llibertat que no vol dir res. Cap punt no
+    es mou, cap coordenada no canvia, i res d'això no es persisteix.
+
+    Els punts de l'eix INTERIORS a la tirada sí que cauen, i han de caure: la vora del
+    doblec desapareix en desplegar (queda a dins de la peça sencera), i només en
+    sobreviuen els dos extrems, que són la frontissa. Mantenir-los faria que el contorn
+    baixés per l'eix i tornés a pujar —una punta d'àrea zero que es toca a ella mateixa,
+    i és exactament el que menjava el 4 % de les dues faldilles del MEREDITH.
+
+    Si l'eix no toca el bucle, o el toca en un sol punt, o el toca en tirades separades
+    (cap cas al material real), es torna el bucle **tal com és**: sense una frontissa
+    de dos extrems no hi ha res a normalitzar, i endevinar seria pitjor que no fer res.
+    """
+    n = len(points)
+    marca = [_on_axis(p.x, p.y, fold) for p in points]
+    if not any(marca) or all(marca):
+        return points
+
+    # L'inici de cada tirada d'eix: un punt marcat el predecessor cíclic del qual no ho és.
+    inicis = [i for i in range(n) if marca[i] and not marca[(i - 1) % n]]
+    if len(inicis) != 1:
+        return points
+
+    tirada = [inicis[0]]
+    seg = (inicis[0] + 1) % n
+    while marca[seg]:
+        tirada.append(seg)
+        seg = (seg + 1) % n
+    if len(tirada) < 2:
+        return points
+
+    primer, ultim = tirada[0], tirada[-1]
+    fora: list[PointData] = []
+    k = (ultim + 1) % n
+    while k != primer:
+        fora.append(points[k])
+        k = (k + 1) % n
+    return (points[ultim],) + tuple(fora) + (points[primer],)
+
+
+def _mirror_points(
+    points: tuple[PointData, ...], fold: FoldData, closed: bool = False,
+) -> tuple[PointData, ...]:
     """Punts originals + el seu mirall en ordre invers (el contorn es tanca sol).
 
     Els punts que seuen sobre l'eix no es dupliquen: són la frontissa.
+
+    En un bucle TANCAT, abans es gira perquè la vora del doblec sigui l'aresta de
+    tancament: v. `_bucle_des_del_doblec`, que és el que fa que l'empelt caigui al lloc.
+    Una vora OBERTA no té aresta de tancament ni es pot girar, i entra com sempre.
     """
+    if closed:
+        points = _bucle_des_del_doblec(points, fold)
     reflectits = [
         PointData(
             *_mirror_xy(p.x, p.y, fold),
