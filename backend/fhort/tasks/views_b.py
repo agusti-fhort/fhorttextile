@@ -236,9 +236,8 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
             …i quan no queda cap feina viva, mana **LA VOLTA** (M3 · CODA · decisió d'Agus):
 
               done    la darrera volta és TANCADA i té ENTREGA (i per tant cap d'oberta)
-              done    el model NO TÉ CAP VOLTA  ← EXCEPCIÓ PRE-LLEI, v. sota
-              pending qualsevol altre cas amb volta: la volta és OBERTA, o es va tancar sense
-                      declarar cap entrega
+              pending qualsevol altre cas: la volta és OBERTA, o es va tancar sense declarar
+                      cap entrega
 
             🔒 **LA 4a COLUMNA ÉS UN FET D'ENTREGA, NO UN RECOMPTE DE TASQUES.** Fins ara hi
             queia tot el que no tenia feina viva, i això barrejava dues coses ben diferents:
@@ -248,14 +247,13 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
             tasca— i el senyal de que ja es pot enviar el porta el badge LLIURABLE, que existeix
             des d'F2.7 i diu exactament això.
 
-            ⏳ **L'EXCEPCIÓ PRE-LLEI ÉS AUTOEXTINGIBLE, i és el mateix patró que la barra de
-            progrés d'M2** (que torna només al pla SENSE voltes). Un model sense cap `Ronda` és
-            tot model LLEGAT: la prohibició de backfill d'M1-bis (vigent fins al retroactiu
-            d'M5) fa que la seva feina no pugui tenir volta, i per tant tampoc entrega. Aplicar-hi
-            la llei nova l'hauria empès a «pendent» per sempre —o l'hauria fet desaparèixer— per
-            una cosa que no és seva. Conserva la lectura vella (tot Done → 4a columna) i
-            **s'apaga sola**: el dia que el retroactiu li doni voltes, aquesta branca deixa de
-            trobar models i es pot retirar sense tocar res més.
+            ✅ **L'EXCEPCIÓ PRE-LLEI JA NO HI ÉS (M5, 25/08).** Mentre la prohibició de backfill
+            va durar, un model sense cap `Ronda` conservava la lectura vella (tot Done → 4a
+            columna): la seva feina no podia tenir volta, i per tant tampoc entrega, i aplicar-hi
+            la llei nova l'hauria empès a «pendent» per sempre per una cosa que no era seva. Era
+            **autoextingible a posta**, i el retroactiu de M5 li ha donat la seva R1 a tot model
+            amb feina —**població pre-llei = 0**, verificat per SQL—, o sigui que la branca ja no
+            trobava ningú. S'ha retirat, i amb ella el test que la mesurava.
             """
             if row['in_progress'] > 0:
                 return 'open'
@@ -264,8 +262,6 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
             if row['pending'] > 0:
                 return 'pending'
             # ── cap feina viva: mana la volta ────────────────────────────────────────────────
-            if row['ronda_seq'] is None:
-                return 'done'                     # ⏳ excepció pre-llei (model llegat)
             # `ronda_*` és la volta de `seq` més ALT, i per la llei «una ronda oberta per model»
             # (ratificada 24/08, `services_r.obrir_ronda`) una volta oberta només pot ser
             # aquesta: si aquesta és tancada, no n'hi ha cap d'oberta. Per això no cal una quarta

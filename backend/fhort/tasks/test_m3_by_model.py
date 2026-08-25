@@ -82,6 +82,23 @@ class BaseByModel(TenantTestCase):
             model=model, task_type=tt or self.tt_pom, status=status,
             planned_start=timezone.now() if planificada else None, **kw)
 
+    def _amb_r1(self, model):
+        """Dona al model la seva R1 **com ho fa el producte** i hi lliga la feina que ja té.
+
+        M5 · retroactiu — des del 25/08 **no existeix cap model amb feina i sense volta**: el
+        retroactiu els va donar la R1 a tots i `ronda_del_gest` la crea al primer gest. Un test
+        que fabriqui aquella forma mesura una població que el sistema ja no pot produir, i per
+        això els casos que parlen de la VOLTA passen per aquí.
+
+        (Els de `KanbanStateTest` que només mesuren la precedència de la feina viva no hi passen:
+        aquella branca no consulta la volta i el fixture no els canvia la resposta. V. la 🚩 de
+        l'acta d'M5-DIA.)
+        """
+        from fhort.tasks.services_r import ronda_del_gest
+        ronda = ronda_del_gest(model)
+        model.model_tasks.filter(ronda__isnull=True).update(ronda=ronda)
+        return ronda
+
     def _client(self):
         c = APIClient(SERVER_NAME=self.get_test_tenant_domain())
         c.force_authenticate(user=self.user)
@@ -121,13 +138,24 @@ class KanbanStateTest(BaseByModel):
         self._tasca(m, self.tt_fitxa, status='Done')
         self.assertEqual(self._fila(m)['kanban_state'], 'pending')
 
-    def test_done_nomes_quan_tot_es_done(self):
-        """Avui `done` vol dir EXACTAMENT «cap tasca viva». Res més hi entra: ni ronda, ni
-        entrega, ni estat del model. És el que FASE 4 canvia, i per això queda escrit."""
+    def test_cap_tasca_viva_JA_NO_es_done_per_si_sol(self):
+        """🔄 **LA PREMISSA D'AQUEST TEST S'HA INVERTIT, i és el que FASE 4 va canviar.**
+
+        Deia «`done` vol dir EXACTAMENT cap tasca viva», i va seguir sent cert un temps més del
+        que tocava: la CODA d'M3 va fer de `done` un **FET D'ENTREGA**, però va conservar la
+        lectura vella per als models LLEGATS (sense cap volta) —i el fixture d'aquest test era
+        justament un d'aquells. El retroactiu de M5 ha buidat aquella població i la branca s'ha
+        retirat, o sigui que ara el test pot dir la llei sencera:
+
+        **cap tasca viva NO és `done`.** Mana la volta, i una volta OBERTA vol el gest humà
+        d'entregar. Qui mesura el `done` de debò és
+        `QuiEntraAlBoardTest.test_volta_ENTREGADA_i_cap_oberta_ES_la_quarta_columna`.
+        """
         m = self._model()
         self._tasca(m, status='Done')
         self._tasca(m, self.tt_fitxa, status='Done')
-        self.assertEqual(self._fila(m, all='true')['kanban_state'], 'done')
+        self._amb_r1(m)                                  # la forma REAL: tot model amb feina en té
+        self.assertEqual(self._fila(m, all='true')['kanban_state'], 'pending')
 
     def test_els_comptadors_son_els_de_la_bd_no_una_mostra(self):
         m = self._model()
@@ -217,9 +245,11 @@ class BoardRondaAwareTest(BaseByModel):
     """M3 · FASE 4 + CODA — el board després del canvi: qui en surt, què diu cada fila i, des de
     la CODA, **a quina columna cau cadascú**.
 
-    Els tests de `KanbanStateTest` (els 14 de FASE 0b) segueixen VERDS i sense tocar-ne cap: la
-    precedència de la feina viva no s'ha mogut i el seu cas de `done` és un model **sense cap
-    volta**, que és exactament l'excepció pre-llei que la CODA conserva."""
+    🚨 **I AQUELL «ELS 14 DE FASE 0b SEGUEIXEN VERDS» NO ERA CERT PER SEMPRE.** L'acta d'M3 va
+    declarar que retirar l'excepció pre-llei era «una línia i un test»; en retirar-la (M5) en van
+    caure **TRES**, i el tercer era precisament un dels 14: `test_done_nomes_quan_tot_es_done`,
+    que fabricava un model sense volta i esperava `done`. Els altres 13 no consulten la volta i
+    segueixen intactes. La lliçó queda escrita aquí perquè no s'hagi de tornar a descobrir."""
 
     def setUp(self):
         super().setUp()
@@ -369,21 +399,21 @@ class QuatreColumnesCodaTest(BaseByModel):
         self.assertEqual(fila['kanban_state'], 'pending')
         self.assertEqual(fila['ronda']['estat'], 'tancada')
 
-    def test_EXCEPCIO_PRE_LLEI_un_model_SENSE_CAP_VOLTA_conserva_la_lectura_vella(self):
-        """⏳ Tot model LLEGAT. La prohibició de backfill d'M1-bis fa que la seva feina no pugui
-        tenir volta —ni, per tant, entrega—: aplicar-li la llei nova l'hauria empès a «pendent»
-        per sempre per una cosa que no és seva. Mateix patró que la barra de progrés d'M2."""
-        m = self._model_tot_done()
-        fila = self._fila(m, all='true')
-        self.assertIsNone(fila['ronda'])
-        self.assertEqual(fila['kanban_state'], 'done')
+    def test_M5_un_model_amb_feina_SEMPRE_te_volta_i_mai_cau_a_done_per_defecte(self):
+        """✅ **L'EXCEPCIÓ PRE-LLEI S'HA RETIRAT (M5, 25/08)**, i aquest test ocupa el lloc dels
+        dos que la mesuraven (`test_EXCEPCIO_PRE_LLEI_…` i `test_i_l_excepcio_s_APAGA_SOLA_…`).
 
-    def test_i_l_excepcio_s_APAGA_SOLA_quan_el_model_rep_una_volta(self):
-        """L'autoextinció, mesurada: el MATEIX model, abans i després de tenir volta."""
+        Mentre va durar, un model sense cap `Ronda` conservava la lectura vella (tot Done → 4a
+        columna). El retroactiu li ha donat la R1 a tot model amb feina —població pre-llei = 0,
+        verificada per SQL— i la branca ja no trobava ningú. El que es guarda ara és la llei que
+        queda: **amb la volta oberta i sense entrega, tot Done és `pending`, no `done`.**
+        """
         m = self._model_tot_done()
-        self.assertEqual(self._estat(m), 'done')
-        self._obrir_ronda(m, 'nova_mostra', ['pom'], profile=self.prof)
-        self.assertEqual(self._estat(m), 'pending')
+        self._amb_r1(m)
+        fila = self._fila(m, all='true')
+        self.assertIsNotNone(fila['ronda'], 'M5: cap model amb feina es queda sense volta')
+        self.assertEqual(fila['ronda']['estat'], 'oberta')
+        self.assertEqual(fila['kanban_state'], 'pending')
 
     def test_la_feina_viva_segueix_manant_sobre_la_volta(self):
         """La precedència no s'ha tocat: una volta entregada no pinta «entregat» un model on
