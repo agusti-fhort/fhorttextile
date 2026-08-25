@@ -177,6 +177,39 @@ class Ronda(models.Model):
     tancada_el = models.DateTimeField(null=True, blank=True,
                                       help_text='null = oberta. És la definició de «vigent».')
 
+    # ── M4 · FIT-12 (Agus, 24/08) — DINS O FORA DEL NUMERAL DE LA COMANDA. ─────────────────────
+    #
+    # Quan les voltes reals superen el que la comanda admet (`SalesOrderLine.rounds_included`),
+    # la volta R(n) **amb les seves tasques** passa a encàrrecs per ser albaranada i facturada A
+    # PART. La volta SEGUEIX SENT la R(n) del model: la numeració no es toca, la genealogia no es
+    # toca, i **la cara del tècnic queda EXACTAMENT IGUAL** — el desbordament és un fet comercial,
+    # i qui l'autoritza o l'atura és el responsable, de paraula. Aquí només se n'escriu el FET.
+    #
+    # 🔒 **ES RESOL UNA VEGADA, EN OBRIR, I NO ES RECALCULA.** El numeral de la comanda és
+    # editable (FIT-5), i si el veredicte es tornés a calcular a cada lectura, pujar el numeral
+    # de 2 a 3 REESCRIURIA la història: la R3 que es va treballar sabent que anava a part
+    # apareixeria de sobte com a inclosa, i una safata que ja l'hagués mostrat canviaria sola.
+    # Per això els tres camps són una FOTO del moment de l'obertura, i per això `numeral_vigent`
+    # es desa al costat del booleà: el «perquè» («n>2 de la comanda C-…») ha de seguir sent
+    # llegible encara que el numeral hagi canviat després.
+    #
+    # 🚩 CONSEQÜÈNCIA DECLARADA: pujar el numeral NO torna les voltes ja obertes a dins. Si el
+    # comercial vol repescar-ne una, avui és un acte a mà sobre la fila. És la mateixa disciplina
+    # de no-backfill que M1-bis i M3 ja apliquen; si Agus el vol automàtic, és una decisió seva.
+    fora_de_comanda = models.BooleanField(
+        default=False,
+        help_text='FIT-12: aquesta volta supera el numeral de la comanda i es factura a part. '
+                  'Es resol en obrir i no es recalcula.')
+    linia_comanda = models.ForeignKey(
+        'commerce.SalesOrderLine', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='rondes',
+        help_text="Línia de comanda que governava el numeral en obrir la volta. SET_NULL: "
+                  "esborrar la línia no ha d'esborrar la història de la volta. "
+                  'null = el model no tenia comanda (llavors no hi ha límit i no es desborda mai).')
+    numeral_vigent = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text='El numeral que hi havia en obrir la volta (foto). null = sense límit.')
+
     class Meta:
         ordering = ['model', 'seq']
         verbose_name = 'Ronda'
