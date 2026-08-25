@@ -58,6 +58,10 @@ export default function OrderDetail() {
   // P4 — desplegable read-only per línia: models assignats + tasques + % imputat (lazy).
   const [expanded, setExpanded] = useState(() => new Set())
   const [alloc, setAlloc] = useState({})   // { [lineId]: { loading | error | data } }
+  // M4 · FIT-5 — esborrany del NUMERAL DE VOLTES per línia (save-on-blur, patró de
+  // DeliveryNoteDetail). Viu a part d'`order` perquè escriure "1" a mig teclejar "12" no ha de
+  // sortir a desar: el que desa és el blur, i el que es pinta mentre s'escriu és l'esborrany.
+  const [numeral, setNumeral] = useState({})   // { [lineId]: string }
 
   const reload = useCallback(() => commerce.orders.get(id)
     .then(res => setOrder(res.data)).catch(() => setError(true)), [id])
@@ -92,6 +96,35 @@ export default function OrderDetail() {
     return commerce.orders.update(id, { issued_at: value })
       .then(() => reload()).then(() => setFeedback({ type: 'ok', text: t('orders.status_saved') }))
       .catch(e => setFeedback({ type: 'err', text: e?.response?.data?.detail || t('orders.error') }))
+  }
+
+  // M4 · FIT-5 — desa el numeral de voltes de la línia. Buit = SENSE LÍMIT (null), que no és el
+  // mateix que 0 (cap volta inclosa): el camp ho distingeix a BD i aquí també, per això el buit
+  // viatja com a `null` explícit i no com a 0.
+  const saveNumeral = (line) => {
+    const raw = numeral[line.id]
+    if (raw === undefined) return                       // no s'ha tocat
+    const value = raw.trim() === '' ? null : Math.max(0, Math.floor(Number(raw)))
+    if (raw.trim() !== '' && !Number.isFinite(value)) {
+      setFeedback({ type: 'err', text: t('orders.rounds_invalid') })
+      return
+    }
+    if (value === (line.rounds_included ?? null)) {      // res a fer
+      setNumeral(prev => { const n = { ...prev }; delete n[line.id]; return n })
+      return
+    }
+    setBusy(true); setFeedback(null)
+    commerce.orderLines.update(line.id, { rounds_included: value })
+      .then(() => reload())
+      .then(() => {
+        setNumeral(prev => { const n = { ...prev }; delete n[line.id]; return n })
+        setFeedback({ type: 'ok', text: t('orders.rounds_saved') })
+      })
+      .catch(e => setFeedback({
+        type: 'err',
+        text: e?.response?.data?.rounds_included?.[0] || e?.response?.data?.detail || t('orders.error'),
+      }))
+      .finally(() => setBusy(false))
   }
 
   // Sprint C — l'assignació de models va a la superfície universal de selecció (mode intenció):
@@ -158,6 +191,24 @@ export default function OrderDetail() {
     { key: 'desc', label: t('orders.col_concept'), render: l => l.description || l.product_name },
     { key: 'alloc', label: t('orders.col_import_imputat'), align: 'right', width: 100,
       render: l => <span style={{ fontFamily: MONO, color: 'var(--text-soft)' }} title={t('orders.allocated')}>{Number(l.qty_allocated).toFixed(2)}/{Number(l.quantity).toFixed(2)}</span> },
+    // M4 · FIT-5 — EL NUMERAL DE VOLTES, editable aquí i enlloc més. La cel·la buida diu
+    // «sense límit» amb paraules (`rounds_unlimited`) i no amb un guió: un guió al costat d'un
+    // 0 no distingeix «cap volta inclosa» de «no s'ha pactat res», i és precisament la
+    // distinció que decideix si una volta desborda.
+    { key: 'rounds', label: t('orders.col_rounds'), align: 'right', width: 120,
+      render: l => (canEdit
+        ? <input type="number" min="0" step="1" disabled={busy}
+            value={numeral[l.id] ?? (l.rounds_included ?? '')}
+            placeholder={t('orders.rounds_unlimited')}
+            title={t('orders.rounds_help')}
+            onChange={e => setNumeral(prev => ({ ...prev, [l.id]: e.target.value }))}
+            onBlur={() => saveNumeral(l)}
+            style={{ fontFamily: MONO, width: '100%', textAlign: 'right', padding: '3px 6px',
+              borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)',
+              borderRadius: 'var(--r-input)', background: 'var(--panel)', color: 'var(--text)' }} />
+        : <span style={{ fontFamily: MONO, color: 'var(--text-soft)' }}>
+            {l.rounds_included ?? t('orders.rounds_unlimited')}
+          </span>) },
     { key: 'price', label: t('orders.col_price'), align: 'right', width: 100,
       render: l => <span style={{ fontFamily: MONO, color: 'var(--text-soft)' }}>{money(l.unit_price)}</span> },
     { key: 'total', label: t('orders.col_import'), align: 'right', width: 100,
