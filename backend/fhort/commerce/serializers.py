@@ -287,15 +287,29 @@ class SalesOrderLineSerializer(PodaEconomicaMixin, serializers.ModelSerializer):
 
     ⚠️ `quantity` i `qty_allocated` NO es poden podar: són la cartera, i el selector
     d'assignació de la fitxa del model els fa servir per saber quantes unitats queden lliures
-    (`ActionsMenu.jsx:392-395`). No són diner."""
-    CAMPS_ECONOMICS = ('unit_price', 'line_total')
+    (`ActionsMenu.jsx:392-395`). No són diner.
+
+    M4 · FIT-5 — `rounds_included` (el numeral de voltes) és el SEGON camp mutable per API, i és
+    una excepció declarada a la irreversibilitat de B3b (v. el camp al model). Neix aquí i no al
+    `Product`.
+
+    🔒 I VIATJA PODAT, tot i no ser un import. FIT-12 diu que **el tècnic no veu res del
+    desbordament**, i aquesta línia la llegeixen dues pantalles tècniques —`ProductionTab.jsx` i
+    l'`ActionsMenu` del selector d'assignació—: si el numeral hi viatgés, la cara del tècnic
+    duria el pacte comercial al payload encara que cap component el pintés. La poda és per
+    PAYLOAD i no per endpoint (v. `PodaEconomicaMixin`), que és exactament la forma que aquest
+    cas demana: les dues pantalles segueixen rebent `quantity`/`qty_allocated` i perden el
+    numeral. Que el mecanisme es digui «econòmica» és un nom, no un límit: el que fa és
+    «aquest camp només per a qui té COMERCIAL», i el numeral és d'aquesta família."""
+    CAMPS_ECONOMICS = ('unit_price', 'line_total', 'rounds_included')
     product_code = serializers.CharField(source='product.code', read_only=True)
     product_name = serializers.CharField(source='product.name', read_only=True)
 
     class Meta:
         model = SalesOrderLine
         fields = ['id', 'order', 'product', 'product_code', 'product_name', 'description',
-                  'quantity', 'unit_price', 'line_total', 'position', 'qty_allocated']
+                  'quantity', 'unit_price', 'line_total', 'position', 'qty_allocated',
+                  'rounds_included']
         read_only_fields = ['order', 'product', 'description', 'quantity', 'unit_price',
                             'line_total', 'position']
 
@@ -308,6 +322,25 @@ class SalesOrderLineSerializer(PodaEconomicaMixin, serializers.ModelSerializer):
         if line is not None and value > line.quantity:
             raise serializers.ValidationError(
                 "La quantitat imputada no pot superar la quantitat comandada.")
+        return value
+
+    def validate_rounds_included(self, value):
+        """M4 · FIT-5 — el numeral l'ESCRIU qui el pot LLEGIR, i ningú més.
+
+        L'endpoint demana CONFIGURE (és la casa de la cartera, no del comerç: v. el docstring de
+        `SalesOrderLineViewSet`), però el numeral el poda COMERCIAL. Sense aquest guard el camp
+        quedaria escrivible-a-cegues per a un manager sense COMERCIAL: PATCH acceptat, i el valor
+        desapareixent de la resposta que ell mateix rep. Escriure el que no es pot llegir és el
+        pitjor dels dos móns, i per això aquí es tanca amb el MATEIX predicat de la poda
+        (`pot_veure_diner`) — una sola font, no una llista de capacitats duplicada.
+        """
+        from fhort.accounts.capabilities import pot_veure_diner
+        ctx = self.context
+        if ctx.get('diner') is not True and not pot_veure_diner(ctx.get('request')):
+            raise serializers.ValidationError(
+                "El numeral de voltes és una condició comercial: cal la capacitat COMERCIAL.")
+        if value is not None and value < 0:
+            raise serializers.ValidationError("El numeral de voltes no pot ser negatiu.")
         return value
 
 

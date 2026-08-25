@@ -373,6 +373,29 @@ class SalesOrderLine(AbstractDocumentLine):
     order = models.ForeignKey(SalesOrder, on_delete=models.CASCADE, related_name='lines')
     qty_allocated = models.DecimalField(max_digits=12, decimal_places=2, default=0,
                                         help_text="Quantitat imputada (≤ quantity). Control de cartera (B4).")
+    # ── M4 · FIT-5 (Agus + Salva, 24/08) — EL NUMERAL DE VOLTES VIU AQUÍ, I NOMÉS AQUÍ. ────────
+    # «El SERVEI es configura amb preu; a la COMANDA es marca quantes revisions admet i es
+    # modifica el preu si cal.» El `Product` NO en porta cap: el catàleg diu QUÈ es ven i a quin
+    # preu, i quantes voltes hi caben és pacte d'AQUESTA venda, no atribut de l'article. Dues
+    # comandes del mateix servei poden admetre 2 i 5 voltes sense que el catàleg sàpiga res.
+    #
+    # És l'ÚNICA font de lectura del desbordament (`tasks.services_r.numeral_efectiu`): qui vulgui
+    # saber si una volta cau dins o fora del pacte llegeix aquest camp i cap altre.
+    #
+    # `null` NO és 0 i la diferència mana: **null = sense límit** (el pacte no en fixa cap, cap
+    # volta desborda mai) i **0 = cap volta inclosa** (la primera ja desborda). Un default de 0
+    # convertiria totes les comandes d'avui en desbordades des de la R1, i un default d'1 seria
+    # inventar un pacte que ningú no ha signat; per això neix null i s'omple a mà.
+    #
+    # ⚠️ EXCEPCIÓ DECLARADA A LA IRREVERSIBILITAT DE B3b. La resta de la línia és congelada
+    # (preu/quantitat read-only per API): això no ho és, i a posta. El numeral és una CONDICIÓ
+    # del pacte que el comercial ha de poder corregir sense refer la comanda — que és exactament
+    # el que FIT-5 demana en dir «i es modifica el preu si cal». No toca cap import ni cap total,
+    # o sigui que no reobre res del que la irreversibilitat protegeix.
+    rounds_included = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text="Quantes voltes (rondes) cobreix el preu d'aquesta línia. null = sense límit; "
+                  "0 = cap volta inclosa. FIT-5: el numeral viu a la comanda, mai al producte.")
 
     class Meta:
         ordering = ['order', 'position', 'id']
