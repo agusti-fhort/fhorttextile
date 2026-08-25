@@ -6,6 +6,11 @@ backend/**/*.pyc
 backend/*.pyc
 frontend/node_modules
 frontend-backoffice/node_modules
+# Els worktrees hi enganxen un symlink al venv i al .env de `ftt-staging`. Sense regla,
+# `git status` els ensenya com a untracked i un `git add` distret els commita —que és
+# exactament com hi va entrar el symlink de node_modules.
+backend/venv
+backend/.env
 frontend/dist/
 backend/.env
 frontend/.env
