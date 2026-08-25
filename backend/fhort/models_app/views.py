@@ -3306,14 +3306,38 @@ class _ExecuteTasksCap(HasCapability):
 @api_view(['POST'])
 @permission_classes([_ExecuteTasksCap])
 def set_size_override_view(request, model_id):
-    """POST /api/v1/models/<model_id>/set-size-override/  Body: {pom_id, size_label, valor}
+    """POST /api/v1/models/<model_id>/set-size-override/  Body: {pom_id, size_label, valor, garment?}
 
     Edita el valor d'UNA talla NO-base com a ModelGradingOverride (per-model,
     traçable) i RE-PROPAGA el grading (generate_graded_specs) sobre la
     GradingVersion vigent (criteri de PEÇA 0). L'override té precedència màxima
     al motor (override→exception→regla→FIXED), per tant editar una 2a talla
     manté la 1a. NO toca GradedSpec directament (és sortida del motor) ni
-    PieceFittingLine. Idempotent per (model, pom, size_label).
+    PieceFittingLine.
+
+    ── F2 (2026-08-25) · **IDEMPOTENT PER `(model, pom, size_label, garment)`** ─────────
+    Ho era per `(model, pom, size_label)`, i era la frase d'abans que el model tingués peces.
+    La `unique` real de `ModelGradingOverride` són SIS columnes
+    —`(model, pom, size_label, capa, instancia, garment)`— i aquest camí en deia CINC: el
+    `garment` no hi era ni al lookup ni al payload, o sigui que no es podia ni dir ni
+    distingir. Amb dues peces vives que comparteixin un POM, el `filter` de cinc columnes
+    casa DUES files i l'`update_or_create` peta amb `MultipleObjectsReturned` (500); i abans
+    d'arribar-hi, el `prev` ja ha pogut llegir el valor de l'ALTRA peça i deixar un
+    `MeasurementChangeLog` que diu que s'ha canviat una mesura que ningú no ha tocat.
+    El defecte NO era latent: `fhort` ja té tres parells `(model, pom)` amb mesura a dues
+    peces (1320/904, 1379/962, 1380/962) — v. `docs/ordres/CENS_INSTANCIES_POM_2026-08-25.md`,
+    fila 9 del veredicte.
+
+    És el MIRALL del germà `escalat_ajustar_talla_view`, que ja el diu i ja el passa des de
+    SET-2/T8. El `garment` surt del punt únic `_identitat_de_mesura`: **qui no el diu rep
+    `''`, la peça MARE**, que és el comportament d'avui byte a byte per a tot model d'una
+    sola peça (i per a tot client antic, que no el sabrà enviar mai).
+
+    ⚠️ `capa` i `instancia` segueixen sent LITERALS aquí, i no és un oblit: aquest fix obre
+    UN eix, el que tenia el defecte. Amb el `garment` al lookup la clau ja és la `unique`
+    sencera i cap `update_or_create` d'aquest camí pot tornar a casar dues files. Que aquesta
+    porta no sàpiga adreçar una GERMANA d'instància és una limitació coneguda i separada
+    (mateix cens, fila 12-13); obrir-la és una altra decisió i un altre tram.
     """
     from fhort.models_app.models import ModelGradingOverride, MeasurementChangeLog
     from fhort.pom.models import POMMaster
@@ -3332,6 +3356,11 @@ def set_size_override_view(request, model_id):
     pom_id = data.get('pom_id')
     size_label = (data.get('size_label') or '').strip()
     valor = data.get('valor')
+    # F2 — EL GARMENT, PEL PUNT ÚNIC. `_identitat_de_mesura` és qui decideix què rep qui no
+    # el diu (v. la seva acta): `''` = peça MARE, i un `None` explícit al cos val el mateix
+    # que no dir-ho, perquè la columna és NOT NULL amb default. Se'n pren NOMÉS el tercer
+    # eix: els altres dos segueixen literals en aquesta porta (v. el docstring).
+    garment = _identitat_de_mesura(data)[2]
     if pom_id is None or not size_label or valor is None:
         return Response({'error': 'Calen pom_id, size_label i valor.'}, status=400)
     try:
@@ -3369,13 +3398,21 @@ def set_size_override_view(request, model_id):
         # FASE_3/C1-ins — literals als TRES punts d'aquest bloc (la lectura de `prev`,
         # l'upsert i el log): han de parlar de la MATEIXA fila o el rastre diria que s'ha
         # canviat una mesura que no s'ha tocat. V. `_write_base`.
+        # F2 — i el `garment` va als TRES pel mateix motiu, que aquí és el més urgent dels
+        # tres: al lookup perquè la clau ha d'anar SEMPRE alineada amb la unicitat real de la
+        # taula (sis columnes, no cinc) i sense ell l'`update_or_create` casa dues files; a
+        # `prev` perquè el valor d'abans ha de ser el D'AQUESTA peça; i al log perquè
+        # `MeasurementChangeLog` és APPEND-ONLY i no té unicitat — una fila mal atribuïda no
+        # es pot corregir després.
         prev = (ModelGradingOverride.objects
                 .filter(model=model, pom=pom, size_label=size_label,
-                        capa=MeasurementLayer.SLUG_DEFECTE, instancia='')
+                        capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
+                        garment=garment)
                 .values_list('value_cm', flat=True).first())
         ModelGradingOverride.objects.update_or_create(
             model=model, pom=pom, size_label=size_label,
             capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
+            garment=garment,
             defaults={
                 'value_cm': valor,
                 'motiu': 'Edició manual de talla (taula propagada)',
@@ -3390,6 +3427,7 @@ def set_size_override_view(request, model_id):
             MeasurementChangeLog.objects.create(
                 model=model, pom=pom, base_measurement=None,
                 capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
+                garment=garment,
                 valor_anterior=(float(prev) if prev is not None else None),
                 valor_nou=valor,
                 context='manual',
@@ -3418,15 +3456,26 @@ def set_size_override_view(request, model_id):
             return Response({'error': str(e)}, status=400)
 
     # 9. Retorna el GradedSpec resultant de la talla editada (reflecteix l'override).
+    # F2 — LA LECTURA DE RETORN TAMBÉ VOL LA IDENTITAT, i era el segon forat d'aquest camí.
+    # La `unique` de `GradedSpec` són sis columnes i aquest filtre en deia TRES: amb una
+    # germana viva —d'instància o de peça— el `.first()` sense `order_by` retorna la fila que
+    # el planner de Postgres vulgui, o sigui que la resposta podia dir el `graded_value_cm`
+    # d'una ALTRA mesura amb un 200 OK. S'hi posen els tres eixos, i els dos literals són
+    # exactament els que aquest camí acaba d'escriure: la resposta descriu la fila escrita.
+    # Mirall del germà (`escalat_ajustar_talla_view`), que ja hi filtra per identitat sencera.
     gv = vigent_grading_version(sf)
     graded = (GradedSpec.objects
-              .filter(grading_version=gv, pom=pom, size_label=size_label)
+              .filter(grading_version=gv, pom=pom, size_label=size_label,
+                      capa=MeasurementLayer.SLUG_DEFECTE, instancia='', garment=garment)
               .values_list('graded_value_cm', flat=True).first()) if gv else None
     return Response({
         'ok': True,
         'model_id': model.id,
         'pom_id': pom.id,
         'size_label': size_label,
+        # F2 — QUINA PEÇA s'ha escrit. Additiu: un client que no el llegeixi no en nota res,
+        # i el que l'envia pot comprovar que ha aterrat on volia (l'`''` és la mare).
+        'garment': garment,
         'override_value_cm': valor,
         'grading_version_id': gv.id if gv else None,
         'graded_value_cm': float(graded) if graded is not None else None,
