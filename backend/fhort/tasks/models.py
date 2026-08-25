@@ -153,12 +153,17 @@ class Ronda(models.Model):
     `services_r.ronda_del_gest`, i és l'ÚNICA volta que es crea sola: la 2 i següents segueixen
     volent el gest explícit de `obrir_ronda`.
 
-    ⛔ **I LA PROHIBICIÓ DE BACKFILL ES MANTÉ — FINS AL RETROACTIU (M5).** L'obertura automàtica
-    **només mira endavant**: no adopta res. Les tasques que avui tenen `ronda = NULL` s'hi queden,
-    i en un model amb feina prèvia el primer gest nou crea la R1 amb **només la tasca d'aquell
-    gest** a dins. Inventar ara una fila Ronda per a 101 tasques que mai no van ser una «volta»
-    seguiria sent escriure història; el dia que es faci, es farà **com a acte declarat** al
-    retroactiu de M5, no com a efecte secundari d'una migració.
+    ✅ **I EL PASSAT JA ESTÀ RESOLT (M5 · retroactiu, 25/08).** M1-bis va declarar una
+    PROHIBICIÓ DE BACKFILL —«el dia que es faci, es farà com a acte declarat»— i **aquell dia ja
+    ha passat**: `ops/retroactius/retroactiu_r1_m5.py` va donar la seva R1 a tot model amb feina,
+    validat en sec i aplicat amb guarda de recompte. Les R1 retroactives van néixer **OBERTES i
+    sense cap `Entrega`** (FIT-1: una entrega és un fet informat, no se'n fabrica cap), i van
+    adoptar **totes** les tasques `ronda = NULL` del seu model.
+
+    ⛔ **La prohibició segueix vigent per a tot el que no sigui aquell acte.** L'obertura
+    automàtica **només mira endavant** i no adopta res: en un model amb feina prèvia, el primer
+    gest nou crea la R1 amb només la tasca d'aquell gest. El retroactiu era d'una sola vegada, i
+    ja s'ha gastat — **no hi ha cap població pre-llei viva** i tornar-hi seria escriure història.
 
     Oberta = `tancada_el IS NULL`. N'hi pot haver **una de sola** oberta per model, i qui ho
     imposa és `obrir_ronda` (`services_r`), no la BD: tancar-la és un acte humà i una constraint

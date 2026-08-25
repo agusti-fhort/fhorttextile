@@ -181,9 +181,11 @@ def ronda_del_gest(model):
          de nova aquí seria fabricar una R(n+1) automàticament, i FIT-4 diu el contrari: «R2+
          neixen amb +Ronda explícit». Aquesta feina espera que el PM obri la volta.
 
-    🔒 **NOMÉS MIRA ENDAVANT** (sub-decisió b, Agus 24/08). No adopta res: les tasques que ja
-    tenen `ronda=NULL` es queden NULL fins al retroactiu de M5. En un model amb feina prèvia i
-    cap ronda, el primer gest NOU crea la R1 i **només la tasca d'aquell gest hi entra** (c).
+    🔒 **NOMÉS MIRA ENDAVANT** (sub-decisió b, Agus 24/08). No adopta res: en un model amb feina
+    prèvia i cap ronda, el primer gest NOU crea la R1 i **només la tasca d'aquell gest hi entra**
+    (c). El passat que això deixava enrere el va resoldre el **retroactiu de M5** (25/08), d'una
+    sola vegada i com a acte declarat (`ops/retroactius/retroactiu_r1_m5.py`); d'aquesta funció
+    no se n'espera cap adopció, ni abans ni ara.
 
     🔒 **NO POT NÉIXER DUES VEGADES.** Qui ho impedeix és la BD, no un `if`: `uniq_ronda_model_seq`
     (`Ronda.Meta.constraints`) ja fa única la parella `(model, seq)`, i `get_or_create` s'hi

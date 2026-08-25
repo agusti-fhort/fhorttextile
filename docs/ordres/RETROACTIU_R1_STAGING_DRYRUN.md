@@ -72,13 +72,46 @@ ressuscitaria una població que el codi ja no sabrà explicar. Les dues coses va
 
 ---
 
-## ⏸️ ESTAT: PENDENT DE VALIDACIÓ
+## ✅ ESTAT: VALIDAT PER AGUS I APLICAT · 25/08/2026
 
-L'apply **no s'ha executat**. Quan validis la llista:
+**Les dues decisions, resoltes per Agus sobre aquesta llista:**
+
+| | |
+|---|---|
+| El **1383** | **INCLÒS.** «Intocable» vol dir *no li toquis el motor*, i el retroactiu no l'hi toca. |
+| `QA-M1-0005` | **Adoptat com la resta, I retirat del banc.** Les dues coses van juntes: adoptar-lo sol hauria deixat que el proper `--remunta` en refabriqués un. |
 
 ```
-cd backend && venv/bin/python ../ops/retroactius/retroactiu_r1_m5.py --apply \
-    --espera-models 5 --espera-tasques 18
+$ venv/bin/python ../ops/retroactius/retroactiu_r1_m5.py --apply \
+      --espera-models 5 --espera-tasques 18
+[fhort] R1 creades=5 · tasques adoptades=18
+[fhort] POST · ModelTask sense ronda=0 · models PRE-LLEI=0 · R1=10 (tancades=5 · amb Entrega=1)
+[los] univers buit → 0 canvis (idempotent)
 ```
 
-Si l'univers ha canviat entremig, la guarda **avorta sense escriure** i demana revalidar.
+**Segona execució — la idempotència, provada:**
+
+```
+[fhort] univers buit → 0 canvis (idempotent)
+[los] univers buit → 0 canvis (idempotent)
+TOTAL: 0 models · 0 tasques.
+```
+
+### Verificació POST **per SQL contra la taula**
+
+| model | codi | seq | `oberta_el` | `tancada_el` | tasques | entregues |
+|---|---|---|---|---|---|---|
+| 1320 | `BRW-FW26-0001` | 1 | 2026-08-09 16:42 | **—** | 5 | **0** |
+| 1322 | `BRW-26-FW-0002` | 1 | 2026-08-10 10:43 | **—** | 2 | **0** |
+| 1379 | `BRW-FW26-0002` | 1 | 2026-08-16 14:51 | **—** | 4 | **0** |
+| 1383 | `TRV-SS27-0001` | 1 | 2026-08-20 16:53 | **—** | 5 | **0** |
+| 1496 | `QA-M1-0005` | 1 | 2026-08-24 20:44 | **—** | 2 | **0** |
+
+```
+ModelTask sense ronda: 0      ← cap tasca òrfena
+models PRE-LLEI:       0      ← la població que les dues excepcions esperaven
+tasques adoptades:     18
+```
+
+Les cinc **OBERTES** i amb **zero `Entrega`**: FIT-1 respectat, i cap model ha canviat de columna.
+Les `oberta_el` són les del dry-run validat, no les d'avui.
