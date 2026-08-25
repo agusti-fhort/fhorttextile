@@ -869,8 +869,7 @@
         "handoff_cancel": "Cancelar",
         "claim_denied": "No puedes coger una tarea de este tipo (no está en tu lista de ejecución)",
         "claim_error": "No se ha podido reasignar la tarea",
-        "time_total": "Tiempo acumulado sobre el modelo",
-        "progress_pla": "{{done}}/{{total}} tareas hechas"
+        "time_total": "Tiempo acumulado sobre el modelo"
       },
       "timeline": {
         "section": "Qué ha cambiado",

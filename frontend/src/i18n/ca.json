@@ -869,8 +869,7 @@
         "handoff_cancel": "Cancel·lar",
         "claim_denied": "No pots agafar una tasca d'aquest tipus (no és a la teva llista d'execució)",
         "claim_error": "No s'ha pogut reassignar la tasca",
-        "time_total": "Temps acumulat sobre el model",
-        "progress_pla": "{{done}}/{{total}} tasques fetes"
+        "time_total": "Temps acumulat sobre el model"
       },
       "timeline": {
         "section": "Què ha canviat",
