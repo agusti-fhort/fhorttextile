@@ -27,6 +27,39 @@ mentre `tests/` no sigui un paquet.
 - 5 talles (`XS S M L XL`), base `M`, **1 regla amb tots els deltes a zero**.
   L'estructura és el que es testeja, no els valors.
 
+## CALLIE_prova.dxf
+
+- **Còpia literal** de `backend/media/fhort/pattern_files/CALLIE-DEC 26 PUR-STYLE-06- 3rd
+  FIT -08-07-2026.dxf` (mateix md5). Estil `CALLIE-DEC 26 PUR-STYLE-06- 3rd FIT`, talla base `S`.
+- md5 `0671cf5c6196ff7d167935bd263e1a06` · 101 860 bytes.
+- **Font CAD: DESCONEGUDA.** És l'únic material sense línia `Author:`, o sigui que
+  `_guess_source_cad` en torna cadena buida. No és una anècdota: v. el punt següent.
+- 🚨 **L'únic material en sentit HORARI**: 30 vores tancades de 30 amb l'àrea signada
+  negativa. Tots els altres fitxers (tots PolyPattern) van en antihorari. És la prova que
+  l'orientació del contorn és una propietat **del CAD d'origen** i que no es pot donar
+  per bona (v. `docs/diagnosis/QA_TALLER_D_CONVENCIO_RECORREGUT_2026-08-25.md`).
+- **Per què cal:** porta **6 peces amb doblec** amb totes les topologies d'eix que
+  trencaven `unfold_piece` — tirades d'eix de 2, 3 i 5 punts, als extrems del bucle i al
+  mig. La peça `14` és el cas canònic del defecte: desplegada pel llegat feia un llaç en
+  vuit d'àrea |−52.511| mm² quan la peça en fa 105.000.
+- L'exercita `patterns/tests_desplegat.py` (T6–T8).
+
+## MEREDITH_prova.dxf
+
+- **Còpia literal** de `backend/media/fhort/pattern_files/MEREDITH_-_Retoque.DXF`
+  (mateix md5). PolyPattern, talla base `M`.
+- md5 `901504269f690d59e58a27c7425930b6` · 464 287 bytes.
+- **Per què cal, si ja hi ha el CALLIE:** és PolyPattern i **antihorari** —o sigui, del
+  costat «bo»— i tanmateix té **2 de les seves 5 peces amb doblec trencades**. És la
+  prova que el defecte del desplegat **no és del sentit del CAD sinó de l'origen del
+  bucle**, i sense aquest fitxer el test semblaria una peculiaritat del CALLIE.
+- Porta l'únic cas **trencat de poc**: `BACK_RUFFL` i `FRONT_RUFFL` tenen la tirada d'eix
+  a `[0, 39, 40]` i el llegat els donava **1,96×** l'àrea en comptes de 2×. El cens el va
+  donar per bo atribuint la diferència a la curvatura; era un tercer punt d'eix al mig de
+  la tirada que hi feia un triangle espuri. **Un error del 4 % que no cantava.**
+- És el fixture més gros del directori. Es paga perquè cap material sintètic no reprodueix
+  aquest cas: depèn d'una llibertat del format que només el CAD real exercita.
+
 ## Absents (FLAG)
 
 - **Cap fitxer Tuka** (AAMA 2.1.1, ~92 punts). Quan arribi, serà la segona empremta i
