@@ -2,9 +2,19 @@ backend/media/
 backend/logs/
 backend/staticfiles/
 backend/**/__pycache__/
+# El `**` d'aquí sobre només cobria `backend/`: un script d'`ops/` executat pel venv hi
+# deixa el seu `__pycache__` i sortia com a untracked (M5). Regla global.
+__pycache__/
+*.pyc
 backend/**/*.pyc
 backend/*.pyc
-frontend/node_modules/
+frontend/node_modules
+frontend-backoffice/node_modules
+# Els worktrees hi enganxen un symlink al venv i al .env de `ftt-staging`. Sense regla,
+# `git status` els ensenya com a untracked i un `git add` distret els commita —que és
+# exactament com hi va entrar el symlink de node_modules.
+backend/venv
+backend/.env
 frontend/dist/
 backend/.env
 frontend/.env

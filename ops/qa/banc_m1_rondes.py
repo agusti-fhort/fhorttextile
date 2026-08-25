@@ -62,19 +62,23 @@ BANC = [
      True),
 ]
 
-#: M2 · CODA-BIS — EL MODEL LLEGAT: feina amb `ronda=NULL` i **cap fila `Ronda`**.
+#: ✅ **EL MODEL LLEGAT (`0005`) S'HA RETIRAT DEL BANC — M5, 25/08.**
 #:
-#: 🚨 **Aquest és l'ÚNIC cas del banc que NO es pot muntar pel camí normal, i és a posta.** Des
-#: d'M1-bis qualsevol gest de treball fa néixer la R1 (`ronda_del_gest`), o sigui que el codi viu
-#: **ja no sap fabricar** aquesta forma. Però és la que tenen els models d'abans del canvi de llei
-#: —4 dels 7 models amb tasques de `fhort` al tancament d'M2— i seguirà sent-ho fins al retroactiu
-#: de M5. Sense ell, la branca del PLA PLA (i la seva barra de progrés global) no es pot veure mai.
+#: Va existir per una raó bona: era **l'únic cas que no es podia muntar pel camí normal** (des
+#: d'M1-bis qualsevol gest fa néixer la R1) i sense ell no es podien veure les dues branques
+#: pre-llei —el PLA PLA amb la seva barra global (M2 · CODA-BIS ①) i la lectura vella de la 4a
+#: columna (M3 · CODA C1)—, que eren la forma de 4 dels 7 models amb tasques de `fhort`.
 #:
-#: Les tasques es creen amb `ronda=None` explícit i els estats es mouen per `transition_task`, que
-#: no toca cap `Ronda` (cens d'M1-bis §1.2). No s'esquiva cap llei: es reprodueix una població.
-LLEGAT = ('0005', '[QA-M1] Llegat sense volta (pre-llei)',
-          ['pom', 'tech_sheet'],
-          {'pom': 'Done', 'tech_sheet': None})
+#: 🚨 **Les dues branques ja no hi són, i per això el fixture tampoc pot quedar-s'hi.** El
+#: retroactiu de M5 va donar la R1 a tot model amb feina (població pre-llei = 0) i les excepcions
+#: es van retirar. Un `--remunta` que seguís fabricant un model pre-llei **ressuscitaria una
+#: població que el codi ja no sap explicar** —i el banc contradiria el producte l'endemà mateix.
+#: Adoptar-lo al retroactiu i deixar-lo al banc eren mitja feina cadascuna: van juntes o cap.
+#:
+#: ⚠️ **El `QA-M1-0005` que ja hi ha a `fhort` sobreviu a un `munta()` normal** —el retroactiu li
+#: va donar la seva R1 i avui és un model del banc com qualsevol altre—, però un `--remunta`
+#: l'esborra amb la resta del prefix i **ja no el torna a fabricar**. És el comportament buscat:
+#: el banc queda amb els quatre models que el camí normal sap produir.
 
 
 def _tecnic_sense_feina_oberta():
@@ -241,30 +245,6 @@ def munta():
         if obre_r2:
             amb_r2.append(model)
         creats.append((model, True))
-
-    # ⚠️ Va ABANS de la segona passada, i pel mateix motiu que ella existeix: els seus
-    # `_porta_estat` passen per `InProgress`, i `_aplica_exclusio_tecnic` és GLOBAL —
-    # muntat després, pausava la `InProgress` del model 0001 (mesurat).
-    # CINQUENA (M2 · CODA-BIS) — el model LLEGAT, sense cap volta. V. la nota de `LLEGAT`.
-    sufix, nom, codes, estats = LLEGAT
-    codi = PREFIX + sufix
-    model = Model.objects.filter(codi_intern=codi).first()
-    if model is None:
-        model = Model.objects.create(
-            codi_intern=codi, codi_tenant='FTT', any=2026, temporada='SS',
-            sequencial=int(sufix), customer=customer, garment_type_item=item, nom_prenda=nom)
-        for code in codes:
-            tt = TaskType.objects.get(code=code, active=True)
-            t = ModelTask.objects.create(
-                model=model, task_type=tt,
-                order=ModelTask.objects.filter(model=model).count(),
-                status='Pending', origen='prevista',
-                estimated_minutes=lookup_estimated_minutes(model, tt),
-                ronda=None)                     # ← la forma pre-llei, i no la fa cap gest
-            _porta_estat(t, estats.get(code), prof)
-        creats.append((model, True))
-    else:
-        creats.append((model, False))
 
     # SEGONA PASSADA — v. la nota de `_ESTATS_PRIMERA_PASSADA`.
     for t in en_curs:

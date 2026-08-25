@@ -149,7 +149,6 @@ def main():
 
     dues = banc['QA-M1-0004']      # R1 tancada + R2 replicada: el cas de dues voltes
     variats = banc['QA-M1-0001']   # una sola volta, quatre estats de tasca
-    llegat = banc['QA-M1-0005']    # CAP volta: la forma pre-llei, i l'únic pla PLA que hi ha
     print(f'bundle={DIST} · backend={BACKEND} · banc {sorted(banc)}\n')
 
     with sync_playwright() as p:
@@ -280,24 +279,14 @@ def main():
         crit('la volta entregada, desplegada, no ofereix cap transport (FIT-2 · el segell)',
              botons_volta_1.count() == 0, botons_volta_1.count())
 
-        # ── B-bis · EL PLA PLA (model LLEGAT, sense cap volta) ──────────────────────────────
-        print("\n── B-bis · el pla PLA del model llegat (CODA-BIS ①) ──")
-        pagina.goto(f'{BASE}/models/{llegat}?tab=Dashboard', wait_until='networkidle',
-                    timeout=60000)
-        pagina.wait_for_timeout(2000)
-        cos = pagina.inner_text('body')
-        pagina.screenshot(path=str(CAPTURES / 'm2_pla_llegat_sense_volta.png'), full_page=True)
-        bolca('m2_pla_llegat_sense_volta', cos)
-
-        crit('① el model SENSE cap volta no dibuixa cap contenidor de ronda',
-             'RONDA 1' not in cos and 'SENSE VOLTA' not in cos)
-        crit('① …i recupera la barra de progrés global (1/2 · 50%)',
-             'tasques fetes' in cos and '50%' in cos,
-             [l for l in cos.splitlines() if 'tasques fetes' in l])
-        crit('① …amb el temps acumulat igualment a la capçalera',
-             'Temps acumulat sobre el model' in cos)
-        crit('① …i sense «+ Nova ronda» (la R1 neix del primer gest, no es declara)',
-             '+ Nova ronda' not in cos)
+        # ── B-bis · EL PLA PLA ✅ RETIRAT (M5, 25/08) ────────────────────────────────────────
+        #
+        # Aquí es mesurava la CODA-BIS ①: un model LLEGAT (cap `Ronda`) no dibuixava cap
+        # contenidor de volta i recuperava la barra de progrés global. La condició era
+        # AUTOEXTINGIBLE a posta, i el retroactiu de M5 va donar la R1 a tot model amb feina
+        # —població pre-llei = 0—: **`QA-M1-0005` ja té la seva volta i el pla pla no existeix.**
+        # El bloc se'n va amb la branca que mesurava; el que queda viu és l'asserció ⑤ de més
+        # amunt («amb voltes, cap barra de progrés global»), que ara val per a TOTS els models.
 
         # ── C · EL REGISTRE D'ACTIVITAT ─────────────────────────────────────────────────────
         print("\n── C · Registre d'activitat (mockup B v3) ──")

@@ -29,10 +29,11 @@ import { TASK_ICON, STATUS_VARIANT, TRANSPORT, isOutOfCharge } from '../../utils
 // col·lapse, i les targetes de sempre hi entren com a `children`. Cap gest de transport, cap
 // camí de Play i cap regla de handoff s'han tocat.
 //
-// 🔑 **UN MODEL SENSE CAP VOLTA ES PINTA COM ABANS D'M2**, pla i sense contenidors. No és una
-// branca de conveniència: és la forma de tot model LLEGAT (la prohibició de backfill d'M1-bis
-// segueix vigent fins al retroactiu de M5), i embolicar la seva feina en una ronda que no
-// existeix seria dibuixar una volta que ningú no ha obert.
+// 🔑 **UN MODEL SENSE CAP VOLTA ES PINTA PLA**, sense contenidors. Va néixer com la forma de tot
+// model LLEGAT, i des del retroactiu de M5 (25/08) **ja no n'hi ha cap**: tot model amb feina té
+// la seva volta. La branca es queda com a DEGRADACIÓ —si `rondes` no carrega, el pla s'ha de
+// seguir veient— i no com a cas de domini; el que sí que se'n va anar amb la població és la barra
+// de progrés global que la CODA-BIS hi havia tornat (v. la nota de `totalMin`).
 
 const API = import.meta.env.VITE_API_URL || ''
 
@@ -253,23 +254,18 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab, model
   // frontend de temps_consumit_min quadra EXACTAMENT amb el rollup de l'albarà (ambdós sumen els
   // minuts de timers consolidats de TOTES les tasques del model; el compositor no scopa) → suma
   // local, zero crides noves (P5 PAS 0.2). Degradació amb gràcia: 0 tasques → 0% / 0h 00m.
-  // EL PROGRÉS GLOBAL («n/m tasques fetes · %» i la seva barra) NOMÉS ES PINTA AL PLA PLA
-  // (M2 · CODA-BIS, decisió d'Agus). Amb voltes, el progrés que vol dir alguna cosa és el de cada
-  // capçalera de ronda, i un percentatge sobre TOTES les tasques del model barrejaria voltes
-  // entregades amb la vigent. Sense cap volta no hi ha cap capçalera que el digui, i retirar-lo
-  // hi deixava un Dashboard sense cap indicador de progrés — mesurat: 4 dels 7 models amb
-  // tasques de `fhort`.
+  // ✅ **EL PROGRÉS GLOBAL S'HA RETIRAT (M5, 25/08).** La CODA d'M2 el va treure de tot arreu i la
+  // CODA-BIS el va tornar NOMÉS al pla pla —el d'un model sense cap `Ronda`—, perquè allà no hi ha
+  // cap capçalera de volta que digui el progrés i el Dashboard quedava sense cap indicador. Era
+  // una condició declarada AUTOEXTINGIBLE: `perVoltes` només és fals mentre el model no tingui cap
+  // volta, i el retroactiu de M5 li'n va donar una a tot model amb feina. **Població = 0**, la
+  // branca ja no es pintava mai, i se n'ha anat amb la seva clau i les seves assercions.
   //
-  // 🔑 **LA CONDICIÓ S'AUTOEXTINGEIX I NO CAL RETIRAR-LA A MÀ.** `perVoltes` és fals només mentre
-  // el model no tingui cap `Ronda`, i la R1 neix sola del primer gest de treball (M1-bis · FIT-4):
-  // tot model que rebi feina en surt. El retroactiu de M5 buidarà el que quedi. El dia que la
-  // població sigui zero, aquesta branca deixarà de pintar-se sense que ningú hi torni.
+  // Amb voltes, el progrés que vol dir alguna cosa és el de cada capçalera de ronda: un
+  // percentatge sobre TOTES les tasques del model barrejaria voltes entregades amb la vigent.
   //
   // El TEMPS acumulat, en canvi, es diu SEMPRE: és un fet del model sencer, no d'una volta.
   const totalMin = list.reduce((s, task) => s + (task.temps_consumit_min || 0), 0)
-  const total = list.length
-  const done = list.filter(task => task.status === 'Done').length
-  const pct = total ? Math.round((100 * done) / total) : 0
 
   // M2 — LES VOLTES, ja agregades. La lògica és compartida amb el Registre (`utils/rondes`):
   // les dues superfícies responen les mateixes preguntes sobre una ronda i només les pinten
@@ -513,23 +509,6 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab, model
           }}>
           {t('rondes.nova')}
         </button>
-      )}
-
-      {/* PROGRÉS GLOBAL · **només sense voltes** (v. la nota de `pct`). Amb rondes, cada capçalera
-          ja porta el seu, i aquesta barra hi diria una tercera xifra que no és de ningú. */}
-      {!perVoltes && list.length > 0 && (
-        <div style={{ width: '100%', marginTop: 14 }}>
-          <div style={{ marginBottom: 6, fontSize: 'var(--fs-label)', color: 'var(--text-soft)' }}>
-            {t('model_sheet.dashboard.workplan.progress_pla', { done, total })} · {pct}%
-          </div>
-          {/* `.prog` de la maqueta: 6px de canal en --line-soft, sense vora, píndola. El farciment
-              és --ok: la barra diu QUANT S'HA FET, i el fet és verd a tot el sistema. */}
-          <div style={{ height: 6, borderRadius: 'var(--r-pill)', background: 'var(--line-soft)',
-                        overflow: 'hidden' }}>
-            <div style={{ width: `${pct}%`, height: '100%', background: 'var(--ok)',
-                          transition: 'width 200ms' }} />
-          </div>
-        </div>
       )}
 
       {/* La frase del peu del mockup: diu la LLEI que la pantalla acaba d'aplicar (per què el

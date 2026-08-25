@@ -52,6 +52,15 @@ const COLOR = {
   estats_encarrec: { OPEN: 'warn', CLOSED: 'ok' },
   estats_tasca: { Pending: 'gray', Paused: 'gray', InProgress: 'warn', Done: 'ok' },
   estats_locals_encarrec: { PENDENT: 'warn', TRASPASSAT: 'ok' },
+  // M5 · l'ESTAT DEL CICLE DE VIDA del model (M3 · FIT-9). Els codis surten de `/vocabulari/`
+  // (`estats_model`, de `Model.ESTAT_CHOICES`); aquí només el color, i segueix la §8e:
+  //   · `nou`     → NEUTRE. És «començat», el cas normal, i no és cap desenllaç.
+  //   · `acabat`  → VERD. És el desenllaç bo del cicle: la feina ha arribat on havia d'arribar.
+  //   · `jubilat` → NEUTRE, i **no vermell**. Jubilar és una decisió de negoci (surt del
+  //     catàleg), no una fallada; el vermell de la §1 és per al que ha acabat MALAMENT, i
+  //     pintar-l'hi diria que alguna cosa ha anat malament quan no. El distingeix la PARAULA,
+  //     que és el mateix criteri que la decisió 2 aplica a `Paused`/`Pending`.
+  estats_model: { nou: 'gray', acabat: 'ok', jubilat: 'gray' },
 }
 
 /**

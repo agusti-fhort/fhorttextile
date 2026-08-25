@@ -43,6 +43,85 @@ def _ronda_oberta(model):
             .order_by('-seq').first())
 
 
+# ═══════════════════════════════════════════════════════════════════════════════════════════
+# M4 · FIT-5 + FIT-12 — LA COSTURA AMB EL COMERCIAL: dins o fora del numeral de la comanda.
+#
+# Tres funcions i una sola direcció de lectura: `tasks` pregunta a `commerce` quantes voltes
+# admet el pacte, i `commerce` no sap que les rondes existeixen. La resposta s'escriu a la
+# `Ronda` en obrir-la (foto) i no es torna a calcular mai — v. el docstring dels camps.
+# ═══════════════════════════════════════════════════════════════════════════════════════════
+
+def linia_de_comanda(model):
+    """LA LÍNIA DE COMANDA QUE GOVERNA AQUEST MODEL, o `None` si no en té cap.
+
+    No hi ha cap FK directa model→comanda al sistema: **el pivot és el `WorkOrder`**
+    (`commerce/models.py`, `WorkOrder.model` + `WorkOrder.order_line`). Un WO de tipus `ORDER`
+    és «aquest model, per aquesta línia»; un `COLLECTOR` és el contenidor mensual de la feina
+    SENSE comanda i per definició no en té cap (constraint `collector_no_model_no_orderline`).
+
+    Quin WO mana, quan n'hi ha més d'un:
+      1. **El que està OBERT.** `_assign_model_core` ja garanteix que no n'hi hagi dos alhora
+         («El model ja té un encàrrec (WO ORDER) actiu»), o sigui que aquest cas és únic.
+      2. Si cap no ho està, **el més recent** que encara conservi la seva línia. Un WO tancat
+         segueix dient de quina venda venia la feina, i és la lectura correcta per a una volta
+         que s'obre després d'haver tancat l'encàrrec.
+
+    QUÈ QUEDA FORA, i per què:
+      · `order_line = NULL` (WO **orfe**, desassignat) — desassignar és treure el model de la
+        venda: si ja no hi penja, aquella comanda no li pot fixar cap límit. El camp
+        `orphaned_from_line` guarda d'on venia, però és traça, no govern.
+      · Comanda **CANCELLED** — una venda anul·lada no pacta res.
+
+    Retorna una `commerce.SalesOrderLine` o `None`.
+    """
+    from fhort.commerce.models import WorkOrder
+
+    base = (WorkOrder.objects
+            .filter(model=model, kind='ORDER', order_line__isnull=False)
+            .exclude(order_line__order__status='CANCELLED')
+            .select_related('order_line'))
+    wo = (base.filter(status='OPEN').order_by('-created_at').first()
+          or base.order_by('-created_at').first())
+    return wo.order_line if wo is not None else None
+
+
+def numeral_efectiu(model):
+    """QUANTES VOLTES ADMET EL PACTE d'aquest model. Retorna `(linia, numeral)`.
+
+    `numeral` és `None` quan **no hi ha límit**, i el `None` arriba per dos camins que la crida
+    ha de poder distingir mirant `linia`:
+      · `(None, None)` — **el model no té comanda**. Sense pacte no hi ha límit: cap volta
+        desborda mai. És el cas normal d'un model de mostrari, i **no és un error** (el cens del
+        25/08 diu que avui, a `fhort`, ho són els 37 models: cap WO de tipus ORDER).
+      · `(linia, None)` — hi ha comanda i el pacte **no fixa numeral** (`rounds_included` null).
+
+    I `(linia, 0)` és el tercer cas, ben diferent d'aquests dos: el pacte no inclou **cap** volta,
+    i per tant ja desborda la primera. Per això el camp és nullable i no té default 0.
+    """
+    linia = linia_de_comanda(model)
+    if linia is None:
+        return None, None
+    return linia, linia.rounds_included
+
+
+def resol_desbordament(ronda):
+    """ESCRIU a la volta si cau DINS o FORA del numeral. Es crida UN COP, en obrir-la.
+
+    FIT-12: `seq > numeral` → fora de comanda. Sense comanda o sense numeral → mai fora.
+    Desa també la línia i el numeral vigents perquè el «perquè» de la safata («R3 · fora de
+    comanda · n>2 de la comanda C-2026-0001») es pugui dir sencer més tard, encara que el
+    numeral s'hagi editat entremig.
+
+    Guarda els tres camps amb `update_fields` i retorna la mateixa `Ronda`, ja mutada en memòria.
+    """
+    linia, numeral = numeral_efectiu(ronda.model)
+    ronda.linia_comanda = linia
+    ronda.numeral_vigent = numeral
+    ronda.fora_de_comanda = numeral is not None and ronda.seq > numeral
+    ronda.save(update_fields=['linia_comanda', 'numeral_vigent', 'fora_de_comanda'])
+    return ronda
+
+
 def tasca_vigent(model, code, *, ronda=None):
     """La tasca `code` VIGENT d'un model — l'únic resolutor del sistema.
 
@@ -102,9 +181,11 @@ def ronda_del_gest(model):
          de nova aquí seria fabricar una R(n+1) automàticament, i FIT-4 diu el contrari: «R2+
          neixen amb +Ronda explícit». Aquesta feina espera que el PM obri la volta.
 
-    🔒 **NOMÉS MIRA ENDAVANT** (sub-decisió b, Agus 24/08). No adopta res: les tasques que ja
-    tenen `ronda=NULL` es queden NULL fins al retroactiu de M5. En un model amb feina prèvia i
-    cap ronda, el primer gest NOU crea la R1 i **només la tasca d'aquell gest hi entra** (c).
+    🔒 **NOMÉS MIRA ENDAVANT** (sub-decisió b, Agus 24/08). No adopta res: en un model amb feina
+    prèvia i cap ronda, el primer gest NOU crea la R1 i **només la tasca d'aquell gest hi entra**
+    (c). El passat que això deixava enrere el va resoldre el **retroactiu de M5** (25/08), d'una
+    sola vegada i com a acte declarat (`ops/retroactius/retroactiu_r1_m5.py`); d'aquesta funció
+    no se n'espera cap adopció, ni abans ni ara.
 
     🔒 **NO POT NÉIXER DUES VEGADES.** Qui ho impedeix és la BD, no un `if`: `uniq_ronda_model_seq`
     (`Ronda.Meta.constraints`) ja fa única la parella `(model, seq)`, i `get_or_create` s'hi
@@ -120,8 +201,15 @@ def ronda_del_gest(model):
         return oberta
     if Ronda.objects.filter(model=model).exists():
         return None                      # cas 3: totes tancades → el PM ha d'obrir la següent
-    ronda, _ = Ronda.objects.get_or_create(
+    ronda, creada = Ronda.objects.get_or_create(
         model=model, seq=1, defaults={'motiu': Ronda.MOTIU_NOVA_MOSTRA})
+    # M4 · FIT-12 — també la R1 es pesa contra el numeral, i NOMÉS quan acaba de néixer. Amb un
+    # `rounds_included` de 0 el pacte no inclou cap volta i la primera ja desborda; si es fes
+    # només a `obrir_ronda` (seq≥2) aquell cas no el veuria ningú. El `creada` és el que evita
+    # rescriure el veredicte cada cop que un gest retorna una R1 que ja existia: la foto és del
+    # moment de l'obertura (v. els camps a `models.py`).
+    if creada:
+        resol_desbordament(ronda)
     return ronda
 
 
@@ -352,6 +440,12 @@ def obrir_ronda(model, motiu, tasques_codes, *, profile=None):
                 ronda=ronda, mare=mares[code], motiu=motiu,
                 assignee=profile,
                 estimated_minutes=lookup_estimated_minutes(model, tt))
+        # M4 · FIT-12 — DINS o FORA del numeral de la comanda, decidit aquí i no més tard. Dins
+        # de la transacció a posta: una volta que existeix sense veredicte seria una volta que
+        # el comercial no pot classificar, i el veredicte depèn del `seq` que s'acaba de
+        # reservar. El tècnic no se n'assabenta: `obrir_ronda` no retorna res de nou i la cara
+        # del Pla de treball no ha canviat ni una línia.
+        resol_desbordament(ronda)
     # Informatiu per a la porta HTTP: quins codes de la volta anterior s'han quedat pel camí.
     ronda._codes_replicats = [c for c in replicats if c in tipus]
     ronda._codes_omesos = omesos

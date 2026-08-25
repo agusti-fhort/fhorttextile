@@ -705,6 +705,32 @@ def _model_header(model):
     }
 
 
+def _ronda_header(ronda):
+    """M4 · FIT-12 — La VOLTA d'un ítem albaranable, tal com la safata l'ha de poder dir.
+
+    Porta les DATES (`oberta_el`/`tancada_el`), que és el que FIT-12 demana explícitament: són
+    la clau perquè el comercial informi QUAN es va fer cada volta. I porta el «perquè» en peces
+    (`fora_de_comanda`, `numeral_vigent`, `comanda`) i no com a frase feta: la frase es compon a
+    la cara, on hi ha l'idioma. Aquí no es tradueix res.
+
+    `comanda` és el `document_number` de la comanda que fixava el numeral, resolt per la línia
+    congelada a la volta (`Ronda.linia_comanda`) i no recalculat: si el model s'ha desassignat
+    des de llavors, el «perquè» ha de seguir dient de quina venda parlava.
+    """
+    if ronda is None:
+        return None
+    linia = ronda.linia_comanda
+    comanda = linia.order.document_number if linia is not None and linia.order_id else None
+    return {
+        'id': ronda.id, 'seq': ronda.seq, 'motiu': ronda.motiu,
+        'fora_de_comanda': ronda.fora_de_comanda,
+        'numeral_vigent': ronda.numeral_vigent,
+        'comanda': comanda,
+        'oberta_el': ronda.oberta_el.isoformat() if ronda.oberta_el else None,
+        'tancada_el': ronda.tancada_el.isoformat() if ronda.tancada_el else None,
+    }
+
+
 def get_billable_items(customer):
     """Safata d'albaranables d'un client (v2), agrupada per MODEL. Parteix de ModelTask (NO de
     WorkOrder): així recull també la feina amb work_order=NULL que el flux v1 no podia veure (R2
@@ -712,25 +738,50 @@ def get_billable_items(customer):
     `delivery_note_lines__isnull=True` evita el doble comptatge; esborrar el DRAFT (CASCADE de
     línies) el retorna. NO filtra per `facturable` (descartat): "no cobrar" es decideix a la línia
     (preu 0). Lectura pura, no persisteix res. Els ítems sense model resoluble van a un bloc
-    `model=None` (no es descarten silenciosament)."""
+    `model=None` (no es descarten silenciosament).
+
+    M4 · FIT-12 — LA VOLTA VIATJA AMB L'ÍTEM. Cada ítem que penja d'una `ModelTask` porta la seva
+    `ronda` (`_ronda_header`), i cada bloc-model porta la llista ordenada `rondes` de les voltes
+    que hi surten. Això és el que fa que **una volta FORA DE COMANDA es pugui albaranar A PART**:
+    la safata la sap agrupar, dir-ne les dates i dir-ne el perquè, sense que calgui cap taula nova
+    ni cap FK de ronda a l'albarà —la traça ja hi és per `DeliveryNoteLine.model_task`.
+
+    ⚠️ **NO ES TOCA CAP PREU.** El brief d'M4 ho prohibeix («cap càlcul de preu de ronda») i aquí
+    es respecta al peu de la lletra: una tasca d'una volta desbordada segueix proposant el preu
+    que li tocaria pel seu WorkOrder, exactament com abans. Qui decideix què val una volta que va
+    a part és el comercial, sobre el DRAFT. La safata només diu QUINA volta és i PER QUÈ va a
+    part; el diner segueix sent gest humà."""
     from django.db.models import Sum
     from fhort.tasks.models import ModelTask
     from .models import WorkOrderAdjustment, Expense
 
-    groups = {}  # key (model_id o None) -> {'model': header, 'items': [...]}
+    groups = {}  # key (model_id o None) -> {'model': header, 'items': [...], 'rondes': [...]}
+    rondes_vistes = {}  # key de bloc -> {ronda_id: header} — dedup i ordre estable
 
     def _bucket(model):
         key = model.id if model is not None else None
         g = groups.get(key)
         if g is None:
-            g = {'model': _model_header(model), 'items': []}
+            g = {'model': _model_header(model), 'items': [], 'rondes': []}
             groups[key] = g
+            rondes_vistes[key] = {}
         return g
+
+    def _amb_ronda(model, ronda):
+        """Registra la volta al bloc del model i retorna la seva capçalera (o None)."""
+        cap = _ronda_header(ronda)
+        if cap is None:
+            return None
+        key = model.id if model is not None else None
+        vistes = rondes_vistes.setdefault(key, {})
+        vistes.setdefault(cap['id'], cap)
+        return cap
 
     # TASK — ModelTask Done sense línia d'albarà (el model FK mai és null).
     for t in (ModelTask.objects
               .filter(model__customer=customer, status='Done', delivery_note_lines__isnull=True)
-              .select_related('task_type', 'model', 'work_order')):
+              .select_related('task_type', 'model', 'work_order',
+                              'ronda', 'ronda__linia_comanda__order')):
         wo = t.work_order
         if wo is not None and wo.kind == 'ORDER':
             price = Decimal(str((wo.price_snapshot or {}).get('unit_price') or '0')).quantize(_CENT)
@@ -745,13 +796,15 @@ def get_billable_items(customer):
             'source_dates': {'started_at': t.started_at.isoformat() if t.started_at else None,
                              'finished_at': t.finished_at.isoformat() if t.finished_at else None},
             'model_task_id': t.id, 'work_order_id': wo.id if wo else None,
+            'ronda': _amb_ronda(t.model, t.ronda),
         })
 
     # EXTRA / DEDUCTION — WorkOrderAdjustment sense línia, via model_task.model o wo.model.
     for adj in (WorkOrderAdjustment.objects
                 .filter(work_order__customer=customer, kind__in=['EXTRA_BILL', 'DEDUCTION'],
                         delivery_note_lines__isnull=True)
-                .select_related('work_order__model', 'model_task__model')):
+                .select_related('work_order__model', 'model_task__model',
+                                'model_task__ronda__linia_comanda__order')):
         model = (adj.model_task.model if adj.model_task_id else None) or adj.work_order.model
         if adj.kind == 'EXTRA_BILL':
             kind, price = 'EXTRA', Decimal(adj.amount or 0).quantize(_CENT)
@@ -765,6 +818,9 @@ def get_billable_items(customer):
             'source_dates': {'started_at': None,
                              'finished_at': adj.resolved_at.isoformat() if adj.resolved_at else None},
             'adjustment_id': adj.id, 'work_order_id': adj.work_order_id,
+            # L'extra/deducció hereta la volta de la tasca que resol. Una deducció de concepte
+            # lliure (`model_task` null) no en té cap i va al calaix «sense volta».
+            'ronda': _amb_ronda(model, adj.model_task.ronda if adj.model_task_id else None),
         })
 
     # EXPENSE — Expense sense línia, via wo.model. Preu = sale_price, qty = quantity.
@@ -780,7 +836,18 @@ def get_billable_items(customer):
             'source_dates': {'started_at': None,
                              'finished_at': exp.incurred_at.isoformat() if exp.incurred_at else None},
             'expense_id': exp.id, 'work_order_id': exp.work_order_id,
+            # Una despesa no penja de cap tasca i per tant de cap volta: calaix «sense volta».
+            'ronda': None,
         })
+
+    # M4 · FIT-12 — l'índex de voltes de cada bloc, en ordre de `seq`, i els ítems ordenats
+    # perquè els d'una mateixa volta quedin CONTIGUS. La cara agrupa per `ronda.id` i no depèn
+    # de l'ordre, però un ordre estable fa que la safata es llegeixi igual a cada obertura i que
+    # el calaix «sense volta» (seq efectiu 0) surti sempre primer, on sempre ha estat.
+    for key, g in groups.items():
+        g['rondes'] = sorted(rondes_vistes.get(key, {}).values(), key=lambda r: r['seq'])
+        g['items'].sort(key=lambda it: ((it.get('ronda') or {}).get('seq', 0),
+                                        it['kind'], it.get('model_task_id') or 0))
 
     # Ordena per codi_intern (el bloc sense model, codi_intern='', queda primer).
     return sorted(groups.values(), key=lambda g: g['model']['codi_intern'] or '')
