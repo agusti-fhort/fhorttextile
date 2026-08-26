@@ -181,6 +181,12 @@ def _valida_fila(fila, peces_del_fitxer, rols_existents):
     if estat is not None and estat not in dict(PatternPiece.ESTAT_CHOICES):
         raise IdentificacioRebutjada(f'Estat de peça no vàlid: {estat!r}.')
 
+    # L'eix DAVANT/DARRERE (D1). Buit és un valor vàlid i vol dir «no en té» —una
+    # cinturilla al doblec no és ni davant ni darrere—, no «encara no ho sabem».
+    face = fila.get('face')
+    if face is not None and face not in dict(PatternPiece.FACE_CHOICES):
+        raise IdentificacioRebutjada(f'Cara no vàlida: {face!r}.')
+
     return peca
 
 
@@ -229,7 +235,7 @@ def identificar_peces(*, pattern_file, files, usuari=None, confirm=False,
             peca.piece_role_id = nou_rol
             canvis += ['piece_role', 'rol_origen']
 
-        for camp in ('nom', 'lateralitat', 'ordinal', 'estat_peca'):
+        for camp in ('nom', 'lateralitat', 'ordinal', 'estat_peca', 'face'):
             if camp in fila:
                 setattr(peca, camp, fila[camp])
                 canvis.append(camp)
@@ -264,9 +270,16 @@ def _snapshot(pattern_file) -> list:
             'rol_slug': p.piece_role.slug if p.piece_role_id else '',
             'nom': p.nom,
             'lateralitat': p.lateralitat,
+            'face': p.face,
             'ordinal': p.ordinal,
             'estat_peca': p.estat_peca,
+            # 🚨 L'acta copia TAMBÉ què havia proposat la màquina. És l'única manera de
+            # respondre més endavant «quantes en va encertar»: si l'acta només desés el
+            # que l'humà va decidir, l'encert del reconeixedor seria immesurable el dia
+            # que algú tornés a córrer les propostes i les reescrivís.
+            'proposed_slug': (p.proposed_role.slug if p.proposed_role_id else ''),
+            'proposed_score': p.proposed_score,
         }
-        for p in pattern_file.pieces.select_related('piece_role').order_by('id')
+        for p in pattern_file.pieces.select_related('piece_role', 'proposed_role').order_by('id')
         if p.piece_role_id is not None
     ]
