@@ -50,6 +50,20 @@ ROLS = [
     ('knee_patch',    R.CLASSE_COMPLEMENT, 'Knee patch',    'Genollera',           'Rodillera'),
     ('lace_strip',    R.CLASSE_TIRA,       'Lace strip',    'Tira de punta',       'Tira de encaje'),
     ('template',      R.CLASSE_COMPLEMENT, 'Template',      'Plantilla',           'Plantilla'),
+
+    # ── F3 · catàleg semàntic (2026-08-26, decisió D6) ───────────────────────────
+    # Els TRES únics forats reals que va deixar el mapa GarmentCode→FTT (informe
+    # `REPORT_GCD_ONTOLOGY_2026-08-25.md` §5.1): dels 24 rols de GarmentCode, 19
+    # queien nets sobre el catàleg i 5 no tenien on caure —`pant_f`/`pant_b`, `hood`,
+    # `ins_skirt_front`/`ins_skirt_back`. Amb l'eix `face` (D1) els cinc es resolen
+    # amb tres slugs, no amb cinc: la cara no va al nom del rol.
+    #
+    # `panel` ja existia i NO serveix per al godet: un panell de faldilla és una peça
+    # del cos de la faldilla i un godet és una INSERCIÓ dins d'una vora oberta
+    # (`godet.py:113-114`), que és el que la mena de costura `insert_join` distingeix.
+    ('pant',          R.CLASSE_COS,        'Trouser leg',   'Cama de pantaló',     'Pernera'),
+    ('hood',          R.CLASSE_COS,        'Hood',          'Caputxa',             'Capucha'),
+    ('godet_insert',  R.CLASSE_PANELL,     'Godet insert',  'Godet',               'Godet'),
 ]
 
 
