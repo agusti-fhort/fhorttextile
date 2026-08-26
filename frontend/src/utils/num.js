@@ -46,8 +46,10 @@ const arrel = (lang) => String(lang || '').trim().toLowerCase().slice(0, 2)
 export function parseNum(v) {
   if (v === null || v === undefined) return null
   if (typeof v === 'number') return Number.isFinite(v) ? v : null
-  // \s cobreix l'espai fi i el no-separable que porten els fulls de càlcul.
-  const net = String(v).replace(/[\s  ]/g, '')
+  // Els dos espais es diuen amb ESCAPADA i no amb el caràcter: un blanc invisible al codi
+  // font és exactament el que `no-irregular-whitespace` existeix per impedir.
+  // `\u00A0` no-separable · `\u202F` fi — tots dos els porta un copiar-i-enganxar d'Excel.
+  const net = String(v).replace(/[\s\u00A0\u202F]/g, '')
   if (net === '') return null
   const ultimPunt = net.lastIndexOf('.')
   const ultimaComa = net.lastIndexOf(',')
@@ -79,7 +81,7 @@ export function parseNum(v) {
  * només està a mitges: `''`, `'-'`, `'1.'`, `'1,'`, `'-0,'` són tots vàlids en curs.
  */
 export function esNumeroEnCurs(text) {
-  const net = String(text ?? '').replace(/[\s  ]/g, '')
+  const net = String(text ?? '').replace(/[\s\u00A0\u202F]/g, '')
   if (net === '') return true
   return /^[+-]?(\d*[.,]?\d*)$/.test(net)
 }
