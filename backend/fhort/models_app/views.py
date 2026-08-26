@@ -2432,9 +2432,17 @@ def gravar_pom_view(request, model_id):
         run = [s.strip() for s in model.size_run_model.replace(';', '·').split('·') if s.strip()]
         return run.index(label) if label in run else None
 
-    from fhort.pom.nomenclatura import colisio_de_codi
+    from fhort.pom.nomenclatura import colisio_de_codi, frase_de_colisio, nom_client
 
     errors = []
+    # F3 · LES COL·LISIONS DE NOMENCLATURA, A PART DELS ALTRES ERRORS. Un codi ocupat no és una
+    # petició mal escrita: és un conflicte amb una dada que ja hi és, i la persona necessita
+    # saber AMB QUÈ xoca per poder-hi fer res. Van en una llista pròpia perquè la resposta les
+    # pugui servir ESTRUCTURADES (v. el `return` de sota) i no aplanades dins d'`errors`.
+    colisions = []
+    # El nom del client es demana UN COP i no per fila: la frase del refús el porta i el bucle
+    # de sota pot passar per aquí tantes vegades com mesures dugui la petició.
+    _client = nom_client(model.customer_id) if model.customer_id else ''
     fora_rang = []
     prepared = []
     identitats = set()
@@ -2487,13 +2495,25 @@ def gravar_pom_view(request, model_id):
         # propi àlies no rebori: no xoca amb ningú, xoca amb ella mateixa.
         nomen = (m.get('nom_fitxa') or '').strip()
         if nomen and model.customer_id:
-            _xoc, _etiqueta = colisio_de_codi(model.customer_id, nomen,
-                                              excloent_pom_id=int(pom_id))
+            _xoc, _etiqueta, _context = colisio_de_codi(model.customer_id, nomen,
+                                                        excloent_pom_id=int(pom_id))
             if _xoc is not None:
-                errors.append(
-                    f'POM {pom_id}: la nomenclatura «{nomen}» ja és {_etiqueta} al catàleg '
-                    f'd\'aquest client'
-                )
+                # 🚨 EL REFÚS PASSA A SER ACCIONABLE (F3). Deia «la nomenclatura «BT» ja és BT
+                # al catàleg d'aquest client» —tautològic per als POMs sense nom— i sobretot no
+                # deia CAP sortida: a la formació del 26/08 se'n van veure TRES reintents
+                # seguits, perquè tornar-hi era l'única acció que la pantalla oferia.
+                #
+                # Tot el que ara viatja ja el sabia el backend i el llençava en un `return`
+                # (`pom_del_codi` es quedava només amb `alias.pom`). La frase és la MATEIXA que
+                # serveix el 409 de `create_model_pom_view`: una sola redacció per a les dues
+                # portes.
+                colisions.append({
+                    'ordre': m.get('ordre'),
+                    'pom_id': int(pom_id),
+                    'nomenclatura': nomen,
+                    **_context,
+                    'message': frase_de_colisio(nomen, _context, _client),
+                })
                 continue
         # SET-2/#12c — l'eix viatja fins a l'escriptura. Fins aquí el `garment` es llegia
         # (v. el guard de duplicats, unes línies més amunt) i es llençava: la tupla el
@@ -2504,6 +2524,17 @@ def gravar_pom_view(request, model_id):
     # un número impossible no és una petició mal escrita, és una dada que no pot existir.
     if fora_rang:
         return Response({'errors': fora_rang, 'codi': CODI_MESURA_FORA_RANG}, status=422)
+
+    # Les col·lisions manen sobre «no hi ha cap mida»: si la petició s'ha aturat per un codi
+    # ocupat, dir-li a la persona que no ha introduït mesures seria mentir-li sobre la causa.
+    if colisions:
+        return Response({
+            'codi': 'NOMENCLATURA_OCUPADA',
+            'colisions': colisions,
+            # `errors` hi va igualment perquè el client antic —i qualsevol lector que només
+            # sàpiga aplanar -- segueixi veient un text. La frase és la mateixa.
+            'errors': [c['message'] for c in colisions],
+        }, status=400)
 
     if not prepared:
         errors.append('Cal introduir almenys una mida base abans de gravar POM')

@@ -2851,7 +2851,9 @@
     "sortir_amb_canvis_peces": "En: {{peces}}",
     "sortir_amb_canvis_cos": "Si sales ahora, los cambios de estos contenedores se perderán. Cierra este aviso y guárdalos en el contenedor donde los has hecho.",
     "sortir_sense_desar": "Salir sin guardar",
-    "quedar_me": "Quedarme"
+    "quedar_me": "Quedarme",
+    "colisio_title": "Nomenclatura ocupada ({{count}})",
+    "colisio_pendent": "pendiente de revisión"
   },
   "model_fabric": {
     "err_close_table": "No se ha podido cerrar la tabla.",

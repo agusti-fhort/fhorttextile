@@ -2851,7 +2851,9 @@
     "sortir_amb_canvis_peces": "A: {{peces}}",
     "sortir_amb_canvis_cos": "Si surts ara, els canvis d’aquests contenidors es perdran. Tanca aquest avís i grava’ls al contenidor on els has fet.",
     "sortir_sense_desar": "Sortir sense desar",
-    "quedar_me": "Quedar-m’hi"
+    "quedar_me": "Quedar-m’hi",
+    "colisio_title": "Nomenclatura ocupada ({{count}})",
+    "colisio_pendent": "pendent de revisió"
   },
   "model_fabric": {
     "err_close_table": "No s'ha pogut tancar la taula.",
