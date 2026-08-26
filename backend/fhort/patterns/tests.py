@@ -3892,10 +3892,30 @@ class ExportSenseDoblecInvisibleTest(EscalatTestBase):
     d'entitats, i aquest test existeix justament per tancar aquesta porta."""
 
     TS = '2026-01-01T00:00:00Z'
-    #: sha256 del DXF de niada de l'AMELIA amb el segell congelat, mesurat sobre l'arbre
-    #: ANTERIOR al plegat (I0/T4a). Si algun dia es mou, el plegat —o el writer— ha
-    #: començat a tocar peces que no tenen doblec.
-    SHA_NIADA_SENSE_DOBLEC = 'a87451a218e198130f56a5b1e76d2d34105b7ae04072985732f7434fc530b1de'
+    #: sha256 del DXF de niada de l'AMELIA amb el segell congelat. Si algun dia es mou,
+    #: el plegat —o el writer— ha començat a tocar peces que no tenen doblec.
+    #:
+    #: ⚠️ RE-SEGELLAT el 2026-08-26. El segell anterior
+    #: (`a87451a218e198130f56a5b1e76d2d34105b7ae04072985732f7434fc530b1de`) es va mesurar
+    #: el 2026-07-30 (2b4132c9) i havia CADUCAT: el writer va canviar deliberadament el
+    #: 24/08 i cap segell no el va seguir. No és cap regressió, i s'ha adjudicat per DIFF
+    #: i no per intuïció (VEREDICTE_4_VERMELLS_2026-08-26.md):
+    #:
+    #:   * l'arbre a `32ef5eb2^` reprodueix el segell VELL byte a byte → el segell era
+    #:     autèntic i res entre el 30/07 i el 24/08 no havia mogut un sol byte;
+    #:   * segell vell → actual: 10.301 línies a banda i banda, 100 valors diferents, i
+    #:     TOTS són codi de grup 1 (contingut de TEXT: el número de regla, +1 exacte a
+    #:     cada un) o codi 1000 (el segell d'ezdxf, que `empremta_dxf` ja neutralitza).
+    #:     ZERO codis de coordenada tocats i cens d'entitats idèntic → cap geometria;
+    #:   * el fix del desplegat (3b7e4841) hi aporta ZERO bytes, MESURAT: amb l'aama_reader
+    #:     revertit el sha és el mateix. Concorda amb `test_cap_peca_de_lamelia_no_te_doblec`,
+    #:     que passa: sense doblec, desplegar és la identitat.
+    #:
+    #: Els canvis deliberats són 32ef5eb2 (capçalera RUL sencera + numeració des d'1) i
+    #: d8b80458 (el número de regla viatja a les capes). La validesa EXTERNA d'aquest
+    #: segell no la dona aquest test: la dona la paritat PolyPattern del 24/08, i el gate
+    #: de niada segueix PENDENT.
+    SHA_NIADA_SENSE_DOBLEC = '5f9a7aa77af994aa010672eddc75e276770f0abbad40d07d8182ae6801b059cd'
 
     def test_el_dxf_emes_no_es_mou_ni_un_byte(self):
         res = build_export(self.fp, self.gv.id, 'polypattern', ts=self.TS)
