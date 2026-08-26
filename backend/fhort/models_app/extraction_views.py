@@ -1149,6 +1149,30 @@ _POM_SYNONYMS = {
 }
 
 
+def _nom_resolt(pom):
+    """El nom llarg d'un POM per a la UI del wizard, o `None` si no n'hi ha POM.
+
+    🔑 PUNT ÚNIC DE F1. Els tres camins del wizard —les files del pas 2, el suggeriment feble i
+    els candidats del 409— servien `POMMaster.nom_client` CRU, i aquell camp és buit a **103
+    dels 144 POMs actius** del schema `fhort` (mesurat el 26/08; tots 103 amb `pom_global`
+    poblat). El resultat era la fila muda que la formació va veure: «B · », «BF · », «BT · ».
+
+    `noms_de` és el resolutor únic de la llei **ÀLIES > TENANT > GLOBAL** (22/08) i ja cau al
+    canònic del sector quan el tenant no ha batejat el POM. Aquí es demana sense àlies a posta:
+    el wizard resol contra el CATÀLEG DE LA CASA, i la nomenclatura del client d'aquell model
+    ja viatja per `codi_fitxa`/`descripcio`, que són el que el document porta escrit.
+
+    Es torna `nom_en` —el canònic— perquè és la PRIMERA línia de la nomenclatura de la casa;
+    la segona (el nom d'usuari, en gris) la resol el front amb `nomsDePom`, que ja rep
+    `nom_ca` pel seu costat. `None` i no `''` per no canviar el contracte de qui ja distingeix
+    «no hi ha POM» de «el POM no té nom».
+    """
+    if pom is None:
+        return None
+    from fhort.pom.nomenclatura import noms_de
+    return noms_de(pom)['nom_en'] or None
+
+
 def find_pom_master(code, description, customer=None):
     """
     Find the most suitable POMMaster.
@@ -1193,9 +1217,14 @@ def find_pom_master(code, description, customer=None):
     alias_pendent = None
     if customer is not None:
         for key in (k for k in (code, desc_clean) if k):
+            # `pom__pom_global` i no només `pom`: aquest era **l'únic camí de match** que no
+            # prefetchava el catàleg global, i des que la fila serveix el nom RESOLT
+            # (`noms_de`, F1) cada match d'àlies hi hauria comprat una query. La resta de
+            # branques d'aquesta funció ja fan `select_related('pom_global')`; aquesta s'hi
+            # posa al costat.
             alias = (CustomerPOMAlias.objects
                      .filter(customer=customer, client_code__iexact=key, pom__isnull=False)
-                     .select_related('pom').first())
+                     .select_related('pom', 'pom__pom_global').first())
             if alias and alias.pom.actiu:
                 if alias.pendent_revisio:
                     if alias_pendent is None:
@@ -1427,7 +1456,12 @@ def _match_rows(files, customer, model=None):
             'descripcio': descripcio,
             'pom_master_id': pm_efectiu.id if pm_efectiu else None,
             'pom_codi': pm_efectiu.codi_client if pm_efectiu else None,
-            'pom_nom': pm_efectiu.nom_client if pm_efectiu else None,
+            # 🔑 F1 · EL NOM VA RESOLT, NO CRU. Era `pm_efectiu.nom_client`, i el camp del
+            # tenant és buit a **103 dels 144 POMs actius** de `fhort` —tots amb `pom_global`
+            # poblat—, o sigui que la fila del wizard sortia «B · » i el nom canònic, que hi
+            # era, no arribava mai. `noms_de` és la font única de la llei ÀLIES > TENANT >
+            # GLOBAL (22/08) i cau al global quan el tenant no bateja.
+            'pom_nom': _nom_resolt(pm_efectiu),
             'match_type': match_type,
             'confidence': confidence,
             'values': f.get('values') or {},
@@ -1436,7 +1470,10 @@ def _match_rows(files, customer, model=None):
             'seccio': f.get('seccio') or None,
             'actiu': bool(pm_efectiu),
             'ordre': i,
-            'weak_suggestion': suggeriment.nom_client if suggeriment else None,
+            # El suggeriment és el MATEIX text que hauria sortit si el vincle hagués estat
+            # ferm: resoldre'l per un camí i no per l'altre faria que la mateixa mesura es
+            # digués de dues maneres segons la confiança del match.
+            'weak_suggestion': _nom_resolt(suggeriment),
             'weak_suggestion_codi': suggeriment.codi_client if suggeriment else None,
             'many_to_one': False,
         })
@@ -1917,11 +1954,19 @@ def _candidats_de_codi(codi):
     return [{
         'id': pm.id,
         'codi_client': pm.codi_client,
+        # F1 · `nom_client` es queda perquè hi ha lectors que el volen CRU (saber si el TENANT
+        # ha batejat el POM és una pregunta legítima), però la fila ara porta també el nom
+        # RESOLT, que és el que s'ha de pintar. Sense ell, els candidats del 409 sortien amb el
+        # codi pelat exactament igual que les files.
         'nom_client': pm.nom_client,
+        'nom_en': _nom_resolt(pm) or '',
         'origen_import': pm.origen_import or '',
         'pendent_revisio': bool(pm.pendent_revisio),
         'actiu': bool(pm.actiu),
-    } for pm in POMMaster.objects.filter(codi_client=codi).order_by('id')]
+        # `select_related('pom_global')`: `_nom_resolt` hi entra per fila i sense això el 409
+        # comprava una query per candidat.
+    } for pm in POMMaster.objects.select_related('pom_global')
+                                 .filter(codi_client=codi).order_by('id')]
 
 
 def _capa_instancia_de(fila):
