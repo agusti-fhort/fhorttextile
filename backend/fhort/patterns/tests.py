@@ -2407,11 +2407,16 @@ class CaigudaOrtogonalAPITest(PatternsAPITestBase):
         self.assertEqual(resp.status_code, 200, resp.data)
 
         per_codi = {m['codi']: m for m in resp.data}
-        self.assertEqual(set(per_codi), {'recta', 'vora', 'ortogonal'})
+        # `projeccio` és el quart mètode des de 3f81313c: el vocabulari el serveix com
+        # els altres tres, i aquest test diu la gramàtica SENCERA —o sigui que l'ha de
+        # cobrir també, no només tolerar-lo.
+        self.assertEqual(set(per_codi), {'recta', 'vora', 'ortogonal', 'projeccio'})
         self.assertEqual(per_codi['recta']['ancores'], ['a', 'b'])
         self.assertEqual(per_codi['vora']['ancores'], ['a', 'b'])
         self.assertEqual(per_codi['ortogonal']['ancores'], ['ref_a', 'ref_b', 'p'])
+        self.assertEqual(per_codi['projeccio']['ancores'], ['a', 'b'])
         self.assertEqual(per_codi['ortogonal']['mode'], 'ortogonal')
+        self.assertEqual(per_codi['projeccio']['mode'], 'projeccio')
         self.assertEqual(per_codi['recta']['mode'], 'points')
 
     def test_el_vocabulari_i_els_choices_no_poden_divergir(self):
@@ -3559,11 +3564,16 @@ class ProjeccioTest(EscalatTestBase):
             self.assertAlmostEqual(dx, 0.0, places=9)
             self.assertAlmostEqual(dy, 0.0, places=9)
 
-    def test_una_regla_per_punt_mogut_i_la_regla_0_per_a_la_resta(self):
+    def test_una_regla_per_punt_mogut_i_la_regla_de_repos_per_a_la_resta(self):
+        """La regla de repòs ja no és la 0: des de 32ef5eb2 la numeració comença a 1,
+        perquè per al PolyPattern el zero no és cap número de regla. El que es prova
+        segueix sent el mateix —la de repòs no mou res—, i per això s'hi arriba per
+        `REGLA_ZERO` i no per un literal que caduca."""
         _, _, _, proj = self._projectar()
 
-        self.assertIn(0, proj.grade_table.regles)
-        for delta in proj.grade_table.regles[0].deltes.values():
+        self.assertIn(REGLA_ZERO, proj.grade_table.regles)
+        self.assertNotIn(0, proj.grade_table.regles, 'el zero ja no és número de regla')
+        for delta in proj.grade_table.regles[REGLA_ZERO].deltes.values():
             self.assertEqual(delta, (0.0, 0.0))
 
         # Els punts de corba no porten regla: flueixen, i és el CAD qui els fa fluir.
@@ -3816,11 +3826,14 @@ class AutovalidacioTest(EscalatTestBase):
 
         self.assertEqual(taula.talles, ('S', 'M', 'L', 'XL', 'XXL'))
         self.assertEqual(taula.talla_base, 'S')
-        self.assertIn(0, taula.regles)
+        # La de repòs és la `REGLA_ZERO` (=1 des de 32ef5eb2), no la 0: el RUL que
+        # emetem numera com el del PolyPattern, i el zero no hi és cap regla.
+        self.assertIn(REGLA_ZERO, taula.regles)
+        self.assertNotIn(0, taula.regles, 'el RUL emès no pot portar DELTA 0')
         # Hi ha d'haver com a mínim una regla que mogui alguna cosa de debò.
         self.assertTrue(any(
             any(d != (0.0, 0.0) for d in regla.deltes.values())
-            for num, regla in taula.regles.items() if num != 0
+            for num, regla in taula.regles.items() if num != REGLA_ZERO
         ))
 
 
@@ -3879,10 +3892,30 @@ class ExportSenseDoblecInvisibleTest(EscalatTestBase):
     d'entitats, i aquest test existeix justament per tancar aquesta porta."""
 
     TS = '2026-01-01T00:00:00Z'
-    #: sha256 del DXF de niada de l'AMELIA amb el segell congelat, mesurat sobre l'arbre
-    #: ANTERIOR al plegat (I0/T4a). Si algun dia es mou, el plegat —o el writer— ha
-    #: començat a tocar peces que no tenen doblec.
-    SHA_NIADA_SENSE_DOBLEC = 'a87451a218e198130f56a5b1e76d2d34105b7ae04072985732f7434fc530b1de'
+    #: sha256 del DXF de niada de l'AMELIA amb el segell congelat. Si algun dia es mou,
+    #: el plegat —o el writer— ha començat a tocar peces que no tenen doblec.
+    #:
+    #: ⚠️ RE-SEGELLAT el 2026-08-26. El segell anterior
+    #: (`a87451a218e198130f56a5b1e76d2d34105b7ae04072985732f7434fc530b1de`) es va mesurar
+    #: el 2026-07-30 (2b4132c9) i havia CADUCAT: el writer va canviar deliberadament el
+    #: 24/08 i cap segell no el va seguir. No és cap regressió, i s'ha adjudicat per DIFF
+    #: i no per intuïció (VEREDICTE_4_VERMELLS_2026-08-26.md):
+    #:
+    #:   * l'arbre a `32ef5eb2^` reprodueix el segell VELL byte a byte → el segell era
+    #:     autèntic i res entre el 30/07 i el 24/08 no havia mogut un sol byte;
+    #:   * segell vell → actual: 10.301 línies a banda i banda, 100 valors diferents, i
+    #:     TOTS són codi de grup 1 (contingut de TEXT: el número de regla, +1 exacte a
+    #:     cada un) o codi 1000 (el segell d'ezdxf, que `empremta_dxf` ja neutralitza).
+    #:     ZERO codis de coordenada tocats i cens d'entitats idèntic → cap geometria;
+    #:   * el fix del desplegat (3b7e4841) hi aporta ZERO bytes, MESURAT: amb l'aama_reader
+    #:     revertit el sha és el mateix. Concorda amb `test_cap_peca_de_lamelia_no_te_doblec`,
+    #:     que passa: sense doblec, desplegar és la identitat.
+    #:
+    #: Els canvis deliberats són 32ef5eb2 (capçalera RUL sencera + numeració des d'1) i
+    #: d8b80458 (el número de regla viatja a les capes). La validesa EXTERNA d'aquest
+    #: segell no la dona aquest test: la dona la paritat PolyPattern del 24/08, i el gate
+    #: de niada segueix PENDENT.
+    SHA_NIADA_SENSE_DOBLEC = '5f9a7aa77af994aa010672eddc75e276770f0abbad40d07d8182ae6801b059cd'
 
     def test_el_dxf_emes_no_es_mou_ni_un_byte(self):
         res = build_export(self.fp, self.gv.id, 'polypattern', ts=self.TS)
