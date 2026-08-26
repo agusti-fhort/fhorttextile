@@ -5,23 +5,22 @@
 **Font del vocabulari:** `REPORT_GCD_ONTOLOGY_2026-08-25.md` (GarmentCode@d449629, MIT)
 **Font de les freqüències:** `ftt_corpus` (128.974 designs, CC-BY-4.0), **read-only**
 
-> ## ⏸️ ESTAT: FASE B ATURADA ESPERANT L'AGUS
+> ## ✅ ESTAT: TANCAT
 >
-> **Les migracions estan aplicades i el codi desplegat. La SEMBRA no.** Les quatre taules
-> són **buides als tres esquemes** i esperen l'OK sobre la llista de
-> `docs/ordres/SEED_SEMANTIC_CATALOG_DRYRUN_2026-08-26.md`. Res del que hi ha aquí no és
-> reversible-amb-pressa perquè res de dada no s'ha escrit.
+> **OK de l'Agus el 26/08 amb una esmena** (`underarm_point.nom_es` → «Punto de axila»,
+> aplicada abans de sembrar). Sembra aplicada als tres esquemes, idempotència provada,
+> recompte de guarda amb `psql` directe.
 >
 > | fase | estat |
 > |---|---|
 > | A · migracions | ✅ aplicades i auditades amb `\d` als 3 esquemes |
-> | B · sembra | ⏸️ **dry-run fet, llista lliurada, esperant OK** |
+> | B · sembra | ✅ **112 files × 3 esquemes = 336** · 2a passada: 0 creats |
 > | C · tests | ✅ `Ran 23 tests · OK` |
-> | D · acta | 🔵 aquesta (es completa amb les xifres de l'apply) |
+> | D · acta | ✅ aquesta |
 
 ---
 
-## 0 · Les quatre coses que val la pena que quedin
+## 0 · Les cinc coses que val la pena que quedin
 
 1. **🚨 El `UNIQUE` que havia d'impedir la costura duplicada no protegia RES**, i el va
    descobrir un test que va donar vermell amb la fila duplicada ja dins. §3.
@@ -33,6 +32,8 @@
 4. **La clausura dels 24 rols aguanta 107× la mostra amb què es va provar.** L'informe la
    va tancar sobre 1.200 patrons; sobre els 128.974 del corpus segueixen sent exactament
    24, ni un més. §5.
+5. **🚨 El recompte de guarda va destapar que jo havia EDITAT un seed i mai EXECUTAT-lo.**
+   El mapa GC→FTT havia entrat apuntant a tres slugs que a staging no existien. §2.2.
 
 ---
 
@@ -98,22 +99,90 @@ trobarà. Per això té un test propi (§7), i per això queda escrit aquí.
 
 ---
 
-## 2 · Fase B · Què s'escriuria (ATURAT)
+## 2 · Fase B · La sembra, aplicada
 
-| taula | files | origen |
+### 2.1 El recompte de guarda, amb `psql` directe i no per l'ORM
+
+```
+ esquema | edgerole | landmarkrole | seampairtemplate | gcpiecerolemap | gtiedgeprofile | total
+---------+----------+--------------+------------------+----------------+----------------+-------
+ fhort   |       27 |            8 |               53 |             24 |              0 |   112
+ los     |       27 |            8 |               53 |             24 |              0 |   112
+ public  |       27 |            8 |               53 |             24 |              0 |   112
+```
+
+**112 × 3 = 336 files.** Segona passada: **0 creats · tot actualitzat** als tres esquemes.
+`pom_patternpiecerole`: **30 → 33** (els tres slugs de D6).
+
+L'esmena de l'Agus, verificada a la fila:
+
+```
+underarm_point | Punt de sota-braç | Punto de axila
+```
+
+### 2.2 🚨 El guard va destapar un seed EDITAT i mai EXECUTAT
+
+El recompte de guarda va tornar `rols_de_peca=30 · slugs_D6=0`. **Jo havia afegit `pant`,
+`hood` i `godet_insert` a la llista de `seed_pattern_piece_roles` i no havia corregut mai
+la comanda contra staging.** El mapa GC→FTT ja hi era, apuntant a tres slugs morts.
+
+I el pitjor no és el forat: **és que res no el veia.**
+
+| control | per què no cantava |
+|---|---|
+| `manage.py check` | és de models, no de dades |
+| els 23 tests | `MapaGCTest.setUp` **sembra els rols**, o sigui que a la suite el catàleg tancava sempre |
+| les migracions | la sembra no és una migració, a posta |
+| `\d` | no hi ha FK: els slugs són el contracte (llei G9), no claus foranes |
+
+Tancat amb `seed_pattern_piece_roles` (3 creats × 3 esquemes) **i amb un guard permanent**:
+`guarda_tancament()` es corre a cada passada de `seed_semantic_catalog` i comprova que
+cada `ftt_slug` del mapa, cada peça i cada vora de cada plantilla, cada `mates_slug` i
+cada operand de cada `derivation_input` **existeixin de debò**. Provat en VERMELL: esborrant
+`hood` i `shoulder_seam` dins d'un `ROLLBACK` dona 9 forats amb nom i cognoms.
+
+```
+gc_map «hood» -> rol de peça «hood» NO EXISTEIX
+plantilla «[union] back/back.shoulder_seam ↔ front/front.shoulder_seam»
+    -> rol de vora «shoulder_seam» NO EXISTEIX
+```
+
+Verificat després, als tres esquemes: **0 orfes a tot arreu.**
+
+> 🔑 **Un recompte de guarda que només es fa el dia de la sembra no és un guard, és un
+> record.** I un test que sembra les seves pròpies dependències al `setUp` demostra que el
+> CODI tanca, mai que la BD VIVA tanqui. La distància entre les dues coses és exactament on
+> es va amagar aquest forat.
+
+### 2.3 Què hi ha escrit
+
+| taula | files | notes |
 |---|---:|---|
-| `pom_edgerole` | 27 | SEED · `is_system` · 24 anatòmics + 3 estructurals |
-| `pom_landmarkrole` | 8 | SEED · `is_system` · tots `derivable=True` |
-| `pom_seampairtemplate` | 53 | IMPORT · `pendent_revisio=True` · totes amb GTI NULL |
-| `pom_gcpiecerolemap` | 24 | el traductor GarmentCode→FTT |
-| `pom_garmenttypeitemedgeprofile` | **0** | **buida a posta** — feina de la sessió Montse |
+| `pom_edgerole` | 27 | 18 `seam` · 3 `structural` · 3 `finished` · 2 `opening` · 1 `internal` · **15 polisèmiques** (`needs_piece_role`) · 4 sense parella |
+| `pom_landmarkrole` | 8 | tots `derivable=True`, cap `manual` · només `hps` i `shoulder_point` amb evidència (2371/2371) |
+| `pom_seampairtemplate` | 53 | 40 `union` (6 `co_generated`) · 5 `centre` · 4 `dart` · 2 `level_join` · 2 `insert_join` |
+| `pom_gcpiecerolemap` | 24 | → 11 slugs d'FTT |
+| `pom_garmenttypeitemedgeprofile` | **0** | buida a posta — sessió Montse |
 
-**112 files × 3 esquemes.** La llista sencera, fila a fila i amb `source_ref`, és a
-`docs/ordres/SEED_SEMANTIC_CATALOG_DRYRUN_2026-08-26.md`.
+Les freqüències: **51 de 53 plantilles amb costures mesurades, 2 amb ZERO mesurat, cap amb
+NULL i cap sense denominador.** Denominadors entre **7.783** (jumpsuits sols) i **128.974**
+(una cinturilla surt a les cinc categories).
 
-La comanda llegeix `ftt_corpus` **en calent i en read-only** amb dos panys i no un: el rol
-`corpus_ro` (que només té `SELECT`) **i** `conn.set_session(readonly=True)`. El rol el pot
-canviar algú; la connexió no.
+```
+cuff/back.band_attach_upper ↔ pant/front.cuff_line   0 costures · 0 patrons · den 17.130
+back/back.armhole           ↔ sleeve/front.sleeve_cap 0 costures · 0 patrons · den 90.273
+```
+
+Un `source_ref` i un `observed_ref` reals, tal com han quedat a la fila:
+
+```
+GarmentCode@d449629 bodice.py:306; sleeves.py:11-105 · REPORT_GCD_ONTOLOGY_2026-08-25.md §2.4
+
+ftt_corpus@2026-08-26 (128.974 designs) · clau=union/back|back<->front|front
+ · den=categories on totes dues peces hi son: [dresses,jumpsuits,upper_garments]
+ · ATENCIO: 2 plantilles comparteixen aquesta xifra -- el corpus no serialitza els
+   noms d'interficie, nomes l'index de vora (informe §4.1)
+```
 
 ---
 
@@ -352,7 +421,15 @@ Dues decisions que hi són a posta:
   necessita per proposar sense inventar — i `co_generated` li diu on pot confiar en comptes
   d'apostar.
 
-## 11 · Fronteres respectades
+## 11 · Fronteres, mesurades i no declarades
 
-Cap escriptura a `ftt_corpus` · cap dada de MODEL tocada · PROD ni s'ha mirat · cap push ·
-`migrate_schemas` sense `--schema` · restart només de `ftt-staging.service`.
+| frontera | com s'ha comprovat |
+|---|---|
+| cap escriptura a `ftt_corpus` | `select count(*) from design` → **128.974**, igual que abans · connexió `readonly=True` sobre el rol `corpus_ro`, que només té `SELECT` |
+| cap dada de MODEL tocada | `patternpiece amb face<>'' = 0` · `patternsegment amb edge_role = 0` · `gtiedgeprofile = 0` |
+| PROD | ni s'ha mirat |
+| push | cap · 7 commits + 3 merges locals a `dev` |
+| `migrate_schemas` | mai amb `--schema` |
+| restart | només `ftt-staging.service`, WorkingDirectory verificat |
+
+Només s'ha escrit CATÀLEG: 336 files de vocabulari + 9 rols de peça (3 × 3 esquemes).

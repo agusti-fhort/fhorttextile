@@ -154,7 +154,7 @@ LANDMARK_ROLES = [
      'Shoulder point', "Punt d'espatlla", 'Punto de hombro'),
     ('underarm_point', Z.ARM, True, LandmarkRole.OP_FAR_ENDPOINT,
      {'a': 'armhole'}, 'lowest_y', None, None, '',
-     'Underarm point', 'Punt de sota-braç', 'Punto de sobaco'),
+     'Underarm point', 'Punt de sota-braç', 'Punto de axila'),
     ('neck_centre_point', Z.NECK, True, LandmarkRole.OP_FAR_ENDPOINT,
      {'a': 'neckline'}, 'away_from:hps', None, None, '',
      'Neck centre point', "Punt central d'escot", 'Punto central de escote'),
@@ -677,6 +677,49 @@ def sembra(schema: str, cens: dict | None, meta: dict, dry_run: bool = False) ->
     return r
 
 
+def guarda_tancament(schema: str) -> list:
+    """El catàleg ha de TANCAR sobre si mateix. -> llista de forats, buida si tot va bé.
+
+    🚨 Existeix perquè el forat va passar de debò (F3, 26/08): el mapa GC→FTT es va sembrar
+    apuntant a `pant`, `hood` i `godet_insert`, i **aquells tres slugs no eren a staging** —
+    el seed de `PatternPieceRole` s'havia EDITAT i mai EXECUTAT. Cap `check`, cap test i cap
+    migració no ho veien: els tests sembren els rols al `setUp`, o sigui que a la suite el
+    catàleg tancava i a la BD viva no.
+
+    **Un recompte de guarda que només es fa el dia de la sembra no és un guard, és un
+    record.** Aquest es corre sol a cada passada i crida fort si troba un slug mort.
+    """
+    from fhort.pom.models import PatternPieceRole
+
+    forats = []
+    with schema_context(schema):
+        peces = set(PatternPieceRole.objects.values_list('slug', flat=True))
+        vores = set(EdgeRole.objects.values_list('slug', flat=True))
+        for m in GCPieceRoleMap.objects.all():
+            if m.ftt_slug not in peces:
+                forats.append('gc_map «{}» -> rol de peça «{}» NO EXISTEIX'.format(
+                    m.gc_role, m.ftt_slug))
+        for t in SeamPairTemplate.objects.all():
+            for slug in (t.piece_role_a_slug, t.piece_role_b_slug):
+                if slug not in peces:
+                    forats.append('plantilla «{}» -> rol de peça «{}» NO EXISTEIX'.format(
+                        t, slug))
+            for slug in (t.edge_role_a_slug, t.edge_role_b_slug):
+                if slug not in vores:
+                    forats.append('plantilla «{}» -> rol de vora «{}» NO EXISTEIX'.format(
+                        t, slug))
+        for r in EdgeRole.objects.exclude(mates_slug=''):
+            if r.mates_slug not in vores:
+                forats.append('vora «{}» -> mates «{}» NO EXISTEIX'.format(
+                    r.slug, r.mates_slug))
+        for l in LandmarkRole.objects.all():
+            for operand in l.derivation_input.values():
+                if operand not in vores:
+                    forats.append('punt «{}» -> opera sobre la vora «{}», que NO EXISTEIX'
+                                  .format(l.slug, operand))
+    return forats
+
+
 def _dry(model, camp: str, claus: list) -> list:
     existents = set(model.objects.values_list(camp, flat=True))
     nous = [k for k in claus if k not in existents]
@@ -742,6 +785,24 @@ class Command(BaseCommand):
                 self.stdout.write(
                     '      {:<16} creats: {:>3} · actualitzats: {:>3} · total ara: {:>3}'
                     .format(taula, creats, actualitzats, totals[taula]))
+
+        if not dry:
+            # El recompte de guarda, cada passada i no només el dia de la sembra.
+            forats = []
+            for sch in schemas:
+                forats += ['[{}] {}'.format(sch, f) for f in guarda_tancament(sch)]
+            if forats:
+                self.stdout.write(self.style.ERROR(
+                    '\nCATALEG OBERT: {} referencia/es morta/es. La sembra ha escrit, '
+                    'pero el cataleg NO tanca sobre si mateix.'.format(len(forats))))
+                for f in forats[:20]:
+                    self.stdout.write(self.style.ERROR('      ' + f))
+                if len(forats) > 20:
+                    self.stdout.write(self.style.ERROR(
+                        '      ... i {} mes'.format(len(forats) - 20)))
+                self.stdout.write(self.style.WARNING(
+                    '  Probablement falta: python manage.py seed_pattern_piece_roles'))
+                return
 
         if not dry:
             self.stdout.write(self.style.SUCCESS(

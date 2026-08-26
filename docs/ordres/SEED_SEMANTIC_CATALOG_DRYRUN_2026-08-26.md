@@ -147,7 +147,7 @@ una evidencia que no tenen.
 |---|---|---|---|---|---|---|---|---|---|---|
 | 1 | `hps` | shoulder | SI | shared_endpoint | neckline + shoulder_seam | -- | 2371/2371 | High point shoulder | Punt alt d'espatlla | Punto alto de hombro |
 | 2 | `shoulder_point` | shoulder | SI | shared_endpoint | shoulder_seam + armhole | -- | 2371/2371 | Shoulder point | Punt d'espatlla | Punto de hombro |
-| 3 | `underarm_point` | arm | SI | far_endpoint | armhole | lowest_y | NO MESURADA | Underarm point | Punt de sota-braç | Punto de sobaco |
+| 3 | `underarm_point` | arm | SI | far_endpoint | armhole | lowest_y | NO MESURADA | Underarm point | Punt de sota-braç | Punto de axila |
 | 4 | `neck_centre_point` | neck | SI | far_endpoint | neckline | away_from:hps | NO MESURADA | Neck centre point | Punt central d'escot | Punto central de escote |
 | 5 | `waist_side_point` | waist | SI | shared_endpoint | side_seam + waistline | -- | NO MESURADA | Waist side point | Punt de cintura al costat | Punto de cintura en el costado |
 | 6 | `hem_side_point` | any | SI | shared_endpoint | side_seam + hem | -- | NO MESURADA | Hem side point | Punt de baix al costat | Punto de bajo en el costado |
