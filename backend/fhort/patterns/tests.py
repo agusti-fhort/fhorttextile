@@ -2407,11 +2407,16 @@ class CaigudaOrtogonalAPITest(PatternsAPITestBase):
         self.assertEqual(resp.status_code, 200, resp.data)
 
         per_codi = {m['codi']: m for m in resp.data}
-        self.assertEqual(set(per_codi), {'recta', 'vora', 'ortogonal'})
+        # `projeccio` és el quart mètode des de 3f81313c: el vocabulari el serveix com
+        # els altres tres, i aquest test diu la gramàtica SENCERA —o sigui que l'ha de
+        # cobrir també, no només tolerar-lo.
+        self.assertEqual(set(per_codi), {'recta', 'vora', 'ortogonal', 'projeccio'})
         self.assertEqual(per_codi['recta']['ancores'], ['a', 'b'])
         self.assertEqual(per_codi['vora']['ancores'], ['a', 'b'])
         self.assertEqual(per_codi['ortogonal']['ancores'], ['ref_a', 'ref_b', 'p'])
+        self.assertEqual(per_codi['projeccio']['ancores'], ['a', 'b'])
         self.assertEqual(per_codi['ortogonal']['mode'], 'ortogonal')
+        self.assertEqual(per_codi['projeccio']['mode'], 'projeccio')
         self.assertEqual(per_codi['recta']['mode'], 'points')
 
     def test_el_vocabulari_i_els_choices_no_poden_divergir(self):
