@@ -1,6 +1,10 @@
 """INSTÀNCIES DE POSICIÓ v2 — la posició passa a tenir DOS EIXOS (Agus, 22-23/08).
 
 lateral (left · right) i CARA (front · back). Dins d'un eix, EXCLOENTS; entre eixos,
+⚠️ RE-ACOTAT EL 26/08 (CODA T3): aquells dos sub-eixos són ara SIS FAMÍLIES —peça · banda ·
+verticalitat · costura · línia · estat— i cap slug es queda orfe. El que aquest fitxer prova
+segueix essent el mateix mecanisme; el que ha canviat és la TAXONOMIA que hi entra. Els vuit
+tests que deien la llei vella s'han re-acotat i queden marcats amb «RE-ACOTAT».
 COMBINABLES: `left`+`back` existeix, `left`+`right` i `front`+`back` no.
 
 El sufix `B` era de `bottom` i el vol `back`: per això el tram comença rebatejant
@@ -156,20 +160,32 @@ class ExclusioPerEixTest(_Base):
 
     # ── el que NO pot ser ────────────────────────────────────────────────────────────────
     def test_left_i_right_no(self):
+        # RE-ACOTAT (CODA T3, 26/08): la família es diu `BANDA`, no `LATERAL`.
         self.assertIn('left', self.mal('left-right'))
-        self.assertIn('LATERAL', self.mal('left-right'))
+        self.assertIn('BANDA', self.mal('left-right'))
 
     def test_front_i_back_no(self):
-        self.assertIn('CARA', self.mal('front-back'))
+        # RE-ACOTAT: `PECA`, no `CARA`.
+        self.assertIn('PECA', self.mal('front-back'))
 
     def test_dos_estats_no(self):
         self.assertTrue(self.mal('relaxed-extended'))
 
-    def test_una_posicio_sense_subeix_no_es_combina_amb_cap_altra(self):
-        """`top`, `cf`, `side`… es comporten com sempre: excloents amb tot el seu eix."""
-        self.assertTrue(self.mal('top-left'))
-        self.assertTrue(self.mal('cf-back'))
-        self.assertTrue(self.mal('top-bottom'))
+    def test_les_posicions_que_NO_tenien_subeix_ara_tenen_FAMILIA(self):
+        """🚨 LLEI RETIRADA (CODA T3, 26/08) — i és el símptoma de la formació.
+
+        Deia: «`top`, `cf`, `side`… es comporten com sempre: excloents amb tot el seu eix», i
+        per això prémer «Top» apagava «Left». Des de la taxonomia de famílies **cap slug és
+        orfe**: `top`/`bottom` són VERTICALITAT, `cf`/`cb` LÍNIA, `side`/`waistband_seam`
+        COSTURA. Excloents dins seu; combinables amb tota la resta.
+        """
+        self.assertEqual(self.mal('top-left'), '')
+        self.assertEqual(self.mal('cf-back'), '')      # la LÍNIA no és la PEÇA
+        self.assertEqual(self.mal('side-top'), '')
+        # …però dins de la seva família segueixen essent excloents, i ARA es diu qui són.
+        self.assertIn('VERTICALITAT', self.mal('top-bottom'))
+        self.assertIn('LINIA', self.mal('cf-cb'))
+        self.assertIn('COSTURA', self.mal('side-waistband_seam'))
 
     # ── el que SÍ que pot ser ────────────────────────────────────────────────────────────
     def test_la_combinada_legitima_back_left(self):
@@ -202,7 +218,7 @@ class PortesDeLaCombinacioTest(_Base):
         s = GarmentPOMMapSerializer()
         with self.assertRaises(Exception) as cm:
             s.validate_instancia('left-right')
-        self.assertIn('LATERAL', str(cm.exception))
+        self.assertIn('BANDA', str(cm.exception))
 
     def test_el_serializer_de_la_pertinenca_deixa_passar_la_legitima(self):
         from fhort.pom.serializers import GarmentPOMMapSerializer
@@ -225,7 +241,7 @@ class PortesDeLaCombinacioTest(_Base):
         ser = self._serializer('left-right')
         self.assertFalse(ser.is_valid())
         self.assertIn('instancia', ser.errors)
-        self.assertIn('LATERAL', str(ser.errors['instancia']))
+        self.assertIn('BANDA', str(ser.errors['instancia']))
 
     def test_la_porta_de_mesures_accepta_la_combinada_legitima(self):
         ser = self._serializer('back-left')
@@ -252,16 +268,31 @@ class SufixCompostTest(_Base):
             {s: self.sufix(s) for s in ('front', 'back', 'left', 'right')},
             {'front': 'F', 'back': 'B', 'left': 'L', 'right': 'R'})
 
-    def test_l_ordre_de_composicio_es_cara_i_despres_lateral(self):
-        self.assertEqual([clau for clau, _ in I.SUBEIXOS], ['CARA', 'LATERAL'])
+    def test_l_ordre_de_composicio_es_el_de_la_LLEI(self):
+        # RE-ACOTAT (CODA T3): eren dues famílies; ara en són SIS i l'ordre és el d'Agus.
+        # El resultat de `back-left` no canvia — la peça segueix davant de la banda.
+        self.assertEqual([clau for clau, _ in I.SUBEIXOS],
+                         ['PECA', 'BANDA', 'VERTICALITAT', 'COSTURA', 'LINIA', 'ESTAT'])
 
-    def test_el_subeix_de_cada_slug(self):
-        self.assertEqual(I.subeix_de('front'), 'CARA')
-        self.assertEqual(I.subeix_de('back'), 'CARA')
-        self.assertEqual(I.subeix_de('left'), 'LATERAL')
-        self.assertEqual(I.subeix_de('right'), 'LATERAL')
-        for sense in ('top', 'bottom', 'cf', 'cb', 'side', 'waistband_seam', 'relaxed'):
-            self.assertEqual(I.subeix_de(sense), '', sense)
+    def test_la_familia_de_cada_slug(self):
+        # 🚨 CAP SLUG ORFE. Set d'aquests tornaven `''` i per això s'excloïen amb tot.
+        self.assertEqual(
+            {s: I.subeix_de(s) for s in ('front', 'back', 'left', 'right', 'top', 'bottom',
+                                         'cf', 'cb', 'side', 'waistband_seam',
+                                         'relaxed', 'extended')},
+            {'front': 'PECA', 'back': 'PECA', 'left': 'BANDA', 'right': 'BANDA',
+             'top': 'VERTICALITAT', 'bottom': 'VERTICALITAT', 'cf': 'LINIA', 'cb': 'LINIA',
+             'side': 'COSTURA', 'waistband_seam': 'COSTURA',
+             'relaxed': 'ESTAT', 'extended': 'ESTAT'})
+
+    def test_els_miralls_es_declaren_i_la_COSTURA_no_en_te(self):
+        # Dada per al dia que el motor demani girar una peça. Aquí no es gira res.
+        for a, b in (('front', 'back'), ('left', 'right'), ('top', 'bottom'),
+                     ('cf', 'cb'), ('relaxed', 'extended')):
+            self.assertEqual(I.mirall_de(a), b)
+            self.assertEqual(I.mirall_de(b), a)
+        self.assertEqual(I.mirall_de('side'), '')
+        self.assertEqual(I.mirall_de('waistband_seam'), '')
 
     def test_el_diccionari_publica_l_estructura(self):
         """El front no se l'ha d'escriure: `subeix` per fila i l'ordre dels sub-eixos."""
@@ -274,10 +305,18 @@ class SufixCompostTest(_Base):
         r = c.get('/api/v1/mesures/diccionari/')
 
         self.assertEqual(r.status_code, 200, r.data)
-        self.assertEqual(r.data['subeixos'], ['CARA', 'LATERAL'])
+        # RE-ACOTAT (CODA T3, 26/08): SIS famílies en ordre canònic, i el front en pren
+        # l'ordre de composició (`pesCanonic` llegeix `subeixos`, no les claus d'`instancies`).
+        self.assertEqual(r.data['subeixos'],
+                         ['PECA', 'BANDA', 'VERTICALITAT', 'COSTURA', 'LINIA', 'ESTAT'])
         per_slug = {f['slug']: f for f in r.data['instancies']['POSICIO']}
-        self.assertEqual(per_slug['back']['subeix'], 'CARA')
+        self.assertEqual(per_slug['back']['subeix'], 'PECA')
         self.assertEqual(per_slug['back']['sufix'], 'B')
-        self.assertEqual(per_slug['left']['subeix'], 'LATERAL')
-        self.assertEqual(per_slug['bottom']['subeix'], '')      # excloent amb tot el seu eix
+        self.assertEqual(per_slug['left']['subeix'], 'BANDA')
+        # 🚨 `bottom` publicava `''` i per això s'excloïa amb tot el seu eix: ara té família.
+        self.assertEqual(per_slug['bottom']['subeix'], 'VERTICALITAT')
         self.assertEqual(per_slug['bottom']['sufix'], 'BM')
+        # I CAP fila surt publicada sense família.
+        for eix, files in r.data['instancies'].items():
+            for f in files:
+                self.assertTrue(f['subeix'], f"{eix}/{f['slug']} surt sense família")
