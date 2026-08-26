@@ -146,3 +146,55 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# The calibration that actually decides the threshold
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def tenant_exam(k=10, exclude_labels=('837',)):
+    """Every exam piece against the TENANT bank. → rows of (label, block, truth, …).
+
+    🚨 **The rows that decide the threshold are the ones whose truth is NOT in the bank.**
+    A recogniser that scores well on pieces it has seen before is not the question; the
+    question is what it says about a yoke when it has never been shown a yoke. Every one of
+    those is a chance to be confidently wrong, and the threshold is set by the loudest of
+    them.
+
+    `exclude_labels` keeps 837 out by default: its pieces ARE the bank, so measuring on
+    them measures nothing.
+    """
+    import django
+    from django_tenants.utils import schema_context
+
+    from fhort.patterns.recognition import bank as B
+
+    with schema_context('fhort'):
+        tb = B.build_tenant_bank()
+        bank_slugs = sorted({r['ftt_slug'] for r in tb.rows})
+        print('tenant bank: {} pieces, roles {}\n'.format(len(tb), bank_slugs))
+        out = []
+        for label, path in EXAM:
+            if label in exclude_labels or not os.path.exists(path):
+                continue
+            doc = AAMAReader().read(open(path, 'rb').read())
+            for piece in (unfold_piece(p) for p in doc.pieces):
+                P, ne, nc, src = outline_and_counts(piece, 'sew')
+                if P is None:
+                    continue
+                f = features_from_outline(P, ne, nc, mirror=False)
+                nb = tb.neighbours(f['descriptor'], k=k)
+                if not nb:
+                    continue
+                best = nb[0]
+                other = next((n for n in nb if n['ftt_slug'] != best['ftt_slug']), None)
+                d1 = best['dist']
+                d2 = other['dist'] if other else float('inf')
+                margin = 1.0 if d2 == float('inf') else (d2 - d1) / (d2 + d1)
+                gt = truth_of(piece.nom_block)
+                out.append({
+                    'label': label, 'block': piece.nom_block, 'truth': gt,
+                    'proposed': best['ftt_slug'], 'd1': d1, 'margin': margin,
+                    'reachable': gt in bank_slugs,
+                })
+        return out, bank_slugs

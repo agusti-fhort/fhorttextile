@@ -142,11 +142,18 @@ FTT_RECOGNITION_CACHE_DIR = os.environ.get(
 FTT_CORPUS_CONNINFO_FILE = os.environ.get(
     'FTT_CORPUS_CONNINFO_FILE', '/root/gcd_corpus/corpus_ro.pgpass')
 #: 🚨 El llindar de SILENCI (N4). Per sota d'això el reconeixedor **no proposa res**.
-#: Calibrat a l'examen REAL i no al laboratori: el valor és el més baix que manté ZERO
-#: propostes errònies sobre 837/TATE/CALLIE/MEREDITH. Vegeu REPORT_F41 §D3.
-FTT_RECOGNITION_MIN_SCORE = float(os.environ.get('FTT_RECOGNITION_MIN_SCORE', 0.55))
-#: Veïns que es demanen al banc del corpus per peça.
-FTT_RECOGNITION_K = int(os.environ.get('FTT_RECOGNITION_K', 200))
+#: **Calibrat a l'examen REAL, no al laboratori** (45 peces de TATE/CALLIE/MEREDITH/AMELIA
+#: + els dos casos de re-import del 837): tota peça la veritat de la qual NO és al banc
+#: surt amb marge ≤ 0,099, i tota proposta errònia ≤ 0,058; les propostes bones van de
+#: 0,255 a 1,000. 0,20 és el doble de l'errada més sorollosa mesurada i encara per sota
+#: de la proposta bona més fluixa. Vegeu REPORT_F41 §D3 i `recognizer.SCORE_MIN`.
+FTT_RECOGNITION_MIN_SCORE = float(os.environ.get('FTT_RECOGNITION_MIN_SCORE', 0.20))
+#: Veïns que es demanen al banc per peça.
+FTT_RECOGNITION_K = int(os.environ.get('FTT_RECOGNITION_K', 10))
+#: 🚨 El banc del CORPUS no proposa. Va treure 4/30 a l'examen real amb sostre de 15/30,
+#: i cap llindar no separa l'encert de l'errada (AUC 0,57/0,67). Queda construït i provat
+#: darrere aquest flag perquè la mesura es pugui discutir, no perquè s'hagi d'engegar.
+FTT_RECOGNITION_USE_CORPUS = os.environ.get('FTT_RECOGNITION_USE_CORPUS', '') == '1'
 
 
 # Anthropic Claude API — usat per extraction_service.py (sprint 6)

@@ -89,6 +89,32 @@ def _rol_niat(rol) -> dict | None:
     }
 
 
+def _proposta(piece):
+    """La proposta del reconeixedor, en la forma que la UI pinta el xip d'evidència.
+
+    Sempre present i sempre amb la mateixa forma, encara que no hi hagi proposta: una UI
+    que ha de distingir «no hi ha camp» de «hi ha camp buit» de «hi ha camp amb null» és
+    una UI que un dia pintarà el verd on tocava el groc.
+
+    `role` és `None` quan el reconeixedor ha CALLAT (N4) — i llavors `score` i `evidence`
+    hi són igualment, perquè «he mirat i no ho sé» és una resposta i vol poder-se explicar.
+    """
+    return {
+        'role': _rol_niat(piece.proposed_role),
+        'face': piece.proposed_face,
+        'score': piece.proposed_score,
+        'evidence': piece.proposed_evidence or {},
+        'at': piece.proposed_at,
+        # 🚨 El senyal que la UI ha de mirar per decidir el COLOR. Confirmat = el verd,
+        # i el verd només el posa un humà. Que això surti del servidor i no es dedueixi
+        # al front és a posta: el color d'un estat no s'endevina a la vista.
+        'is_confirmed': piece.piece_role_id is not None,
+        'matches_confirmed': (
+            piece.piece_role_id is not None
+            and piece.proposed_role_id == piece.piece_role_id),
+    }
+
+
 class PatternPieceSerializer(serializers.ModelSerializer):
     """La peça amb els seus RECOMPTES, no amb els seus milers de punts.
 
@@ -101,6 +127,7 @@ class PatternPieceSerializer(serializers.ModelSerializer):
     bounding_box_mm = serializers.SerializerMethodField()
     total_punts = serializers.SerializerMethodField()
     piece_role = serializers.SerializerMethodField()
+    proposta = serializers.SerializerMethodField()
 
     class Meta:
         model = PatternPiece
@@ -108,14 +135,21 @@ class PatternPieceSerializer(serializers.ModelSerializer):
             'id', 'nom_block', 'rol', 'contorns', 'grain', 'metadata',
             'doblec_original', 'has_sew', 'has_fold', 'unknown_layers',
             'punts_per_capa', 'bounding_box_mm', 'total_punts',
-            # Identitat (I1). Neixen buits i NINGÚ no els escriu encara: qui els sap
-            # omplir és la capa d'identificació. Aquí només es llegeixen.
+            # Identitat (I1). Els escriu la capa d'identificació; aquí només es llegeixen.
             'piece_role', 'nom', 'lateralitat', 'ordinal', 'estat_peca', 'rol_origen',
+            'face',
+            # La PROPOSTA del reconeixedor (F4.1). Camp a part i no barrejat amb
+            # `piece_role`: qui llegeix ha de poder dir sempre si un rol el va decidir
+            # una persona o una màquina.
+            'proposta',
         ]
         read_only_fields = fields
 
     def get_piece_role(self, obj):
         return _rol_niat(obj.piece_role)
+
+    def get_proposta(self, obj):
+        return _proposta(obj)
 
     def get_punts_per_capa(self, obj):
         recompte: dict[str, int] = {}
@@ -270,9 +304,11 @@ class PatternGeometrySerializer(serializers.ModelSerializer):
             'piece_role': _rol_niat(piece.piece_role),
             'nom': piece.nom,
             'lateralitat': piece.lateralitat,
+            'face': piece.face,
             'ordinal': piece.ordinal,
             'estat_peca': piece.estat_peca,
             'rol_origen': piece.rol_origen,
+            'proposta': _proposta(piece),
             'metadata': piece.metadata,
             'boundaries': boundaries,
             'notches': notches,
