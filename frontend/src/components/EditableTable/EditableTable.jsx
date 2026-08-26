@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { esNumeroEnCurs, parseNum } from '../../utils/num'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import {
@@ -276,9 +277,10 @@ export default function EditableTable({
       const fila = localRows.find(r => r.id === rowId)
       if (!fila) return
       if (col === 'base_value_cm') {
-        const cru = String(value ?? '').replace(',', '.').trim()
-        if (cru !== '' && Number.isNaN(parseFloat(cru))) return
-        const net = cru === '' ? null : parseFloat(cru)
+        // `parseNum` (política única, R1): el buit és `null` —esborrar una mesura és un
+        // gest— i la brossa no desa. Era `parseFloat`, que de «12px» en treia 12.
+        const net = parseNum(value)
+        if (net === null && String(value ?? '').trim() !== '') return
         setLocalRows(prev => prev.map(r => (r.id === rowId ? { ...r, base_value_cm: net } : r)))
         marcaDesat(presa.onValor(fila, net)).catch(() => {})
         return
@@ -299,10 +301,9 @@ export default function EditableTable({
       // complir perquè no hi havia manera d'arribar al buit. Un text no numèric tampoc no
       // s'escriu: es queda al buffer de l'input, que el marca en vermell.
       if (col.includes('value')) {
-        const cru = String(value ?? '').replace(',', '.').trim()
-        if (cru === '') return { ...r, [col]: null }
-        const n = parseFloat(cru)
-        return Number.isNaN(n) ? r : { ...r, [col]: n }
+        if (String(value ?? '').trim() === '') return { ...r, [col]: null }
+        const n = parseNum(value)
+        return n === null ? r : { ...r, [col]: n }
       }
       return { ...r, [col]: value }
     }))
@@ -1835,8 +1836,9 @@ function CarrilInput({ value, readOnly, onCommit, registerVal, onNav, hint, onEn
 
   const onChange = (raw) => {
     setTxt(raw)
-    const net = raw.replace(',', '.').trim()
-    if (net !== '' && Number.isNaN(parseFloat(net))) { setBad(true); return }
+    // `esNumeroEnCurs` en comptes de parsejar per marcar el vermell: «1.» i «1,» són estats
+    // d'edició LEGÍTIMS i no s'han de pintar d'error mentre s'hi escriu (R1).
+    if (!esNumeroEnCurs(raw)) { setBad(true); return }
     setBad(false)
     onCommit(raw)
   }

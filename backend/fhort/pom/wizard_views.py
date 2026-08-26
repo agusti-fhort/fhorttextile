@@ -837,7 +837,7 @@ def create_model_pom_view(request, model_id):
     from django.db import transaction
     from fhort.models_app.models import Model
     from fhort.pom.models import CustomerPOMAlias, POMMaster
-    from fhort.pom.nomenclatura import colisio_de_codi
+    from fhort.pom.nomenclatura import colisio_de_codi, frase_de_colisio, nom_client
 
     nom = (request.data.get('nom') or '').strip()
     codi = (request.data.get('nomenclatura') or '').strip()
@@ -859,14 +859,17 @@ def create_model_pom_view(request, model_id):
     # «U1 hauria estat rebutjat: U1 és BUTTON SPACING al catàleg Brownie». 409 i no 400 perquè
     # no és un camp mal escrit: és un conflicte amb una dada que ja hi és, i el que la persona
     # necessita saber és AMB QUÈ xoca per triar un altre codi.
-    xoc, etiqueta = colisio_de_codi(customer_id, codi)
+    xoc, etiqueta, context = colisio_de_codi(customer_id, codi)
     if xoc is not None:
         return Response({
             'codi': 'NOMENCLATURA_OCUPADA',
             'nomenclatura': codi,
             'pom_id': xoc.pk,
             'pom_nom': etiqueta,
-            'message': f'«{codi}» ja és {etiqueta} al catàleg d\'aquest client.',
+            # El context sencer de l'àlies que reserva el codi (F3): d'on ve, si està pendent
+            # de revisió i amb quina caixa el va escriure el client. Ja el sabíem; ara es diu.
+            'colisio': context,
+            'message': frase_de_colisio(codi, context, nom_client(customer_id)),
         }, status=409)
 
     # ── EL CODI DE LA COTA VA NET, I SI ESTÀ OCUPAT ES DIU ─────────────────────────────────
@@ -889,7 +892,11 @@ def create_model_pom_view(request, model_id):
     codi_casa = codi[:30]
     ja_hi_es = POMMaster.objects.filter(codi_client__iexact=codi_casa).first()
     if ja_hi_es is not None:
-        etiqueta_casa = (ja_hi_es.nom_client or codi_casa).strip()
+        # 🚨 Era `(ja_hi_es.nom_client or codi_casa)`, i `nom_client` és buit a 103 dels 144
+        # POMs actius de `fhort`: el missatge es llegia «BT ja és BT al catàleg», que no diu
+        # res. `noms_de` és la font única i cau al canònic del global quan el tenant no bateja.
+        _noms_casa = noms_de(ja_hi_es)
+        etiqueta_casa = (_noms_casa['nom_en'] or _noms_casa['nom_ca'] or codi_casa).strip()
         return Response({
             'codi': 'CODI_CASA_OCUPAT',
             'nomenclatura': codi,

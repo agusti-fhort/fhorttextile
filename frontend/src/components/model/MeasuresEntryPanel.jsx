@@ -72,6 +72,10 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
   // de cap sembra (primer cop que veiem files de taula-mesures). `confirmRef` desa la promesa que
   // savePom torna a EditableTable: resol en confirmar+desar, rebutja en cancel·lar (no marca "desat").
   const [pomConfirmOpen, setPomConfirmOpen] = useState(false)
+  // F3 · LES COL·LISIONS DE NOMENCLATURA, DINS DEL MODAL. Abans el refús es aplanava amb
+  // `' · '` a la banda vermella de dalt i el modal es TANCAVA: qui el rebia perdia el context
+  // del gest i l'única acció que li quedava era tornar-hi (tres reintents en viu, 26/08).
+  const [colisions, setColisions] = useState(null)
   const [pomReseed, setPomReseed] = useState(false)
   const pendingPayloadRef = useRef(null)
   const confirmRef = useRef(null)
@@ -248,32 +252,50 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
     setPomReseed(!!hadBaseRef.current)
     confirmRef.current = { resolve, reject }
     setError('')
+    setColisions(null)
     setPomConfirmOpen(true)
   })
 
   const confirmGravarPom = async () => {
     setSavingPom(true)
     setError('')
+    setColisions(null)
     try {
       await models.gravarPom(id, pendingPayloadRef.current)
       setPomConfirmOpen(false)
       confirmRef.current?.resolve()
+      confirmRef.current = null
+      pendingPayloadRef.current = null
       onPomSaved?.()
     } catch (err) {
-      const msg = err?.response?.data?.error || err?.response?.data?.errors?.join?.(' · ')
+      const cos = err?.response?.data || {}
+      // 🔑 UN REFÚS DE NOMENCLATURA NO TANCA EL MODAL. És un conflicte amb una dada que ja hi
+      // és, no una fallada del desat: la persona ha de poder llegir amb què xoca I seguir
+      // tenint al davant el gest que estava fent. La resta d'errors es comporten com sempre.
+      if (cos.codi === 'NOMENCLATURA_OCUPADA' && Array.isArray(cos.colisions)) {
+        setColisions(cos.colisions)
+        setSavingPom(false)
+        return                                  // ni resolem ni rebutgem: el gest segueix obert
+      }
+      const msg = cos.error || cos.errors?.join?.(' · ')
         || t('model_measurements.save_pom_err')
       setError(msg)
       setPomConfirmOpen(false)
       confirmRef.current?.reject(err)
-    } finally {
-      setSavingPom(false)
       confirmRef.current = null
       pendingPayloadRef.current = null
+    } finally {
+      // ⚠️ El `confirmRef`/`pendingPayloadRef` es netegen a CADA SORTIDA menys una: la
+      // col·lisió de nomenclatura, que deixa el gest obert a posta perquè es pugui reintentar
+      // amb el mateix payload sense tornar a muntar-lo. Netejar-los aquí (com abans) buidaria
+      // el que el reintent necessita.
+      setSavingPom(false)
     }
   }
 
   const cancelGravarPom = () => {
     setPomConfirmOpen(false)
+    setColisions(null)
     confirmRef.current?.reject(new Error('cancelled'))
     confirmRef.current = null
     pendingPayloadRef.current = null
@@ -386,6 +408,36 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
             {pomReseed && <i className="ti ti-alert-triangle" style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }} />}
             {pomReseed ? t('model_measurements.gravar_confirm_reseed') : t('model_measurements.gravar_confirm_simple')}
           </p>
+          {/* F3 · EL REFÚS, DINS DEL MODAL I SENCER. Una fila per col·lisió: què xoca, amb
+              quin POM (codi + nom RESOLT), d'on ve l'àlies i si està pendent de revisió — i la
+              frase amb la sortida, que és la mateixa que serveix el 409 de l'alta de POM.
+              Res d'aplanar amb `' · '`: aquí cada col·lisió és una fila que es pot llegir. */}
+          {colisions?.length > 0 && (
+            <div style={{ marginTop: 14, background: 'var(--err-bg)', border: '1px solid var(--err)',
+                          borderRadius: 8, padding: '10px 12px' }}>
+              <div style={{ fontSize: 'var(--fs-label)', fontWeight: 600, textTransform: 'uppercase',
+                            letterSpacing: '0.04em', color: 'var(--err)', marginBottom: 6 }}>
+                {t('model_measurements.colisio_title', { count: colisions.length })}
+              </div>
+              {colisions.map((c, i) => (
+                <div key={`${c.pom_id}-${i}`}
+                     style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)',
+                              paddingTop: i ? 8 : 0, marginTop: i ? 8 : 0,
+                              borderTop: i ? '1px solid var(--err)' : 'none' }}>
+                  <div><b>{c.client_code}</b>{' → '}{c.pom_nom || c.pom_codi}
+                    {c.pom_codi && c.pom_codi !== c.client_code && (
+                      <span style={{ color: 'var(--text-muted)' }}> ({c.pom_codi})</span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 2 }}>
+                    {c.origen_llegible}
+                    {c.pendent_revisio && ` · ${t('model_measurements.colisio_pendent')}`}
+                  </div>
+                  <div style={{ marginTop: 4 }}>{c.message}</div>
+                </div>
+              ))}
+            </div>
+          )}
         </Modal>
       )}
 

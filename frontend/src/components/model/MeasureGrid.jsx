@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { parseNum } from '../../utils/num'
 import { useTranslation } from 'react-i18next'
 
 import BateigInput from './BateigInput'
@@ -47,10 +48,26 @@ const cellTd = (filled, groupStart, groupEnd) => ({
   borderRight: groupEnd ? '1px solid var(--line)' : undefined,
 })
 
-// Parse numèric tolerant amb la COMA decimal (60,5 == 60.5). Buit → null; no-numèric → NaN.
-// L'input editable és type=text inputMode=decimal perquè la coma s'hi pugui escriure (type=number la
-// rebutja segons locale abans d'arribar a onChange).
-const toNum = (v) => (v === '' || v == null) ? null : Number(String(v).replace(',', '.'))
+// 🔑 LA POLÍTICA DE NÚMEROS DE LA CASA JA NO ES DECLARA AQUÍ: ÉS `utils/num.js` (R1+R2,
+// 26/08). Aquest fitxer era la implementació de REFERÈNCIA —el comentari de sota deia la llei
+// i les altres superfícies l'havien de copiar—, i copiar-la és exactament com es va arribar a
+// tenir set `num()` locals dient cadascun la seva. Ara la llei té un sol lloc i aquest fitxer
+// n'és un consumidor més.
+//
+// La llei, que no canvia: l'input editable és `type=text inputMode=decimal` perquè la coma
+// s'hi pugui escriure (`type=number` la rebutja segons locale abans d'arribar a `onChange`), el
+// text cru viu a l'estat mentre s'escriu i el número se'n deriva al commit.
+//
+// ⚠️ UN MATÍS QUE ES CONSERVA EXPLÍCITAMENT. `toNum` tornava `null` per al BUIT i `NaN` per a
+// la brossa, i dos llocs es recolzaven en aquella diferència (la tolerància i el commit).
+// `parseNum` torna `null` als dos casos —que és la resposta correcta a «quin número és
+// això?»—, o sigui que allà on la diferència importa ara es diu amb una condició escrita i no
+// amb la forma del NaN. Buit i brossa NO són el mateix: el buit ESBORRA la mesura, la brossa
+// no ha de desar res.
+const toNum = parseNum
+
+/** `true` si hi ha text i no és cap número: entrada a mitges o brossa (mai el buit). */
+const esBrossa = (v) => String(v ?? '').trim() !== '' && parseNum(v) === null
 
 const isModified = (value, baseValue) => value !== '' && value != null && baseValue != null
   && toNum(value) !== Number(baseValue)
@@ -85,6 +102,10 @@ const activeRed = (value, active) => {
   if (value === '' || value == null) return false
   if (active.tol && active.baseValue != null) {
     const v = toNum(value)
+    // `v === null` abans queia sol perquè `toNum` en deia `NaN` i tota comparació amb NaN és
+    // falsa. Amb `null`, `null < x` es llegiria com `0 < x` i una entrada a mitges es pintaria
+    // FORA DE TOLERÀNCIA sense ser-ho. Es diu explícitament.
+    if (v === null) return false
     return v < active.baseValue - active.tol.minus || v > active.baseValue + active.tol.plus
   }
   return isModified(value, active.baseValue)
@@ -630,7 +651,10 @@ export default function MeasureGrid({
   const commitFor = useCallback((lineId) => (raw) => {
     if (!onSave) return Promise.resolve()
     const num = toNum(raw)
-    if (Number.isNaN(num)) return Promise.resolve()   // entrada incompleta/no-numèrica → no desa
+    // Entrada incompleta o no-numèrica → no desa. El BUIT sí que passa (i desa `null`): esborrar
+    // una mesura és un gest legítim i no es pot confondre amb teclejar brossa. Abans els
+    // distingia la forma del retorn (`NaN` vs `null`); ara ho fa aquesta condició.
+    if (esBrossa(raw)) return Promise.resolve()
     return Promise.resolve(onSave(lineId, num)).then(res => {
       const propagated = res && res.data ? res.data.linies || res.data.lines : (res && (res.linies || res.lines))
       if (Array.isArray(propagated)) {

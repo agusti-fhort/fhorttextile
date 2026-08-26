@@ -11,6 +11,7 @@ import {
   construeixTaula, teValorABase,
 } from './taulaMesures'
 import { sufixIdentitat } from '../../utils/capaInstancia'
+import { nomsDePom } from '../../utils/nomenclaturaPom'
 import ColumnatIdentitat from '../instancia/ColumnatIdentitat'
 import { agrupaPerPeca, capaEfectiva, estatDeLaPeca, filaAmbIdentitat, identitatEfectiva,
          instanciaEfectiva, pecaEfectiva, pecaVisible } from './filaPas2'
@@ -153,10 +154,34 @@ function PomCatalegPicker({ modelId, onPick, autoFocus }) {
                           textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               {retol}{comptes ? ` · ${comptes.mostrats}/${comptes.count}` : ''}
             </div>
-            {files.filter(f => f.seccio === clau).map(c => (
+            {files.filter(f => f.seccio === clau).map(c => {
+              // 🔑 F1 · NOMENCLATURA A DUES LÍNIES, la llei de la casa. Això pintava
+              // `{' · '}{c.nom_client}` —el camp CRU del tenant—, i és buit a 103 dels 144
+              // POMs actius: d'aquí les files «B · » de la formació. El nom hi era (l'endpoint
+              // ja serveix `nom_ca`/`nom_en` RESOLTS des del 22/08), només no es llegia.
+              //
+              // El resolutor és `nomsDePom`, el mateix que la fitxa i la taula de mesures: es
+              // demana per un sol lloc perquè el mateix POM no es digui de dues maneres a dues
+              // pantalles (la lliçó de `nomenclaturaPom.js`).
+              //
+              // A la secció del CLIENT la nomenclatura que mana és la SEVA —és la que porta el
+              // document escrit—, i el canònic de la casa queda a la segona línia; a la de la
+              // casa, la de la casa. Per això cada secció alimenta el resolutor amb els seus
+              // camps i no hi ha una sola crida per a totes dues.
+              const noms = clau === 'client'
+                ? nomsDePom({ nom_en: c.client_name_en, nom_ca: c.client_name_local,
+                              nom_client: c.nom_en || c.nom_client })
+                : nomsDePom({ nom_en: c.nom_en, nom_ca: c.nom_ca, nom_client: c.nom_client })
+              return (
               <button key={`${clau}-${c.id}`} type="button"
                 onClick={() => onPick({ id: c.id, codi_client: c.codi_client,
-                                        nom_client: c.nom_client })}
+                                        // Els noms RESOLTS viatgen amb la tria: aquí es
+                                        // perdien, i el rètol «Es vincularà a…» tornava a
+                                        // quedar-se amb el codi pelat encara que la llista
+                                        // acabés de pintar-lo bé.
+                                        nom_client: c.nom_client,
+                                        nom_en: c.nom_en, nom_ca: c.nom_ca,
+                                        nom_resolt: noms.canonic })}
                 style={{ display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer',
                          padding: '6px 10px', fontSize: 'var(--fs-body)', fontFamily: 'inherit',
                          background: 'transparent', border: 'none',
@@ -164,12 +189,20 @@ function PomCatalegPicker({ modelId, onPick, autoFocus }) {
                 {/* A la secció del CLIENT mana el seu codi —és el que la fitxa porta escrit— i
                     el de la casa queda al costat. A la de la casa, el de la casa. */}
                 <b>{clau === 'client' && c.client_code ? c.client_code : c.codi_client}</b>
-                {' · '}{c.nom_client}
+                {noms.canonic ? <>{' · '}{noms.canonic}</> : null}
                 {clau === 'client' && c.client_code && c.client_code !== c.codi_client && (
                   <span style={{ color: 'var(--text-muted)' }}> → {c.codi_client}</span>
                 )}
+                {/* LA SEGONA LÍNIA només si diu una cosa diferent (`nomsDePom` ja hi torna
+                    `''` quan repetiria la primera): un gris que repeteix és soroll. */}
+                {noms.local && (
+                  <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>
+                    {noms.local}
+                  </div>
+                )}
               </button>
-            ))}
+              )
+            })}
           </Fragment>
         ))}
       </div>
@@ -252,7 +285,10 @@ function ResolPanel({ fila, conflicte, res, modelId, crea, setCrea, onVincula, o
               <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px',
                                        borderTop: i ? `1px solid ${BORDER}` : 'none' }}>
                 <div style={{ flex: 1, fontSize: 'var(--fs-body)' }}>
-                  <b>{c.codi_client}</b> · {c.nom_client}
+                  {/* F1 · el backend serveix `nom_en` RESOLT (`_candidats_de_codi`); abans
+                      aquí hi anava `nom_client` cru i el candidat sortia amb el codi pelat,
+                      que és justament el que fa impossible triar entre dos candidats. */}
+                  <b>{c.codi_client}</b>{nomsDePom(c).canonic ? ` · ${nomsDePom(c).canonic}` : ''}
                   <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 2 }}>
                     {c.origen_import
                       ? t('import_wizard.resol_origen_import', { origen: c.origen_import })
@@ -282,7 +318,9 @@ function ResolPanel({ fila, conflicte, res, modelId, crea, setCrea, onVincula, o
       <div style={EYEBROW}>{t('import_wizard.resol_cataleg_title')}</div>
       <PomCatalegPicker modelId={modelId} autoFocus={candidats.length === 0}
         onPick={pm => onVincula({ id: pm.id, codi_client: pm.codi_client,
-                                  nom_client: pm.nom_client, actiu: true })} />
+                                  nom_client: pm.nom_client, nom_en: pm.nom_en,
+                                  nom_ca: pm.nom_ca, nom_resolt: pm.nom_resolt,
+                                  actiu: true })} />
 
       <div style={EYEBROW}>{t('import_wizard.resol_crea_title')}</div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end' }}>
@@ -656,8 +694,10 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
   const addPomManual = (pm) => {
     if (pomsExtrets.some(p => p.pom_master_id === pm.id)) { setShowAddPom(false); return }
     setPomsExtrets([...pomsExtrets, {
-      codi_fitxa: '', descripcio: pm.nom_client || '', pom_master_id: pm.id,
-      pom_codi: pm.codi_client, pom_nom: pm.nom_client, match_type: 'manual',
+      codi_fitxa: '', descripcio: pm.nom_resolt || pm.nom_en || pm.nom_client || '',
+      pom_master_id: pm.id,
+      pom_codi: pm.codi_client,
+      pom_nom: pm.nom_resolt || pm.nom_en || pm.nom_client, match_type: 'manual',
       confidence: 'HIGH', values: {}, actiu: true, ordre: pomsExtrets.length,
     }])
     setShowAddPom(false)
@@ -1410,7 +1450,10 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
                           ...prev, [p.ordre]: { ...identitatEfectiva(p, prev), instancia: slug } }))}
                         onVincula={(c) => posaResolucio(p.ordre, {
                           accio: 'vincula', pom_master_id: c.id,
-                          pom_codi: c.codi_client, pom_nom: c.nom_client,
+                          // El nom que es desa a la resolució és el RESOLT: el rètol
+                          // «Es vincularà a {codi} · {nom}» el llegeix tal qual.
+                          pom_codi: c.codi_client,
+                          pom_nom: c.nom_resolt || c.nom_en || c.nom_client,
                         }, { tanca: false })}
                         onCrea={() => posaResolucio(p.ordre, {
                           accio: 'crea', codi: crea.codi.trim(),

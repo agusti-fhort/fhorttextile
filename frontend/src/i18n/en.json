@@ -2851,7 +2851,9 @@
     "sortir_amb_canvis_peces": "In: {{peces}}",
     "sortir_amb_canvis_cos": "If you leave now, the changes in these containers will be lost. Close this warning and save them in the container where you made them.",
     "sortir_sense_desar": "Leave without saving",
-    "quedar_me": "Stay here"
+    "quedar_me": "Stay here",
+    "colisio_title": "Name already taken ({{count}})",
+    "colisio_pendent": "pending review"
   },
   "model_fabric": {
     "err_close_table": "Could not close the table.",
