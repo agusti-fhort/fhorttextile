@@ -15,6 +15,28 @@ export function baseLang(v) {
 const clau = (lang, id) => `${lang}|${id}`
 
 /**
+ * 🚨 QUANTS IDS CABEN EN UNA PETICIÓ. La porta (`GET /api/v1/translate/pom/`) en refusa més de
+ * 300 amb un 400, i aquí no se n'hi enviaven mai menys dels que hi hagués: `buida()` agafava
+ * el `Set` sencer d'un idioma i el passava en UNA sola crida.
+ *
+ * A `/poms` això vol dir el CATÀLEG SENCER —la pantalla el carrega tot des que `totesLesPagines`
+ * va substituir un `page_size: 1000` que mentia—, i amb un catàleg de més de 300 la petició
+ * naixia morta: 400, `catch` mut, i la ⓘ que no sortia mai sense que ningú veiés cap error.
+ *
+ * **200 i no 300 a posta.** El client no ha de saber el número exacte del servidor, només
+ * quedar-hi per sota amb marge: si algun dia el sostre baixa, això segueix passant. I la URL
+ * es queda curta, que és gratis.
+ */
+const MAX_PER_PETICIO = 200
+
+/** `[1..450]` → `[[1..200], [201..400], [401..450]]`. */
+function trosseja(ids, mida = MAX_PER_PETICIO) {
+  const lots = []
+  for (let i = 0; i < ids.length; i += mida) lots.push(ids.slice(i, i + mida))
+  return lots
+}
+
+/**
  * @param demana  `(ids, lang) => Promise<[{pom_id, text}]>` — l'accés real a dades.
  * @param programa `(fn) => void` — quan surt el lot. Per defecte, el proper tic.
  *
@@ -42,15 +64,28 @@ export function creaCua(demana, programa = (fn) => setTimeout(fn, 0)) {
     let novetat = false
     for (const [lang, ids] of feina) {
       if (!ids.length) continue
-      try {
-        for (const it of (await demana(ids, lang)) || []) {
-          cache.set(clau(lang, it.pom_id), it.text || '')
-          novetat = true
+      // EN LOTS, i SEQÜENCIALS. Seqüencials i no en paral·lel perquè cada petició ja dispara
+      // diverses crides al proveïdor al servidor (50 textos per crida): obrir-ne dues alhora
+      // multiplicaria la ràfega contra un tercer sense guanyar gaire res a la pantalla, que
+      // pinta la ⓘ a mesura que arriba.
+      for (const lot of trosseja(ids)) {
+        try {
+          for (const it of (await demana(lot, lang)) || []) {
+            cache.set(clau(lang, it.pom_id), it.text || '')
+            novetat = true
+          }
+        } catch (e) {
+          // ⚠️ UN 4xx NO ES REINTENTA. Es desmarcaven SEMPRE els ids, i per a un tall de xarxa
+          // és el correcte —la ⓘ no pot quedar muda per sempre per un segon dolent—, però per
+          // a un refús de la porta és una repetició garantida a cada entrada a la pantalla,
+          // sempre amb el mateix resultat i sempre en silenci. Un lot que el servidor rebutja
+          // es dona per preguntat: la ⓘ callarà, que és el que la casa ja fa amb un POM sense
+          // traducció, en comptes de tornar-hi eternament.
+          const codi = e?.response?.status
+          if (!(codi >= 400 && codi < 500)) {
+            for (const id of lot) demanats.delete(clau(lang, id))
+          }
         }
-      } catch {
-        // NO es memoritza res i es desmarquen els ids. Desar-los com a «sense traducció» faria
-        // que la ⓘ callés per sempre per un tall de xarxa d'un segon.
-        for (const id of ids) demanats.delete(clau(lang, id))
       }
     }
     if (novetat) avisa()

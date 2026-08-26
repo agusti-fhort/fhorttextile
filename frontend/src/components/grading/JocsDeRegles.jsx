@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { esNumeroEnCurs, formatNum, parseNum } from '../../utils/num'
 import { gradingRuleSets, gradingRules, sizeSystems } from '../../api/endpoints'
 import PageMenu from '../ui/PageMenu'
 import useToc, { anellFocus } from '../ui/toc'
@@ -291,15 +292,10 @@ function Info({ text }) {
   )
 }
 
-/** El valor d'un input numèric: `null`/`undefined` han de deixar el camp BUIT, no escriure «null». */
-const valorCamp = (v) => (v === null || v === undefined ? '' : String(v))
-
-/** Text lliure → número o null. Accepta la coma decimal, que és com s'escriu aquí. */
-function num(v) {
-  if (v === null || v === undefined || String(v).trim() === '') return null
-  const n = Number(String(v).replace(',', '.'))
-  return Number.isFinite(n) ? n : null
-}
+// `valorCamp()` i `num()` vivien aquí i ja no els crida ningú: el camp del Δ pinta amb
+// `formatNum` i llegeix amb `parseNum`, que són la política única de la casa (`utils/num.js`,
+// R1+R2 · 26/08). Deixar-los seria deixar dues respostes vives per a la mateixa pregunta —
+// que és exactament com es va arribar a tenir set còpies d'aquesta aritmètica.
 
 /** Δ base d'una regla tal com es llegeix avui: forma canònica, o el camp legacy si no s'ha backfillat. */
 const deltaLlegit = (r) => (r.increment_base !== null && r.increment_base !== undefined
@@ -442,12 +438,28 @@ function JocModal({ joc, runs, onDesat, onError, onTanca }) {
 
 // ── LA PANTALLA D'UN JOC ─────────────────────────────────────────────────────────────────────
 function Joc({ joc, run, runs, vocabularis, regimsAutorables, accions, onTanca, onCanviat, onError }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  // R2 · el separador decimal el decideix l'idioma de qui llegeix, demanat un sol cop.
+  const lang = i18n?.language || 'ca'
   const [tab, setTab] = useState('regles')
   // 🔴 EL MAP DE LA LLEI (mateix patró que `GraduacioSuperficie`): neix buit i només hi entra el
   // que un gest humà canvia. Sense això, «Gravar» hauria de decidir què ha canviat comparant, i
   // una comparació de decimals amb strings escriu files que ningú no ha tocat.
   const [edicions, setEdicions] = useState(new Map())
+  // 🚨 EL TEXT DEL Δ MENTRE S'ESCRIU, a part del número. El camp tenia
+  // `value={valorCamp(deltaVal)}` amb un `onChange` que ja hi desava el NÚMERO: l'estat
+  // intermedi «1.» no era representable —es repintava «1»— i el separador decimal
+  // desapareixia sota els dits. Mateix defecte exacte que la columna de breaks del costat.
+  //
+  // Va a part de `edicions` i no a dins a posta: `edicions` és el PATCH que se'n va a l'API i
+  // el que llegeixen `relleuResidual`, `intervalsIncomplets` i el guard de degenerada — tots
+  // volen el número. El text és només per als ulls i per al camp.
+  //
+  // El número segueix entrant a `edicions` a cada tecla, i això NO era el defecte: el defecte
+  // era que el CAMP es repintés amb ell. És la mateixa forma que el carril de mesures ja fa
+  // (`EditableTable`: `setTxt(raw)` + commit), la implementació de referència de la casa — i
+  // mantenir-la viva és el que fa que «Gravar» no es quedi apagat fins que algú desenfoqui.
+  const [deltaTxt, setDeltaTxt] = useState(new Map())
   // F4-BIS — L'ERROR DE LA PORTA D'INTERVALS, PER REGLA. `Map<rule.id, {codi, detall}>`. Va a
   // part del toast d'`onError` perquè un `BREAKS_*` és de LA REGLA que el va provocar: amb el
   // missatge només al toast, qui havia tocat sis files havia d'endevinar quina.
@@ -867,11 +879,27 @@ function Joc({ joc, run, runs, vocabularis, regimsAutorables, accions, onTanca, 
                           )}
                         </td>
                         <td style={{ ...cx.td, textAlign: 'right' }}>
+                          {/* El TEXT mana mentre s'escriu; el número va a `edicions` per al
+                              PATCH i per als guards. Al BLUR el text es normalitza a l'idioma
+                              de qui l'escriu (R2): qui teclegi «.75» hi acaba veient «0,75». */}
                           <Camp inputMode="decimal" aria-label={t('grading.jocs.col_delta')}
-                                value={valorCamp(deltaVal)} placeholder="—"
+                                value={deltaTxt.has(r.id) ? deltaTxt.get(r.id)
+                                                          : formatNum(deltaVal, { lang })}
+                                placeholder="—"
                                 style={{ width: 76, textAlign: 'right', fontWeight: 600, padding: '4px 8px',
-                                         fontVariantNumeric: 'tabular-nums' }}
-                                onChange={e => edita(r.id, { increment_base: num(e.target.value) })} />
+                                         fontVariantNumeric: 'tabular-nums',
+                                         ...(esNumeroEnCurs(deltaTxt.get(r.id)) ? null
+                                             : { borderColor: 'var(--err)' }) }}
+                                onChange={e => {
+                                  const cru = e.target.value
+                                  setDeltaTxt(prev => new Map(prev).set(r.id, cru))
+                                  edita(r.id, { increment_base: parseNum(cru) })
+                                }}
+                                onBlur={e => {
+                                  const n = parseNum(e.target.value)
+                                  setDeltaTxt(prev => new Map(prev).set(
+                                    r.id, n === null ? '' : formatNum(n, { lang })))
+                                }} />
                         </td>
                         {/* F4-BIS — «BREAKS» EN LLOC DE «Δ BREAK» + «TALLA BREAK». El
                             trencament d'aquest joc es diu sencer i es diu N vegades. Mateix

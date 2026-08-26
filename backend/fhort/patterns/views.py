@@ -41,6 +41,7 @@ from .engine.aama_reader import AAMAReader, unfold_piece
 from .engine.errors import PatternParseError
 from .engine.rul_reader import RULReader, coherencia_dxf_rul
 from .export import PERFILS_DISPONIBLES, ExportBlocked, build_export
+from .recognition.service import recognize_pattern_file
 from .models import (ExportAcknowledgement, PatternFile, PatternPOM,
                      PieceIdentityAcknowledgement)
 from .serializers import (PatternFileLlistaSerializer, PatternFileSerializer,
@@ -348,7 +349,7 @@ class PatternFileViewSet(mixins.CreateModelMixin,
         PatternFile.objects
         .select_related('model', 'garment_type_item', 'pujat_per', 'versio_anterior')
         .prefetch_related('pieces__points', 'pieces__segments', 'pieces__poms__pom_master',
-                          'pieces__piece_role')
+                          'pieces__piece_role', 'pieces__proposed_role')
         .all()
     )
     # MultiPart/Form per a l'upload (que porta els bytes del DXF); JSON per a l'exportació,
@@ -469,12 +470,58 @@ class PatternFileViewSet(mixins.CreateModelMixin,
         # El document sencer: geometria, empremta i taula de grading.
         DjangoGeometryStore().save(document, pattern_file=fp)
 
+        # ── El reconeixedor (F4.1) ──────────────────────────────────────────
+        # Corre SÍNCRON: mesurat en 110-155 ms per patró de cinc peces, dos ordres de
+        # magnitud per sota del sostre de 2 s que justificaria una cua. Muntar
+        # infraestructura de tasques per a això seria pagar complexitat per res.
+        #
+        # 🚨 **No pot tombar l'import.** El fitxer ja és desat i llegible; si el
+        # reconeixedor peta —el banc buit, una peça sense contorn tancat— el que ha de
+        # passar és que no hi hagi propostes, no que l'usuari perdi la pujada. L'error
+        # viatja pel mateix canal que els avisos de coherència, que és on l'usuari ja
+        # mira les coses que no bloquegen.
+        reconeixement = None
+        try:
+            reconeixement = recognize_pattern_file(fp)
+        except Exception as exc:  # noqa: BLE001 — volem el motiu a la resposta
+            logger.warning('reconeixedor F4.1 fallit al fitxer %s: %s', fp.pk, exc)
+            avisos = avisos + [{
+                'codi': 'reconeixedor_fallit',
+                'missatge': 'Les peces s\'han desat, però no s\'han pogut proposar rols.',
+                'detall': '{}: {}'.format(type(exc).__name__, exc),
+            }]
+
         fp.refresh_from_db()
         dades = self.get_serializer(fp).data
+        if reconeixement is not None:
+            dades['reconeixement'] = reconeixement
         if avisos:
             # No bloquegen: el fitxer s'ha desat. Però el desajust s'ha de veure.
             dades['avisos_coherencia'] = avisos
         return Response(dades, status=201)
+
+    @action(detail=True, methods=['post'], url_path='recognize')
+    def recognize(self, request, pk=None):
+        """Torna a proposar rol i cara per a les peces d'aquest patró. **Idempotent.**
+
+        És el botó «Identificar» de la pantalla d'identitat, i és exactament el mateix
+        camí que corre l'import: una sola implementació, o el botó i l'automatisme
+        divergirien el primer dia que algú toqués un dels dos.
+
+        Reescriu `proposed_*` i **no toca res més**. Confirmar segueix sent un gest humà,
+        i tornar a identificar no desfà cap confirmació: `piece_role` i `face` no són a
+        la llista de camps que aquest camí pot escriure (`recognition.service.UPDATE_FIELDS`).
+        """
+        fp = self.get_object()
+        try:
+            stats = recognize_pattern_file(fp)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning('reconeixedor F4.1 fallit al fitxer %s: %s', fp.pk, exc)
+            return Response(
+                {'error': 'No s\'han pogut proposar rols.',
+                 'detall': '{}: {}'.format(type(exc).__name__, exc)},
+                status=503)
+        return Response(stats, status=200)
 
     def _resoldre_propietari(self, request):
         model_id = request.data.get('model')

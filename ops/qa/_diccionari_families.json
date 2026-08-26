@@ -1,0 +1,237 @@
+{
+ "capes": [
+  {
+   "slug": "exterior",
+   "nom_en": "Shell",
+   "nom_ca": "Exterior",
+   "nom_es": "Exterior",
+   "is_system": true,
+   "pendent_revisio": false,
+   "display_order": 1
+  },
+  {
+   "slug": "folre",
+   "nom_en": "Lining",
+   "nom_ca": "Folre",
+   "nom_es": "Forro",
+   "is_system": true,
+   "pendent_revisio": false,
+   "display_order": 2
+  },
+  {
+   "slug": "entretela",
+   "nom_en": "Interfacing",
+   "nom_ca": "Entretela",
+   "nom_es": "Entretela",
+   "is_system": true,
+   "pendent_revisio": false,
+   "display_order": 3
+  },
+  {
+   "slug": "farciment",
+   "nom_en": "Padding",
+   "nom_ca": "Farciment",
+   "nom_es": "Relleno / Guata",
+   "is_system": true,
+   "pendent_revisio": false,
+   "display_order": 4
+  },
+  {
+   "slug": "reforc",
+   "nom_en": "Underlining",
+   "nom_ca": "Reforç",
+   "nom_es": "Refuerzo",
+   "is_system": true,
+   "pendent_revisio": false,
+   "display_order": 5
+  },
+  {
+   "slug": "fornitura",
+   "nom_en": "Trim",
+   "nom_ca": "Fornitura",
+   "nom_es": "Fornitura",
+   "is_system": true,
+   "pendent_revisio": false,
+   "display_order": 6
+  }
+ ],
+ "eixos": [
+  {
+   "clau": "POSICIO",
+   "nom_en": "Position",
+   "nom_ca": "Posició",
+   "nom_es": "Posición"
+  },
+  {
+   "clau": "ESTAT",
+   "nom_en": "State",
+   "nom_ca": "Estat",
+   "nom_es": "Estado"
+  }
+ ],
+ "subeixos": [
+  "PECA",
+  "BANDA",
+  "VERTICALITAT",
+  "COSTURA",
+  "LINIA",
+  "ESTAT"
+ ],
+ "instancies": {
+  "POSICIO": [
+   {
+    "slug": "left",
+    "nom_en": "Left",
+    "nom_ca": "Esquerra",
+    "nom_es": "Izquierda",
+    "is_system": true,
+    "pendent_revisio": false,
+    "display_order": 1,
+    "eix": "POSICIO",
+    "sufix": "L",
+    "subeix": "BANDA"
+   },
+   {
+    "slug": "right",
+    "nom_en": "Right",
+    "nom_ca": "Dreta",
+    "nom_es": "Derecha",
+    "is_system": true,
+    "pendent_revisio": false,
+    "display_order": 2,
+    "eix": "POSICIO",
+    "sufix": "R",
+    "subeix": "BANDA"
+   },
+   {
+    "slug": "top",
+    "nom_en": "Top",
+    "nom_ca": "Superior",
+    "nom_es": "Superior",
+    "is_system": true,
+    "pendent_revisio": false,
+    "display_order": 3,
+    "eix": "POSICIO",
+    "sufix": "T",
+    "subeix": "VERTICALITAT"
+   },
+   {
+    "slug": "bottom",
+    "nom_en": "Bottom",
+    "nom_ca": "Inferior",
+    "nom_es": "Inferior",
+    "is_system": true,
+    "pendent_revisio": false,
+    "display_order": 4,
+    "eix": "POSICIO",
+    "sufix": "BM",
+    "subeix": "VERTICALITAT"
+   },
+   {
+    "slug": "cf",
+    "nom_en": "CF",
+    "nom_ca": "CF",
+    "nom_es": "CF",
+    "is_system": true,
+    "pendent_revisio": false,
+    "display_order": 5,
+    "eix": "POSICIO",
+    "sufix": "CF",
+    "subeix": "LINIA"
+   },
+   {
+    "slug": "cb",
+    "nom_en": "CB",
+    "nom_ca": "CB",
+    "nom_es": "CB",
+    "is_system": true,
+    "pendent_revisio": false,
+    "display_order": 6,
+    "eix": "POSICIO",
+    "sufix": "CB",
+    "subeix": "LINIA"
+   },
+   {
+    "slug": "side",
+    "nom_en": "Side seam",
+    "nom_ca": "Costura lateral",
+    "nom_es": "Costura lateral",
+    "is_system": true,
+    "pendent_revisio": false,
+    "display_order": 7,
+    "eix": "POSICIO",
+    "sufix": "S",
+    "subeix": "COSTURA"
+   },
+   {
+    "slug": "waistband_seam",
+    "nom_en": "Waistband seam",
+    "nom_ca": "Costura de cinturilla",
+    "nom_es": "Costura de pretina",
+    "is_system": true,
+    "pendent_revisio": false,
+    "display_order": 8,
+    "eix": "POSICIO",
+    "sufix": "",
+    "subeix": "COSTURA"
+   },
+   {
+    "slug": "front",
+    "nom_en": "Front",
+    "nom_ca": "Front",
+    "nom_es": "Front",
+    "is_system": true,
+    "pendent_revisio": false,
+    "display_order": 9,
+    "eix": "POSICIO",
+    "sufix": "F",
+    "subeix": "PECA"
+   },
+   {
+    "slug": "back",
+    "nom_en": "Back",
+    "nom_ca": "Back",
+    "nom_es": "Back",
+    "is_system": true,
+    "pendent_revisio": false,
+    "display_order": 10,
+    "eix": "POSICIO",
+    "sufix": "B",
+    "subeix": "PECA"
+   }
+  ],
+  "ESTAT": [
+   {
+    "slug": "relaxed",
+    "nom_en": "Relaxed",
+    "nom_ca": "Relaxada",
+    "nom_es": "Relajada",
+    "is_system": true,
+    "pendent_revisio": false,
+    "display_order": 1,
+    "eix": "ESTAT",
+    "sufix": "",
+    "subeix": "ESTAT"
+   },
+   {
+    "slug": "extended",
+    "nom_en": "Extended",
+    "nom_ca": "Estirada",
+    "nom_es": "Estirada",
+    "is_system": true,
+    "pendent_revisio": false,
+    "display_order": 2,
+    "eix": "ESTAT",
+    "sufix": "",
+    "subeix": "ESTAT"
+   }
+  ]
+ },
+ "regles": {
+  "sufix_separador": "",
+  "sufix_ordre": "base+sufix",
+  "capa_al_codi": false,
+  "instancia_separador": "-",
+  "instancia_unica": ""
+ }
+}

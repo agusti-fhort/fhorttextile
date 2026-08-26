@@ -47,8 +47,17 @@ logger = logging.getLogger(__name__)
 # L'idioma del text canònic. Demanar-lo no és una traducció: es respon amb l'original.
 LANG_ORIGEN = 'en'
 
-# Sostre d'ids per petició. L'univers real són 142 POMs; el sostre hi és perquè un client
-# equivocat no pugui demanar una pàgina sencera de catàleg com si fos una sola pantalla.
+# Sostre d'ids per petició. És **la porta qui el fa complir** (`translation_views`), i aquí
+# només es declara.
+#
+# ⚠️ EL SUPÒSIT ORIGINAL HA CADUCAT. Deia: «l'univers real són 142 POMs; el sostre hi és
+# perquè un client equivocat no pugui demanar una pàgina sencera de catàleg com si fos una
+# sola pantalla». Doncs resulta que `/poms` **és** la pàgina sencera del catàleg, legítimament
+# —carrega totes les pàgines des que `totesLesPagines` va substituir un `page_size: 1000` que
+# mentia— i el catàleg d'algun tenant ja ha passat de 300. El sostre no era el problema; el
+# problema era que ningú trossejava. Ara trosseja el client (`utils/traduccioPomCua.js`) i
+# aquest número torna a ser el que sempre havia de ser: una barana contra una petició absurda,
+# no un límit que una pantalla de producte hagi de tocar.
 MAX_IDS = 300
 
 # Textos per crida al proveïdor. DeepL n'accepta 50 per petició; amb 142 POMs són 3 crides el
@@ -144,9 +153,19 @@ def tradueix_poms(pom_ids, lang):
     `font` no és decoració: és el que fa comprovable que la cache i el fallback funcionen sense
     haver d'espiar la BD ni el proveïdor des de fora.
     """
+    # 🚨 EL TRUNCAT SILENCIÓS SE'N VA. Això era `list(pom_ids)[:MAX_IDS]`, i convivia amb un
+    # `if len(ids) > MAX_IDS: 400` a la vista: **dues polítiques per al mateix límit**, i cap
+    # de les dues decidida. La que manava era la de la vista (mai s'hi arribava amb més de
+    # MAX_IDS), o sigui que aquest tall era codi mort que deia una cosa contrària a la porta.
+    #
+    # I si algun dia hagués manat, hauria estat pitjor: retornar els 300 primers de 400 és
+    # respondre 200 OK amb un terç de la resposta que falta i sense dir-ho. La llei de la casa
+    # ja és l'altra —**un número que menteix és pitjor que un error que parla**, que és el que
+    # va motivar `totesLesPagines`—, i per això la decisió és UNA: la porta accepta fins a
+    # MAX_IDS i refusa per sobre amb un error clar; aquí no es talla res.
     lang = normalitza_lang(lang)
     ids = []
-    for x in list(pom_ids)[:MAX_IDS]:
+    for x in pom_ids:
         try:
             i = int(x)
         except (TypeError, ValueError):

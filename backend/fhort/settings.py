@@ -129,6 +129,33 @@ DATABASES = {
 DATABASE_ROUTERS = ['django_tenants.routers.TenantSyncRouter']
 
 
+# ── Reconeixedor de peces (F4.1) ─────────────────────────────────────────────
+#: Banc de veïns del corpus: es queda una peça de cada N. **Proporcional i no
+#: estratificat**: la distribució natural de rols ÉS el prior, i el gimnàs va mesurar que
+#: el prior val +8,1 punts sobre famílies. Aplanar-la per igualar classes seria llençar-ho.
+#: 1 = corpus sencer (1,4 M panells, 229 MB per worker).
+FTT_RECOGNITION_CORPUS_FRACTION = int(os.environ.get('FTT_RECOGNITION_CORPUS_FRACTION', 5))
+#: On es cacheja el banc construït. Construir-lo val ~17 s; carregar-lo, menys d'un segon.
+FTT_RECOGNITION_CACHE_DIR = os.environ.get(
+    'FTT_RECOGNITION_CACHE_DIR', str(BASE_DIR / 'var' / 'recognition'))
+#: Conninfo de libpq cap a `ftt_corpus` (rol `corpus_ro`, NOMÉS lectura).
+FTT_CORPUS_CONNINFO_FILE = os.environ.get(
+    'FTT_CORPUS_CONNINFO_FILE', '/root/gcd_corpus/corpus_ro.pgpass')
+#: 🚨 El llindar de SILENCI (N4). Per sota d'això el reconeixedor **no proposa res**.
+#: **Calibrat a l'examen REAL, no al laboratori** (45 peces de TATE/CALLIE/MEREDITH/AMELIA
+#: + els dos casos de re-import del 837): tota peça la veritat de la qual NO és al banc
+#: surt amb marge ≤ 0,099, i tota proposta errònia ≤ 0,058; les propostes bones van de
+#: 0,255 a 1,000. 0,20 és el doble de l'errada més sorollosa mesurada i encara per sota
+#: de la proposta bona més fluixa. Vegeu REPORT_F41 §D3 i `recognizer.SCORE_MIN`.
+FTT_RECOGNITION_MIN_SCORE = float(os.environ.get('FTT_RECOGNITION_MIN_SCORE', 0.20))
+#: Veïns que es demanen al banc per peça.
+FTT_RECOGNITION_K = int(os.environ.get('FTT_RECOGNITION_K', 10))
+#: 🚨 El banc del CORPUS no proposa. Va treure 4/30 a l'examen real amb sostre de 15/30,
+#: i cap llindar no separa l'encert de l'errada (AUC 0,57/0,67). Queda construït i provat
+#: darrere aquest flag perquè la mesura es pugui discutir, no perquè s'hagi d'engegar.
+FTT_RECOGNITION_USE_CORPUS = os.environ.get('FTT_RECOGNITION_USE_CORPUS', '') == '1'
+
+
 # Anthropic Claude API — usat per extraction_service.py (sprint 6)
 ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
 

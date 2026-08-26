@@ -1005,6 +1005,11 @@ export const patterns = {
   identificar: (id, data) =>
     client.post(`/api/v1/patterns/pattern-files/${id}/identificar/`, data),
 
+  // Tornar a PROPOSAR rol i cara. Idempotent, i el MATEIX camí que corre l'import: no
+  // escriu res que un humà hagi confirmat, només els camps `proposed_*`.
+  reconeixer: id =>
+    client.post(`/api/v1/patterns/pattern-files/${id}/recognize/`),
+
   // L'última acta del fitxer. D'aquí surt el verd de la pantalla — del servidor i no del
   // navegador: un estat que viu a localStorage diu que algú va confirmar en AQUELL
   // ordinador, que no és el que la pregunta vol saber.

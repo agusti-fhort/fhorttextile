@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import {
   MAX_BREAKS, finalTriables, iniciTriables, intervalNou, intervalsVisibles, ordenaIntervals,
 } from '../../utils/gradingRegime'
+import { esNumeroEnCurs, formatDeltaNum, formatNum, parseNum } from '../../utils/num'
 
 // ── F4-BIS · LA COLUMNA «BREAKS», UNA DE SOLA PER A LES DUES TAULES ──────────────────────────
 //
@@ -96,19 +97,17 @@ const control = {
 const selTalla = { ...control, cursor: 'pointer', minWidth: 56 }
 const inputDelta = { ...control, width: 52, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }
 
-/** Text lliure → número o null (accepta la coma decimal, que és com s'escriu aquí). */
-function num(v) {
-  if (v === null || v === undefined || v === '') return null
-  const n = Number(String(v).replace(',', '.'))
-  return Number.isFinite(n) ? n : null
-}
+// `num()` i `signe()` vivien aquí, i eren la sisena i la setena còpia de la mateixa
+// aritmètica. Ara la política de números és UNA i és `utils/num.js` (R1+R2, 26/08): el
+// separador d'entrada i el de presentació els decideix aquell mòdul, no cada component.
+//
+// 🚨 I EL DEFECTE QUE AIXÒ TANCA NO ERA `num()`: era QUAN es cridava. L'input parsejava a cada
+// tecla i es repintava amb el número que en sortia, o sigui que `Number('1.')` → `1` esborrava
+// el separador sota els dits i **el decimal no s'hi podia escriure mai**, ni amb punt ni amb
+// coma. Ara el TEXT CRU viu a l'esborrany (`delta_txt`) i el número se'n deriva.
 
-/** `+3` / `-1.5` — el signe explícit del Δ, com a `breakConvention.etiquetaRegla`. */
-function signe(v) {
-  const n = Number(v)
-  if (!Number.isFinite(n)) return '—'
-  return n < 0 ? `${n}` : `+${n}`
-}
+/** El Δ de l'esborrany com a NÚMERO, derivat del text que s'hi està escrivint. */
+const deltaDe = (esb) => parseNum(esb?.delta_txt)
 
 /**
  * La columna «Breaks» d'una fila de regla.
@@ -125,7 +124,10 @@ function signe(v) {
  */
 export default function ColumnaBreaks({ rule, run, onCanvi, onEsborrany, readOnly = false,
   motiu = '', error = null }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  // R2 · l'idioma de qui llegeix decideix el separador decimal, i es demana UN COP aquí: els
+  // dos llocs que pinten un Δ (el xip tancat i el camp obert) han de dir-lo igual.
+  const lang = i18n?.language || 'ca'
   // `editant`: índex del xip obert, o `llista.length` per a un de NOU. `-1` = cap.
   const [editant, setEditant] = useState(-1)
   const [esborrany, setEsborrany] = useState(null)
@@ -134,7 +136,7 @@ export default function ColumnaBreaks({ rule, run, onCanvi, onEsborrany, readOnl
   /** Avisa el pare de si aquesta columna té un xip pendent. Es crida des dels GESTOS i no des
    *  d'un efecte: un `setState` dins d'un efecte encadena renders (i el lint ho canta). */
   const avisa = (esb) => onEsborrany?.(esb
-    ? { complet: !!esb.inici && !!esb.final && esb.delta !== null } : null)
+    ? { complet: !!esb.inici && !!esb.final && deltaDe(esb) !== null } : null)
 
   const llista = intervalsVisibles(rule, run)
   const ple = llista.length >= MAX_BREAKS
@@ -144,8 +146,11 @@ export default function ColumnaBreaks({ rule, run, onCanvi, onEsborrany, readOnl
 
   /** Confirma l'esborrany: entra a la llista (substituint o afegint) i es tanca. */
   const confirma = () => {
-    if (!esborrany || !esborrany.inici || !esborrany.final || esborrany.delta === null) return
-    const net = { inici: esborrany.inici, final: esborrany.final, delta: esborrany.delta }
+    // El número es deriva del text AQUÍ —al confirm—, que és el moment en què el Δ deixa de
+    // ser una cosa que s'està escrivint i passa a ser una dada.
+    const delta = deltaDe(esborrany)
+    if (!esborrany || !esborrany.inici || !esborrany.final || delta === null) return
+    const net = { inici: esborrany.inici, final: esborrany.final, delta }
     const nova = editant < llista.length
       ? llista.map((iv, k) => (k === editant ? net : { inici: iv.inici, final: iv.final, delta: iv.delta }))
       : [...llista.map(iv => ({ inici: iv.inici, final: iv.final, delta: iv.delta })), net]
@@ -163,14 +168,18 @@ export default function ColumnaBreaks({ rule, run, onCanvi, onEsborrany, readOnl
 
   const obre = (i) => {
     const iv = llista[i]
-    const esb = { inici: iv.inici, final: iv.final, delta: iv.delta }
+    // El Δ entra al camp en l'idioma de qui l'edita (R2): un catalanoparlant que obre un
+    // Δ de 0,75 ha de veure-hi la coma que ell mateix hi escriuria.
+    const esb = { inici: iv.inici, final: iv.final, delta_txt: formatNum(iv.delta, { lang }) }
     setEsborrany(esb); setEditant(i); avisa(esb)
   }
 
   const afegeix = () => {
     const nou = intervalNou(llista, run)
     if (!nou) return
-    setEsborrany(nou); setEditant(llista.length); avisa(nou)
+    // `intervalNou` dona `delta: null` (encara no s'ha dit): al camp, text buit.
+    const esb = { inici: nou.inici, final: nou.final, delta_txt: '' }
+    setEsborrany(esb); setEditant(llista.length); avisa(esb)
   }
 
   /** Canvi dins del xip obert. Va per aquí i no per `setEsborrany` directe perquè cada tecla ha
@@ -186,7 +195,7 @@ export default function ColumnaBreaks({ rule, run, onCanvi, onEsborrany, readOnl
   const opcionsInici = esborrany ? iniciTriables(llista, run, editant) : []
   const opcionsFinal = esborrany ? finalTriables(llista, run, editant, esborrany.inici) : []
   const potConfirmar = !!esborrany && !!esborrany.inici && !!esborrany.final
-    && esborrany.delta !== null
+    && deltaDe(esborrany) !== null
 
   const nouPossible = !readOnly && !ple && !senseRun && !!intervalNou(llista, run)
   const motiuApagat = motiu
@@ -198,7 +207,7 @@ export default function ColumnaBreaks({ rule, run, onCanvi, onEsborrany, readOnl
         {llista.map((iv, i) => (
           editant === i && esborrany ? (
             <EditorXip key={`ed-${i}`} {...{ esborrany, toca, opcionsInici, opcionsFinal,
-              potConfirmar, confirma, tanca, t }} />
+              potConfirmar, confirma, tanca, t, lang }} />
           ) : (
             /* 🔑 DOS BOTONS GERMANS DINS D'UN `span`, MAI un botó dins d'un botó: és HTML
                invàlid i el clic de dins queda mort (el defecte que QA-TALLER-C va caçar a la
@@ -213,7 +222,7 @@ export default function ColumnaBreaks({ rule, run, onCanvi, onEsborrany, readOnl
                 <span>{iv.inici}</span>
                 <span aria-hidden="true" style={{ color: 'var(--text-soft)' }}>→</span>
                 <span>{iv.final}</span>
-                <span style={{ fontWeight: 700 }}>{signe(iv.delta)}</span>
+                <span style={{ fontWeight: 700 }}>{formatDeltaNum(iv.delta, { lang, buit: '—' })}</span>
               </button>
               {!readOnly && (
                 <button type="button" onClick={() => treu(i)}
@@ -229,7 +238,7 @@ export default function ColumnaBreaks({ rule, run, onCanvi, onEsborrany, readOnl
         {/* L'esborrany d'un interval NOU va al final: encara no és a la llista. */}
         {editant >= llista.length && esborrany && (
           <EditorXip {...{ esborrany, toca, opcionsInici, opcionsFinal, potConfirmar,
-            confirma, tanca, t }} />
+            confirma, tanca, t, lang }} />
         )}
 
         {/* AL MÀXIM, EL [+] DESAPAREIX I HO DIU. Un control apagat que ningú pot fer servir
@@ -275,7 +284,7 @@ export default function ColumnaBreaks({ rule, run, onCanvi, onEsborrany, readOnl
 
 /** El xip OBERT: dos selectors de talla + Δ + confirmar/cancel·lar. */
 function EditorXip({ esborrany, toca, opcionsInici, opcionsFinal, potConfirmar,
-  confirma, tanca, t }) {
+  confirma, tanca, t, lang }) {
   return (
     <span style={xipEdicio}
       onKeyDown={e => {
@@ -300,12 +309,25 @@ function EditorXip({ esborrany, toca, opcionsInici, opcionsFinal, potConfirmar,
         onChange={e => toca({ final: e.target.value })}>
         {opcionsFinal.map(s => <option key={s} value={s}>{s}</option>)}
       </select>
+      {/* 🚨 EL TEXT CRU MANA MENTRE S'ESCRIU. Això tenia `value={esborrany.delta}` amb un
+          `onChange` que parsejava: l'estat intermedi «1.» no era representable —`Number('1.')`
+          és 1 i es repintava «1»— i el separador decimal desapareixia sota els dits. Ni el
+          punt ni la coma hi arribaven mai.
+          Ara el camp és el TEXT (`delta_txt`) i el número se'n deriva al confirm; al BLUR, a
+          més, el text es normalitza a l'idioma de qui l'escriu (R2), o sigui que qui teclegi
+          «.75» hi acaba veient «0,75» i el que es desa és 0.75.
+          `esNumeroEnCurs` és el que permet no pintar de vermell el que només està a mitges. */}
       <input type="text" inputMode="decimal" size={4} autoFocus
-        value={esborrany.delta === null || esborrany.delta === undefined ? '' : esborrany.delta}
+        value={esborrany.delta_txt ?? ''}
         aria-label={t('grading.intervals.delta')} placeholder="Δ"
         title={t('grading.intervals.delta_help')}
-        onChange={e => toca({ delta: num(e.target.value) })}
-        style={inputDelta} />
+        onChange={e => toca({ delta_txt: e.target.value })}
+        onBlur={e => {
+          const n = parseNum(e.target.value)
+          if (n !== null) toca({ delta_txt: formatNum(n, { lang }) })
+        }}
+        style={{ ...inputDelta,
+                 borderColor: esNumeroEnCurs(esborrany.delta_txt) ? undefined : 'var(--err)' }} />
       <button type="button" onClick={confirma} disabled={!potConfirmar}
         title={t('grading.intervals.confirmar')} aria-label={t('grading.intervals.confirmar')}
         style={{ ...botoIcona, color: 'var(--ok)',

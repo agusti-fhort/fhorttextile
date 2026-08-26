@@ -207,9 +207,62 @@ class PatternPiece(models.Model):
     lateralitat = models.CharField(
         max_length=1, choices=LAT_CHOICES, blank=True, default=LAT_CAP)
 
+    FACE_CAP = ''
+    FACE_FRONT = 'front'
+    FACE_BACK = 'back'
+    FACE_CHOICES = [
+        (FACE_CAP, 'Sense cara'),
+        (FACE_FRONT, 'Davant'),
+        (FACE_BACK, 'Darrere'),
+    ]
+    #: L'eix DAVANT/DARRERE (decisió D1, 2026-08-26). **Un eix, no un rol nou.**
+    #:
+    #: El catàleg de rols de peça (`pom.PatternPieceRole`, 30 slugs) és un contracte entre
+    #: tenants i entre versions d'un patró: partir-lo en `sleeve_front`/`sleeve_back` el
+    #: doblaria i posaria la mateixa distinció en dos llocs, perquè `front` i `back` ja hi
+    #: són com a rols de COS. Va aquí, amb la mateixa forma que `lateralitat`, que és l'eix
+    #: germà i ja funciona.
+    #:
+    #: Buit NO vol dir «encara no ho sabem»: vol dir que la peça **no té cara** —una
+    #: cinturilla tallada al doblec, un panell de godet. Igual que la lateralitat.
+    #:
+    #: Indexat perquè el banc de veïns (F4) filtra per cara abans de comparar contorns.
+    face = models.CharField(
+        max_length=6, choices=FACE_CHOICES, blank=True, default=FACE_CAP, db_index=True)
+
     #: Quan el mateix rol es repeteix a la mateixa peça de roba (tres vistes, dues traves).
     #: null = no cal distingir-la de cap germana.
     ordinal = models.PositiveSmallIntegerField(null=True, blank=True)
+
+    # ── LA PROPOSTA DEL RECONEIXEDOR (F4.1) ──────────────────────────────────
+    # 🚨 **Camps SEPARATS dels confirmats, i la separació és la peça de disseny.**
+    # `piece_role` i `face` els escriu NOMÉS un humà. El reconeixedor escriu aquí i
+    # només aquí. Si compartissin columna, el dia que el reconeixedor s'equivoqués
+    # ningú no podria dir si aquell rol el va decidir una persona o una màquina —i
+    # aquesta és exactament la pregunta que caldria respondre.
+    #
+    # En CONFIRMAR, la proposta **es conserva**: és l'única manera de mesurar més
+    # endavant si el reconeixedor encertava, i una auditoria d'encert que s'esborra
+    # a cada confirmació no és una auditoria.
+
+    #: El rol proposat. PROTECT com el confirmat: un rol que alguna proposta reclama
+    #: tampoc no ha de desaparèixer sense que ningú se n'adoni.
+    proposed_role = models.ForeignKey(
+        'pom.PatternPieceRole', on_delete=models.PROTECT,
+        null=True, blank=True, related_name='proposed_pieces',
+    )
+    proposed_face = models.CharField(
+        max_length=6, choices=FACE_CHOICES, blank=True, default=FACE_CAP)
+    #: El MARGE: quant més a prop és el rol guanyador que el millor rival. NO és una
+    #: probabilitat i no s'ha de llegir com si ho fos. Per sota del llindar de silenci
+    #: hi ha score però NO hi ha `proposed_role`: el reconeixedor ha mirat i ha callat.
+    proposed_score = models.FloatField(null=True, blank=True)
+    #: L'evidència sencera i estructurada: etapa de la cascada, veïns amb distància,
+    #: marge, suport de graf, geometria i llindar vigent. Es desa i no es recalcula
+    #: perquè el banc canvia: sense això, la raó d'una proposta es perdria a la
+    #: següent peça que algú confirmés.
+    proposed_evidence = models.JSONField(default=dict, blank=True)
+    proposed_at = models.DateTimeField(null=True, blank=True)
 
     ESTAT_PRODUCCIO = 'produccio'
     ESTAT_TREBALL = 'treball'
@@ -361,6 +414,24 @@ class PatternSegment(models.Model):
     #: Nom lliure del patronista ("costura lateral", "sisa davant"). Només té sentit als
     #: declarats: un tram derivat no l'ha batejat ningú.
     nom = models.CharField(max_length=120, null=True, blank=True)
+
+    #: QUÈ és aquesta vora, del catàleg semàntic (F3, 2026-08-26): escot, sisa, costat.
+    #:
+    #: **`nom` ES QUEDA i conviuen**: el rol diu què és la vora en vocabulari de la casa,
+    #: `nom` diu com en diu aquest taller. És la mateixa coexistència que `PatternPiece` ja
+    #: té entre `piece_role`, `nom_block` i `nom`.
+    #:
+    #: `RESTRICT` i no `PROTECT`: un rol de vora que algun segment reclama no pot
+    #: desaparèixer, i RESTRICT ho fa complir a la BD i no només a l'ORM —el catàleg és de
+    #: sistema i el que el reclama viu a un altre schema del mateix tenant.
+    #:
+    #: ⚠️ Neix BUIT a tot arreu i F3 no l'omple (D2): els rols de vora no vindran mai del
+    #: DXF. Qui els sabrà escriure és un reconeixedor amb confirmació humana, o el
+    #: patronista declarant-los —el camí que `ORIGEN_DECLARAT` ja obre avui.
+    edge_role = models.ForeignKey(
+        'pom.EdgeRole', on_delete=models.RESTRICT,
+        null=True, blank=True, related_name='segments',
+    )
 
     class Meta:
         verbose_name = 'Segment de patró'

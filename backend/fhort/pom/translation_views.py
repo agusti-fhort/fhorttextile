@@ -32,10 +32,20 @@ def translate_poms_view(request):
     ids = [t for t in (x.strip() for x in cru.split(',')) if t]
     lang = normalitza_lang(request.GET.get('lang'))
 
+    # LA POLÍTICA DEL LÍMIT, UNA I AQUÍ (F4 · 26/08). El servei ja no talla res: si això
+    # deixés passar 400 ids, la resposta en portaria 400. Qui en tingui més, que ho demani en
+    # més d'una petició — que és el que el client fa des del trossejat de `traduccioPomCua.js`.
+    #
+    # L'error DIU EL NÚMERO i porta codi propi: un client que rebi això ha de poder trossejar
+    # sol sense endevinar el sostre, i `detail` es queda perquè cap lector antic es quedi mut.
     if len(ids) > MAX_IDS:
-        return Response(
-            {'detail': f'Massa POMs en una petició (màxim {MAX_IDS}).'}, status=400,
-        )
+        return Response({
+            'codi': 'MASSA_POMS',
+            'max': MAX_IDS,
+            'rebuts': len(ids),
+            'detail': (f'Massa POMs en una petició: {len(ids)} (màxim {MAX_IDS}). '
+                       f'Demana-les en lots de {MAX_IDS} o menys.'),
+        }, status=400)
 
     traduccions = tradueix_poms(ids, lang)
     return Response({

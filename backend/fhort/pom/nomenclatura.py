@@ -68,41 +68,161 @@ def camps_de(alias_by_pom, pom_id):
 # «u1» i «U1» són el mateix codi per a qui el llegeix.
 
 
-def pom_del_codi(customer_id, codi):
-    """El POM que aquest client ja anomena `codi`, o None.
+def alies_del_codi(customer_id, codi):
+    """L'ÀLIES que aquest client ja anomena `codi`, o None. La consulta, sencera.
+
+    🚨 EXISTEIX PERQUÈ `pom_del_codi` LLENÇAVA LA FILA. Aquella funció feia exactament aquesta
+    consulta —amb `select_related('pom')` i tot— i en tornava només `alias.pom`, o sigui que
+    tot el que el sistema sap del conflicte moria en un `return`: de quin diccionari ve el codi,
+    si està pendent de revisió, amb quina caixa el va escriure el client, quan es va editar.
+    Un refús que no pot dir res d'això només pot dir «no», i la persona no té més sortida que
+    tornar-hi (tres reintents en viu a la formació del 26/08).
 
     Només mira àlies amb `pom` informat: un àlies sense POM és vocabulari del client pendent de
     mapar (no vincula res), i deixar que bloquegi un codi seria barrar el pas per una fila que
     encara no diu a què es refereix.
+
+    `pom__pom_global` perquè qui rep l'àlies en voldrà el NOM RESOLT (`noms_de`), i sense el
+    prefetch cada col·lisió compraria una query.
     """
     if not customer_id or not codi:
         return None
     from fhort.pom.models import CustomerPOMAlias
 
-    alias = (CustomerPOMAlias.objects
-             .filter(customer_id=customer_id, client_code__iexact=str(codi).strip(),
-                     pom__isnull=False)
-             .select_related('pom')
-             .first())
+    return (CustomerPOMAlias.objects
+            .filter(customer_id=customer_id, client_code__iexact=str(codi).strip(),
+                    pom__isnull=False)
+            .select_related('pom', 'pom__pom_global')
+            .first())
+
+
+def pom_del_codi(customer_id, codi):
+    """El POM que aquest client ja anomena `codi`, o None.
+
+    Es queda com la porta curta per a qui només vol saber SI el codi és lliure; qui hagi
+    d'explicar el conflicte va per `alies_del_codi`, que és el mateix viatge a la BD.
+    """
+    alias = alies_del_codi(customer_id, codi)
     return alias.pom if alias else None
 
 
 def colisio_de_codi(customer_id, codi, excloent_pom_id=None):
-    """`(pom, etiqueta)` si el codi ja és d'un ALTRE POM d'aquest client; `(None, None)` si és lliure.
+    """`(pom, etiqueta, context)` si el codi ja és d'un ALTRE POM d'aquest client.
 
-    `excloent_pom_id` és per a l'edició: rebatejar una fila amb el codi que ja tenia no és cap
-    col·lisió amb ella mateixa.
+    `(None, None, None)` si és lliure. `excloent_pom_id` és per a l'edició: rebatejar una fila
+    amb el codi que ja tenia no és cap col·lisió amb ella mateixa.
 
     L'etiqueta és el text que ha de llegir la persona —«U1 és BUTTON SPACING al catàleg
     Brownie»—, i es construeix aquí perquè el missatge sigui el mateix vingui d'on vingui la
     validació (crear un POM propi, o el llapis d'identitat).
+
+    🚨 L'ETIQUETA ES RESOL, NO ES LLEGEIX CRUA. Començava per `pom.nom_client`, i aquell camp
+    és buit a **103 dels 144 POMs actius** de `fhort` (mesurat el 26/08): la cadena tenia un
+    fallback al global i se salvava per poc, però als **7 POMs sense cap nom enlloc** queia a
+    `codi_client` i el refús es llegia «**BT** ja és **BT** al catàleg d'aquest client» — una
+    tautologia. Ara passa per `noms_de`, que és el resolutor únic de la llei
+    ÀLIES > TENANT > GLOBAL, i el codi hi queda com a últim recurs de debò.
+
+    ⚠️ LA SIGNATURA TÉ TRES ELEMENTS I NO DOS, i els dos cridadors s'han tocat alhora a posta:
+    és justament el que fa que el missatge del refús sigui UN DE SOL vingui d'on vingui.
     """
-    pom = pom_del_codi(customer_id, codi)
+    alias = alies_del_codi(customer_id, codi)
+    pom = alias.pom if alias else None
     if pom is None or (excloent_pom_id is not None and pom.pk == excloent_pom_id):
-        return None, None
-    nom = (pom.nom_client or getattr(getattr(pom, 'pom_global', None), 'nom_en', '') or
-           pom.codi_client or '').strip()
-    return pom, nom
+        return None, None, None
+    noms = noms_de(pom)
+    nom = (noms['nom_en'] or noms['nom_ca'] or pom.codi_client or '').strip()
+    return pom, nom, _context_de_alias(alias, pom, nom)
+
+
+#: Com es diu cada origen d'àlies a una persona. Viu aquí i no a la vista perquè el refús ha de
+#: sonar igual a totes les portes; `CustomerPOMAlias.ORIGEN_CHOICES` en té els codis.
+ORIGEN_LLEGIBLE = {
+    'DICCIONARI': 'del diccionari del client',
+    'IMPORT': "d'una importació anterior",
+    'MANUAL': 'creat a mà',
+    'MIGRACIO': "d'una migració",
+    'MODEL': "nascut d'un model",
+}
+
+
+def nom_client(customer_id):
+    """El nom del client, per posar-lo a la frase del refús («…del diccionari del client BRW»).
+
+    Una consulta de `values_list` i prou, i mai una excepció: si el client no es pot llegir
+    —la FK creua schemes i va sense constraint de BD—, la frase es queda sense el nom i segueix
+    dient tot el que importa. Un refús no pot petar per una etiqueta.
+    """
+    if not customer_id:
+        return ''
+    try:
+        from fhort.tasks.models import Customer
+        return Customer.objects.filter(pk=customer_id).values_list('nom', flat=True).first() or ''
+    except Exception:
+        return ''
+
+
+def frase_de_colisio(codi, context, client=''):
+    """LA FRASE DEL REFÚS, una i la mateixa a totes les portes.
+
+    «BT ja és Leg opening girth (BT) del diccionari del client BRW, pendent de revisió. Fes-lo
+    servir des del cercador, revisa'l al catàleg, o dona-li una nomenclatura diferent.»
+
+    🚨 PER QUÈ VIU AQUÍ I NO A LA VISTA. Hi ha DUES portes que refusen per aquest motiu —
+    `gravar_pom_view` (400) i `create_model_pom_view` (409)— i fins ara cadascuna es redactava
+    la seva: la del 409 ja deia una sortida («Fes-lo servir des del cercador, o dona-li una
+    nomenclatura diferent») i la del 400 només deia el xoc. La persona ha de llegir el mateix
+    vingui d'on vingui, i el dia que la frase millori ha de millorar a totes dues alhora.
+
+    ⚠️ **DIU AMB QUÈ XOCA I QUÈ POT FER**, que és la doctrina que `create_model_pom_view` ja
+    tenia escrita al seu comentari: «la sortida no és inventar un codi: és DIR AMB QUÈ XOCA
+    (…) el que necessita no és un codi nou, és que li ensenyin l'existent».
+    """
+    if not context:
+        return f'«{codi}» ja és al catàleg d\'aquest client.'
+    qui = context['pom_nom'] or context['pom_codi'] or ''
+    # El codi de la casa al costat del nom quan són coses diferents: qui ha d'anar a buscar-lo
+    # al cercador el buscarà per aquell, no pel del client.
+    if context['pom_codi'] and context['pom_codi'] != context['client_code']:
+        qui = f'{qui} ({context["pom_codi"]})' if qui else context['pom_codi']
+    on = context['origen_llegible']
+    if client:
+        on = f'{on} {client}'
+    pendent = ', pendent de revisió' if context['pendent_revisio'] else ''
+    # Les sortides: la que revisa només s'ofereix si hi ha res a revisar.
+    sortides = ['Fes-lo servir des del cercador']
+    if context['pendent_revisio']:
+        sortides.append('revisa\'l al catàleg')
+    sortides.append('o dona-li una nomenclatura diferent')
+    return (f'«{context["client_code"]}» ja és {qui} {on}{pendent}. '
+            f'{", ".join(sortides)}.')
+
+
+def _context_de_alias(alias, pom, nom):
+    """Tot el que el sistema sap del conflicte, en una forma que una resposta pot servir.
+
+    Això ja era a la mà i es llençava. No hi ha cap consulta nova: `alies_del_codi` porta
+    l'àlies sencer i el seu POM amb el global prefetchat.
+    """
+    return {
+        # El codi TAL COM el client l'escriu: la comparació és `iexact` (i la unique de
+        # `POMMaster` és `upper(codi_client)`), o sigui que qui ha escrit «bt» ha de veure que
+        # el que ja hi ha es diu «BT». Sense això el refús sembla que no parli del que s'ha fet.
+        'client_code': alias.client_code,
+        'pom_id': pom.pk,
+        'pom_codi': pom.codi_client,
+        'pom_nom': nom,
+        'origen': alias.origen,
+        'origen_llegible': ORIGEN_LLEGIBLE.get(alias.origen, alias.origen),
+        # El cas de PROD: un àlies de DICCIONARI encara pendent de revisar. Qui ho llegeix ha de
+        # saber que el codi el reserva una fila que ENCARA no ha validat ningú — és el que fa
+        # que «revisa'l» sigui una sortida i no una endevinalla.
+        'pendent_revisio': bool(alias.pendent_revisio),
+        'es_instancia': bool(alias.es_instancia),
+        'description_en': alias.description_en or '',
+        'description_local': alias.description_local or '',
+        'editat_at': alias.editat_at.isoformat() if alias.editat_at else None,
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────

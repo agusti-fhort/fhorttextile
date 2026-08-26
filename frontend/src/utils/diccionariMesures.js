@@ -89,14 +89,22 @@ export const nomEnIdioma = (fila, lang) =>
 export const subeixDe = (dicc, slug) => filaInstancia(dicc, slug)?.subeix || ''
 
 /**
- * LA CLAU D'EXCLUSIÓ d'un slug: el bloc dins del qual només pot haver-hi UNA etiqueta encesa.
- * `null` si el diccionari no el coneix (no es pot dir què rellevaria).
+ * LA CLAU D'EXCLUSIÓ d'un slug: **la seva FAMÍLIA**, que és el bloc dins del qual només pot
+ * haver-hi UNA etiqueta encesa. `null` si el diccionari no el coneix (no es pot dir què
+ * rellevaria un slug del qual no se sap la família).
+ *
+ * 🚨 ERA `eix` + `/sub-eix` QUAN N'HI HAVIA. Amb dues famílies declarades de deu slugs, els sis
+ * que no en tenien queien a la clau de l'EIX i per tant s'excloïen entre ells i amb tota la
+ * resta: prémer «Top» apagava «Left». Des de la llei del 26/08 **cap slug és orfe** i la
+ * família sola és la clau.
  */
 export function clauExclusio(dicc, slug) {
-  const eix = eixDe(dicc, slug)
-  if (!eix) return null
-  const sub = subeixDe(dicc, slug)
-  return sub ? `${eix}/${sub}` : eix
+  // ⚠️ EL FALLBACK A L'EIX NO ÉS DECORACIÓ. Un payload sense `subeix` —un backend anterior a
+  // aquest tram, que és exactament el cas d'un PROD amb el gunicorn ranci— deixaria TOTES les
+  // píndoles sense clau, i llavors `triaTram` no en pot encendre cap: els xips es tornarien
+  // INERTS, que és pitjor que excloents. Amb l'eix al darrere, un payload vell es comporta com
+  // es comportava; amb famílies, mana la família.
+  return subeixDe(dicc, slug) || eixDe(dicc, slug) || null
 }
 
 /**
@@ -104,19 +112,28 @@ export function clauExclusio(dicc, slug) {
  * `MeasurementInstance.error_de_combinacio` al backend, i les dues bandes han de dir el mateix:
  * la UI evita el gest impossible i la porta el rebutja igualment (una pantalla no és una barana).
  *
- *   · eixos diferents → conviuen (`left` + `relaxed`);
- *   · mateix eix, sub-eixos diferents → conviuen (`back` + `left`);
- *   · mateix sub-eix → xoquen (`left` + `right`, `front` + `back`);
- *   · algun SENSE sub-eix → xoquen (`top` + `left`): el comportament de sempre.
+ * LA REGLA, SENCERA: **xoquen si i només si són de la MATEIXA FAMÍLIA.**
+ *
+ *   · famílies diferents → conviuen (`front`+`left`, `top`+`left`, `cf`+`left`, `side`+`top`);
+ *   · mateixa família → xoquen (`left`+`right`, `front`+`back`, `top`+`bottom`, `cf`+`cb`,
+ *     `side`+`waistband_seam`, `relaxed`+`extended`);
+ *   · vocabulari desconegut → NO es jutja i conviu (com fa el backend).
+ *
+ * ⚠️ **LES REDUNDÀNCIES CONVIUEN.** `front`+`cf` diu dues vegades que és del davant i és
+ * legal: el sistema no fa de policia semàntic (llei d'Agus, 26/08).
  */
 export function xoquen(dicc, a, b) {
+  const fa = subeixDe(dicc, a)
+  const fb = subeixDe(dicc, b)
+  if (fa && fb) return fa === fb
+  // Sense família a banda i banda no es pot aplicar la llei nova: es cau a la d'abans (mateix
+  // EIX → xoquen), que és com es comportava un payload sense `subeix`. Amb el vocabulari de la
+  // casa això no passa mai —cap slug és orfe des del 26/08—; passa amb un backend endarrerit o
+  // amb una instància que s'hagi creat un tenant.
   const ea = eixDe(dicc, a)
   const eb = eixDe(dicc, b)
-  if (!ea || !eb || ea !== eb) return false
-  const sa = subeixDe(dicc, a)
-  const sb = subeixDe(dicc, b)
-  if (!sa || !sb) return true
-  return sa === sb
+  if (!ea || !eb) return false
+  return ea === eb
 }
 
 /** L'eix (`POSICIO`/`ESTAT`) d'un slug d'instància simple, o `null` si no és al diccionari. */
@@ -151,22 +168,49 @@ export const tramsInstancia = (dicc, slug) =>
  * `(model, pom, capa, instancia)`.
  */
 /**
- * EL PES CANÒNIC d'un tram: primer l'EIX que el diccionari declara i, dins de l'eix, el SUB-EIX
- * (`subeixos`, en l'ordre que el backend emet: CARA abans que LATERAL).
+ * EL PES CANÒNIC d'un tram: la posició de la seva FAMÍLIA a `dicc.subeixos`, i prou.
+ *
+ * 🚨 AIXÒ ÉS EL QUE SUBSTITUEIX L'ATZAR ALFABÈTIC. Era
+ *
+ *     const eixos = Object.keys(dicc?.instancies || {})     // ← l'ordre d'un objecte JSON
+ *     return (i < 0 ? 99 : i) * 100 + (j < 0 ? 99 : j)      // ← eix primer, sub-eix després
+ *
+ * i les claus d'aquell objecte les posa el backend amb `order_by('eix')`, que és **alfabètic**:
+ * `'ESTAT' < 'POSICIO'`. O sigui que el sistema componia `extended-right` mentre el docstring
+ * d'aquesta mateixa funció deia «posició abans que estat». La BD en porta la prova
+ * (`extended-right`, `relaxed-right`), i **l'ordre entra a la clau única de cinc taules**.
+ *
+ * ⚠️ **LA FONT ÉS `dicc.subeixos` I NO `dicc.eixos`**, i la tria importa:
+ *   · `subeixos` és la llista de FAMÍLIES en ordre canònic, emesa des de `MeasurementInstance
+ *     .FAMILIES` — que és **on la llei d'Agus viu escrita** (peça → banda → verticalitat →
+ *     costura → línia → estat);
+ *   · `eixos` és una altra cosa: POSICIÓ i ESTAT, el que agrupa les COLUMNES de la taula de
+ *     mesures. Des de la llei del 26/08 l'eix **ja no decideix res de l'ordre**: cada slug té
+ *     família i la família sola en diu el lloc. Fer-lo servir mantindria dos nivells
+ *     d'ordenació on la llei només en té un, i el dia que la família i l'eix no casessin
+ *     tornaríem a tenir dues respostes per a la mateixa pregunta.
  *
  * ⚠️ AQUEST ORDRE NO ÉS EL `display_order`, i no s'hi ha de fer coincidir. El `display_order`
  * diu en quin ordre s'OFEREIXEN els xips (Left · Right · Front · Back: el que es fa servir cada
- * dia, primer); això diu com es COMPON el codi que va al fabricant, que es llegeix cara-i-banda
+ * dia, primer); això diu com es COMPON el slug que va a la clau i el sufix que va al fabricant
  * (`BL`, mai `LB`). Dues preguntes, dues respostes.
  *
- * Un tram sense sub-eix va al final del seu eix — i és inofensiu: no pot conviure amb cap altre
- * del mateix eix (v. `xoquen`).
+ * El que el diccionari no conegui va al final: no es pot inventar on cau un slug del qual no se
+ * sap la família. `sort` és estable, o sigui que entre desconeguts es conserva l'ordre d'entrada.
  */
 function pesCanonic(dicc, slug) {
+  const families = dicc?.subeixos || []
+  const i = families.indexOf(subeixDe(dicc, slug))
+  if (i >= 0) return i
+  // ⚠️ MATEIX FALLBACK QUE `clauExclusio`, i pel mateix motiu. Amb un payload sense `subeix`
+  // —un backend anterior a aquest tram— tots els trams pesarien igual i l'ordre del slug seria
+  // el dels CLICS: la mateixa germana tindria dues claus, que és el defecte que això tanca.
+  // Amb l'eix al darrere, un payload vell compon com componia. Els family-less van DESPRÉS de
+  // les famílies conegudes: un payload mixt no pot deixar-los al mig i moure les que sí que en
+  // tenen.
   const eixos = Object.keys(dicc?.instancies || {})
-  const i = eixos.indexOf(eixDe(dicc, slug))
-  const j = (dicc?.subeixos || []).indexOf(subeixDe(dicc, slug))
-  return (i < 0 ? 99 : i) * 100 + (j < 0 ? 99 : j)
+  const j = eixos.indexOf(eixDe(dicc, slug))
+  return families.length + (j < 0 ? eixos.length : j)
 }
 
 /** Els trams, sense repetits i en l'ordre CANÒNIC. La porta única de tot el que compon. */
@@ -175,10 +219,11 @@ const canonics = (dicc, trams) =>
     .sort((a, b) => pesCanonic(dicc, a) - pesCanonic(dicc, b))
 
 /**
- * Compon el slug d'instància a partir dels trams, en l'ORDRE CANÒNIC (posició abans que estat;
- * i dins la posició, cara abans que lateral): `back-left-relaxed`, mai `left-back-relaxed`. Un
- * ordre que depengués de l'ordre de clic faria dues claus per a la mateixa germana, i la clau
- * única de la BD és `(model, pom, capa, instancia)`.
+ * Compon el slug d'instància a partir dels trams, en l'ORDRE CANÒNIC de la llei (26/08):
+ * **peça → banda → verticalitat → costura → línia → estat**. `back-left`, mai `left-back`;
+ * `right-extended`, mai `extended-right`. Un ordre que depengués de l'ordre de clic —o de com
+ * es diguin els eixos— faria dues claus per a la mateixa germana, i la clau única de la BD és
+ * `(model, pom, capa, instancia, garment)`.
  */
 export function composaInstancia(dicc, trams) {
   return canonics(dicc, trams).join(sepInst(dicc))

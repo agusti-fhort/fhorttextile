@@ -71,8 +71,18 @@ def measurement_identity_vocabulary_view(request):
     """
     capes = [_fila(c) for c in MeasurementLayer.objects.all().order_by('display_order', 'slug')]
 
+    # ⚠️ L'ORDRE DE LES CLAUS D'AQUEST DICCIONARI JA NO DECIDEIX RES, i abans sí. `order_by('eix')`
+    # és ALFABÈTIC (`'ESTAT' < 'POSICIO'`) i el front en prenia l'ordre de composició del slug
+    # (`pesCanonic` amb `Object.keys`), o sigui que la clau única de cinc taules depenia de com
+    # es diguessin dos eixos. Des de la llei del 26/08 l'ordre canònic el diu `subeixos` (les
+    # FAMÍLIES, en l'ordre declarat a `MeasurementInstance.FAMILIES`) i res més.
+    #
+    # Es reordena igualment per `EIX_CHOICES` —l'ordre DECLARAT— i no per l'alfabet: un
+    # diccionari amb un ordre accidental és una mina esperant el proper lector que se'l cregui.
+    _ordre_eix = {clau: i for i, (clau, _) in enumerate(MeasurementInstance.EIX_CHOICES)}
     instancies = {}
-    for r in MeasurementInstance.objects.all().order_by('eix', 'display_order', 'slug'):
+    for r in sorted(MeasurementInstance.objects.all(),
+                    key=lambda x: (_ordre_eix.get(x.eix, 99), x.display_order, x.slug)):
         # El SUFIX només té sentit a l'eix POSICIÓ (els estats no componen codi, D-31.26); s'emet
         # a totes les files igualment perquè el client no hagi de saber en quin eix el pot trobar.
         # `subeix` — EL SEGON NIVELL DE LA POSICIÓ (22-23/08). `''` a tot el que no en té: una
@@ -94,10 +104,14 @@ def measurement_identity_vocabulary_view(request):
     return Response({
         'capes': capes,
         'eixos': eixos,
-        # ELS SUB-EIXOS, EN ORDRE DE COMPOSICIÓ (22-23/08): CARA primer, LATERAL després —
-        # `back`+`left` proposa `BL` i mai `LB`. Va com a LLISTA perquè l'ordre ÉS la dada; les
-        # claus d'un objecte no en tenen. No porta noms: cap superfície n'ensenya el rètol
-        # (els xips van tots dins la columna POSICIÓ); el dia que en calgui, s'hi afegeixen.
+        # LES FAMÍLIES, EN ORDRE CANÒNIC DE COMPOSICIÓ (llei d'Agus, 26/08):
+        #     peça → banda → verticalitat → costura → línia → estat
+        # `back`+`left` compon `back-left` i proposa `BL`, mai `LB`. Va com a LLISTA perquè
+        # **l'ordre ÉS la dada**, i les claus d'un objecte no en tenen — que és exactament el
+        # forat que això tanca: el front prenia l'ordre de les claus de `instancies` i aquelles
+        # sortien alfabètiques. La clau es diu `subeixos` i no `families` perquè el nom és el
+        # contracte publicat i renombrar-lo és un tram propi.
+        # No porta noms: cap superfície n'ensenya el rètol; el dia que en calgui, s'hi afegeixen.
         'subeixos': [clau for clau, _ in MeasurementInstance.SUBEIXOS],
         'instancies': instancies,
         'regles': {

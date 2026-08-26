@@ -32,27 +32,37 @@ const D = {
     { clau: EIX_POSICIO, nom_en: 'Position', nom_ca: 'Posició', nom_es: 'Posición' },
     { clau: EIX_ESTAT, nom_en: 'State', nom_ca: 'Estat', nom_es: 'Estado' },
   ],
-  // ELS SUB-EIXOS DE LA POSICIÓ, EN ORDRE DE COMPOSICIÓ (22-23/08): cara abans que lateral.
-  // No és el `display_order` —aquell diu en quin ordre s'ofereixen els xips— i no s'hi ha de
-  // fer coincidir: `back`+`left` proposa `BL` i els xips surten Left · Right · Front · Back.
-  subeixos: ['CARA', 'LATERAL'],
+  // LES FAMÍLIES, EN ORDRE CANÒNIC (llei d'Agus, 26/08): peça → banda → verticalitat →
+  // costura → línia → estat. No és el `display_order` —aquell diu en quin ordre s'OFEREIXEN
+  // els xips— i no s'hi ha de fer coincidir.
+  subeixos: ['PECA', 'BANDA', 'VERTICALITAT', 'COSTURA', 'LINIA', 'ESTAT'],
+  // 🚨 LES CLAUS D'AQUEST OBJECTE VAN A POSTA EN L'ORDRE «DOLENT» (ESTAT primer).
+  //
+  // Aquest fixture les tenia amb POSICIO davant, i **el servidor no les emetia així**: les
+  // posava `order_by('eix')`, que és ALFABÈTIC (`'ESTAT' < 'POSICIO'`). `pesCanonic` en prenia
+  // l'ordre de composició amb `Object.keys`, o sigui que el test passava en VERD contra un
+  // payload que la porta real no envia mai — i la BD, mentrestant, acumulava `extended-right`.
+  //
+  // Ara el fixture reprodueix l'ordre que el servidor DEIA (el pitjor cas) i l'ordre canònic
+  // n'ha de sortir igualment bé: si algú torna a fer dependre la composició de les claus
+  // d'aquest objecte, aquestes assercions cauen.
   instancies: {
-    [EIX_POSICIO]: [
-      { slug: 'left', sufix: 'L', subeix: 'LATERAL', display_order: 1 },
-      { slug: 'right', sufix: 'R', subeix: 'LATERAL', display_order: 2 },
-      { slug: 'top', sufix: 'T', subeix: '', display_order: 3 },
-      // `BM`, no `B`: `B` és de `back` des del 22-23/08 (`pom/0079_bottom_sufix_bm`).
-      { slug: 'bottom', sufix: 'BM', subeix: '', display_order: 4 },
-      { slug: 'cf', sufix: 'CF', subeix: '', display_order: 5 },
-      { slug: 'cb', sufix: 'CB', subeix: '', display_order: 6 },
-      { slug: 'side', sufix: 'S', subeix: '', display_order: 7 },
-      { slug: 'waistband_seam', sufix: '', subeix: '', display_order: 8 },
-      { slug: 'front', sufix: 'F', subeix: 'CARA', display_order: 9 },
-      { slug: 'back', sufix: 'B', subeix: 'CARA', display_order: 10 },
-    ],
     [EIX_ESTAT]: [
-      { slug: 'relaxed', sufix: '', display_order: 1 },
-      { slug: 'extended', sufix: '', display_order: 2 },
+      { slug: 'relaxed', sufix: '', subeix: 'ESTAT', display_order: 1 },
+      { slug: 'extended', sufix: '', subeix: 'ESTAT', display_order: 2 },
+    ],
+    [EIX_POSICIO]: [
+      { slug: 'left', sufix: 'L', subeix: 'BANDA', display_order: 1 },
+      { slug: 'right', sufix: 'R', subeix: 'BANDA', display_order: 2 },
+      { slug: 'top', sufix: 'T', subeix: 'VERTICALITAT', display_order: 3 },
+      // `BM`, no `B`: `B` és de `back` des del 22-23/08 (`pom/0079_bottom_sufix_bm`).
+      { slug: 'bottom', sufix: 'BM', subeix: 'VERTICALITAT', display_order: 4 },
+      { slug: 'cf', sufix: 'CF', subeix: 'LINIA', display_order: 5 },
+      { slug: 'cb', sufix: 'CB', subeix: 'LINIA', display_order: 6 },
+      { slug: 'side', sufix: 'S', subeix: 'COSTURA', display_order: 7 },
+      { slug: 'waistband_seam', sufix: '', subeix: 'COSTURA', display_order: 8 },
+      { slug: 'front', sufix: 'F', subeix: 'PECA', display_order: 9 },
+      { slug: 'back', sufix: 'B', subeix: 'PECA', display_order: 10 },
     ],
   },
   regles: { sufix_separador: '', instancia_separador: '-', capa_al_codi: false, instancia_unica: '' },
@@ -78,9 +88,15 @@ test('creuar els dos eixos enganxa NOMÉS el sufix de la posició', () => {
   assert.equal(codiProposat(D, 'B', ['relaxed', 'left']), 'BL')
 })
 
-test('el slug compost va SEMPRE en l\'ordre dels eixos, no en el del clic', () => {
+test('el slug compost va SEMPRE en l\'ordre CANÒNIC, no en el del clic', () => {
   assert.equal(composaInstancia(D, ['left', 'relaxed']), 'left-relaxed')
   assert.equal(composaInstancia(D, ['relaxed', 'left']), 'left-relaxed')
+  // 🚨 EL CAS QUE LA BD PORTAVA MAL ESCRIT. Amb l'ordre pres de `Object.keys(instancies)` —i
+  // el servidor emetent ESTAT primer— d'aquí en sortia `extended-right`, que és el que hi ha
+  // desat a `fhort` (pk 3389/3390). La llei diu banda abans que estat.
+  assert.equal(composaInstancia(D, ['extended', 'right']), 'right-extended')
+  assert.equal(composaInstancia(D, ['right', 'extended']), 'right-extended')
+  assert.equal(composaInstancia(D, ['relaxed', 'right']), 'right-relaxed')
   // Idempotent i sense duplicats: dos clics a la mateixa opció no fabriquen `left-left`.
   assert.equal(composaInstancia(D, ['left', 'left']), 'left')
   assert.equal(composaInstancia(D, []), '')
@@ -200,45 +216,67 @@ test('el nom de la columna el posa el diccionari, en l\'idioma de qui llegeix', 
 // CARA (front · back) i LATERAL (left · right). Dins d'un, excloents; entre ells, combinables.
 // Les posicions que no en declaren cap segueixen sent excloents amb tot el seu eix.
 
-test('el sub-eix el diu el diccionari, no aquest fitxer', () => {
-  assert.equal(subeixDe(D, 'back'), 'CARA')
-  assert.equal(subeixDe(D, 'left'), 'LATERAL')
-  assert.equal(subeixDe(D, 'top'), '')
-  assert.equal(subeixDe(D, 'relaxed'), '')
+test('la FAMÍLIA la diu el diccionari, no aquest fitxer', () => {
+  assert.equal(subeixDe(D, 'back'), 'PECA')
+  assert.equal(subeixDe(D, 'left'), 'BANDA')
+  // 🚨 JA NO HI HA CAP SLUG ORFE. Aquests tres tornaven `''` i per això s'excloïen amb tot:
+  // és el que la formació va veure com «els xips són un grup exclusiu».
+  assert.equal(subeixDe(D, 'top'), 'VERTICALITAT')
+  assert.equal(subeixDe(D, 'cf'), 'LINIA')
+  assert.equal(subeixDe(D, 'side'), 'COSTURA')
+  assert.equal(subeixDe(D, 'relaxed'), 'ESTAT')
   assert.equal(subeixDe(D, 'sleeve'), '')      // desconegut: no s'inventa
   assert.equal(subeixDe(null, 'back'), '')     // sense diccionari, tampoc
 })
 
-test('la clau d\'exclusió és el sub-eix quan n\'hi ha, i l\'eix quan no', () => {
-  assert.equal(clauExclusio(D, 'left'), `${EIX_POSICIO}/LATERAL`)
-  assert.equal(clauExclusio(D, 'back'), `${EIX_POSICIO}/CARA`)
-  assert.equal(clauExclusio(D, 'top'), EIX_POSICIO)
-  assert.equal(clauExclusio(D, 'relaxed'), EIX_ESTAT)
-  assert.equal(clauExclusio(D, 'sleeve'), null)
+test('la clau d\'exclusió és LA FAMÍLIA, i prou', () => {
+  assert.equal(clauExclusio(D, 'left'), 'BANDA')
+  assert.equal(clauExclusio(D, 'back'), 'PECA')
+  assert.equal(clauExclusio(D, 'top'), 'VERTICALITAT')
+  assert.equal(clauExclusio(D, 'side'), 'COSTURA')
+  assert.equal(clauExclusio(D, 'cf'), 'LINIA')
+  assert.equal(clauExclusio(D, 'relaxed'), 'ESTAT')
+  assert.equal(clauExclusio(D, 'sleeve'), null)   // desconegut: no es pot dir què rellevaria
 })
 
-test('quines etiquetes xoquen: el mirall exacte del backend', () => {
-  // mateix sub-eix → xoquen
-  assert.equal(xoquen(D, 'left', 'right'), true)
-  assert.equal(xoquen(D, 'front', 'back'), true)
-  // sub-eixos diferents del mateix eix → conviuen (el cas nou)
+test('quines etiquetes xoquen: MATEIXA FAMÍLIA, i res més', () => {
+  // Dins de família → xoquen. Les SIS famílies, una per una.
+  assert.equal(xoquen(D, 'front', 'back'), true)                 // PECA
+  assert.equal(xoquen(D, 'left', 'right'), true)                 // BANDA
+  assert.equal(xoquen(D, 'top', 'bottom'), true)                 // VERTICALITAT
+  assert.equal(xoquen(D, 'side', 'waistband_seam'), true)        // COSTURA
+  assert.equal(xoquen(D, 'cf', 'cb'), true)                      // LINIA
+  assert.equal(xoquen(D, 'relaxed', 'extended'), true)           // ESTAT
+  // Entre famílies → conviuen SEMPRE.
   assert.equal(xoquen(D, 'back', 'left'), false)
   assert.equal(xoquen(D, 'front', 'right'), false)
-  // sense sub-eix → excloent amb tot el seu eix (el comportament de sempre)
-  assert.equal(xoquen(D, 'top', 'left'), true)
-  assert.equal(xoquen(D, 'top', 'bottom'), true)
-  assert.equal(xoquen(D, 'cf', 'back'), true)
-  // eixos diferents → conviuen
   assert.equal(xoquen(D, 'left', 'relaxed'), false)
+  // 🚨 ELS QUATRE QUE ABANS XOCAVEN I ARA NO: és el símptoma de la formació, dit en assercions.
+  assert.equal(xoquen(D, 'top', 'left'), false)
+  assert.equal(xoquen(D, 'cf', 'back'), false)     // la LÍNIA no és la PEÇA
+  assert.equal(xoquen(D, 'side', 'top'), false)
+  assert.equal(xoquen(D, 'waistband_seam', 'left'), false)
+  // La redundància és LEGAL: el sistema no fa de policia semàntic.
+  assert.equal(xoquen(D, 'front', 'cf'), false)
   // desconegut → no es jutja
   assert.equal(xoquen(D, 'sleeve', 'left'), false)
 })
 
-test('el slug compost posa la CARA abans que el LATERAL, tant se val l\'ordre del clic', () => {
+test('l\'ORDRE CANÒNIC SENCER: peça → banda → verticalitat → costura → línia → estat', () => {
+  // L'exemple canònic de la llei.
   assert.equal(composaInstancia(D, ['left', 'back']), 'back-left')
   assert.equal(composaInstancia(D, ['back', 'left']), 'back-left')
-  // i els dos eixos grans segueixen manant per sobre: posició abans que estat
+  // L'estat va SEMPRE l'últim, vingui com vingui.
   assert.equal(composaInstancia(D, ['relaxed', 'left', 'back']), 'back-left-relaxed')
+  assert.equal(composaInstancia(D, ['extended', 'top']), 'top-extended')
+  // Les sis famílies alhora, en desordre d'entrada: una sola resposta possible.
+  assert.equal(
+    composaInstancia(D, ['relaxed', 'left', 'back', 'top', 'side', 'cf']),
+    'back-left-top-side-cf-relaxed')
+  // …i entrades en QUALSEVOL permutació donen el mateix slug: és el que la clau única exigeix.
+  assert.equal(
+    composaInstancia(D, ['cf', 'side', 'top', 'back', 'left', 'relaxed']),
+    'back-left-top-side-cf-relaxed')
 })
 
 test('el sufix compost és CARA + LATERAL (FL · FR · BL · BR), no l\'ordre del clic', () => {

@@ -34,3 +34,4 @@ frontend-backoffice/.env.*
 
 # Q8/QA — bolcat de payloads del banc (el genera el test; no és codi)
 ops/qa/_out/
+backend/var/

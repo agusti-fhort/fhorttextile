@@ -54,6 +54,7 @@ export default function PatternTab({ modelId }) {
   const [rols, setRols] = useState([])
   const [acta, setActa] = useState(null)
   const [desantIdentitat, setDesantIdentitat] = useState(false)
+  const [reconeixent, setReconeixent] = useState(false)
   const [errorIdentitat, setErrorIdentitat] = useState('')
 
   // Els fitxers triats: estat CONTROLAT (les FileDropCard són controlades). Abans eren dos
@@ -135,6 +136,23 @@ export default function PatternTab({ modelId }) {
       setErrorIdentitat(e?.response?.data?.error || t('pattern.identity_err'))
     } finally {
       setDesantIdentitat(false)
+    }
+  }, [actual, t])
+
+  /** Torna a proposar rol i cara. Idempotent, i no toca res confirmat. */
+  const reconeixPeces = useCallback(async () => {
+    setErrorIdentitat('')
+    setReconeixent(true)
+    try {
+      await patterns.reconeixer(actual.id)
+      // Es rellegeix el detall sencer, pel mateix motiu que en desar: el servidor és qui
+      // sap què ha quedat proposat i què ha quedat en silenci.
+      const { data } = await patterns.get(actual.id)
+      setActual(data)
+    } catch (e) {
+      setErrorIdentitat(e?.response?.data?.error || t('pattern.recognize_err'))
+    } finally {
+      setReconeixent(false)
     }
   }, [actual, t])
 
@@ -256,6 +274,8 @@ export default function PatternTab({ modelId }) {
                 onTria={setPecaSel}
                 onDesa={desaIdentitat}
                 onConfirma={confirmaIdentitat}
+                onReconeix={reconeixPeces}
+                reconeixent={reconeixent}
                 desant={desantIdentitat}
                 error={errorIdentitat}
               />

@@ -2851,7 +2851,9 @@
     "sortir_amb_canvis_peces": "In: {{peces}}",
     "sortir_amb_canvis_cos": "If you leave now, the changes in these containers will be lost. Close this warning and save them in the container where you made them.",
     "sortir_sense_desar": "Leave without saving",
-    "quedar_me": "Stay here"
+    "quedar_me": "Stay here",
+    "colisio_title": "Name already taken ({{count}})",
+    "colisio_pendent": "pending review"
   },
   "model_fabric": {
     "err_close_table": "Could not close the table.",
@@ -4682,7 +4684,24 @@
     "identity_saving": "Saving…",
     "identity_saved": "Saved",
     "identity_err": "Could not save the identity",
-    "identity_block_orig": "Block name in the file: {{nom}}"
+    "identity_block_orig": "Block name in the file: {{nom}}",
+    "recognize": "Identify",
+    "recognize_running": "Identifying…",
+    "recognize_summary": "{{proposades}} proposed · {{mudes}} with no proposal",
+    "recognize_err": "Could not propose roles.",
+    "proposal_field_t": "Machine proposal: nobody has confirmed it yet.",
+    "proposal_silent": "No proposal",
+    "proposal_accept": "Accept the proposal",
+    "proposal_accept_t": "Accept: it becomes the piece's identity.",
+    "proposal_ev_exact": "same piece as {{peca}}",
+    "proposal_ev_near": "looks like {{peca}}",
+    "proposal_ev_sewn": "sewn with {{amb}}",
+    "proposal_ev_plain": "proposal from the piece bank",
+    "proposal_chip_t": "Margin {{score}} against a {{llindar}} threshold · {{veins}} neighbours looked at",
+    "identity_face": "Face",
+    "identity_face_none": "No face",
+    "identity_face_front": "Front",
+    "identity_face_back": "Back"
   },
   "filedrop": {
     "hint": "Drag it here or click",

@@ -2,6 +2,9 @@ from django.conf import settings
 from django.db import models
 from django.db.models.functions import Upper
 
+# La llei de les famílies d'instància (26/08). V. la nota a `MeasurementInstance`.
+from fhort.pom import families as _fam
+
 
 # ─────────────────────────────────────────────────────────────
 # FHORT global catalog ('public' schema)
@@ -346,80 +349,126 @@ class MeasurementInstance(models.Model):
     #: es fa un cop no té res a qualificar (v. `sufixIdentitat`, que hi torna `''`).
     SLUG_UNICA = ''
 
-    # ═══ ELS DOS EIXOS DE LA POSICIÓ (Agus, 22-23/08) ══════════════════════════════════════
+    # ═══ LES FAMÍLIES D'EIXOS (LA LLEI D'AGUS, 26/08) ═════════════════════════════════════
     #
-    # 🚨 LA POSICIÓ NO ÉS UNA LLISTA D'OPCIONS EXCLOENTS: en són DUES. Una mesura pot ser «la
-    # de l'esquena, banda esquerra» —CARA i LATERAL alhora—, i no pot ser «esquerra i dreta»
-    # ni «davant i darrere». Dins d'un sub-eix, excloents; entre sub-eixos, combinables.
+    # 🚨 LA POSICIÓ NO ÉS UNA LLISTA D'OPCIONS EXCLOENTS: són CINC FAMÍLIES. Una mesura pot ser
+    # «la del davant, banda esquerra, per dalt» —tres famílies alhora—, i no pot ser «esquerra i
+    # dreta». **Excloents DINS de família; combinables ENTRE totes.**
     #
-    # ⚠️ **L'ORDRE D'AQUESTA TUPLA ÉS L'ORDRE DEL SUFIX**, no el de presentació: CARA primer i
-    # LATERAL després (`BL`, mai `LB`; `FR`, mai `RF`). El `display_order` de les files diu
-    # una altra cosa —en quin ordre s'OFEREIXEN els xips (Left · Right · Front · Back)— i les
-    # dues coses no han de coincidir: el codi que va al fabricant es llegeix cara-i-banda, i
-    # els xips s'ofereixen pel que es fa servir cada dia.
+    # Això substitueix els dos sub-eixos del 22-23/08 (`CARA` i `LATERAL`), que deixaven **6
+    # dels 10 slugs de posició sense família** —`top`, `bottom`, `cf`, `cb`, `side`,
+    # `waistband_seam`—, i un slug sense família era EXCLOENT AMB TOT. D'aquí venia el símptoma
+    # de la formació: prémer «Top» apagava «Left». Ara no hi ha cap slug orfe.
     #
-    # ⚠️ PER QUÈ UNA CONSTANT I NO UNA COLUMNA. El sub-eix no és una dada que un tenant pugui
+    # ⚠️ **`cf`/`cb` són família PRÒPIA (LÍNIA), NO són peça.** El centre davant és una LÍNIA de
+    # la peça, no la seva cara: per això `front`+`cf` és legal. És redundant —qui ho digui ja
+    # sap què vol dir— i **el sistema no fa de policia semàntic**: la redundància és criteri de
+    # qui mesura, no un error.
+    #
+    # ⚠️ **L'ORDRE D'AQUESTA TUPLA ÉS L'ORDRE CANÒNIC**, i és el de la llei:
+    #     peça → banda → verticalitat → costura → línia → estat.
+    # Mana el slug que es desa (`back-left`, mai `left-back`) i el sufix que es proposa. **MAI
+    # l'alfabet**: v. la nota de `EIX_CHOICES` i el defecte que això tanca.
+    # El `display_order` de les files diu una altra cosa —en quin ordre s'OFEREIXEN els xips— i
+    # les dues coses no han de coincidir.
+    #
+    # ⚠️ **EL MIRALL ÉS PROPIETAT DE LA FAMÍLIA, i només el tenen les BINOMIALS.** `COSTURA` no
+    # en té: «side seam» i «waistband seam» no són l'una el revers de l'altra, són dues costures
+    # diferents. Es declaren com a DADA per al dia que el motor demani girar una peça o copiar
+    # left→right; **cap operació de gir s'implementa aquí** (v. l'acta: fora d'abast).
+    #
+    # ⚠️ PER QUÈ UNA CONSTANT I NO UNA COLUMNA. La família no és una dada que un tenant pugui
     # informar: és la GEOMETRIA de la peça —que left i right són la mateixa pregunta— i és la
     # mateixa a tot arreu. Una columna la faria editable per schema i el dia que dos schemes
     # discrepessin, la mateixa germana tindria dos codis. El que SÍ que viatja és la
     # publicació: `GET /api/v1/mesures/diccionari/` l'emet, i el front no se la reescriu.
-    SUBEIX_CARA = 'CARA'
-    SUBEIX_LATERAL = 'LATERAL'
-    SUBEIXOS = (
-        (SUBEIX_CARA, ('front', 'back')),
-        (SUBEIX_LATERAL, ('left', 'right')),
-    )
+    # 🚨 LA LLEI VIU A `fhort/pom/families.py`, NO AQUÍ. Les migracions de dades treballen amb
+    # models HISTÒRICS, que no porten els mètodes de la classe viva: una migració que hagi de
+    # recompondre un slug no pot cridar cap `@classmethod` d'aquí. Si la llei visqués al model,
+    # la migració se n'hauria d'escriure una còpia — i una còpia de l'ordre canònic és
+    # exactament el defecte que aquest tram tanca. Aquest model n'és CONSUMIDOR, no propietari.
+    FAM_PECA = _fam.FAM_PECA
+    FAM_BANDA = _fam.FAM_BANDA
+    FAM_VERTICALITAT = _fam.FAM_VERTICALITAT
+    FAM_COSTURA = _fam.FAM_COSTURA
+    FAM_LINIA = _fam.FAM_LINIA
+    FAM_ESTAT = _fam.FAM_ESTAT
+
+    #: `(família, (slugs...), mirall)` EN ORDRE CANÒNIC — v. `families.FAMILIES`.
+    FAMILIES = _fam.FAMILIES
+
+    #: Compatibilitat de nom: `SUBEIXOS` era la forma vella (dues famílies i sense mirall) i és
+    #: el que llegeixen el publicador i el front. Es manté el NOM —és el contracte publicat a
+    #: `GET /api/v1/mesures/diccionari/`— amb el contingut nou, que és el que la llei diu.
+    SUBEIXOS = tuple((clau, slugs) for clau, slugs, _ in _fam.FAMILIES)
 
     @classmethod
-    def subeix_de(cls, slug):
-        """El sub-eix d'un slug simple, o `''` si no en té cap de declarat.
+    def familia_de(cls, slug):
+        """La família d'un slug simple, o `''` si el diccionari no el coneix."""
+        return _fam.familia_de(slug)
 
-        Sense sub-eix (`top`, `cf`, `side`, `waistband_seam`…) la posició es comporta com fins
-        avui: EXCLOENT amb tota la resta de l'eix. Només les quatre declarades es creuen.
+    #: Àlies històric. `subeix_de` és com es deia quan les famílies eren dues i es deien
+    #: «sub-eixos»; el nom viu a la publicació i al front, i canviar-lo seria un tram propi.
+    subeix_de = familia_de
+
+    @classmethod
+    def mirall_de(cls, slug):
+        """El slug que és el REVERS d'aquest dins de la seva família, o `''` si no en té.
+
+        És DADA, no operació: qui giri una peça o copiï left→right la llegirà d'aquí. **Aquí no
+        es gira res** (llei d'Agus 26/08: els miralls es declaren, el motor ja els demanarà).
         """
-        for clau, slugs in cls.SUBEIXOS:
-            if slug in slugs:
-                return clau
-        return ''
+        return _fam.mirall_de(slug)
+
+    @classmethod
+    def ordre_canonic(cls, slug):
+        """El PES d'un slug per a l'ordre canònic. Com més baix, més a l'esquerra."""
+        return _fam.ordre_canonic(slug)
+
+    @classmethod
+    def composa(cls, trams, separador=_fam.SEPARADOR):
+        """Els trams en ORDRE CANÒNIC, sense repetits. La porta única de composició."""
+        return _fam.composa(trams, separador)
 
     @classmethod
     def error_de_combinacio(cls, valor, separador='-'):
         """El motiu pel qual aquesta instància composta és il·legal, o `''` si és bona.
 
-        LA REGLA, EN UNA FRASE: **fins a UNA etiqueta per eix**, i a la POSICIÓ fins a una per
-        SUB-EIX —amb una excepció que conserva el comportament d'abans: una posició SENSE
-        sub-eix declarat no es combina amb cap altra posició.
+        LA REGLA, EN UNA FRASE (llei d'Agus, 26/08): **fins a UNA etiqueta per FAMÍLIA**, i res
+        més. Entre famílies, tot combina.
+
+        🚨 AIXÒ ÉS MÉS PERMISSIU QUE EL QUE HI HAVIA, i a posta. Abans es jutjava per EIX i les
+        posicions sense sub-eix eren excloents amb tota la resta de l'eix: `top`+`left` era
+        il·legal i `cf`+`left` també, que és el que la formació va veure com «els xips es
+        comporten com un grup exclusiu». Ara les úniques parelles impossibles són les de dins
+        d'una família.
+
+        ⚠️ **LES REDUNDÀNCIES SÓN LEGALS.** `front`+`cf` diu dues vegades que és del davant, i
+        no és cap error: és criteri de qui mesura. El sistema **no fa de policia semàntic**.
 
         Torna un missatge i no un booleà perquè qui el crida el pinta tal qual: la persona ha
         de llegir QUINES dues etiquetes es barallen, no «valor invàlid».
 
         El vocabulari que el diccionari no conté NO es jutja (un tenant pot crear-se la seva
-        instància, i un slug desconegut no diu de quin eix és): es deixa passar, com ja fa el
-        front, que el pinta cru en comptes de fer-lo desaparèixer.
+        instància, i un slug desconegut no diu de quina família és): es deixa passar, com ja fa
+        el front, que el pinta cru en comptes de fer-lo desaparèixer.
         """
         trams = [t for t in str(valor or '').split(separador) if t]
         if len(trams) < 2:
             return ''
-        files = {r.slug: r for r in cls.objects.filter(slug__in=trams)}
-        per_eix = {}
+        # Només es jutja el vocabulari que el diccionari declara: la resta passa.
+        coneguts = set(cls.objects.filter(slug__in=trams).values_list('slug', flat=True))
+        per_familia = {}
         for t in trams:
-            fila = files.get(t)
-            if fila is not None:
-                per_eix.setdefault(fila.eix, []).append(t)
-        for eix, slugs in per_eix.items():
-            if len(slugs) < 2:
+            if t not in coneguts:
                 continue
-            subeixos = [cls.subeix_de(s) for s in slugs]
-            nom_eix = cls.EIX_NOMS.get(eix, {}).get('nom_ca', eix)
-            sense = [s for s, sx in zip(slugs, subeixos) if not sx]
-            if sense:
-                return (f'«{sense[0]}» no es combina amb cap altra etiqueta de la mateixa '
-                        f'columna ({nom_eix}): {" + ".join(slugs)}.')
-            if len(set(subeixos)) != len(subeixos):
-                repetit = next(sx for sx in subeixos if subeixos.count(sx) > 1)
-                iguals = [s for s, sx in zip(slugs, subeixos) if sx == repetit]
-                return (f'«{iguals[0]}» i «{iguals[1]}» són del mateix eix de {nom_eix.lower()} '
-                        f'({repetit}): una mesura no pot ser totes dues.')
+            fam = cls.familia_de(t)
+            if fam:
+                per_familia.setdefault(fam, []).append(t)
+        for fam, slugs in per_familia.items():
+            if len(slugs) > 1:
+                return (f'«{slugs[0]}» i «{slugs[1]}» són de la mateixa família ({fam}): '
+                        f'una mesura no pot ser totes dues.')
         return ''
 
     slug = models.SlugField(max_length=30, unique=True)
@@ -2135,3 +2184,448 @@ class TranslationCache(models.Model):
 
     def __str__(self):
         return f'{self.source_ref} [{self.lang}]'
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# CATÀLEG SEMÀNTIC (F3 · Patró B, 2026-08-26)
+#
+# Font: `docs/diagnosis/REPORT_GCD_ONTOLOGY_2026-08-25.md` §5.4, ajustat per les
+# decisions D1–D7 ratificades per l'Agus el 26/08.
+#
+# Aquestes quatre taules són el vocabulari que a FTT NO existia: què és una VORA
+# (`EdgeRole`), què és un PUNT amb nom (`LandmarkRole`), quina vora es cus amb quina
+# (`SeamPairTemplate`) i quines vores s'espera que tingui una peça d'un tipus de
+# garment concret (`GarmentTypeItemEdgeProfile`). El catàleg de PECES ja existia i és
+# més ric que el de GarmentCode (30 slugs contra 8 que GarmentCode pot produir): per
+# això aquí NO es toca `PatternPieceRole` més enllà de tres slugs que li faltaven (D6).
+#
+# **Viuen a `fhort.pom` per la mateixa raó d'infraestructura que `PatternPieceRole` i
+# `MeasurementLayer`**: és l'única app que és a SHARED *i* a TENANT alhora, o sigui
+# l'única on una taula pot existir a `public` i replicar-se a cada tenant.
+#
+# **Referència per SLUG, mai per PK** (llei G9): els slugs són el contracte i viatgen
+# entre tenants i entre versions d'un patró. L'única FK real d'aquest bloc cap a un
+# altre catàleg és `PatternSegment.edge_role` (viu dins del tenant, on les dues taules
+# hi són). Els `*_slug` d'aquí NO són FKs a propòsit.
+#
+# **LA SEMBRA NO ESBORRA MAI**: `update_or_create` per slug o per clau canònica, cap
+# `delete`, i el revers de tota migració de dades és un noop.
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+class CatalegSemanticOrigenMixin(models.Model):
+    """Els tres camps d'auditoria que la casa ja fa servir per a tot catàleg de sistema.
+
+    §5.3 de l'informe: FTT **ja té** l'idioma per dir «això encara no està validat» —
+    `is_system` + `pendent_revisio` + `origen`. Introduir un `validation_state` nou
+    seria un segon vocabulari per a la mateixa cosa. L'únic camp que aquest bloc hi
+    afegeix és `source_ref`, que és el que la procedència de GarmentCode demana de debò.
+    """
+
+    ORIGEN_SEED = 'SEED'
+    ORIGEN_MANUAL = 'MANUAL'
+    ORIGEN_IMPORT = 'IMPORT'
+    ORIGEN_CHOICES = [
+        (ORIGEN_SEED, 'Sembra'),
+        (ORIGEN_MANUAL, 'Manual'),
+        (ORIGEN_IMPORT, 'Importació'),
+    ]
+
+    is_system = models.BooleanField(default=False)
+    pendent_revisio = models.BooleanField(default=False)
+    origen = models.CharField(max_length=10, choices=ORIGEN_CHOICES, default=ORIGEN_MANUAL)
+    display_order = models.PositiveSmallIntegerField(default=0)
+    #: Procedència fila a fila: 'GarmentCode@d449629 bodice.py:306'. És l'auditoria de la
+    #: importació, no una nota: qui llegeixi una fila ha de poder anar a la línia que la
+    #: va evidenciar.
+    source_ref = models.TextField(blank=True, default='')
+
+    class Meta:
+        abstract = True
+
+
+class ZonaAnatomica(models.TextChoices):
+    """Zona del cos on viu una vora o un punt. Vocabulari tancat.
+
+    `ANY` no és «no ho sabem»: és una vora que apareix a més d'una zona amb el mateix
+    sentit (una vora acabada és una vora acabada tant a una faldilla com a una màniga).
+    """
+
+    NECK = 'neck', 'Coll'
+    SHOULDER = 'shoulder', 'Espatlla'
+    ARM = 'arm', 'Braç'
+    TORSO = 'torso', 'Tors'
+    WAIST = 'waist', 'Cintura'
+    LEG = 'leg', 'Cama'
+    ANY = 'any', 'Qualsevol'
+
+
+class Face(models.TextChoices):
+    """L'eix DAVANT/DARRERE (decisió D1).
+
+    GarmentCode posa aquesta distinció DINS del nom del rol (22 dels seus 24 rols la
+    porten: `ftorso`/`btorso`, `sleeve_f`/`sleeve_b`…). FTT no la tenia enlloc: tenia
+    lateralitat (L/R) i prou. D1 diu que va com a EIX, no partint el vocabulari de rols
+    — és la mateixa forma que la lateralitat que ja funciona, i deixa intactes els 30
+    slugs sembrats, que són un contracte entre tenants.
+
+    Buit NO vol dir «encara no ho sabem»: vol dir que la peça **no té cara** (una
+    cinturilla al doblec, un panell de godet). Igual que `PatternPiece.lateralitat`.
+    """
+
+    CAP = '', 'Sense cara'
+    FRONT = 'front', 'Davant'
+    BACK = 'back', 'Darrere'
+
+
+class EdgeRole(CatalegSemanticOrigenMixin):
+    """Què ÉS una vora, anatòmicament: escot, sisa, costat, entrecuix.
+
+    Aquest vocabulari a FTT **no existia**. `PatternSegment.nom` és text lliure i
+    `PatternSegment.tipus_vora` és un `CharField` sense vocabulari enlloc del codi. El
+    més semblant que hi havia és `LayerRole` (`patterns/engine/geometry.py:26`:
+    `cut`/`sew`/`internal`/`turn`/`curve`/`notch`/`grain`/`mirror`), que és semàntica de
+    CAPA de CAD — diu «això és una línia de tall», mai «això és un escot». És ORTOGONAL
+    a aquest catàleg, no un rival.
+
+    **Els 24 slugs anatòmics surten del codi de GarmentCode, no de les dades**
+    (informe §2.4): els noms d'`Interface` (34 claus, mai serialitzades) i les 13
+    factories de construcció de vores. Els 3 estructurals (`godet_insert_seam`,
+    `level_join_seam`, `slit_edge`) diuen com s'ha muntat una peça, no on seu al cos, i
+    per això van amb `kind='structural'`.
+
+    ⚠️ **D2: cap `EdgeRole` vindrà mai del DXF.** El catàleg es construeix ara; l'
+    assignació serà d'un reconeixedor + humà, més endavant. El camí manual ja existeix
+    avui: `PatternSegment.origen = ORIGEN_DECLARAT` és el patronista dient «això és la
+    costura lateral».
+
+    🚨 `needs_piece_role=True` marca les vores POLISÈMIQUES (informe §2.2): a GarmentCode
+    la clau `bottom` és cintura en un cos, baix en una faldilla, puny en una màniga i
+    vora d'unió en una cinturilla; `inside` és centre-davant en un tors i entrecuix en un
+    pantaló. **Un `EdgeRole` d'aquests no es pot llegir sol: es llegeix amb el rol de la
+    peça.** És el bessó, pel costat de la vora, de la trampa d'`armhole_shape`.
+    """
+
+    KIND_OPENING = 'opening'
+    KIND_SEAM = 'seam'
+    KIND_FINISHED = 'finished'
+    KIND_INTERNAL = 'internal'
+    KIND_STRUCTURAL = 'structural'
+    KIND_CHOICES = [
+        (KIND_OPENING, 'Obertura'),
+        (KIND_SEAM, 'Costura'),
+        (KIND_FINISHED, 'Vora acabada'),
+        (KIND_INTERNAL, 'Interna'),
+        (KIND_STRUCTURAL, 'Estructural'),
+    ]
+
+    slug = models.SlugField(max_length=60, unique=True)
+    nom_en = models.CharField(max_length=120)
+    nom_ca = models.CharField(max_length=120)
+    nom_es = models.CharField(max_length=120)
+    zone = models.CharField(max_length=12, choices=ZonaAnatomica.choices)
+    kind = models.CharField(max_length=12, choices=KIND_CHOICES)
+    #: El rol de vora amb què aquesta es cus normalment. **Slug, no FK** (llei G9), i
+    #: nul·lable perquè una vora acabada (`hem`, `strapless_top`) no es cus amb res.
+    #: Una vora que es cus amb ella mateixa (costat amb costat) es referencia a si mateixa.
+    mates_slug = models.CharField(max_length=60, blank=True, default='')
+    needs_piece_role = models.BooleanField(default=False)
+
+    class Meta:
+        verbose_name = 'Rol de vora'
+        verbose_name_plural = 'Rols de vora'
+        ordering = ['display_order', 'slug']
+
+    def __str__(self):
+        return f'{self.slug} · {self.nom_ca or self.nom_en}'
+
+
+class LandmarkRole(CatalegSemanticOrigenMixin):
+    """Un PUNT amb nom, i —el que de debò importa— si es pot DERIVAR o s'ha de marcar.
+
+    🔑 **Aquesta taula és la resposta directa al bloquejant A11** d'
+    `INFORME_CORPUS_I_AUTOANCORATGE_2026-08-24`, que diu que cap dada del sistema
+    identifica l'HPS. Un cop hi ha `EdgeRole`, l'HPS **no és una dada que ningú hagi de
+    marcar**: és l'extrem que comparteixen l'escot i la costura d'espatlla.
+
+    La regla és estructural i no afortunada (informe §6.1): escot i sisa es retallen a
+    DUES cantonades disjuntes del mateix panell (`collar_corner` i `shoulder_corner`), i
+    entre elles hi ha sempre exactament una vora — l'espatlla. Mesurat 2 371 de 2 371.
+
+    ⚠️ **Però deriva de ROLS DE VORA, no de GarmentCode.** El 2 371/2 371 està mesurat
+    sobre patrons on el GENERADOR havia etiquetat les vores. Diu que la regla és sòlida;
+    no diu res sobre si un DXF del taller es pot etiquetar (D2).
+
+    `derivable=False` és la columna interessant: punt de pit, àpex, alçada de cintura en
+    un costat corbat, línia de genoll, línia de colze. GarmentCode en calcula uns quants
+    des de les mesures del COS, no del patró — un mecanisme genuïnament diferent, i
+    `derivation_op='manual'` n'és el registre honest.
+    """
+
+    OP_SHARED_ENDPOINT = 'shared_endpoint'
+    OP_FAR_ENDPOINT = 'far_endpoint'
+    OP_EXTREMUM = 'extremum'
+    OP_MANUAL = 'manual'
+    OP_CHOICES = [
+        (OP_SHARED_ENDPOINT, 'Extrem compartit per dues vores'),
+        (OP_FAR_ENDPOINT, "Extrem llunyà d'una vora"),
+        (OP_EXTREMUM, 'Extrem geomètric'),
+        (OP_MANUAL, 'Marcat a mà'),
+    ]
+
+    slug = models.SlugField(max_length=60, unique=True)
+    nom_en = models.CharField(max_length=120)
+    nom_ca = models.CharField(max_length=120)
+    nom_es = models.CharField(max_length=120)
+    zone = models.CharField(max_length=12, choices=ZonaAnatomica.choices)
+    #: True = el punt es calcula des dels rols de vora, sense que ningú el marqui.
+    derivable = models.BooleanField(default=False)
+    derivation_op = models.CharField(max_length=20, choices=OP_CHOICES, default=OP_MANUAL)
+    #: Operands com a SLUGS de rol de vora: {"a": "neckline", "b": "shoulder_seam"}.
+    #: JSON i no dues FKs perquè els operands no són sempre dos ni sempre del mateix tipus.
+    derivation_input = models.JSONField(default=dict, blank=True)
+    #: Desempat quan l'operació sola és ambigua ('lowest_y', 'away_from:shoulder_point').
+    derivation_tiebreak = models.CharField(max_length=20, blank=True, default='')
+    #: L'evidència de la regla, **tal com es va mesurar**: 2 371 de 2 371. NULL vol dir
+    #: que aquesta regla concreta no s'ha mesurat mai — i NULL és més honest que un 0.
+    evidence_num = models.IntegerField(null=True, blank=True)
+    evidence_den = models.IntegerField(null=True, blank=True)
+    evidence_ref = models.TextField(blank=True, default='')
+
+    class Meta:
+        verbose_name = 'Rol de punt notable'
+        verbose_name_plural = 'Rols de punt notable'
+        ordering = ['display_order', 'slug']
+
+    def __str__(self):
+        return f'{self.slug} · {self.nom_ca or self.nom_en}'
+
+
+class SeamPairTemplate(CatalegSemanticOrigenMixin):
+    """Quina vora es cus normalment amb quina. La gramàtica de costura.
+
+    🔑 **Per a les parelles `co_generated` això NO és una regularitat estadística: és una
+    GARANTIA del generador** (informe §4.1). Les tres factories `Armhole*` retornen
+    `(bodice_cut, sleeve_edges)` d'UNA sola crida, i `ArmholeCurve` hi passa un
+    optimitzador (`ops.curve_match_tangents`) perquè les dues vores coincideixin en
+    llargada i tangent. Els escots funcionen igual, via `front_proj`/`back_proj`. Un
+    aparellador pot CONFIAR en aquestes files; a la resta, només hi pot apostar.
+
+    **D4: `level_join` i `insert_join` són menes pròpies**, no unions. Totes dues
+    cusen dues peces del MATEIX rol, i plegar-les dins d'`union` faria que el graf digués
+    que una peça es cus amb ella mateixa — que és exactament l'argument amb què el
+    precedent va separar la PINÇA.
+
+    🚨 **L'ORDENACIÓ (a,b) ÉS CANÒNICA i s'implementa, no es comenta.** Sense això la
+    mateixa costura entra dues vegades amb els costats girats i el UNIQUE no ho veu.
+    `canonitza()` ordena els dos costats per `(piece_role_slug, face, edge_role_slug)` i
+    `save()` l'aplica sempre. La clau única és la parella sencera + el GTI + la mena.
+
+    `garment_type_item_id` NULL = plantilla genèrica, val per a qualsevol tipus de
+    garment. És així com neix tot el que sembra F3: les plantilles per GTI concret són
+    feina de la sessió Montse.
+    """
+
+    KIND_UNION = 'union'
+    KIND_DART = 'dart'
+    KIND_CENTRE = 'centre'
+    KIND_LEVEL_JOIN = 'level_join'
+    KIND_INSERT_JOIN = 'insert_join'
+    KIND_CHOICES = [
+        (KIND_UNION, 'Unió'),
+        (KIND_DART, 'Pinça'),
+        (KIND_CENTRE, 'Centre'),
+        (KIND_LEVEL_JOIN, 'Unió de nivells'),
+        (KIND_INSERT_JOIN, 'Unió d\'inserció'),
+    ]
+
+    #: 🚨 **`db_constraint=False` és OBLIGATORI aquí, no una preferència.** `pom` viu a
+    #: SHARED *i* a TENANT; `tasks` és tenant-only. Amb constraint real, la migració
+    #: PETA en arribar a `public` amb `relation "tasks_garmenttypeitem" does not exist`
+    #: —mesurat, no suposat. La columna i l'índex hi són igualment i l'ORM hi navega dins
+    #: del tenant, que és l'únic lloc on la taula de destí existeix. Mateixa forma que
+    #: `ItemBaseMeasurement`, `ItemBaseSet` i `RulesetScopeNode` (migracions 0025, 0047,
+    #: 0040), que la porten declarada explícitament des del primer dia.
+    garment_type_item = models.ForeignKey(
+        'tasks.GarmentTypeItem', on_delete=models.CASCADE, db_constraint=False,
+        null=True, blank=True, related_name='seam_pair_templates',
+        help_text='NULL = plantilla genèrica, val per a qualsevol tipus de garment.')
+    seam_kind = models.CharField(max_length=12, choices=KIND_CHOICES)
+
+    piece_role_a_slug = models.CharField(max_length=60)
+    face_a = models.CharField(max_length=6, choices=Face.choices, blank=True, default='')
+    edge_role_a_slug = models.CharField(max_length=60)
+    piece_role_b_slug = models.CharField(max_length=60)
+    face_b = models.CharField(max_length=6, choices=Face.choices, blank=True, default='')
+    edge_role_b_slug = models.CharField(max_length=60)
+
+    co_generated = models.BooleanField(default=False)
+    observed_seams = models.IntegerField(null=True, blank=True)
+    observed_patterns = models.IntegerField(null=True, blank=True)
+    #: **El denominador HONEST**: quants patrons hi havia on la parella era POSSIBLE, no
+    #: els 128 974 del corpus sencer. Una parella de pantaló es mesura sobre patrons amb
+    #: pantaló. La regla exacta de cada fila viatja a `observed_ref`.
+    observed_den = models.IntegerField(null=True, blank=True)
+    observed_ref = models.TextField(blank=True, default='')
+
+    class Meta:
+        verbose_name = 'Plantilla de parella de costura'
+        verbose_name_plural = 'Plantilles de parella de costura'
+        ordering = ['display_order', 'seam_kind', 'piece_role_a_slug', 'edge_role_a_slug']
+        constraints = [
+            # 🚨 DUES constraints i no una, i el motiu és una llei que ja ens ha mossegat
+            # (`ftt-diagnosi-pre-sembra-v4`): **una FK NULLABLE dins d'una clau única
+            # trenca la unicitat EN SILENCI.** A Postgres dos NULL no són iguals, o sigui
+            # que un únic UNIQUE sobre les 8 columnes NO protegeix cap plantilla
+            # genèrica —i genèriques ho són TOTES les que F3 sembra. Partir-lo en dues
+            # constraints parcials és el que fa que la protecció existeixi de debò als dos
+            # costats. Mesurat amb un test que primer va donar VERMELL i va deixar entrar
+            # la fila duplicada.
+            models.UniqueConstraint(
+                fields=['garment_type_item', 'seam_kind',
+                        'piece_role_a_slug', 'face_a', 'edge_role_a_slug',
+                        'piece_role_b_slug', 'face_b', 'edge_role_b_slug'],
+                condition=models.Q(garment_type_item__isnull=False),
+                name='uniq_seampairtemplate_canonic',
+            ),
+            models.UniqueConstraint(
+                fields=['seam_kind',
+                        'piece_role_a_slug', 'face_a', 'edge_role_a_slug',
+                        'piece_role_b_slug', 'face_b', 'edge_role_b_slug'],
+                condition=models.Q(garment_type_item__isnull=True),
+                name='uniq_seampairtemplate_canonic_generic',
+            ),
+        ]
+
+    #: Els dos costats, com a tuples ordenables. Punt únic: qui vulgui comparar-los no
+    #: ha de tornar a escriure l'ordre.
+    @property
+    def costat_a(self) -> tuple[str, str, str]:
+        return (self.piece_role_a_slug, self.face_a, self.edge_role_a_slug)
+
+    @property
+    def costat_b(self) -> tuple[str, str, str]:
+        return (self.piece_role_b_slug, self.face_b, self.edge_role_b_slug)
+
+    @staticmethod
+    def ordena(costat_a: tuple[str, str, str],
+               costat_b: tuple[str, str, str]) -> tuple[tuple[str, str, str],
+                                                        tuple[str, str, str]]:
+        """L'ordenació canònica, com a funció pura: (a,b) i (b,a) donen el mateix parell.
+
+        Ordre per `(piece_role_slug, face, edge_role_slug)`. És l'única regla, i la fan
+        servir tant `canonitza()` com la comanda de sembra: si la sembra ordenés per la
+        seva banda hi hauria dues veritats i la segona passada crearia duplicats.
+        """
+        return (costat_a, costat_b) if costat_a <= costat_b else (costat_b, costat_a)
+
+    def canonitza(self) -> None:
+        """Posa els dos costats en ordre canònic, in situ."""
+        a, b = self.ordena(self.costat_a, self.costat_b)
+        (self.piece_role_a_slug, self.face_a, self.edge_role_a_slug) = a
+        (self.piece_role_b_slug, self.face_b, self.edge_role_b_slug) = b
+
+    def save(self, *args, **kwargs):
+        self.canonitza()
+        return super().save(*args, **kwargs)
+
+    def __str__(self):
+        a = f'{self.piece_role_a_slug}{"/" + self.face_a if self.face_a else ""}.{self.edge_role_a_slug}'
+        b = f'{self.piece_role_b_slug}{"/" + self.face_b if self.face_b else ""}.{self.edge_role_b_slug}'
+        return f'[{self.seam_kind}] {a} ↔ {b}'
+
+
+class GarmentTypeItemEdgeProfile(CatalegSemanticOrigenMixin):
+    """Quines vores s'ESPERA que tingui una peça, per a un tipus de garment concret.
+
+    La plantilla anatòmica. Es llegeix sempre amb el rol de PEÇA al davant: **un garment
+    no té escot, el té el seu coll o el seu davant**. Sense `piece_role_slug` la fila no
+    es pot llegir.
+
+    ⚠️ **F3 CREA LA TAULA I NO LA SEMBRA.** Els perfils per GTI es poblaran quan l'Agus i
+    la Montse mapin GTIs reals; les plantilles genèriques que F3 sí que sembra viuen a
+    `SeamPairTemplate` amb `garment_type_item=NULL`. Una taula buida aquí no és un oblit:
+    és que el vocabulari genèric no sap encara quin GTI de casa li correspon.
+
+    D3: els graus `core`/`common`/`rare` es queden, però **els llindars i els
+    denominadors són feina de la Montse**: els denominadors del precedent estan inflats
+    fins a 4,1× i ningú no ha de llegir aquests percentatges com un fet fins que es
+    recalculin contra la comporta derivada del codi.
+    """
+
+    PRESENCE_CORE = 'core'
+    PRESENCE_COMMON = 'common'
+    PRESENCE_RARE = 'rare'
+    PRESENCE_CHOICES = [
+        (PRESENCE_CORE, 'Nucli'),
+        (PRESENCE_COMMON, 'Comuna'),
+        (PRESENCE_RARE, 'Rara'),
+    ]
+
+    #: Mateixa llei que a `SeamPairTemplate.garment_type_item`: `db_constraint=False`
+    #: perquè `tasks` és tenant-only i `pom` també viu a `public`. Aquí, a més, és NOT
+    #: NULL: un perfil sense GTI no vol dir res (el genèric viu a `SeamPairTemplate`).
+    garment_type_item = models.ForeignKey(
+        'tasks.GarmentTypeItem', on_delete=models.CASCADE, db_constraint=False,
+        related_name='edge_profiles')
+    piece_role_slug = models.CharField(max_length=60)
+    face = models.CharField(max_length=6, choices=Face.choices, blank=True, default='')
+    edge_role_slug = models.CharField(max_length=60)
+    presence = models.CharField(max_length=8, choices=PRESENCE_CHOICES)
+    min_count = models.PositiveSmallIntegerField(default=1)
+    max_count = models.PositiveSmallIntegerField(null=True, blank=True)
+    observed_n = models.IntegerField(null=True, blank=True)
+    #: El denominador honest (§3.2 de l'informe): la comporta d'aplicabilitat, no el total.
+    observed_den = models.IntegerField(null=True, blank=True)
+    observed_ref = models.TextField(blank=True, default='')
+
+    class Meta:
+        verbose_name = 'Perfil de vores per item de garment'
+        verbose_name_plural = 'Perfils de vores per item de garment'
+        ordering = ['garment_type_item', 'display_order', 'piece_role_slug', 'edge_role_slug']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['garment_type_item', 'piece_role_slug', 'face', 'edge_role_slug'],
+                name='uniq_gtiedgeprofile_canonic',
+            ),
+        ]
+
+    def __str__(self):
+        cara = f'/{self.face}' if self.face else ''
+        return f'{self.piece_role_slug}{cara}.{self.edge_role_slug} ({self.presence})'
+
+
+class GCPieceRoleMap(models.Model):
+    """El traductor GarmentCode → FTT, com a taula i no com a diccionari amagat en un script.
+
+    24 rols de GarmentCode cauen sobre **11 slugs d'FTT × cara** (D1): els 8 que el catàleg
+    ja tenia més els tres que D6 hi afegeix. La reducció és forta i volguda —vuit rols
+    cauen tots sobre `cuff`, perquè l'acampanament d'un puny és un eix de variant i no una
+    peça diferent. Existeix com a TAULA perquè el banc de veïns (F4) l'ha de consultar en
+    calent per traduir un panell del corpus a vocabulari de casa, i perquè quan un rol de
+    GarmentCode canviï de destí es vegi a la BD i no en un diff d'un script.
+
+    🚨 **Aquest mapa és una via de sola anada i cap a AVALL en riquesa** (informe §5.1):
+    22 dels 30 slugs d'FTT GarmentCode no els pot produir de cap manera —tota
+    l'auxiliaria DEREK (`facing`, `lining`, `placket`=TAPETA, `fly`…) més `yoke`,
+    `collar_stand`, `neckband`, `ruffle`, `tie`, `strap`, `body`. El catàleg de peces de
+    casa ja és 3,75× més ric. **El que GarmentCode aporta són les altres tres taules.**
+    """
+
+    #: El rol tal com surt del corpus, normalitzat (sense lateralitat ni ordinal).
+    gc_role = models.CharField(max_length=60, unique=True)
+    #: Slug de `PatternPieceRole`. Per slug i no per FK: el mapa ha de poder existir
+    #: encara que un slug de destí no s'hagi sembrat encara en aquest schema.
+    ftt_slug = models.CharField(max_length=60)
+    face = models.CharField(max_length=6, choices=Face.choices, blank=True, default='')
+    nota = models.TextField(blank=True, default='')
+    source_ref = models.TextField(blank=True, default='')
+
+    class Meta:
+        verbose_name = 'Mapa de rol de peça GarmentCode→FTT'
+        verbose_name_plural = 'Mapa de rols de peça GarmentCode→FTT'
+        ordering = ['gc_role']
+
+    def __str__(self):
+        cara = f'/{self.face}' if self.face else ''
+        return f'{self.gc_role} → {self.ftt_slug}{cara}'

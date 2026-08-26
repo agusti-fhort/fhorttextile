@@ -1,6 +1,7 @@
 // Helpers de presentació compartits.
 
 import i18n from '../i18n';
+import { parseNum } from './num';
 
 // Minuts (enters) → "Hh MMm". Coherent amb el format de TimeTracking.jsx (que
 // treballa en SEGONS); aquí l'entrada ja són minuts consolidats del backend.
@@ -73,7 +74,13 @@ export function formatDelta(cm, unit = 'CM') {
     minimumFractionDigits: d, maximumFractionDigits: d,
   });
   // El zero no porta signe: "+0,0" faria pensar que sobra alguna cosa.
-  const signe = Number(abs.replace(',', '.')) === 0 ? '' : (n < 0 ? '−' : '+');
+  //
+  // ⚠️ Es mira l'ARRODONIT i no `n`: un −0,04 cm es pinta «0,0» i posar-hi un menys diria que
+  // hi ha una diferència que la xifra no ensenya. Es llegeix amb `parseNum` (la política única,
+  // R1) i no amb un `replace` a mà: `toLocaleString` hi pot haver posat separador de MILER, i
+  // llavors `'1.234,5'.replace(',', '.')` donava `'1.234.5'` → `NaN` → el signe queia al costat
+  // fals per a qualsevol delta de quatre xifres.
+  const signe = parseNum(abs) === 0 ? '' : (n < 0 ? '−' : '+');
   return `${signe}${abs}`;
 }
 

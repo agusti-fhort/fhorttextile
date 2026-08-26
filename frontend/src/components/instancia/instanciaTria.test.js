@@ -131,20 +131,71 @@ test('l\'estat segueix creuant-se amb la posició sencera', () => {
   assert.equal(triaTram(DICC2, 'back-left-relaxed', 'right'), 'back-right-relaxed')
 })
 
-test('tramsPerEix indexa pel bloc d\'exclusió, no per l\'eix', () => {
-  assert.deepEqual(tramsPerEix(DICC2, 'back-left'),
-    { 'POSICIO/CARA': 'back', 'POSICIO/LATERAL': 'left' })
+test('tramsPerEix indexa per la FAMÍLIA, i cau a l\'eix quan no n\'hi ha', () => {
+  // La clau d'exclusió és la FAMÍLIA sola des del 26/08 (era `EIX/subeix`).
+  assert.deepEqual(tramsPerEix(DICC2, 'back-left'), { CARA: 'back', LATERAL: 'left' })
+  // `top` no en té a DICC2 (payload d'un backend anterior): cau a l'eix, com abans.
   assert.deepEqual(tramsPerEix(DICC2, 'top'), { POSICIO: 'top' })
 })
 
 test('el modal ＋ segueix la mateixa llei que la fila', () => {
-  assert.deepEqual(triaAlModal(DICC2, { 'POSICIO/LATERAL': 'left' }, 'back'),
-    { 'POSICIO/LATERAL': 'left', 'POSICIO/CARA': 'back' })
-  assert.deepEqual(triaAlModal(DICC2, { 'POSICIO/LATERAL': 'left' }, 'right'),
-    { 'POSICIO/LATERAL': 'right' })
-  assert.deepEqual(triaAlModal(DICC2, { 'POSICIO/CARA': 'back', 'POSICIO/LATERAL': 'left' }, 'top'),
+  assert.deepEqual(triaAlModal(DICC2, { LATERAL: 'left' }, 'back'),
+    { LATERAL: 'left', CARA: 'back' })
+  assert.deepEqual(triaAlModal(DICC2, { LATERAL: 'left' }, 'right'), { LATERAL: 'right' })
+  // `top` sense família (payload vell) segueix rellevant tot el seu eix.
+  assert.deepEqual(triaAlModal(DICC2, { CARA: 'back', LATERAL: 'left' }, 'top'),
     { POSICIO: 'top' })
-  assert.deepEqual(triaAlModal(DICC2, { 'POSICIO/CARA': 'back' }, 'back'), {})
-  assert.equal(aplicaCombinacio(DICC2, { 'POSICIO/CARA': 'back', 'POSICIO/LATERAL': 'left' }),
-    'back-left')
+  assert.deepEqual(triaAlModal(DICC2, { CARA: 'back' }, 'back'), {})
+  assert.equal(aplicaCombinacio(DICC2, { CARA: 'back', LATERAL: 'left' }), 'back-left')
+})
+
+// ── 6 · LES SIS FAMÍLIES (llei d'Agus, 26/08) ─────────────────────────────────
+// DICC2 és el payload de QUAN les famílies eren dues i sis slugs eren orfes; es queda perquè
+// prova la compatibilitat amb un backend endarrerit. Aquest és el d'ARA.
+const DICC3 = {
+  eixos: DICC.eixos,
+  subeixos: ['PECA', 'BANDA', 'VERTICALITAT', 'COSTURA', 'LINIA', 'ESTAT'],
+  instancies: {
+    POSICIO: [
+      { slug: 'front', subeix: 'PECA', display_order: 9 },
+      { slug: 'back', subeix: 'PECA', display_order: 10 },
+      { slug: 'left', subeix: 'BANDA', display_order: 1 },
+      { slug: 'right', subeix: 'BANDA', display_order: 2 },
+      { slug: 'top', subeix: 'VERTICALITAT', display_order: 3 },
+      { slug: 'bottom', subeix: 'VERTICALITAT', display_order: 4 },
+      { slug: 'side', subeix: 'COSTURA', display_order: 7 },
+      { slug: 'waistband_seam', subeix: 'COSTURA', display_order: 8 },
+      { slug: 'cf', subeix: 'LINIA', display_order: 5 },
+      { slug: 'cb', subeix: 'LINIA', display_order: 6 },
+    ],
+    ESTAT: [
+      { slug: 'relaxed', subeix: 'ESTAT', display_order: 1 },
+      { slug: 'extended', subeix: 'ESTAT', display_order: 2 },
+    ],
+  },
+  regles: { instancia_separador: '-' },
+}
+
+test('🚨 les SIS famílies es creuen: cap n\'apaga una altra', () => {
+  // El símptoma de la formació, dit en gestos: prémer «Top» apagava «Left».
+  let v = ''
+  for (const s of ['front', 'left', 'top', 'side', 'cf', 'relaxed']) v = triaTram(DICC3, v, s)
+  assert.equal(v, 'front-left-top-side-cf-relaxed')
+})
+
+test('dins de CADA família, la segona píndola rellevà la primera', () => {
+  for (const [a, b] of [['front', 'back'], ['left', 'right'], ['top', 'bottom'],
+                        ['side', 'waistband_seam'], ['cf', 'cb'], ['relaxed', 'extended']]) {
+    assert.equal(triaTram(DICC3, a, b), b, `${a} → ${b}`)
+  }
+})
+
+test('l\'ordre canònic no depèn del clic, amb les sis famílies', () => {
+  let v = ''
+  for (const s of ['relaxed', 'cf', 'side', 'top', 'left', 'front']) v = triaTram(DICC3, v, s)
+  assert.equal(v, 'front-left-top-side-cf-relaxed')
+})
+
+test('la redundància és LEGAL: front + cf conviuen', () => {
+  assert.equal(triaTram(DICC3, 'front', 'cf'), 'front-cf')
 })
