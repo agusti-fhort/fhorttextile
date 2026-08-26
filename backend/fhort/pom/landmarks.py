@@ -68,7 +68,47 @@ def _extrems_de_rol(graf, rol: str) -> set:
     return {p for p, n in comptes.items() if n == 1}
 
 
-def _shared_endpoint(graf, entrada: dict):
+def _y(p):
+    """La y d'un punt, o `None` si el punt no és una coordenada.
+
+    Els extrems poden ser tuples `(x, y)` o identitats opaques (una pk de
+    `PatternPoint`). Les regles que llegeixen coordenades han de poder **saltar-se el
+    control** quan no n'hi ha, en comptes de petar: un verificador que no es pot avaluar
+    no és una regla incomplerta, és una regla que aquí no aplica.
+    """
+    try:
+        return float(p[1])
+    except (TypeError, IndexError, ValueError):
+        return None
+
+
+def _verifica_highest_y(punt, candidats, slug: str) -> None:
+    """🚨 VERIFICADOR DE SANITAT, no desempat (llei d'ofici Agus, 26/08).
+
+    `shared_endpoint` ja exigeix un únic extrem comú: el punt no cal triar-lo. El que fa
+    `highest_y` és **comprovar que el punt que ha sortit és el que hauria de ser**. L'HPS
+    és el punt més alt de la peça que porta l'escot; si `shared_endpoint` en retorna un
+    que no ho és, el que falla no és el desempat —és que alguna vora està mal etiquetada,
+    o que la peça ve girada al plànol. Val més que canti que no pas que passi.
+
+    ⚠️ **Empat permès.** En un escot de barca, el centre de l'escot és a la mateixa alçada
+    que l'HPS. La comprovació és «és DELS més alts», no «és EL més alt»: exigir estrictament
+    el màxim faria vermell un patró correcte.
+    """
+    ys = [y for y in (_y(p) for p in candidats) if y is not None]
+    y_punt = _y(punt)
+    if y_punt is None or len(ys) < 2:
+        return
+    marge = max((max(ys) - min(ys)) * 0.01, 1e-9)
+    if y_punt < max(ys) - marge:
+        raise LandmarkNoResolt(
+            "«{}»: l'extrem compartit surt a y={:.4g}, i el més alt dels operands és "
+            "y={:.4g}. El verificador de sanitat `highest_y` diu que aquest punt no és "
+            "l'alt: revisa les etiquetes de vora o l'orientació de la peça"
+            .format(slug, y_punt, max(ys)))
+
+
+def _shared_endpoint(graf, entrada: dict, tiebreak: str = '', slug: str = ''):
     """L'extrem que dos rols comparteixen. **N'hi ha d'haver exactament un.**
 
     Zero vol dir que les dues vores no es toquen (o que hi falta un rol); més d'un vol dir
@@ -76,12 +116,17 @@ def _shared_endpoint(graf, entrada: dict):
     la regla descrivia. Cap dels dos casos no s'ha de resoldre «triant-ne un».
     """
     a, b = entrada['a'], entrada['b']
-    comuns = _extrems_de_rol(graf, a) & _extrems_de_rol(graf, b)
+    extrems_a = _extrems_de_rol(graf, a)
+    extrems_b = _extrems_de_rol(graf, b)
+    comuns = extrems_a & extrems_b
     if len(comuns) != 1:
         raise LandmarkNoResolt(
             '«{}» i «{}» comparteixen {} extrems, i la regla en vol exactament 1'
             .format(a, b, len(comuns)))
-    return comuns.pop()
+    punt = comuns.pop()
+    if tiebreak == 'highest_y':
+        _verifica_highest_y(punt, extrems_a | extrems_b, slug or '{}+{}'.format(a, b))
+    return punt
 
 
 def _far_endpoint(graf, entrada: dict, tiebreak: str, resolts: dict):
@@ -128,7 +173,8 @@ def resol_landmark(regla, graf, resolts: dict | None = None):
             'la regla no és derivable: aquest punt es marca, no es calcula')
     op = regla.derivation_op
     if op == 'shared_endpoint':
-        return _shared_endpoint(graf, regla.derivation_input)
+        return _shared_endpoint(graf, regla.derivation_input,
+                                regla.derivation_tiebreak, getattr(regla, 'slug', ''))
     if op == 'far_endpoint':
         return _far_endpoint(graf, regla.derivation_input,
                              regla.derivation_tiebreak, resolts)

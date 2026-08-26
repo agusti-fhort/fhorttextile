@@ -234,6 +234,36 @@ class PatternPiece(models.Model):
     #: null = no cal distingir-la de cap germana.
     ordinal = models.PositiveSmallIntegerField(null=True, blank=True)
 
+    # ── LA PROPOSTA DEL RECONEIXEDOR (F4.1) ──────────────────────────────────
+    # 🚨 **Camps SEPARATS dels confirmats, i la separació és la peça de disseny.**
+    # `piece_role` i `face` els escriu NOMÉS un humà. El reconeixedor escriu aquí i
+    # només aquí. Si compartissin columna, el dia que el reconeixedor s'equivoqués
+    # ningú no podria dir si aquell rol el va decidir una persona o una màquina —i
+    # aquesta és exactament la pregunta que caldria respondre.
+    #
+    # En CONFIRMAR, la proposta **es conserva**: és l'única manera de mesurar més
+    # endavant si el reconeixedor encertava, i una auditoria d'encert que s'esborra
+    # a cada confirmació no és una auditoria.
+
+    #: El rol proposat. PROTECT com el confirmat: un rol que alguna proposta reclama
+    #: tampoc no ha de desaparèixer sense que ningú se n'adoni.
+    proposed_role = models.ForeignKey(
+        'pom.PatternPieceRole', on_delete=models.PROTECT,
+        null=True, blank=True, related_name='proposed_pieces',
+    )
+    proposed_face = models.CharField(
+        max_length=6, choices=FACE_CHOICES, blank=True, default=FACE_CAP)
+    #: El MARGE: quant més a prop és el rol guanyador que el millor rival. NO és una
+    #: probabilitat i no s'ha de llegir com si ho fos. Per sota del llindar de silenci
+    #: hi ha score però NO hi ha `proposed_role`: el reconeixedor ha mirat i ha callat.
+    proposed_score = models.FloatField(null=True, blank=True)
+    #: L'evidència sencera i estructurada: etapa de la cascada, veïns amb distància,
+    #: marge, suport de graf, geometria i llindar vigent. Es desa i no es recalcula
+    #: perquè el banc canvia: sense això, la raó d'una proposta es perdria a la
+    #: següent peça que algú confirmés.
+    proposed_evidence = models.JSONField(default=dict, blank=True)
+    proposed_at = models.DateTimeField(null=True, blank=True)
+
     ESTAT_PRODUCCIO = 'produccio'
     ESTAT_TREBALL = 'treball'
     ESTAT_REFERENCIA = 'referencia'
