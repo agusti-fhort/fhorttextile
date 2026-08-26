@@ -137,6 +137,19 @@ ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
 # crida per polir text cosmètic. S'encén per avaluar-la, no per a tothom.
 IMPORT_REVISIO_SONNET = os.environ.get('IMPORT_REVISIO_SONNET', '').lower() in ('1', 'true', 'yes')
 
+# FASE A — el MOTOR DE PATRONS, sencer, darrere d'un sol interruptor de desplegament.
+# A PROD s'hi posa `false` mentre el motor no hi hagi d'arribar; a staging no es declara i queda
+# ENCÈS. Amb TRUE el comportament és byte a byte el d'abans d'existir el flag: l'`include` de
+# `fhort/urls.py` és literalment el mateix objecte.
+#
+# EL DEFAULT ÉS LA XARXA DE SEGURETAT, I VA AL REVÉS QUE ELS ALTRES FLAGS DE LA CASA.
+# `IMPORT_REVISIO_SONNET` (a sobre) apaga per omissió perquè encendre'l costa diners; aquest
+# ENCÉN per omissió perquè apagar-lo fa desaparèixer pantalles que avui existeixen. Un entorn
+# que no digui res —un `.env` que ningú ha tocat, un test, una consola— no pot perdre el motor
+# per descuit: només el perd qui ho escriu. Per això es nega la llista de FALSOS en lloc
+# d'afirmar la de certs, i el valor per omissió ja és 'true'.
+FTT_PATTERNS_ENABLED = os.environ.get('FTT_PATTERNS_ENABLED', 'true').lower() not in ('0', 'false', 'no')
+
 # TRAM ⓘ — traducció del vocabulari de domini (`pom/translation_service.py`).
 # La clau viu AQUÍ i no al bundle: el front només coneix `/api/v1/translate/pom/`.
 # Sense clau, tot segueix funcionant en anglès (fallback silenciós), i és per això que el tram

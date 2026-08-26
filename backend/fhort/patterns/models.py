@@ -390,6 +390,37 @@ class PatternPOM(models.Model):
     #: resol des de S6, però la UI v1 només ofereix el mode de punts: el mode landmark
     #: entra amb l'editor de receptes, no abans.
     MODE_LANDMARK = 'landmark'
+    #: **La CAIGUDA ortogonal.** Tres àncores, no dues: dues defineixen una línia de
+    #: REFERÈNCIA (els dos HPS de la peça) i la tercera és el punt que hi cau. La mesura
+    #: és la distància perpendicular del punt a la línia.
+    #:
+    #: No és ΔY del sistema de coordenades, i la diferència no és acadèmica: un ΔY
+    #: mentiria en una peça girada al plànol i mentiria en un escot asimètric (on els dos
+    #: HPS no estan a la mateixa alçada). La referència l'ha de posar la PEÇA, no el full.
+    MODE_ORTOGONAL = 'ortogonal'
+    #: **LA COTA D'EIX.** Dues àncores i un eix: la mesura és |Δ| de la PROJECCIÓ sobre
+    #: l'eix horitzontal o el vertical, que és el que un CAD dibuixa quan acota una amplada
+    #: o una alçada.
+    #:
+    #: ⚠️ Sí, això SÍ que és Δx o Δy del full — exactament el que el mode `ortogonal` no és,
+    #: i la contradicció és aparent. Són dues preguntes diferents:
+    #:   · `ortogonal` pregunta «quant cau aquest punt respecte del NIVELL de la peça», i la
+    #:     referència l'han de posar dues àncores seves perquè la resposta sobrevisqui al gir.
+    #:   · `projeccio` pregunta «quant ocupa això en amplada (o en alçada) sobre la TAULA»,
+    #:     que és una pregunta sobre els eixos del full i no en té cap altra.
+    #: L'amplada de coll d'un patró estès es mesura amb una cinta horitzontal, no seguint la
+    #: corda inclinada entre els dos HPS: per això `EK` al banc del 837 dona 26,8 cm en recta
+    #: i ~22 en projecció H, i el que la fitxa declara és 22,0.
+    MODE_PROJECCIO = 'projeccio'
+
+    #: L'eix d'una cota de projecció. Buit = **AUTO**: mana l'eix on els dos punts tenen més
+    #: recorregut, que és el que fa qualsevol CAD quan l'usuari no en tria cap. No és una
+    #: endevinalla: una amplada de coll és molt més ampla que alta, i una llargada d'obertura
+    #: molt més alta que ampla; l'excepció es tria a mà i es desa.
+    EIX_AUTO = ''
+    EIX_H = 'H'
+    EIX_V = 'V'
+    EIXOS = (EIX_AUTO, EIX_H, EIX_V)
 
     pattern_piece = models.ForeignKey(
         PatternPiece, on_delete=models.CASCADE, related_name='poms',
@@ -400,21 +431,128 @@ class PatternPOM(models.Model):
         'pom.POMMaster', on_delete=models.PROTECT, related_name='pattern_poms',
     )
 
-    #: La recepta. Dues formes, v1:
+    #: La recepta. Tres formes:
     #:   {"mode": "points",   "a": <PatternPoint.id>, "b": <PatternPoint.id>}
     #:   {"mode": "landmark", "landmark": <PatternPoint.id>, "offset_cm": 1.0,
     #:    "direccio": "down", "b": <PatternPoint.id>}
+    #:   {"mode": "ortogonal", "ref_a": <PatternPoint.id>, "ref_b": <PatternPoint.id>,
+    #:    "p": <PatternPoint.id>}
+    #:   {"mode": "projeccio", "a": <PatternPoint.id>, "b": <PatternPoint.id>,
+    #:    "eix": "H" | "V" | ""}
+    #:
+    #: Les formes anteriors NO canvien: cada mode nou s'hi AFEGEIX, no les reescriu. Cap
+    #: fila existent no es toca mai.
     definicio_mesura = models.JSONField(default=dict)
 
     #: LLEGIT de la geometria, mai teclejat. Si algú el pogués editar, deixaria de ser
     #: una mesura del patró per ser una opinió sobre el patró.
     valor_mesurat_cm = models.FloatField(null=True, blank=True)
 
-    #: Com s'ha mesurat: recta entre punts, o longitud resseguint la vora.
+    #: Com s'ha mesurat: recta entre punts, longitud resseguint la vora, o caiguda
+    #: perpendicular a una línia de referència.
     METODE_RECTA = 'recta'
     METODE_VORA = 'vora'
-    METODE_CHOICES = [(METODE_RECTA, 'Distància recta'), (METODE_VORA, 'Longitud per vora')]
+    METODE_ORTOGONAL = 'ortogonal'
+    METODE_PROJECCIO = 'projeccio'
+    METODE_CHOICES = [
+        (METODE_RECTA, 'Distància recta'),
+        (METODE_VORA, 'Longitud per vora'),
+        (METODE_ORTOGONAL, 'Caiguda ortogonal'),
+        (METODE_PROJECCIO, "Projecció sobre un eix"),
+    ]
     metode = models.CharField(max_length=10, choices=METODE_CHOICES, default=METODE_RECTA)
+
+    #: 🔑 UNA decisió, escrita dues vegades — i per això hi ha un validador i no dos camps
+    #: independents. `metode` és el que veuen l'API i la UI (el selector de mètode);
+    #: `definicio_mesura['mode']` és la FORMA de la recepta que el motor ha de saber llegir.
+    #: Per al mètode ortogonal totes dues han de dir 'ortogonal' alhora: un `metode`
+    #: ortogonal amb una recepta de dos punts (o al revés) seria una fila que es contradiu
+    #: a ella mateixa, i el motor n'hauria de triar una de les dues en silenci.
+    #: Quines formes de recepta admet cada mètode. La PRIMERA és la canònica —la que el
+    #: Taller construeix—; les altres són formes que el motor també sap llegir i que no es
+    #: poden rebutjar sense trencar dades ja desades (`landmark` es persisteix des de S6).
+    MODES_ACCEPTATS = {
+        METODE_RECTA: (MODE_POINTS, MODE_LANDMARK),
+        METODE_VORA: (MODE_POINTS, MODE_LANDMARK),
+        METODE_ORTOGONAL: (MODE_ORTOGONAL,),
+        METODE_PROJECCIO: (MODE_PROJECCIO,),
+    }
+
+    #: 🔑 **LA GRAMÀTICA DE CADA MÈTODE, en un sol lloc.** Quantes àncores vol i com es
+    #: diuen dins de la recepta. Serveix per a tres coses que abans s'haurien escrit tres
+    #: vegades: validar la recepta al serializer, dir-li al Taller quants clics ha de
+    #: guiar, i posar nom a cada clic. El client NO en té cap còpia — se la serveix
+    #: l'endpoint `pattern-poms/metodes/` —, que és el que evita que el dia que entri un
+    #: quart mètode calgui tocar el front per fer-l'hi saber.
+    ANCORES_PER_METODE = {
+        METODE_RECTA: ('a', 'b'),
+        METODE_VORA: ('a', 'b'),
+        METODE_ORTOGONAL: ('ref_a', 'ref_b', 'p'),
+        METODE_PROJECCIO: ('a', 'b'),
+    }
+
+    #: Les OPCIONS d'un mètode: el que la recepta porta i que **no és una àncora**. Van al
+    #: mateix vocabulari i pel mateix motiu que les àncores — perquè el Taller pugui oferir
+    #: la sub-tria sense saber que existeix cap eix. Cada opció és `nom → valors admesos`, i
+    #: el primer valor és el per defecte.
+    OPCIONS_PER_METODE = {
+        METODE_PROJECCIO: {'eix': list(EIXOS)},
+    }
+
+    @classmethod
+    def mode_esperat(cls, metode: str) -> str:
+        """La forma de recepta CANÒNICA d'aquest mètode: la que el Taller construeix."""
+        return cls.MODES_ACCEPTATS.get(metode, (cls.MODE_POINTS,))[0]
+
+    @classmethod
+    def mode_admes(cls, metode: str, mode: str) -> bool:
+        """Aquesta recepta la pot llegir aquest mètode?
+
+        No és `mode == mode_esperat`: un `metode='recta'` amb una recepta `landmark` és
+        legítim (el motor la resol des de S6) i rebutjar-la trencaria files ja desades.
+        """
+        return mode in cls.MODES_ACCEPTATS.get(metode, (cls.MODE_POINTS,))
+
+    @classmethod
+    def vocabulari_metodes(cls) -> list[dict]:
+        """El vocabulari que se serveix al client: codi, forma de recepta, àncores i opcions.
+
+        Sense etiquetes: els tres idiomes viuen al front (llei i18n-gate), i un rètol
+        servit des d'aquí seria un quart lloc on mantenir-los.
+        """
+        return [
+            {
+                'codi': codi,
+                'mode': cls.mode_esperat(codi),
+                'ancores': list(cls.ANCORES_PER_METODE[codi]),
+                'opcions': {
+                    nom: list(valors)
+                    for nom, valors in cls.OPCIONS_PER_METODE.get(codi, {}).items()
+                },
+            }
+            for codi, _ in cls.METODE_CHOICES
+        ]
+
+    #: 🔑 **PRESENTACIÓ, MAI MESURA.** On seu la línia de cota respecte de la mesura, en mm,
+    #: comptat perpendicularment i amb signe (el signe diu de quin costat).
+    #:
+    #: Que visqui a la MATEIXA fila que la recepta és deliberat i té un límit escrit: una
+    #: cota és d'un ancoratge, i moure-la no és una opinió que calgui versionar ni compartir
+    #: entre usuaris. El que NO pot passar mai és que toqui `valor_mesurat_cm`: el valor es
+    #: llegeix de la geometria i el desplaçament només diu on es dibuixa la línia que
+    #: l'anuncia. Per això és un camp a part i no un tercer element de `definicio_mesura` —
+    #: dins de la recepta, qualsevol lector del motor l'hauria de saber ignorar, i el dia que
+    #: un se n'oblidés el desplaçament entraria en un càlcul.
+    #:
+    #: 0 = la cota seu sobre la mesura mateixa, que és on ha estat fins avui.
+    #:
+    #: ⚠️ NO és `models_app.POMPlacement`: allò acota un CROQUIS de la fitxa tècnica i es desa
+    #: normalitzat 0..1 sobre la bbox de l'objecte que anota. Això acota GEOMETRIA REAL i va
+    #: en mil·límetres del patró. Comparteixen la paraula «cota» i res més.
+    cota_offset_mm = models.FloatField(
+        default=0.0,
+        help_text='Desplaçament perpendicular de la línia de cota, en mm. Presentació pura.',
+    )
 
     creat_per = models.ForeignKey(
         'accounts.UserProfile', on_delete=models.SET_NULL, null=True, blank=True,

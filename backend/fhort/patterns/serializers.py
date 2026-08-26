@@ -310,6 +310,10 @@ class PatternGeometrySerializer(serializers.ModelSerializer):
                     'definicio_mesura': p.definicio_mesura,
                     'metode': p.metode,
                     'valor_mesurat_cm': p.valor_mesurat_cm,
+                    # On seu la línia de cota. Viatja amb el POM i no per una crida a part
+                    # perquè és el que el canvas necessita per dibuixar-lo, i sense això la
+                    # cota tornaria al seu lloc a cada recàrrega de la geometria.
+                    'cota_offset_mm': p.cota_offset_mm,
                 }
                 for p in piece.poms.all()
             ],

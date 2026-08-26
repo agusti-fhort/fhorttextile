@@ -327,7 +327,12 @@ function Omissions({ preview, t }) {
   // F2.3 — els problemes de COSTURA també compten: si l'únic problema d'un export és una costura
   // òrfena (o un patró ancorat a ITEM, que no en porta cap), el modal es dibuixava net.
   const problemesCostures = preview.problemes_costures || []
-  const total = preview.omissions.length + preview.problemes_poms.length + problemesCostures.length
+  // Els problemes d'ESCALAT (ordres del cosit que no s'han pogut traslladar al tall,
+  // re-mesures que no aterren al delta) entren a la mateixa llista: qui exporta no ha de
+  // saber de quina capa del motor ve cada cosa, ha de saber què no farà el fitxer.
+  const problemesEscalat = preview.problemes_escalat || []
+  const total = preview.omissions.length + preview.problemes_poms.length
+    + problemesCostures.length + problemesEscalat.length
   if (total === 0) return null
 
   const senseSpec = preview.omissions.filter(o => o.codi === 'pom_sense_spec')
@@ -348,6 +353,7 @@ function Omissions({ preview, t }) {
         ))}
         {preview.problemes_poms.map((p, i) => <li key={`p-${i}`}>{p}</li>)}
         {problemesCostures.map((p, i) => <li key={`c-${i}`}>{p}</li>)}
+        {problemesEscalat.map((p, i) => <li key={`e-${i}`}>{p}</li>)}
         {senseAncora.length > 0 && (
           <li>
             {t('pattern.exp_om_no_anchor', { count: senseAncora.length })}

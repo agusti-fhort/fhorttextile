@@ -150,6 +150,20 @@ function ModelCard({ model, onClick, t, highlight = false, innerRef = null }) {
           <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', fontFamily: MONO }}>{faseLabel}</span>
         )}
         <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', fontFamily: MONO }}>{t('dashboard.board.tasks_n', { n: total })}</span>
+        {/* M3 · FASE 4 — LA VOLTA, i només quan diu alguna cosa. La 4a columna es diu ara
+            «Entregats» i el gruix del que hi cau són models esperant el retorn del client
+            (entregar tanca la volta i la volta tanca la seva feina), però NO tots: una volta
+            pot ser oberta o tancada sense entrega, i un model llegat no en té cap. El xip ho
+            distingeix a la targeta, que és on es pot dir sense inventar-se una cinquena
+            columna. Regla del silenci: sense volta, no es pinta res. */}
+        {model.ronda && (
+          <span title={t(`dashboard.board.ronda.${model.ronda.estat}`)}
+                style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', fontFamily: MONO,
+                         border: '1px solid var(--line)', borderRadius: 'var(--r-pill)',
+                         padding: '0 6px', lineHeight: '16px' }}>
+            R{model.ronda.seq} · {t(`dashboard.board.ronda.${model.ronda.estat}`)}
+          </span>
+        )}
       </div>
     </button>
   )

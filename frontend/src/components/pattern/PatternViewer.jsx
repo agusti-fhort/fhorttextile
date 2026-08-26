@@ -5,8 +5,9 @@ import { useTranslation } from 'react-i18next'
 
 import { etiquetaPeca } from './pieceText'
 import {
-  arcDirigit, bboxDePeces, capesPresents, escalaPerCabre, longitudVora,
-  puntMesProper, puntsDelSegment, puntsPerKonva, situaPunt, tramMesProper,
+  arcDirigit, arcsEntrePunts, bboxDePeces, capesPresents, desplacaPolilinia, escalaPerCabre,
+  longitudVora, normalDe, peuPerpendicular, puntMesProper, puntsDeLaCotaProjeccio,
+  puntsDelSegment, puntsPerKonva, situaPunt, tramMesProper,
 } from './patternGeometry'
 import { formatLen, formatLenNum } from '../../utils/format'
 
@@ -70,11 +71,16 @@ const ALCADA = 560
 export const METRICA_EINA = {
   borderRadius: 4, padding: '0.35rem 0.8rem', fontSize: 'var(--fs-body)', gap: '0.35rem',
 }
-const METRICA_EINA_COMPACTA = {
+export const METRICA_EINA_COMPACTA = {
   borderRadius: 4, padding: '0.2rem 0.5rem', fontSize: 'var(--fs-caption)', gap: '0.25rem',
 }
 
-const clampZoom = (v) => Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, v))
+// L'últim filtre abans que una xifra arribi al zoom. `Math.max`/`Math.min` deixen passar el
+// NaN sencer (`Math.max(0.02, NaN)` és NaN), o sigui que sense aquesta línia el zoom pot
+// acabar sent NaN i el llenç, en blanc. El recanvi és 1: es veu malament, però es veu.
+const clampZoom = (v) => (Number.isFinite(v)
+  ? Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, v))
+  : 1)
 
 /**
  * La mida d'un glif, en px de CONTINGUT (es divideix pel zoom perquè a pantalla sigui la que
@@ -89,6 +95,17 @@ export default function PatternViewer({
   // ── mode d'anotació (S6). Sense aquestes props, el visor és el de S5: read-only.
   mode = 'view',                 // 'view' | 'pom' | 'seg' | 'pinca' | 'sew'
   puntsPom = [],                 // punts ja clicats (2 per a POM i tram; 3 per a una pinça)
+  // Els noms de les àncores que el gest de POM demana, EN ORDRE, tal com el backend els
+  // serveix ('a','b' · 'ref_a','ref_b','p'). El visor n'havia de deduir el recompte amb una
+  // regla pròpia («pinça 3, la resta 2»), que era una segona còpia de la del taller i es va
+  // quedar enrere el dia que un mètode en va voler tres. Ara la rep.
+  ancoresPom = ['a', 'b'],
+  // ── La COTA seleccionada al canvas, i què se'n pot fer. Sense `onSeleccionaPom` les
+  // cotes no escolten el ratolí (és el visor read-only del tab del model); sense `onMouPom`
+  // no s'arrosseguen.
+  pomSel = null,
+  onSeleccionaPom = null,
+  onMouPom = null,
   onClicPunt = null,
   // Els trams que la costura en curs ja té a cada costat (per pintar-los del seu color).
   segmentsA = [], segmentsB = [],
@@ -176,21 +193,37 @@ export default function PatternViewer({
   }, [pieces, pecaIman, voraIman])
 
   // ── enquadrar ────────────────────────────────────────────────────────────
+  // 🚨 Les dependències són les QUATRE XIFRES de la capsa, no l'objecte.
+  //
+  // `bboxDePeces` en torna un de nou a cada crida, i `pieces` canvia d'identitat cada cop
+  // que el Taller reescriu la geometria —cosa que ara passa a cada arrossegada d'una cota,
+  // per l'actualització optimista. Amb l'objecte a les dependències, `encaixar` canviava
+  // d'identitat, l'efecte de sota tornava a disparar-se i **el llenç es reenquadrava sol**:
+  // fer zoom sobre un escot per separar tres cotes, moure'n una, i que el patró saltés a
+  // «encaixar-ho tot».
+  //
+  // Amb les xifres, l'enquadrat es refà quan canvia el que ha de fer-lo canviar —una versió
+  // nova del patró, una peça que entra o surt— i no quan es mou una línia de lloc.
+  const { minX, maxX, minY, maxY } = bbox
   const encaixar = useCallback(() => {
     const el = viewportRef.current
     if (!el) return
     const w = el.clientWidth
     const h = omplirAlcada ? el.clientHeight : ALCADA
     if (!w || !h) return
-    const z = clampZoom(escalaPerCabre(bbox, w, h))
+    // L'objecte va SENCER —amb `ample` i `alt`— i no a mitges. `escalaPerCabre` ja no en
+    // depèn (les dedueix de les cantonades), però fabricar-ne un d'incomplet va ser
+    // exactament el que va cegar els dos visors: no es torna a fer.
+    const z = clampZoom(escalaPerCabre(
+      { minX, maxX, minY, maxY, ample: maxX - minX, alt: maxY - minY }, w, h))
     setZoom(z)
     // El contingut es dibuixa en mm amb l'eix Y capgirat: el centrem al viewport.
     setPos({
-      x: w / 2 - ((bbox.minX + bbox.maxX) / 2) * z,
-      y: h / 2 + ((bbox.minY + bbox.maxY) / 2) * z,
+      x: w / 2 - ((minX + maxX) / 2) * z,
+      y: h / 2 + ((minY + maxY) / 2) * z,
     })
     setMida({ w, h })
-  }, [bbox, omplirAlcada])
+  }, [minX, maxX, minY, maxY, omplirAlcada])
 
   useEffect(() => { encaixar() }, [encaixar])
 
@@ -365,7 +398,7 @@ export default function PatternViewer({
 
   // La PRÈVIA: de l'últim punt fixat fins on és el cursor ara mateix. És el que substitueix
   // la tria d'arcs com a pas separat — es veu abans de clicar, i la tecla d'invertir el gira.
-  const maxPunts = mode === 'pinca' ? 3 : 2
+  const maxPunts = mode === 'pinca' ? 3 : mode === 'pom' ? ancoresPom.length : 2
   const previa = useMemo(() => {
     if (!segueixVora || !hover?.iman) return null
     if (puntsPom.length === 0 || puntsPom.length >= maxPunts) return null
@@ -442,9 +475,16 @@ export default function PatternViewer({
               />
             ))}
 
-            {/* Els POMs ja ancorats: la mesura, dibuixada sobre la geometria que mesura. */}
+            {/* Els POMs ja ancorats, dibuixats com a COTES sobre la geometria que mesuren. */}
             {pieces.flatMap(piece => (piece.poms || []).map(pom => (
-              <PomKonva key={`pom-${pom.id}`} piece={piece} pom={pom} zoom={zoom} unit={unit} />
+              <PomKonva
+                key={`pom-${pom.id}`} piece={piece} pom={pom} zoom={zoom} unit={unit}
+                sel={pomSel === pom.id}
+                onSelecciona={onSeleccionaPom}
+                onMou={onMouPom}
+                anotant={anotant}
+                maAlta={maAlta}
+              />
             )))}
 
             {/* Els trams DECLARATS, sobre la geometria. Es pinten SEMPRE: són el vocabulari
@@ -611,21 +651,61 @@ export default function PatternViewer({
               </>
             )}
 
-            {/* Mode POM: la mesura que s'està marcant, i l'imant sota el cursor. */}
-            {mode === 'pom' && puntsPom.length >= 1 && (
-              <Line
-                points={[
-                  ...puntsPom.flatMap(p => [p.x, -p.y]),
-                  ...(puntsPom.length === 1 && hover?.iman
-                    ? [hover.iman.punt.x, -hover.iman.punt.y] : []),
-                ]}
-                stroke={KONVA_COL.pom}
-                strokeWidth={2 / zoom}
-                dash={[5 / zoom, 3 / zoom]}
-                listening={false}
-                perfectDrawEnabled={false}
-              />
-            )}
+            {/* Mode POM: la mesura que s'està marcant, i l'imant sota el cursor.
+
+                Amb DUES àncores la mesura és la línia entre els punts, i unir-los tots és
+                dir la veritat. Amb TRES no ho és: `ref_a → ref_b → p` dibuixa una ela que
+                no és cap caiguda. La forma honesta són dues línies —la de REFERÈNCIA entre
+                les dues primeres àncores, i la perpendicular des del punt que hi cau— i
+                això és el que es pinta. */}
+            {mode === 'pom' && puntsPom.length >= 1 && (() => {
+              const cursor = hover?.iman?.punt
+              if (ancoresPom.length <= 2) {
+                return (
+                  <Line
+                    points={[
+                      ...puntsPom.flatMap(p => [p.x, -p.y]),
+                      ...(puntsPom.length === 1 && cursor ? [cursor.x, -cursor.y] : []),
+                    ]}
+                    stroke={KONVA_COL.pom}
+                    strokeWidth={2 / zoom}
+                    dash={[5 / zoom, 3 / zoom]}
+                    listening={false}
+                    perfectDrawEnabled={false}
+                  />
+                )
+              }
+              // Amb tres àncores: la referència es tanca amb el cursor mentre es marca la
+              // segona; després, el cursor (o el punt ja fixat) penja de la línia.
+              const refA = puntsPom[0]
+              const refB = puntsPom[1] || (puntsPom.length === 1 ? cursor : null)
+              const cau = puntsPom[2] || (puntsPom.length === 2 ? cursor : null)
+              const peu = peuPerpendicular(refA, refB, cau)
+              return (
+                <>
+                  {refB && (
+                    <Line
+                      points={[refA.x, -refA.y, refB.x, -refB.y]}
+                      stroke={KONVA_COL.pom}
+                      strokeWidth={1 / zoom}
+                      dash={[2 / zoom, 4 / zoom]}
+                      listening={false}
+                      perfectDrawEnabled={false}
+                    />
+                  )}
+                  {peu && cau && (
+                    <Line
+                      points={[peu.x, -peu.y, cau.x, -cau.y]}
+                      stroke={KONVA_COL.pom}
+                      strokeWidth={2 / zoom}
+                      dash={[5 / zoom, 3 / zoom]}
+                      listening={false}
+                      perfectDrawEnabled={false}
+                    />
+                  )}
+                </>
+              )
+            })()}
 
             {/* EL PUNT FIXAT (T3a): marcador gran, halo, i l'etiqueta que no marxa fins que
                 el gest s'acaba. Abans era un cercle de 5 px que es perdia entre els vèrtexs
@@ -642,7 +722,7 @@ export default function PatternViewer({
                           strokeWidth={1.6 / zoom} perfectDrawEnabled={false} />
                   <Text
                     x={p.x + r * 1.6} y={-p.y - r * 2.4}
-                    text={etiquetaPunt(t, mode, i, maxPunts)}
+                    text={etiquetaPunt(t, mode, i, ancoresPom)}
                     fontSize={13 / zoom} fontStyle="bold" fill={col}
                     perfectDrawEnabled={false}
                   />
@@ -682,48 +762,155 @@ export default function PatternViewer({
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Un POM ancorat, dibuixat sobre la geometria que mesura.
+ * Un POM ancorat, dibuixat com el que és: una COTA.
  *
- * La línia de mesura és la MATEIXA cosa que la capa FTT-POM exportarà al DXF (S2): el que
- * el patronista veurà al seu CAD és això mateix. Aquí i allà, la mesura es dibuixa on és.
+ * Fins ara es dibuixava la línia de la mesura, damunt de la geometria i prou. Una cota de
+ * CAD no és això: és una línia paral·lela, separada de la peça, amb dos TESTIMONIS
+ * puntejats que la lliguen als punts que acota. La diferència no és estètica — amb tres
+ * mesures que comparteixen un extrem, les línies s'apilen sobre el mateix vèrtex i ja no
+ * es pot llegir cap.
+ *
+ * · recta i cota d'eix → la cota va paral·lela a l'eix de la mesura.
+ * · caiguda → paral·lela a la caiguda, i el testimoni de baix surt de la línia de referència
+ *   (el peu de la perpendicular hi seu).
+ * · longitud per vora → la cota és la VORA desplaçada, no la corda: acotar amb una recta una
+ *   magnitud que ressegueix una corba seria dibuixar una altra xifra.
+ *
+ * **Es pot arrossegar**, i el desplaçament es desa (`cota_offset_mm`). El drag va CONSTRET a
+ * la normal: una cota de CAD s'allunya i s'apropa, no llisca — i així el que es desa és un
+ * sol número amb sentit geomètric, no una posició absoluta que caducaria el dia que algú
+ * recol·loqui una àncora.
  */
-function PomKonva({ piece, pom, zoom, unit }) {
-  const punts = puntsDeLaMesura(piece, pom)
-  if (punts.length < 2) return null
-  const mig = {
-    x: (punts[0].x + punts[punts.length - 1].x) / 2,
-    y: (punts[0].y + punts[punts.length - 1].y) / 2,
+function PomKonva({
+  piece, pom, zoom, unit, sel = false, onSelecciona, onMou,
+  anotant = false, maAlta = false,
+}) {
+  const boto = useRef(0)
+  const g = geometriaDeLaCota(piece, pom)
+  if (!g) return null
+
+  const { origens, cota, normal } = g
+  const cap = cota[0]
+  const cua = cota[cota.length - 1]
+  const mig = cota[Math.floor(cota.length / 2)]
+
+  // 🚨 **MENTRE S'ANOTA, LA COTA NO ESCOLTA RES**, i és la llei del fitxer: el tram declarat
+  // fa `listening={mode === 'sew' && ...}` i `PecaKonva` fa `!anotant && onTriaPeca(...)`.
+  // Sense això, el clic de l'IMANT —que és del `Stage`, no d'aquest shape— quedava mort a
+  // menys de 12 px de qualsevol cota: el patronista veia el marcador d'imant encès i el clic
+  // no ancorava res. I a offset 0, que és on neixen totes, la cota seu DAMUNT de les seves
+  // pròpies àncores; amb `metode='vora'`, damunt de tot un tros de contorn.
+  //
+  // `maAlta` (espai premut o pan en curs) hi entra pel mateix motiu: la sortida d'emergència
+  // del pan no pot ser justament el que es queda enganxat a una cota.
+  const viva = !anotant && !maAlta
+  const arrossegable = !!onMou && viva
+  // La tinta del TEXT no canvia amb la selecció: `tramSel` (#fb8500) sobre blanc mesura
+  // 2,48:1 i no arriba ni al llindar de component. L'èmfasi el porten la línia i els punts,
+  // que són traç i no lletra.
+  const col = sel ? KONVA_COL.tramSel : KONVA_COL.pom
+
+  // El drag es projecta sobre la normal: el que arriba al servidor és quant s'ha separat la
+  // cota de la mesura, no on ha anat a parar el ratolí.
+  const nomesNormal = (posa) => {
+    const d = posa.x * normal.x + (-posa.y) * normal.y
+    return { x: normal.x * d, y: -(normal.y * d) }
   }
+
   return (
-    <Group listening={false}>
+    <Group
+      draggable={arrossegable}
+      onDragMove={arrossegable ? (e) => {
+        const p = nomesNormal({ x: e.target.x(), y: e.target.y() })
+        e.target.position(p)
+      } : undefined}
+      onDragEnd={arrossegable ? (e) => {
+        const d = e.target.x() * normal.x + (-e.target.y()) * normal.y
+        // El grup torna a l'origen: la posició nova arriba per `cota_offset_mm` quan el
+        // servidor confirma. Deixar-l'hi la sumaria dues vegades al render següent.
+        e.target.position({ x: 0, y: 0 })
+        if (Math.abs(d) > 1e-6) onMou(pom, (pom.cota_offset_mm || 0) + d)
+      } : undefined}
+      onDragStart={arrossegable ? (e) => {
+        // Konva arrossega amb el botó del mig també (`dragButtons` per defecte és [0, 1]).
+        // El del mig és el pan del Taller: si comença damunt d'una cota, ha de panejar.
+        if (boto.current !== 0) e.target.stopDrag()
+      } : undefined}
+      onMouseDown={onSelecciona ? (e) => {
+        boto.current = e.evt?.button ?? 0
+        if (boto.current !== 0) return    // el pan del botó del mig ha d'arribar al Stage
+        e.cancelBubble = true
+      } : undefined}
+      onClick={onSelecciona ? (e) => {
+        if ((e.evt?.button ?? 0) !== 0) return
+        e.cancelBubble = true
+        onSelecciona(pom)
+      } : undefined}
+      onTap={onSelecciona ? (e) => { e.cancelBubble = true; onSelecciona(pom) } : undefined}
+      onMouseEnter={arrossegable ? (e) => {
+        const c = e.target.getStage()?.container()
+        if (c) c.style.cursor = 'move'      // res no deia que això s'arrossegués
+      } : undefined}
+      onMouseLeave={arrossegable ? (e) => {
+        const c = e.target.getStage()?.container()
+        if (c) c.style.cursor = ''
+      } : undefined}
+      listening={viva && !!(onSelecciona || onMou)}
+    >
+      {/* TESTIMONIS: del punt acotat fins una mica més enllà de la línia de cota, puntejats
+          i fins, com al CAD. Només quan la cota s'ha separat: a offset zero seria una línia
+          de longitud zero sobre ella mateixa. */}
+      {origens.map((o, i) => {
+        const fi = i === 0 ? cap : cua
+        if (Math.hypot(fi.x - o.x, fi.y - o.y) < 1e-6) return null
+        return (
+          <Line
+            key={`t${i}`}
+            points={[o.x, -o.y, fi.x, -fi.y]}
+            stroke={col} strokeWidth={0.8 / zoom}
+            dash={[1.5 / zoom, 2.5 / zoom]}
+            listening={false} perfectDrawEnabled={false}
+          />
+        )
+      })}
+
+      {/* La LÍNIA DE COTA. Amb `hitStrokeWidth` generós: una línia d'1,8 px no es pot
+          agafar amb el ratolí, i una cota que s'ha d'encertar al píxel no és arrossegable. */}
       <Line
-        points={punts.flatMap(p => [p.x, -p.y])}
-        stroke={KONVA_COL.pom} strokeWidth={1.8 / zoom}
+        points={cota.flatMap(p => [p.x, -p.y])}
+        stroke={col} strokeWidth={(sel ? 2.6 : 1.8) / zoom}
+        hitStrokeWidth={Math.max(12 / zoom, 4)}
         perfectDrawEnabled={false}
       />
-      {punts.map((p, i) => (
-        <Circle key={i} x={p.x} y={-p.y} r={3 / zoom} fill={KONVA_COL.pom}
-                perfectDrawEnabled={false} />
+      {[cap, cua].map((p, i) => (
+        <Circle key={i} x={p.x} y={-p.y} r={3 / zoom} fill={col}
+                listening={false} perfectDrawEnabled={false} />
       ))}
       <Text
         x={mig.x} y={-mig.y - 14 / zoom}
         text={`${pom.pom_code}${pom.valor_mesurat_cm != null
           ? ` ${formatLen(pom.valor_mesurat_cm, unit)}` : ''}`}
         fontSize={11 / zoom}
-        fill={KONVA_COL.pom}
+        fill={col}
+        listening={false}
         perfectDrawEnabled={false}
       />
     </Group>
   )
 }
 
-/** L'etiqueta d'un punt fixat: A → B, o A → Vèrtex → B si s'està marcant una pinça. */
-function etiquetaPunt(t, mode, i, maxPunts) {
+/** L'etiqueta d'un punt fixat: la de la seva ÀNCORA, o A → Vèrtex → B si és una pinça.
+ *
+ * Deia «A» i «B» per a tot el que no fos una pinça, i amb tres àncores el tercer clic
+ * quedava etiquetat «B» com el segon: dos punts diferents amb el mateix rètol, mentre els
+ * xips del selector, tres pams més amunt, els anomenaven correctament.
+ */
+function etiquetaPunt(t, mode, i, ancores) {
   if (mode === 'pinca') {
     return t(['pattern.taller.pt_a', 'pattern.taller.pt_vertex', 'pattern.taller.pt_b'][i]
       || 'pattern.taller.pt_b')
   }
-  return t(i === 0 ? 'pattern.taller.pt_a' : 'pattern.taller.pt_b')
+  return t(`pattern.taller.pt_${ancores[i] || 'b'}`)
 }
 
 /**
@@ -773,16 +960,78 @@ function PincaKonva({ pinca, zoom, unit }) {
   )
 }
 
-/** Els punts que una recepta de mesura toca (mode `points`; el landmark es resol al servidor). */
+/** La polilínia que una recepta de mesura RECORRE. La longitud d'això ÉS el valor.
+ *
+ * Una recepta ORTOGONAL no porta `a`/`b` sinó `ref_a`/`ref_b`/`p`, i una de PROJECCIÓ acota
+ * sobre un eix: llegint-hi només les dues primeres claus el POM sortia amb la llista buida i
+ * **no es dibuixava gens**. La lectura natural d'això és «no s'ha desat».
+ *
+ * ⚠️ Per a la caiguda i per a la cota, aquesta línia NO és el que la capa FTT-POM exportarà
+ * —cap dels dos modes entra encara a la niada (`adapters.pom_specs`)—, a diferència de la
+ * recta i la longitud per vora.
+ */
 function puntsDeLaMesura(piece, pom) {
   const def = pom.definicio_mesura || {}
   const perId = new Map()
   for (const b of piece.boundaries || []) {
     for (const p of b.points || []) perId.set(p.id, p)
   }
+
+  if (def.mode === 'ortogonal') {
+    const p = perId.get(def.p)
+    const peu = peuPerpendicular(perId.get(def.ref_a), perId.get(def.ref_b), p)
+    return peu && p ? [peu, p] : []
+  }
+
   const a = perId.get(def.a) || perId.get(def.landmark)
   const b = perId.get(def.b)
-  return a && b ? [a, b] : []
+  if (!a || !b) return []
+
+  if (def.mode === 'projeccio') return puntsDeLaCotaProjeccio(a, b, def.eix || '')
+
+  // LONGITUD PER VORA: la mesura ressegueix la vora, i dibuixar-hi la CORDA seria dibuixar
+  // una altra magnitud. S'agafa l'arc CURT entre els dos punts, que és el que el motor
+  // mesura (`engine/measure._cami_per_vora`).
+  if (pom.metode === 'vora') {
+    for (const boundary of piece.boundaries || []) {
+      const pts = boundary.points || []
+      const ia = pts.findIndex(q => q.id === a.id)
+      const ib = pts.findIndex(q => q.id === b.id)
+      if (ia < 0 || ib < 0) continue
+      const arc = arcsEntrePunts(boundary, ia, ib)[0]
+      if (arc?.punts?.length >= 2) return arc.punts
+    }
+    // Cap vora no passa pels dos punts. El servidor tampoc no ho pot mesurar i deixa el
+    // valor a null (`engine/measure._cami_per_vora`): dibuixar-hi la corda seria pintar una
+    // magnitud que ningú no ha demanat i que no és la que la fila diu.
+    return []
+  }
+
+  return [a, b]
+}
+
+/**
+ * La COTA d'un POM: què es dibuixa i on.
+ *
+ * Una cota de CAD no és la línia de la mesura: és una línia PARAL·LELA, separada, amb dos
+ * testimonis que la lliguen als punts que acota. Per això aquí surten tres coses i no una:
+ * els ORÍGENS (d'on surten els testimonis), la línia de COTA (ja desplaçada) i la NORMAL
+ * (la direcció en què el desplaçament es compta, que és la que el drag ha de respectar).
+ *
+ * El desplaçament és `cota_offset_mm` i és PRESENTACIÓ: no toca ni pot tocar el valor.
+ * A zero, la cota seu sobre la mesura —exactament on es dibuixava abans que això existís.
+ */
+function geometriaDeLaCota(piece, pom) {
+  const base = puntsDeLaMesura(piece, pom)
+  if (base.length < 2) return null
+  const normal = normalDe(base[0], base[base.length - 1])
+  if (!normal) return null
+  const off = pom.cota_offset_mm || 0
+  return {
+    origens: [base[0], base[base.length - 1]],
+    cota: desplacaPolilinia(base, off),
+    normal,
+  }
 }
 
 function PecaKonva({ piece, zoom, sel, atenuada, visible, mostraPunts, anotant, onClick }) {

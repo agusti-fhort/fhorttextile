@@ -92,10 +92,67 @@ def te_paret_albara(task):
         delivery_note__status__in=['ISSUED', 'INVOICED']).exists()
 
 
-def _log(task, frm, to, profile, auto=None):
+def hi_ha_volta_posterior(task):
+    """M3 · FIT-11 — hi ha una VOLTA POSTERIOR a la d'aquesta tasca?
+
+    🔒 **OBRIR UNA RONDA NOVA ELIMINA L'OPCIÓ DE RECTIFICAR L'ANTERIOR** (llei dura d'Agus,
+    24/08). Rectificar és tornar a entrar en una feina que ja s'havia donat per acabada, i això
+    només té sentit sobre la **darrera** volta: si el PM ja n'ha obert una de nova, la manera de
+    refer aquella feina és la volta nova —que té identitat, genealogia (`mare`) i comptador
+    propis—, no reobrir una tasca de dues voltes enrere i deixar el rastre repartit entre les
+    dues. FIT-2 segueix intacte per a la darrera volta: allà rectificar és legal i deixa nota.
+
+    Dos casos, i el segon és el que fa que això no es pugui escriure amb un `seq__gt` i prou:
+
+      · **La tasca TÉ volta** → n'hi ha de posterior si existeix una `Ronda` del model amb
+        `seq` més gran. Directe.
+      · **La tasca NO en té** (`ronda` NULL) → n'hi ha dues menes i **no es poden tractar
+        igual**: l'històric anterior a la primera volta del model (feina llegada, que la
+        prohibició de backfill d'M1-bis deixa NULL a posta) i la feina nascuda al BUIT entre
+        dues voltes, que encara no n'ha vist cap de posterior. El que les separa és el TEMPS,
+        que és el mateix criteri que `services_r.tasques_del_buit` fa servir per adoptar-les:
+        és posterior tota volta **oberta després que la tasca es creés**.
+
+    Retorna la `Ronda` posterior més antiga (per dir-la al missatge), o None.
+    """
+    from .models import Ronda
+
+    ronda = getattr(task, 'ronda', None)
+    qs = Ronda.objects.filter(model_id=task.model_id)
+    if ronda is not None:
+        qs = qs.filter(seq__gt=ronda.seq)
+    else:
+        qs = qs.filter(oberta_el__gt=task.created_at)
+    return qs.order_by('seq').first()
+
+
+def _log(task, frm, to, profile, auto=None, nota=None):
     # `auto` viatja fins al log perquè digui la veritat: null = gest del tècnic, slug = guard.
+    # `nota` (M1 · FIT-2) és el CONTEXT del gest en text, quan n'hi ha: null a la immensa
+    # majoria de transicions, que no tenen res a dir.
     TaskTransition.objects.create(model_task=task, from_status=frm, to_status=to, by=profile,
-                                  auto=auto)
+                                  auto=auto, nota=nota)
+
+
+def _nota_reobertura_post_entrega(task):
+    """M1 · FIT-2 — «reoberta després d'entrega de R{n}», o None si no s'escau.
+
+    🔒 **EL SEGELL SEGUEIX SENT TOU.** Això NO és un guard: `Done→InProgress` era legal ahir i ho
+    és avui, i aquesta funció no pot rebutjar res. L'única cosa que canvia és que el log deixa
+    dit que aquella feina ja s'havia entregat —que és una conversa diferent de la paret DURA de
+    l'albarà (`te_paret_albara`), que sí que refusa.
+
+    Només parla quan la tasca pertany a una ronda amb entrega INFORMADA. Una tasca de la volta 1
+    (`ronda` NULL, la implícita) o d'una volta que ningú no ha entregat no té res a rastrejar.
+    La CARA d'aquest rastre —qui el veu i com— és M2; aquí només hi ha la dada.
+    """
+    ronda = getattr(task, 'ronda', None)
+    if ronda is None:
+        return None
+    entrega = getattr(ronda, 'entrega', None)   # OneToOne invers: None si no n'hi ha
+    if entrega is None:
+        return None
+    return f"reoberta després d'entrega de R{ronda.seq}"
 
 
 def _aplica_exclusio_tecnic(profile, task):
@@ -317,6 +374,16 @@ def transition_task(task, to_status, profile, force=False, auto=None,
     # reobrir (rectificació = extra nova que genera línia al proper albarà). DRAFT NO bloqueja
     # (encara es pot desfer esborrant el DRAFT). Limitat estrictament a Done→InProgress.
     if not force and frm == 'Done' and to_status == 'InProgress':
+        # M3 · FIT-11 — LA PARET DE LA VOLTA. Va ABANS de la de l'albarà a posta: quan totes
+        # dues hi són, el motiu que el tècnic ha de llegir és el que té sortida («fes-ho a la
+        # volta nova»), no el que no en té. `force` la salta igual que l'altra: les rutines
+        # internes que reprocessen històric no estan rectificant res.
+        posterior = hi_ha_volta_posterior(task)
+        if posterior is not None:
+            raise TransitionError(
+                f'Aquesta feina és d\'una volta anterior: la R{posterior.seq} ja està oberta. '
+                f'El que s\'ha de refer es fa a la volta nova, no reobrint la vella.',
+                code='volta_posterior')
         if te_paret_albara(task):
             # El `code` és el que fa que el client pugui dir el MOTIU. Sense ell, aquest rebuig
             # arribava com un 409 mut i el tècnic veia «no s'ha pogut obrir la tasca» sense saber
@@ -369,7 +436,11 @@ def transition_task(task, to_status, profile, force=False, auto=None,
 
     task.status = to_status
     task.save()
-    _log(task, frm, to_status, profile, auto=auto)
+    # M1 · FIT-2 — el rastre es calcula ABANS del log i només per a la reobertura: és l'únic
+    # moment en què la frase té sentit i l'únic en què la tasca pot estar entregada.
+    nota = (_nota_reobertura_post_entrega(task)
+            if (frm == 'Done' and to_status == 'InProgress') else None)
+    _log(task, frm, to_status, profile, auto=auto, nota=nota)
 
     # Pas 5B-fix: arrencar la PRIMERA tasca treu el model de Pending → Dev.
     if to_status == 'InProgress':

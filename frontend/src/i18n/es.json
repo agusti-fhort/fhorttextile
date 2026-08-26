@@ -73,8 +73,13 @@
     "show": "Mostrar",
     "remove_line": "Quitar línea",
     "tray_title": "Bandeja de albaranables",
-    "tray_hint": "Tareas terminadas, extras, gastos y deducciones pendientes de albarán, agrupados por modelo.",
+    "tray_hint": "Tareas acabadas, extras, gastos y deducciones pendientes de albarar, agrupados por modelo y por vuelta.",
     "tray_empty": "Ningún ítem pendiente de albarán para este cliente.",
+    "ronda_label": "R{{n}}",
+    "ronda_fora": "fuera de pedido",
+    "ronda_oberta": "abierta",
+    "ronda_perque": "n>{{numeral}} del pedido {{comanda}}: esta vuelta se factura aparte.",
+    "ronda_perque_sense_comanda": "supera el numeral de {{numeral}} vueltas: esta vuelta se factura aparte.",
     "tray_add": "Añadir ({{n}})",
     "back_title": "Volver al panel",
     "entity": "albaranes",
@@ -864,7 +869,6 @@
         "handoff_cancel": "Cancelar",
         "claim_denied": "No puedes coger una tarea de este tipo (no está en tu lista de ejecución)",
         "claim_error": "No se ha podido reasignar la tarea",
-        "progress_label": "{{done}}/{{total}} tareas hechas",
         "time_total": "Tiempo acumulado sobre el modelo"
       },
       "timeline": {
@@ -997,7 +1001,37 @@
     "pas_sense_mesures": "Hay que grabar el POM para generar la tabla de tallas",
     "pas_sense_regles": "Hay que definir la graduación para generar la tabla de tallas",
     "pas_sense_propagacio": "Hay que propagar para generar la tabla de tallas",
-    "measure_set": "Medir set"
+    "measure_set": "Medir set",
+    "cicle": {
+      "tancar": "Cerrar modelo",
+      "tancar_confirm": "Cerrar",
+      "tancar_ajuda": "Cerrar el modelo lo saca del tablero activo. Sigue consultable y se puede reabrir.",
+      "motiu": "Motivo",
+      "motiu_acabat": "Acabado (decisión interna)",
+      "motiu_tret_de_cataleg": "Retirado de catálogo (el cliente no lo producirá)",
+      "motiu_tret": "Retirado de catálogo (el cliente no lo producirá)",
+      "ronda_oberta_avis": "La ronda R{{n}} está abierta. Confirmar la entrega lo cierra todo: se informará la entrega de esta vuelta y se cerrará el trabajo que quede vivo.",
+      "confirmar_i_tancar": "Confirmar la entrega y cerrar",
+      "destinatari": "Destinatario",
+      "descripcio": "Qué se ha entregado",
+      "jubilar": "Jubilar modelo",
+      "jubilar_ajuda": "Jubilar lo archiva: queda fuera de las vistas normales y solo se ve con el filtro «jubilados».",
+      "reobrir": "Reabrir modelo",
+      "reobrir_ajuda": "El modelo vuelve al tablero. Dentro se decide si se rectifica la última vuelta o se abre una nueva.",
+      "motiu_lliure": "Motivo (opcional)",
+      "confirmar": "Confirmar",
+      "tancat_ok": "Modelo {{codi}} cerrado.",
+      "jubilat_ok": "Modelo {{codi}} jubilado.",
+      "reobert_ok": "Modelo {{codi}} reabierto.",
+      "estat_titol": "Estado del modelo",
+      "estat": {
+        "acabat": "Acabado",
+        "jubilat": "Jubilado"
+      },
+      "banner_ajuda": "este modelo se consulta; para volver a trabajar en él, reábrelo.",
+      "ronda_oberta_avis_tret": "La ronda R{{n}} está abierta. Al cerrar el modelo se cerrará esta vuelta y el trabajo que quede vivo, SIN declarar ninguna entrega: el cliente ha dicho que la pieza no se producirá y no se ha enviado nada.",
+      "tancar_volta_i_model": "Cerrar la vuelta y el modelo"
+    }
   },
   "model_wizard": {
     "customer": "Cliente",
@@ -1185,8 +1219,8 @@
     "col_entrada_model": "Entrada",
     "col_deadline": "Deadline",
     "col_estat": "Estado",
-    "estat_pendent": "Estado comercial: pendiente del Kanban.",
-    "select_page": "Seleccionar toda la página"
+    "select_page": "Seleccionar toda la página",
+    "view_retired": "Modelos jubilados"
   },
   "models_filters": {
     "button": "Filtros",
@@ -1669,6 +1703,11 @@
     "col_import_imputat": "Imputado",
     "col_price": "Precio unit.",
     "col_import": "Importe",
+    "col_rounds": "Vueltas incl.",
+    "rounds_unlimited": "Sin límite",
+    "rounds_help": "Cuántas vueltas (rondas) cubre el precio de esta línea. Vacío = sin límite; 0 = ninguna vuelta incluida.",
+    "rounds_saved": "Numeral de vueltas actualizado.",
+    "rounds_invalid": "El numeral de vueltas debe ser un entero igual o superior a 0.",
     "col_total": "Total",
     "col_created": "Creado",
     "status_OPEN": "Abierto",
@@ -1712,7 +1751,7 @@
     "pdf_error": "No se pudo generar el PDF.",
     "status": "Estado",
     "status_saved": "Estado actualizado.",
-    "readonly_note": "Pedido congelado: las líneas y los precios no se pueden editar (nacen de la conversión de la oferta).",
+    "readonly_note": "Pedido congelado: las líneas y los precios no se pueden editar (nacen de la conversión de la oferta). La excepción es el numeral de vueltas incluidas, que es una condición del pacto y sí se corrige aquí.",
     "details": "Detalles",
     "source_quote": "Oferta origen",
     "issued_at": "Fecha de emisión",
@@ -2219,10 +2258,9 @@
       "SP": "SP · Especial"
     },
     "estats": {
-      "Nou": "Nuevo",
-      "EnCurs": "En curso",
-      "EnRevisio": "En revisión",
-      "Tancat": "Cerrado"
+      "nou": "Nuevo",
+      "acabat": "Acabado",
+      "jubilat": "Jubilado"
     }
   },
   "model": {
@@ -2265,10 +2303,9 @@
       "codi_tenant_help": "3 caracteres · si está vacío se deriva del código cliente"
     },
     "estats": {
-      "Nou": "Nuevo",
-      "EnCurs": "En curso",
-      "EnRevisio": "En revisión",
-      "Tancat": "Cerrado"
+      "nou": "Nuevo",
+      "acabat": "Acabado",
+      "jubilat": "Jubilado"
     },
     "prioritats": {
       "1": "Baja",
@@ -3487,7 +3524,12 @@
         "pending": "Pendientes",
         "open": "En curso",
         "paused": "Pausados",
-        "done": "Hechos"
+        "done": "Entregados"
+      },
+      "ronda": {
+        "oberta": "ronda abierta",
+        "entregada": "entregada",
+        "tancada": "cerrada"
       }
     },
     "milestones": {
@@ -4433,7 +4475,68 @@
       "value_pattern_t": "patrón",
       "value_sheet": "ficha {{cm}}",
       "value_sheet_none": "ficha —",
-      "value_sheet_t": "ficha"
+      "value_sheet_t": "ficha",
+      "metode_label": "Método de medida",
+      "metode": {
+        "recta": "Recta",
+        "vora": "Por borde",
+        "ortogonal": "Caída",
+        "projeccio": "Cota"
+      },
+      "metode_ajuda": {
+        "recta": "Distancia recta entre dos puntos, como una cinta tensada.",
+        "vora": "Longitud siguiendo el borde entre dos puntos, como una cinta que recorre la curva.",
+        "ortogonal": "Distancia perpendicular de un punto a la línea que marcan dos anclajes (por ejemplo, la caída desde el nivel HPS).",
+        "projeccio": "Distancia entre dos puntos proyectada sobre el eje horizontal o vertical del plano, como una cota de CAD."
+      },
+      "ancora": {
+        "a": "el punto A",
+        "b": "el punto B",
+        "ref_a": "el primer anclaje de la línea de referencia",
+        "ref_b": "el segundo anclaje de la línea de referencia",
+        "p": "el punto que cae"
+      },
+      "ancora_pas": "Colocando {{codi}} ({{nom}}) — haz clic en {{ancora}} ({{pas}} de {{total}})",
+      "ancora_pas_sense_pom": "Haz clic en {{ancora}} ({{pas}} de {{total}})",
+      "ancora_reopen": "Reabriendo {{codi}} — vuelve a marcar {{ancora}} ({{pas}} de {{total}}). Esc para salir sin tocar nada",
+      "ancora_estat": {
+        "fet": "{{ancora}}: hecho",
+        "ara": "{{ancora}}: toca ahora",
+        "pendent": "{{ancora}}: pendiente"
+      },
+      "pt_ref_a": "Ref A",
+      "pt_ref_b": "Ref B",
+      "pt_p": "Cae",
+      "err_metode_desconegut": "Este POM usa un método de medida que la pantalla no conoce ({{metode}}). Recarga el taller antes de reabrirlo.",
+      "err_sense_vocabulari": "No se han podido leer los métodos de medida. Recarga el taller antes de reabrir un POM.",
+      "opcio": {
+        "eix": "Eje"
+      },
+      "opcio_valor": {
+        "eix": {
+          "auto": "Auto",
+          "H": "Horizontal",
+          "V": "Vertical"
+        }
+      },
+      "opcio_ajuda": {
+        "eix": {
+          "auto": "El eje en el que los dos puntos tienen más recorrido.",
+          "H": "Horizontal DEL PLANO. Ojo: si la pieza está girada en el patrón, no es el ancho de la prenda.",
+          "V": "Vertical DEL PLANO. Ojo: si la pieza está girada en el patrón, no es el largo de la prenda."
+        }
+      },
+      "err_cota_moure": "No se ha podido guardar la posición de la cota. Inténtalo de nuevo.",
+      "cota_delete_title": "¿Borrar esta cota?",
+      "cota_delete_body": "Se borra el anclaje del POM sobre el patrón. La medida de la ficha no se toca, y el POM se puede volver a colocar.",
+      "cota_delete_ok": "Borrar la cota",
+      "act_menu": "Acciones",
+      "act_place": "Colocar en el patrón",
+      "act_reanchor": "Reanclar",
+      "act_delete": "Borrar la cota",
+      "act_point": "Señalar en el patrón",
+      "act_unpoint": "Dejar de señalar",
+      "pom_outside_group": "Anclados que no están en la ficha ({{n}})"
     },
     "loading": "Cargando el patrón…",
     "empty_title": "Todavía no hay ningún patrón",
@@ -4507,8 +4610,6 @@
     "pom_search": "Busca un POM por código o por nombre…",
     "pom_none": "Ningún POM encontrado.",
     "pom_unmeasured": "sin medida",
-    "poms_anchored": "POMs anclados ({{n}})",
-    "poms_empty": "Ningún POM anclado todavía. Entra en modo «Marcar POM» para empezar.",
     "sews": "Costuras ({{n}})",
     "sews_empty": "Ninguna costura declarada.",
     "sew_type": {
@@ -5105,5 +5206,62 @@
     "step_base_copiada_avis": "{{count}} medida(s) con regla STEP sin valor: se ha copiado el valor de la talla base y hay que corregirlo a mano en Escalado → {{detall}}",
     "step_posar_valor": "Poner el valor de esta talla en la regla",
     "step_valor_err": "No se ha podido guardar el valor."
+  },
+  "rondes": {
+    "nom": "RONDA {{n}}",
+    "sense_volta": "SIN VUELTA",
+    "estat_entregada": "Entregada",
+    "estat_tancada": "Cerrada",
+    "estat_oberta": "En curso",
+    "inici": "inicio",
+    "fi": "fin",
+    "temps": "tiempo",
+    "n_tasques_one": "{{count}} tarea",
+    "n_tasques_other": "{{count}} tareas",
+    "rectificacions_one": "/ rectificación {{count}}",
+    "rectificacions_other": "/ rectificaciones {{count}}",
+    "rectificacions_titol": "Veces que se ha reabierto trabajo de esta vuelta DESPUÉS de entregarla",
+    "plega": "Plegar la vuelta",
+    "desplega": "Desplegar la vuelta",
+    "volta_buida": "Esta vuelta todavía no tiene ninguna tarea",
+    "peu_segellades": "Las tareas de una ronda entregada quedan selladas — rectificar abre ronda nueva.",
+    "marcar_entregable": "Marcar entregable",
+    "nova": "+ Nueva ronda",
+    "nova_ok": "Ronda {{n}} abierta",
+    "nova_replicats_one": "{{count}} tarea replicada",
+    "nova_replicats_other": "{{count}} tareas replicadas",
+    "nova_adoptats_one": "{{count}} tarea recogida",
+    "nova_adoptats_other": "{{count}} tareas recogidas",
+    "nova_omesos": "omitidas (fuera de catálogo): {{codes}}",
+    "nova_error": "No se ha podido abrir la ronda",
+    "entrega_titol": "Informar la entrega de la ronda {{n}}",
+    "entrega_destinatari": "A quién se ha entregado",
+    "entrega_destinatari_ph": "Nombre del cliente o del contacto",
+    "entrega_descripcio": "Qué se ha entregado",
+    "entrega_descripcio_ph": "Ficha técnica v1, patrón + escalado…",
+    "entrega_avis": "Al confirmar, la ronda {{n}} quedará CERRADA.",
+    "entrega_avis_viues_one": "También se cerrará {{count}} tarea que todavía está viva.",
+    "entrega_avis_viues_other": "También se cerrarán {{count}} tareas que todavía están vivas.",
+    "entrega_confirma": "Informar la entrega y cerrar la ronda",
+    "entrega_error": "No se ha podido informar la entrega",
+    "entrega_ok": "Entrega informada · ronda {{n}} cerrada",
+    "entrega_linia": "Entrega {{data}} a {{destinatari}}",
+    "entrega_per": "por {{qui}}",
+    "ok_client_pendent": "OK cliente pendiente",
+    "ok_client_fet": "OK cliente {{data}}",
+    "ok_client_titol": "Informar el OK del cliente",
+    "ok_client_cos": "El cliente ({{destinatari}}) ha confirmado que lo ha recibido bien. Se informa una sola vez.",
+    "ok_client_data": "Fecha del OK",
+    "ok_client_data_nota": "Si no la dices, se pone la de ahora.",
+    "ok_client_confirma": "Informar el OK",
+    "ok_client_error": "No se ha podido informar el OK del cliente",
+    "ok_client_ok": "OK del cliente informado",
+    "reg_titol": "Actividad por rondas",
+    "reg_kpi_rondes": "Rondas",
+    "reg_kpi_entregues": "Entregas",
+    "reg_col_qui": "Quién",
+    "reg_entrega_a": "Entrega a {{destinatari}}",
+    "reg_buit": "Este modelo todavía no tiene actividad registrada",
+    "lliurable": "Entregable"
   }
 }

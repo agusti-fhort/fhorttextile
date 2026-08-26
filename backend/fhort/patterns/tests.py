@@ -22,6 +22,8 @@ import logging
 import math
 import re
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from django.db import connection
 from django.db.models import ProtectedError
@@ -47,7 +49,9 @@ from fhort.patterns.engine.ftt_pom_layer import (
 from fhort.patterns.engine.geometry import (
     BoundaryData,
     Confidence,
+    Fingerprint,
     GradeRuleData,
+    GradeTable,
     LayerRole,
     NotchData,
     PatternDocument,
@@ -60,11 +64,17 @@ from fhort.patterns.engine.geometry import (
 from fhort.patterns.engine.grading_projection import (
     GradingContextError,
     GradingNotApproved,
+    POMPreview,
+    PRIMERA_REGLA_MOBIL,
+    REGLA_ZERO,
+    SizePreview,
+    _taula,
     preview_per_talla,
     project,
 )
-from fhort.patterns.engine.operations import POMSpec, PointRef, move_points
-from fhort.patterns.engine.measure import MeasureError, resoldre
+from fhort.patterns.engine.ports import GradedPOMDelta, GradingSnapshot
+from fhort.patterns.engine.operations import MoveIssue, POMSpec, PointRef, move_points
+from fhort.patterns.engine.measure import MeasureError, eix_dominant, resoldre
 from fhort.patterns.engine.roundtrip import compare, compare_grade_tables
 from fhort.patterns.engine.dart_detection import (
     LLINDAR_PINCA,
@@ -134,8 +144,10 @@ from fhort.patterns.annotation_views import (PatternPOMViewSet, PatternSegmentVi
                                              SewProposalRejectionViewSet, SewRelationSerializer,
                                              SewRelationViewSet, SewToleranceAcceptanceViewSet,
                                              comprovar_costura)
-from fhort.patterns.export import ExportBlocked, build_export
+from fhort.patterns.export import (ExportBlocked, _problemes_capcalera,
+                                   _problemes_escalat, build_export)
 from fhort.patterns.services import CONFIRM_TEXT_CA
+from fhort.patterns import annotation_views
 from fhort.patterns.models import (DartProposalRejection, ExportAcknowledgement, PatternFile,
                                    PatternPiece, PatternPOM, PatternPoint, PatternSegment,
                                    SegmentPreference, SewProposalRejection, SewRelation,
@@ -1761,6 +1773,305 @@ class MesuraTest(unittest.TestCase):
             resoldre(self.back, {'mode': 'telepatia'}, self.punts)
 
 
+class CaigudaOrtogonalTest(unittest.TestCase):
+    """La caiguda perpendicular: el que la fa útil és el que NO la fa moure.
+
+    Tot el valor d'aquest mode és que no depèn dels eixos del full. Si depengués, seria
+    una resta de coordenades i no caldria cap mode: per això el test que mana aquí és el
+    del gir, i per això n'hi ha un que compara contra la resta de coordenades per veure
+    que les dues NO són el mateix quan la peça no seu recta.
+    """
+
+    class Punt:
+        """Un punt qualsevol: l'engine només demana `.x` i `.y`."""
+        def __init__(self, x, y):
+            self.x, self.y = x, y
+
+    @staticmethod
+    def _rota(punts, graus):
+        a = math.radians(graus)
+        cos, sin = math.cos(a), math.sin(a)
+        return {
+            k: CaigudaOrtogonalTest.Punt(p.x * cos - p.y * sin, p.x * sin + p.y * cos)
+            for k, p in punts.items()
+        }
+
+    #: La forma canònica: línia de referència horitzontal de 100 mm i un punt 77 mm avall.
+    RECEPTA = {'mode': 'ortogonal', 'ref_a': 1, 'ref_b': 2, 'p': 3}
+
+    def setUp(self):
+        P = self.Punt
+        self.recte = {1: P(0.0, 0.0), 2: P(100.0, 0.0), 3: P(40.0, -77.0)}
+        # Referència INCLINADA i punt que no seu entre les dues àncores: l'escot asimètric,
+        # on els dos HPS no són a la mateixa alçada i el punt més baix no queda al mig.
+        self.asimetric = {1: P(0.0, 0.0), 2: P(100.0, 40.0), 3: P(20.0, -30.0)}
+
+    def test_el_cas_simple_es_la_distancia_a_la_linia(self):
+        r = resoldre(None, self.RECEPTA, self.recte)
+        self.assertAlmostEqual(r.valor_cm, 7.7, places=10)
+        self.assertEqual(r.metode, 'ortogonal')
+
+    def test_el_peu_de_la_perpendicular_es_DERIVAT_i_no_es_materialitza(self):
+        """Com el punt del mode `landmark`: es calcula cada vegada, no es desa com a vèrtex.
+
+        I `punts` torna el segment (peu → p) i prou: la polilínia la longitud de la qual ÉS
+        el valor, que és la mateixa invariant que compleixen `recta` i `vora`.
+        """
+        r = resoldre(None, self.RECEPTA, self.recte)
+        self.assertTrue(r.derivat)
+        self.assertEqual(len(r.punts), 2)
+        (peu_x, peu_y), (px, py) = r.punts
+        self.assertAlmostEqual(peu_x, 40.0, places=10)
+        self.assertAlmostEqual(peu_y, 0.0, places=10)
+        self.assertAlmostEqual(math.hypot(px - peu_x, py - peu_y) / 10.0, r.valor_cm,
+                               places=10)
+
+    def test_LA_PECA_ROTADA_MESURA_EXACTAMENT_EL_MATEIX(self):
+        """El test que justifica el mode. Un DXF no promet que la peça segui recta al
+        plànol, i la mesura no pot dependre de com hi seu."""
+        base = resoldre(None, self.RECEPTA, self.recte).valor_cm
+        for graus in (30, 90, 137.5, -63, 180, 359.9):
+            with self.subTest(graus=graus):
+                girat = resoldre(None, self.RECEPTA, self._rota(self.recte, graus))
+                self.assertAlmostEqual(girat.valor_cm, base, places=10)
+
+    def test_una_resta_de_coordenades_NO_hauria_donat_el_mateix(self):
+        """La prova per l'absurd: ΔY sobreviu al cas recte i es trenca al gir de 30°.
+
+        És el bug que aquest mode evita, escrit com a test perquè ningú no el reintrodueixi
+        «per simplificar»."""
+        girat = self._rota(self.recte, 30)
+        delta_y = abs(girat[3].y - girat[1].y) / 10.0
+        self.assertAlmostEqual(resoldre(None, self.RECEPTA, girat).valor_cm, 7.7, places=10)
+        self.assertNotAlmostEqual(delta_y, 7.7, places=2)
+
+    def test_asimetric_la_referencia_la_posen_les_ancores_no_el_full(self):
+        """Amb els dos HPS a alçades diferents no hi ha cap «nivell» horitzontal: el
+        nivell és la recta que els uneix, i és contra aquesta recta que es mesura."""
+        r = resoldre(None, self.RECEPTA, self.asimetric)
+        esperat = abs(100.0 * (-30.0) - 40.0 * 20.0) / math.hypot(100.0, 40.0) / 10.0
+        self.assertAlmostEqual(r.valor_cm, esperat, places=10)
+        # I no és cap de les dues distàncies fàcils: ni la vertical ni la distància a ref_a.
+        self.assertNotAlmostEqual(r.valor_cm, 3.0, places=2)
+        self.assertNotAlmostEqual(r.valor_cm, math.hypot(20.0, 30.0) / 10.0, places=2)
+
+    def test_el_peu_pot_caure_FORA_del_tram_i_es_correcte(self):
+        """La referència és una RECTA (el nivell), no el tram entre les dues àncores. Un
+        punt que queda per fora dels dos HPS —passa a la màniga i als escots asimètrics—
+        continua tenint una caiguda, i és la perpendicular a la recta perllongada.
+        """
+        P = self.Punt
+        fora = {1: P(0.0, 0.0), 2: P(100.0, 40.0), 3: P(-40.0, -30.0)}
+        r = resoldre(None, self.RECEPTA, fora)
+
+        esperat = abs(100.0 * (-30.0) - 40.0 * (-40.0)) / math.hypot(100.0, 40.0) / 10.0
+        self.assertAlmostEqual(r.valor_cm, esperat, places=10)
+
+        # El peu queda darrere de ref_a: fora del tram, sobre la recta.
+        (peu_x, peu_y), _ = r.punts
+        self.assertLess(peu_x, 0.0)
+        # I hi és de debò, sobre la recta: el producte vectorial amb la direcció és zero.
+        self.assertAlmostEqual(100.0 * peu_y - 40.0 * peu_x, 0.0, places=9)
+
+    def test_lasimetric_tambe_sobreviu_al_gir(self):
+        base = resoldre(None, self.RECEPTA, self.asimetric).valor_cm
+        for graus in (30, -45, 111):
+            with self.subTest(graus=graus):
+                self.assertAlmostEqual(
+                    resoldre(None, self.RECEPTA, self._rota(self.asimetric, graus)).valor_cm,
+                    base, places=10)
+
+    def test_el_valor_no_te_signe(self):
+        """Una caiguda no té costat: el punt a sobre i el punt a sota de la línia mesuren
+        el mateix. El signe diria de quin costat cau, i això no és la mesura."""
+        P = self.Punt
+        avall = {1: P(0.0, 0.0), 2: P(100.0, 0.0), 3: P(40.0, -77.0)}
+        amunt = {1: P(0.0, 0.0), 2: P(100.0, 0.0), 3: P(40.0, +77.0)}
+        self.assertAlmostEqual(resoldre(None, self.RECEPTA, avall).valor_cm,
+                               resoldre(None, self.RECEPTA, amunt).valor_cm, places=10)
+
+    def test_lordre_de_les_dues_referencies_es_indiferent(self):
+        """ref_a i ref_b defineixen una RECTA, i una recta no té sentit de marxa."""
+        endavant = resoldre(None, self.RECEPTA, self.asimetric)
+        enrere = resoldre(None, {'mode': 'ortogonal', 'ref_a': 2, 'ref_b': 1, 'p': 3},
+                          self.asimetric)
+        self.assertAlmostEqual(endavant.valor_cm, enrere.valor_cm, places=10)
+
+    # ── degenerats: error explícit, mai un NaN que viatgi ────────────────────
+
+    def test_dues_referencies_al_mateix_lloc_es_un_error_dit(self):
+        P = self.Punt
+        with self.assertRaises(MeasureError) as ctx:
+            resoldre(None, self.RECEPTA, {1: P(5.0, 5.0), 2: P(5.0, 5.0), 3: P(0.0, 0.0)})
+        self.assertIn('mateix punt', str(ctx.exception))
+
+    def test_dues_referencies_quasi_al_mateix_lloc_tambe(self):
+        """Per sota del llindar no hi ha direcció fiable, encara que els dos punts siguin
+        formalment diferents. Sense això, el quocient donaria un número enorme i ningú no
+        sabria d'on ha sortit."""
+        P = self.Punt
+        with self.assertRaises(MeasureError):
+            resoldre(None, self.RECEPTA,
+                     {1: P(5.0, 5.0), 2: P(5.0, 5.0 + 1e-9), 3: P(0.0, 0.0)})
+
+    def test_una_ancora_que_falta_diu_QUINA(self):
+        """Amb tres àncores de papers diferents, «falta un punt» no deixaria saber quin
+        s'ha de tornar a clicar."""
+        for absent in ('ref_a', 'ref_b', 'p'):
+            with self.subTest(absent=absent):
+                recepta = {k: v for k, v in self.RECEPTA.items() if k != absent}
+                with self.assertRaises(MeasureError) as ctx:
+                    resoldre(None, recepta, self.recte)
+                self.assertIn(absent, str(ctx.exception))
+
+    def test_el_punt_sobre_la_linia_no_es_cap_error_es_un_zero(self):
+        """Cau zero perquè no cau: és una resposta geomètrica, no una avaria. Qui ho ha de
+        rebutjar és l'API (una recepta que ho demana és un error de qui la fa), no el motor."""
+        P = self.Punt
+        sobre = {1: P(0.0, 0.0), 2: P(100.0, 0.0), 3: P(55.0, 0.0)}
+        self.assertAlmostEqual(resoldre(None, self.RECEPTA, sobre).valor_cm, 0.0, places=10)
+
+    def test_els_modes_de_sempre_no_han_canviat(self):
+        """Cap recepta existent no canvia de resposta perquè n'hagi entrat una de nova."""
+        P = self.Punt
+        punts = {1: P(0.0, 0.0), 2: P(30.0, 40.0)}
+        r = resoldre(None, {'mode': 'points', 'a': 1, 'b': 2}, punts)
+        self.assertAlmostEqual(r.valor_cm, 5.0, places=10)
+        self.assertEqual(r.metode, 'recta')
+        self.assertFalse(r.derivat)
+
+
+class CotaProjeccioTest(unittest.TestCase):
+    """La cota d'eix: |Δ| de la projecció sobre l'horitzontal o la vertical.
+
+    És el mode que SÍ que viu als eixos del full, i el test que el separa del seu germà
+    `ortogonal` és el del gir: aquí, girar la peça HA de canviar el valor. Si no el canviés
+    seria que algú l'ha reimplementat com una distància, i llavors els dos modes farien el
+    mateix.
+    """
+
+    class Punt:
+        def __init__(self, x, y):
+            self.x, self.y = x, y
+
+    def setUp(self):
+        P = self.Punt
+        # 250 mm d'ample per 98,1 d'alt: les proporcions de l'EK del banc del 837.
+        self.punts = {1: P(2018.6, 1164.3), 2: P(1768.8, 1066.2)}
+
+    def _resol(self, eix=None):
+        recepta = {'mode': 'projeccio', 'a': 1, 'b': 2}
+        if eix is not None:
+            recepta['eix'] = eix
+        return resoldre(None, recepta, self.punts)
+
+    def test_horitzontal_es_delta_x(self):
+        r = self._resol('H')
+        self.assertAlmostEqual(r.valor_cm, abs(2018.6 - 1768.8) / 10.0, places=10)
+        self.assertEqual(r.metode, 'projeccio')
+
+    def test_vertical_es_delta_y(self):
+        self.assertAlmostEqual(
+            self._resol('V').valor_cm, abs(1164.3 - 1066.2) / 10.0, places=10)
+
+    def test_auto_tria_leix_de_mes_recorregut(self):
+        """El que fa qualsevol CAD quan l'usuari no en tria cap."""
+        self.assertAlmostEqual(self._resol().valor_cm, self._resol('H').valor_cm, places=10)
+        self.assertAlmostEqual(self._resol('').valor_cm, self._resol('H').valor_cm, places=10)
+        self.assertGreater(self._resol('H').valor_cm, self._resol('V').valor_cm)
+
+    def test_auto_amb_la_cota_a_laltre_eix(self):
+        P = self.Punt
+        alt = {1: P(0.0, 0.0), 2: P(30.0, 400.0)}
+        r = resoldre(None, {'mode': 'projeccio', 'a': 1, 'b': 2}, alt)
+        self.assertAlmostEqual(r.valor_cm, 40.0, places=10)
+
+    def test_un_empat_exacte_cau_a_lhoritzontal(self):
+        """Arbitrari i escrit a posta: val més una regla que resolgui sempre igual que una
+        que depengui de com hagi arrodonit el CAD."""
+        P = self.Punt
+        diagonal = {1: P(0.0, 0.0), 2: P(100.0, 100.0)}
+        self.assertEqual(eix_dominant((0.0, 0.0), (100.0, 100.0)), 'H')
+        self.assertAlmostEqual(
+            resoldre(None, {'mode': 'projeccio', 'a': 1, 'b': 2}, diagonal).valor_cm,
+            10.0, places=10)
+
+    def test_LA_PECA_ROTADA_CANVIA_EL_VALOR_i_ha_de_canviar(self):
+        """El test que separa aquest mode del seu germà.
+
+        `ortogonal` mesura contra el NIVELL de la peça i per això sobreviu al gir;
+        `projeccio` mesura contra els eixos del FULL i per això no hi ha de sobreviure. Si
+        algun dia aquest test es posés verd, seria que els dos modes han convergit i un
+        dels dos ha deixat de fer la seva feina.
+        """
+        recte = self._resol('H').valor_cm
+        a = math.radians(30)
+        cos, sin = math.cos(a), math.sin(a)
+        girat = {k: self.Punt(p.x * cos - p.y * sin, p.x * sin + p.y * cos)
+                 for k, p in self.punts.items()}
+        self.assertNotAlmostEqual(
+            resoldre(None, {'mode': 'projeccio', 'a': 1, 'b': 2, 'eix': 'H'},
+                     girat).valor_cm,
+            recte, places=2)
+
+    def test_el_segment_es_la_COTA_i_no_la_corda(self):
+        """Una cota d'eix és paral·lela al seu eix, i seu a la coordenada MITJANA dels dos
+        punts: entre tots dos, no enganxada a un. I la seva longitud ÉS el valor —la mateixa
+        invariant que compleixen recta, vora i la caiguda."""
+        r = self._resol('H')
+        (x0, y0), (x1, y1) = r.punts
+        self.assertAlmostEqual(y0, y1, places=10)                     # paral·lela a H
+        self.assertAlmostEqual(y0, (1164.3 + 1066.2) / 2.0, places=10)  # a la mitjana
+        self.assertAlmostEqual(math.hypot(x1 - x0, y1 - y0) / 10.0, r.valor_cm, places=10)
+
+        v = self._resol('V')
+        (vx0, _), (vx1, _) = v.punts
+        self.assertAlmostEqual(vx0, vx1, places=10)                   # paral·lela a V
+        self.assertAlmostEqual(vx0, (2018.6 + 1768.8) / 2.0, places=10)
+
+    def test_els_extrems_son_derivats(self):
+        self.assertTrue(self._resol('H').derivat)
+
+    def test_lordre_dels_punts_es_indiferent(self):
+        endavant = self._resol('H').valor_cm
+        enrere = resoldre(None, {'mode': 'projeccio', 'a': 2, 'b': 1, 'eix': 'H'},
+                          self.punts).valor_cm
+        self.assertAlmostEqual(endavant, enrere, places=10)
+
+    def test_dos_punts_alineats_amb_leix_donen_zero_i_no_es_cap_error(self):
+        """Acotar en horitzontal dos punts a la mateixa abscissa mesura zero. És una
+        resposta geomètrica, no una avaria: qui l'ha de veure és qui miri la cota."""
+        P = self.Punt
+        vertical = {1: P(50.0, 0.0), 2: P(50.0, 300.0)}
+        r = resoldre(None, {'mode': 'projeccio', 'a': 1, 'b': 2, 'eix': 'H'}, vertical)
+        self.assertAlmostEqual(r.valor_cm, 0.0, places=10)
+
+    def test_un_eix_inventat_ho_diu_i_no_endevina(self):
+        with self.assertRaises(MeasureError) as ctx:
+            self._resol('Z')
+        self.assertIn('Z', str(ctx.exception))
+
+    def test_una_ancora_que_falta_diu_QUINA(self):
+        for absent in ('a', 'b'):
+            with self.subTest(absent=absent):
+                recepta = {'mode': 'projeccio', 'a': 1, 'b': 2}
+                del recepta[absent]
+                with self.assertRaises(MeasureError) as ctx:
+                    resoldre(None, recepta, self.punts)
+                self.assertIn(absent, str(ctx.exception))
+
+    def test_la_caiguda_i_la_projeccio_NO_donen_el_mateix(self):
+        """Els dos modes existeixen perquè responen preguntes diferents. Sobre la mateixa
+        geometria han de dir coses diferents; si convergissin, un dels dos sobraria."""
+        P = self.Punt
+        punts = {1: P(0.0, 0.0), 2: P(100.0, 40.0), 3: P(20.0, -30.0)}
+        caiguda = resoldre(
+            None, {'mode': 'ortogonal', 'ref_a': 1, 'ref_b': 2, 'p': 3}, punts).valor_cm
+        cota = resoldre(
+            None, {'mode': 'projeccio', 'a': 1, 'b': 3, 'eix': 'V'}, punts).valor_cm
+        self.assertNotAlmostEqual(caiguda, cota, places=2)
+
+
 class CosturaTest(unittest.TestCase):
     """El diferencial vol dir coses OPOSADES segons el tipus. És tot el test."""
 
@@ -1941,6 +2252,439 @@ class AnotacioAPITest(PatternsAPITestBase):
 # ═════════════════════════════════════════════════════════════════════════════
 # Guard de puresa — la frontera hexagonal, feta complir per una màquina
 # ═════════════════════════════════════════════════════════════════════════════
+
+class CaigudaOrtogonalAPITest(PatternsAPITestBase):
+    """La caiguda per l'API: què s'accepta, què rebota, i què n'arriba al client.
+
+    Es fa sobre l'AMELIA de `fixtures/`, MAI sobre el banc del 837 a staging: aquell és
+    material viu de l'Agus i un test que hi escrivís deixaria feina que ningú no ha
+    demanat dins de la seva pantalla.
+
+    Munta el seu propi fixture en lloc d'heretar d'`AnotacioAPITest`: heretar-ne li
+    tornaria a executar la dotzena de tests que ja passen, i el temps de la suite és de
+    tothom.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.fp = PatternFile.objects.get(
+            pk=self._upload(AMELIA_DXF.read_bytes()).data['id'])
+        self.back = self.fp.pieces.get(nom_block='BACK')
+        self.pom_master = POMMaster.objects.create(
+            codi_client='DROP', nom_client='Caiguda d\'escot')
+        self.girs = list(
+            self.back.points.filter(mena='vertex', tipus='turn', boundary_index=0)
+            .order_by('ordre'))
+
+    #: `back` porta 22 girs al contorn de tall; en calen tres que no siguin colineals.
+    def _tres(self):
+        return self.girs[0], self.girs[5], self.girs[10]
+
+    def _ancora_recta(self, a, b):
+        request = self.factory.post('/api/v1/patterns/pattern-poms/', {
+            'pattern_piece': self.back.id,
+            'pom_master': self.pom_master.id,
+            'definicio_mesura': {'mode': 'points', 'a': a.id, 'b': b.id},
+            'metode': 'recta',
+        }, format='json')
+        force_authenticate(request, user=self.user)
+        return PatternPOMViewSet.as_view({'post': 'create'})(request)
+
+    def _caiguda(self, ref_a, ref_b, punt, metode='ortogonal', pom=None):
+        request = self.factory.post('/api/v1/patterns/pattern-poms/', {
+            'pattern_piece': self.back.id,
+            'pom_master': (pom or self.pom_master).id,
+            'definicio_mesura': {
+                'mode': 'ortogonal',
+                'ref_a': ref_a.id, 'ref_b': ref_b.id, 'p': punt.id,
+            },
+            'metode': metode,
+        }, format='json')
+        force_authenticate(request, user=self.user)
+        return PatternPOMViewSet.as_view({'post': 'create'})(request)
+
+    # ── el camí bo ───────────────────────────────────────────────────────────
+
+    def test_ancorar_una_caiguda_la_mesura_al_servidor(self):
+        ref_a, ref_b, punt = self._tres()
+        resp = self._caiguda(ref_a, ref_b, punt)
+        self.assertEqual(resp.status_code, 201, resp.data)
+
+        pom = PatternPOM.objects.get(pk=resp.data['id'])
+        self.assertEqual(pom.metode, PatternPOM.METODE_ORTOGONAL)
+        self.assertIsNotNone(pom.valor_mesurat_cm)
+
+        # El valor és la perpendicular, calculada a part: no l'ha dit el client i no és la
+        # distància a cap dels dos extrems.
+        vx, vy = ref_b.x - ref_a.x, ref_b.y - ref_a.y
+        wx, wy = punt.x - ref_a.x, punt.y - ref_a.y
+        esperat = round(abs(vx * wy - vy * wx) / math.hypot(vx, vy) / 10.0, 2)
+        self.assertAlmostEqual(pom.valor_mesurat_cm, esperat, places=2)
+
+    def test_la_caiguda_es_mes_curta_que_qualsevol_de_les_dues_rectes(self):
+        """La perpendicular és, per definició, la distància MÍNIMA a la recta. Si algun dia
+        algú la calculés com una recta a un extrem, això ho cantaria."""
+        ref_a, ref_b, punt = self._tres()
+        pom = PatternPOM.objects.get(pk=self._caiguda(ref_a, ref_b, punt).data['id'])
+        for extrem in (ref_a, ref_b):
+            self.assertLess(
+                pom.valor_mesurat_cm,
+                math.hypot(punt.x - extrem.x, punt.y - extrem.y) / 10.0)
+
+    # ── el que ha de rebotar ─────────────────────────────────────────────────
+
+    def test_dues_referencies_iguals_rebota_ABANS_de_desar(self):
+        """L'engine també ho rebutja, però desar-ho igualment deixaria un ancoratge que
+        ningú no pot mesurar i que algú hauria de venir a esborrar."""
+        ref_a, _, punt = self._tres()
+        resp = self._caiguda(ref_a, ref_a, punt)
+        self.assertEqual(resp.status_code, 400, resp.data)
+        self.assertEqual(PatternPOM.objects.count(), 0)
+
+    def test_el_punt_que_cau_sobre_una_referencia_rebota(self):
+        ref_a, ref_b, _ = self._tres()
+        resp = self._caiguda(ref_a, ref_b, ref_b)
+        self.assertEqual(resp.status_code, 400, resp.data)
+        self.assertEqual(PatternPOM.objects.count(), 0)
+
+    def test_una_ancora_que_falta_rebota(self):
+        ref_a, ref_b, _ = self._tres()
+        request = self.factory.post('/api/v1/patterns/pattern-poms/', {
+            'pattern_piece': self.back.id,
+            'pom_master': self.pom_master.id,
+            'definicio_mesura': {'mode': 'ortogonal', 'ref_a': ref_a.id, 'ref_b': ref_b.id},
+            'metode': 'ortogonal',
+        }, format='json')
+        force_authenticate(request, user=self.user)
+        resp = PatternPOMViewSet.as_view({'post': 'create'})(request)
+        self.assertEqual(resp.status_code, 400, resp.data)
+
+    def test_el_metode_i_la_forma_de_la_recepta_no_es_poden_separar(self):
+        """Una decisió escrita dues vegades: si es poguessin separar, la fila diria una
+        cosa i el valor en diria una altra."""
+        ref_a, ref_b, punt = self._tres()
+
+        # metode ortogonal + recepta de dos punts
+        with self.subTest(cas='metode ortogonal, recepta de punts'):
+            request = self.factory.post('/api/v1/patterns/pattern-poms/', {
+                'pattern_piece': self.back.id, 'pom_master': self.pom_master.id,
+                'definicio_mesura': {'mode': 'points', 'a': ref_a.id, 'b': ref_b.id},
+                'metode': 'ortogonal',
+            }, format='json')
+            force_authenticate(request, user=self.user)
+            self.assertEqual(
+                PatternPOMViewSet.as_view({'post': 'create'})(request).status_code, 400)
+
+        # recepta ortogonal + metode recta
+        with self.subTest(cas='recepta ortogonal, metode recta'):
+            self.assertEqual(self._caiguda(ref_a, ref_b, punt, metode='recta').status_code,
+                             400)
+
+    def test_un_PATCH_no_pot_separar_les_dues_meitats(self):
+        """El Taller reobre un POM enviant NOMÉS la recepta. Si la validació mirés només el
+        payload, aquest és exactament el forat pel qual s'hi colaria una contradicció."""
+        ref_a, ref_b, punt = self._tres()
+        pom_id = self._caiguda(ref_a, ref_b, punt).data['id']
+
+        request = self.factory.patch(f'/api/v1/patterns/pattern-poms/{pom_id}/', {
+            'definicio_mesura': {'mode': 'points', 'a': ref_a.id, 'b': ref_b.id},
+        }, format='json')
+        force_authenticate(request, user=self.user)
+        resp = PatternPOMViewSet.as_view({'patch': 'partial_update'})(request, pk=pom_id)
+        self.assertEqual(resp.status_code, 400, resp.data)
+
+        # I la fila del disc no s'ha mogut.
+        pom = PatternPOM.objects.get(pk=pom_id)
+        self.assertEqual(pom.definicio_mesura['mode'], PatternPOM.MODE_ORTOGONAL)
+
+    # ── el vocabulari que se serveix ─────────────────────────────────────────
+
+    def test_lendpoint_de_metodes_serveix_la_gramatica_sencera(self):
+        """El front no ha de saber quants clics vol cada mètode: li ho diu això."""
+        request = self.factory.get('/api/v1/patterns/pattern-poms/metodes/')
+        force_authenticate(request, user=self.user)
+        resp = PatternPOMViewSet.as_view({'get': 'metodes'})(request)
+        self.assertEqual(resp.status_code, 200, resp.data)
+
+        per_codi = {m['codi']: m for m in resp.data}
+        # `projeccio` és el quart mètode des de 3f81313c: el vocabulari el serveix com
+        # els altres tres, i aquest test diu la gramàtica SENCERA —o sigui que l'ha de
+        # cobrir també, no només tolerar-lo.
+        self.assertEqual(set(per_codi), {'recta', 'vora', 'ortogonal', 'projeccio'})
+        self.assertEqual(per_codi['recta']['ancores'], ['a', 'b'])
+        self.assertEqual(per_codi['vora']['ancores'], ['a', 'b'])
+        self.assertEqual(per_codi['ortogonal']['ancores'], ['ref_a', 'ref_b', 'p'])
+        self.assertEqual(per_codi['projeccio']['ancores'], ['a', 'b'])
+        self.assertEqual(per_codi['ortogonal']['mode'], 'ortogonal')
+        self.assertEqual(per_codi['projeccio']['mode'], 'projeccio')
+        self.assertEqual(per_codi['recta']['mode'], 'points')
+
+    def test_el_vocabulari_i_els_choices_no_poden_divergir(self):
+        """Si algú afegeix un mètode als `choices` i s'oblida de la seva gramàtica, el
+        vocabulari peta aquí i no al navegador."""
+        self.assertEqual(
+            {c for c, _ in PatternPOM.METODE_CHOICES},
+            set(PatternPOM.ANCORES_PER_METODE),
+        )
+
+    # ── la frontera amb la projecció ─────────────────────────────────────────
+
+    def test_la_caiguda_es_MESURA_pero_no_entra_a_la_niada(self):
+        """Frontera d'aquest sprint, escrita com a test perquè es vegi que és deliberada:
+        `POMSpec` porta dues adreces i una caiguda en té tres. Com es reparteix el seu
+        delta entre el punt i la línia és patronatge i no està decidit, així que la
+        projecció no la rep — i qui exporti ho llegeix, no ho endevina."""
+        ref_a, ref_b, punt = self._tres()
+        pom = PatternPOM.objects.get(pk=self._caiguda(ref_a, ref_b, punt).data['id'])
+        self.assertIsNotNone(pom.valor_mesurat_cm)      # es mesura
+
+        specs, problemes = pom_specs(self.fp)
+        self.assertEqual(specs, ())                     # i no gradua
+        self.assertEqual(len(problemes), 1)
+        self.assertIn('CAIGUDA', problemes[0])
+        self.assertIn(self.pom_master.codi_client, problemes[0])
+
+    def test_les_receptes_de_sempre_segueixen_entrant_a_la_niada(self):
+        """L'exclusió és de la caiguda, no un embut nou per a tothom."""
+        self.assertEqual(self._ancora_recta(self.girs[0], self.girs[5]).status_code, 201)
+        specs, problemes = pom_specs(self.fp)
+        self.assertEqual(len(specs), 1)
+        self.assertEqual(problemes, [])
+
+
+class CotaProjeccioAPITest(PatternsAPITestBase):
+    """La cota d'eix per l'API, i el desplaçament de presentació.
+
+    Sobre l'AMELIA de `fixtures/`, MAI sobre el banc del 837: aquell és material viu de
+    l'Agus.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.fp = PatternFile.objects.get(
+            pk=self._upload(AMELIA_DXF.read_bytes()).data['id'])
+        self.back = self.fp.pieces.get(nom_block='BACK')
+        self.pom_master = POMMaster.objects.create(
+            codi_client='NECK', nom_client='Amplada de coll')
+        self.girs = list(
+            self.back.points.filter(mena='vertex', tipus='turn', boundary_index=0)
+            .order_by('ordre'))
+
+    def _cota(self, a, b, eix=None, metode='projeccio'):
+        recepta = {'mode': 'projeccio', 'a': a.id, 'b': b.id}
+        if eix is not None:
+            recepta['eix'] = eix
+        request = self.factory.post('/api/v1/patterns/pattern-poms/', {
+            'pattern_piece': self.back.id, 'pom_master': self.pom_master.id,
+            'definicio_mesura': recepta, 'metode': metode,
+        }, format='json')
+        force_authenticate(request, user=self.user)
+        return PatternPOMViewSet.as_view({'post': 'create'})(request)
+
+    # ── el camí bo ───────────────────────────────────────────────────────────
+
+    def test_ancorar_una_cota_la_mesura_al_servidor(self):
+        a, b = self.girs[0], self.girs[5]
+        resp = self._cota(a, b, 'H')
+        self.assertEqual(resp.status_code, 201, resp.data)
+
+        pom = PatternPOM.objects.get(pk=resp.data['id'])
+        self.assertEqual(pom.metode, PatternPOM.METODE_PROJECCIO)
+        self.assertAlmostEqual(pom.valor_mesurat_cm, round(abs(b.x - a.x) / 10.0, 2),
+                               places=2)
+
+    def test_lauto_es_desa_com_a_buit_i_el_motor_el_resol(self):
+        """AUTO no es materialitza en un eix concret al desar: es desa el buit i es resol a
+        cada lectura. Si es congelés, moure un punt del patró deixaria la cota mirant un eix
+        que ja no és el dominant, i ningú no ho sabria."""
+        a, b = self.girs[0], self.girs[5]
+        pom = PatternPOM.objects.get(pk=self._cota(a, b).data['id'])
+        self.assertEqual(pom.definicio_mesura.get('eix', ''), '')
+
+        dominant = 'H' if abs(b.x - a.x) >= abs(b.y - a.y) else 'V'
+        esperat = abs(b.x - a.x) if dominant == 'H' else abs(b.y - a.y)
+        self.assertAlmostEqual(pom.valor_mesurat_cm, round(esperat / 10.0, 2), places=2)
+
+    def test_la_cota_no_es_mai_mes_llarga_que_la_recta(self):
+        """Una projecció és un catet i la recta és la hipotenusa. Si algun dia sortís més
+        llarga, és que s'ha calculat la distància i no la projecció."""
+        a, b = self.girs[0], self.girs[5]
+        pom = PatternPOM.objects.get(pk=self._cota(a, b, 'H').data['id'])
+        self.assertLessEqual(pom.valor_mesurat_cm,
+                             math.hypot(b.x - a.x, b.y - a.y) / 10.0 + 1e-9)
+
+    # ── el que ha de rebotar ─────────────────────────────────────────────────
+
+    def test_un_eix_inventat_rebota_i_no_desa_res(self):
+        a, b = self.girs[0], self.girs[5]
+        self.assertEqual(self._cota(a, b, 'Z').status_code, 400)
+        self.assertEqual(PatternPOM.objects.count(), 0)
+
+    def test_els_dos_extrems_iguals_reboten(self):
+        a = self.girs[0]
+        self.assertEqual(self._cota(a, a, 'H').status_code, 400)
+        self.assertEqual(PatternPOM.objects.count(), 0)
+
+    def test_el_metode_i_la_forma_de_la_recepta_no_es_poden_separar(self):
+        a, b = self.girs[0], self.girs[5]
+        self.assertEqual(self._cota(a, b, 'H', metode='recta').status_code, 400)
+
+    def test_una_recepta_landmark_segueix_valent_per_a_recta_i_vora(self):
+        """La generalització de la llei metode↔mode no pot haver tancat la porta a una
+        forma que el motor ja sap llegir i que hi ha desada des de S6."""
+        for metode in ('recta', 'vora'):
+            with self.subTest(metode=metode):
+                self.assertTrue(PatternPOM.mode_admes(metode, PatternPOM.MODE_LANDMARK))
+        self.assertFalse(
+            PatternPOM.mode_admes('ortogonal', PatternPOM.MODE_LANDMARK))
+        self.assertFalse(
+            PatternPOM.mode_admes('projeccio', PatternPOM.MODE_POINTS))
+
+    # ── el vocabulari ────────────────────────────────────────────────────────
+
+    def test_el_vocabulari_serveix_leix_com_a_opcio(self):
+        """El Taller ha de poder oferir la sub-tria sense saber que cap eix existeix."""
+        request = self.factory.get('/api/v1/patterns/pattern-poms/metodes/')
+        force_authenticate(request, user=self.user)
+        resp = PatternPOMViewSet.as_view({'get': 'metodes'})(request)
+        self.assertEqual(resp.status_code, 200, resp.data)
+
+        per_codi = {m['codi']: m for m in resp.data}
+        self.assertEqual(set(per_codi), {'recta', 'vora', 'ortogonal', 'projeccio'})
+        self.assertEqual(per_codi['projeccio']['ancores'], ['a', 'b'])
+        self.assertEqual(per_codi['projeccio']['opcions'], {'eix': ['', 'H', 'V']})
+        # Els que no en tenen, la porten buida i no absent: una forma sola per a tots.
+        self.assertEqual(per_codi['recta']['opcions'], {})
+
+    def test_tot_metode_te_gramatica_i_les_opcions_son_valors_del_model(self):
+        self.assertEqual(
+            {c for c, _ in PatternPOM.METODE_CHOICES},
+            set(PatternPOM.ANCORES_PER_METODE),
+        )
+        self.assertEqual(
+            {c for c, _ in PatternPOM.METODE_CHOICES},
+            set(PatternPOM.MODES_ACCEPTATS),
+        )
+        self.assertEqual(
+            PatternPOM.OPCIONS_PER_METODE[PatternPOM.METODE_PROJECCIO]['eix'],
+            list(PatternPOM.EIXOS),
+        )
+
+    # ── la frontera amb la projecció d'escalat ───────────────────────────────
+
+    def test_la_cota_es_MESURA_pero_no_entra_a_la_niada(self):
+        """I el motiu no és el de la caiguda: aquí la forma hi cabria (dues adreces), i el
+        que no encaixa és la DIRECCIÓ del creixement."""
+        a, b = self.girs[0], self.girs[5]
+        pom = PatternPOM.objects.get(pk=self._cota(a, b, 'H').data['id'])
+        self.assertIsNotNone(pom.valor_mesurat_cm)
+
+        specs, problemes = pom_specs(self.fp)
+        self.assertEqual(specs, ())
+        self.assertEqual(len(problemes), 1)
+        self.assertIn('PROJECCIÓ', problemes[0])
+        self.assertIn(self.pom_master.codi_client, problemes[0])
+
+
+class CotaDesplacadaAPITest(CotaProjeccioAPITest):
+    """El desplaçament de la línia de cota: presentació, i mai mesura.
+
+    Hereta el fixture d'`CotaProjeccioAPITest` a posta —li cal la mateixa peça i el mateix
+    POMMaster—, i els tests heretats es tornen a córrer: són barats i el que verifiquen (que
+    la cota es mesura bé) és precondició del que aquesta classe afegeix.
+    """
+
+    def _mou(self, pom_id, offset):
+        request = self.factory.patch(f'/api/v1/patterns/pattern-poms/{pom_id}/', {
+            'cota_offset_mm': offset,
+        }, format='json')
+        force_authenticate(request, user=self.user)
+        return PatternPOMViewSet.as_view({'patch': 'partial_update'})(request, pk=pom_id)
+
+    def test_neix_a_zero_o_sigui_sobre_la_mesura(self):
+        pom = PatternPOM.objects.get(pk=self._cota(self.girs[0], self.girs[5]).data['id'])
+        self.assertEqual(pom.cota_offset_mm, 0.0)
+
+    def test_moure_la_cota_NO_toca_el_valor(self):
+        """La llei sencera del camp, en un test: el número que la cota anuncia no depèn
+        d'on seu la cota."""
+        pom_id = self._cota(self.girs[0], self.girs[5], 'H').data['id']
+        abans = PatternPOM.objects.get(pk=pom_id).valor_mesurat_cm
+
+        resp = self._mou(pom_id, 42.5)
+        self.assertEqual(resp.status_code, 200, resp.data)
+
+        despres = PatternPOM.objects.get(pk=pom_id)
+        self.assertEqual(despres.cota_offset_mm, 42.5)
+        self.assertEqual(despres.valor_mesurat_cm, abans)
+
+    def test_el_desplacament_te_signe(self):
+        """El signe diu de quin costat de la mesura seu la cota. Un valor absolut deixaria
+        el patronista sense poder-la posar a l'altra banda."""
+        pom_id = self._cota(self.girs[0], self.girs[5], 'H').data['id']
+        self._mou(pom_id, -18.0)
+        self.assertEqual(PatternPOM.objects.get(pk=pom_id).cota_offset_mm, -18.0)
+
+    def test_el_client_segueix_sense_poder_dictar_el_valor(self):
+        """Que s'obri una porta d'escriptura a la fila no n'obre cap altra."""
+        pom_id = self._cota(self.girs[0], self.girs[5], 'H').data['id']
+        abans = PatternPOM.objects.get(pk=pom_id).valor_mesurat_cm
+
+        request = self.factory.patch(f'/api/v1/patterns/pattern-poms/{pom_id}/', {
+            'cota_offset_mm': 5.0, 'valor_mesurat_cm': 999.0,
+        }, format='json')
+        force_authenticate(request, user=self.user)
+        PatternPOMViewSet.as_view({'patch': 'partial_update'})(request, pk=pom_id)
+
+        self.assertEqual(PatternPOM.objects.get(pk=pom_id).valor_mesurat_cm, abans)
+
+    def test_el_desplacament_viatja_amb_la_geometria(self):
+        """Sense això la cota tornaria al seu lloc a cada recàrrega, i el drag no serviria
+        de res."""
+        pom_id = self._cota(self.girs[0], self.girs[5], 'H').data['id']
+        self._mou(pom_id, 30.0)
+
+        request = self.factory.get(f'/api/v1/patterns/pattern-files/{self.fp.id}/geometry/')
+        force_authenticate(request, user=self.user)
+        resp = PatternFileViewSet.as_view({'get': 'geometry'})(request, pk=self.fp.id)
+        self.assertEqual(resp.status_code, 200)
+
+        peca = next(p for p in resp.data['pieces'] if p['nom_block'] == 'BACK')
+        cota = next(p for p in peca['poms'] if p['id'] == pom_id)
+        self.assertEqual(cota['cota_offset_mm'], 30.0)
+
+    def test_moure_la_cota_NO_torna_a_carregar_la_geometria(self):
+        """El drag desa a cada deixada, i `_mesurar` carrega el patró SENCER (totes les
+        peces, tots els punts). Rellegir-lo per moure una línia de lloc seria pagar el fitxer
+        sencer per una preferència de dibuix — i el valor no en depèn."""
+        pom_id = self._cota(self.girs[0], self.girs[5], 'H').data['id']
+        with patch.object(annotation_views, '_mesurar') as mesura:
+            self.assertEqual(self._mou(pom_id, 9.0).status_code, 200)
+        mesura.assert_not_called()
+        self.assertEqual(PatternPOM.objects.get(pk=pom_id).cota_offset_mm, 9.0)
+
+    def test_canviar_la_recepta_SI_que_torna_a_mesurar(self):
+        """La cara complementària: el que sí que mou el valor no es pot saltar mai."""
+        pom_id = self._cota(self.girs[0], self.girs[5], 'H').data['id']
+        request = self.factory.patch(f'/api/v1/patterns/pattern-poms/{pom_id}/', {
+            'definicio_mesura': {
+                'mode': 'projeccio', 'a': self.girs[0].id, 'b': self.girs[6].id, 'eix': 'V'},
+        }, format='json')
+        force_authenticate(request, user=self.user)
+        with patch.object(annotation_views, '_mesurar', return_value=1.23) as mesura:
+            PatternPOMViewSet.as_view({'patch': 'partial_update'})(request, pk=pom_id)
+        mesura.assert_called_once()
+        self.assertEqual(PatternPOM.objects.get(pk=pom_id).valor_mesurat_cm, 1.23)
+
+    def test_un_desplacament_no_re_valida_la_recepta(self):
+        """Un PATCH que només mou la cota no ha de topar amb la llei metode↔mode: no en
+        toca cap de les dues meitats."""
+        pom_id = self._cota(self.girs[0], self.girs[5], 'H').data['id']
+        self.assertEqual(self._mou(pom_id, 12.0).status_code, 200)
+        pom = PatternPOM.objects.get(pk=pom_id)
+        self.assertEqual(pom.metode, PatternPOM.METODE_PROJECCIO)
+        self.assertEqual(pom.definicio_mesura['mode'], PatternPOM.MODE_PROJECCIO)
+
 
 class PurityGuardTest(unittest.TestCase):
     """`engine/` és un paquet Python pur i ho ha de continuar sent.
@@ -2157,6 +2901,555 @@ class SewCosidorAMBTallTest(unittest.TestCase):
         self.assertEqual(res.informe.punts_cosit_propagats, 2)
 
 
+class OrdresSobreLaLiniaDeCositTest(unittest.TestCase):
+    """S8/FIX — una ordre que aterra sobre la línia de COSIT ha d'arribar a la niada.
+
+    Aquest és el defecte que va deixar la niada del 837 a zero moviments amb tots els verds
+    posats: `_propagar_al_cosit` re-derivava el cosit sencer del tall i, pel camí,
+    esborrava qualsevol ordre que el cosit portés de seu. I ancorar un POM sobre la línia
+    de cosit no és cap raresa —al 837 ho fan 26 dels 27 extrems—, o sigui que el motor
+    graduava exactament res.
+
+    El banc de `SewCosidorAMBTallTest` no ho podia veure: mou `PointRef('P', 0, 2)`, que és
+    la vora **0**, el TALL. Aquest ho mou per la vora 1, el COSIT, que és el cas real.
+    """
+
+    #: Marge de costura del fixture, en mm. És la invariant que ha d'aguantar a totes les
+    #: talles: si el cosit no segueix el tall, aquesta xifra deixa de ser constant.
+    MARGE_MM = 10.0
+
+    def _peca(self, has_sew: bool = True) -> PieceData:
+        """Un rectangle obert: tall a y=0, cosit 10 mm endins. Girs als extrems, corba al mig."""
+        tall = (
+            PointData(0.0, 0.0, PointKind.TURN),
+            PointData(50.0, 0.0, PointKind.CURVE),
+            PointData(100.0, 0.0, PointKind.TURN),
+        )
+        cosit = (
+            PointData(0.0, self.MARGE_MM, PointKind.TURN),
+            PointData(50.0, self.MARGE_MM, PointKind.CURVE),
+            PointData(100.0, self.MARGE_MM, PointKind.TURN),
+        )
+        return PieceData(
+            nom_block='P',
+            boundaries=(
+                BoundaryData(role=LayerRole.CUT, layer='1', points=tall, closed=False),
+                BoundaryData(role=LayerRole.SEW, layer='14', points=cosit, closed=False),
+            ),
+            has_sew=has_sew,
+        )
+
+    #: El POM que la fitxa gradua, ancorat als dos girs de la línia de COSIT.
+    POM_AL_COSIT = POMSpec(
+        pom_code='W', nom='Width', peca='P',
+        ref_a=PointRef('P', 1, 0), ref_b=PointRef('P', 1, 2),
+        metode='recta', pom_id=1,
+    )
+
+    # ── 1. El cas real: POM ancorat sobre el cosit ───────────────────────────
+
+    def test_ordre_sobre_el_cosit_mou_les_DUES_linies_i_la_remesura_clava_el_delta(self):
+        """Creixem 20 mm pel costat dret. Han de moure's el cosit I el tall, i el POM ha de
+        mesurar 20 mm més. Abans d'aquest fix es movia CAP dels dos i el POM no creixia."""
+        doc = PatternDocument(pieces=(self._peca(),))
+        res = move_points(
+            doc, {PointRef('P', 1, 2): (20.0, 0.0)}, poms=(self.POM_AL_COSIT,))
+
+        peca = res.document.piece('P')
+        tall, cosit = peca.boundaries[0], peca.boundaries[1]
+
+        # El gir del COSIT s'ha mogut — que és el que es demanava.
+        self.assertAlmostEqual(cosit.points[2].x, 120.0, places=6)
+        # I el seu company del TALL també: l'ordre s'ha normalitzat cap allà.
+        self.assertAlmostEqual(tall.points[2].x, 120.0, places=6)
+
+        # El marge de costura es conserva a tot arreu: la invariant de la decisió.
+        for pt, pc in zip(tall.points, cosit.points):
+            self.assertAlmostEqual(pc.y - pt.y, self.MARGE_MM, places=6)
+            self.assertAlmostEqual(pc.x, pt.x, places=6)
+
+        # La RE-MESURA clava el delta: el POM feia 10 cm i n'ha de fer 12.
+        lectura = {p.pom_code: p for p in res.informe.poms}['W']
+        self.assertAlmostEqual(lectura.valor_cm, 12.0, places=6)
+
+        # I l'informe ho diu: una ordre normalitzada, cap problema.
+        self.assertEqual(res.informe.punts_cosit_normalitzats, 1)
+        self.assertFalse(
+            [a for a in res.informe.avisos if a.codi.startswith('ordre_cosit_')])
+
+    def test_el_moviment_del_cosit_sobreviu_a_totes_les_talles_del_size_run(self):
+        """No és un cas puntual: el mateix ha de passar amb qualsevol delta, i el marge
+        s'ha de conservar a totes les talles (que és el que un patronista comprova)."""
+        doc = PatternDocument(pieces=(self._peca(),))
+        for delta_mm in (5.0, 20.0, -8.0, 45.0):
+            with self.subTest(delta_mm=delta_mm):
+                res = move_points(
+                    doc, {PointRef('P', 1, 2): (delta_mm, 0.0)}, poms=(self.POM_AL_COSIT,))
+                peca = res.document.piece('P')
+                tall, cosit = peca.boundaries[0], peca.boundaries[1]
+                self.assertAlmostEqual(cosit.points[2].x, 100.0 + delta_mm, places=6)
+                self.assertAlmostEqual(tall.points[2].x, 100.0 + delta_mm, places=6)
+                for pt, pc in zip(tall.points, cosit.points):
+                    self.assertAlmostEqual(pc.y - pt.y, self.MARGE_MM, places=6)
+                lectura = {p.pom_code: p for p in res.informe.poms}['W']
+                self.assertAlmostEqual(lectura.valor_cm, (100.0 + delta_mm) / 10.0, places=6)
+
+    # ── 2. El conflicte: mai en silenci ──────────────────────────────────────
+
+    def test_ordre_en_conflicte_entre_tall_i_cosit_es_diu_en_VEU_ALTA(self):
+        """Dues ordres incompatibles sobre el mateix parell tall/cosit. Les dues línies han
+        de moure's juntes per conservar el marge, o sigui que una de les dues no es pot
+        complir — i no s'endevina quina mana: es diu i no s'aplica."""
+        doc = PatternDocument(pieces=(self._peca(),))
+        res = move_points(doc, {
+            PointRef('P', 0, 2): (20.0, 0.0),    # el TALL vol créixer 20
+            PointRef('P', 1, 2): (35.0, 0.0),    # el COSIT en vol 35
+        }, poms=(self.POM_AL_COSIT,))
+
+        conflictes = [a for a in res.informe.avisos
+                      if a.codi == 'ordre_cosit_en_conflicte']
+        self.assertEqual(len(conflictes), 1)
+
+        # El missatge ha de portar les DUES xifres i el nom del POM: una adreça pelada
+        # («vora 1, ordre 2») no li diu res a qui exporta.
+        avis = conflictes[0]
+        self.assertIn('POM W', avis.missatge)
+        self.assertIn('35.00', avis.missatge)
+        self.assertIn('20.00', avis.missatge)
+        self.assertEqual(avis.detall['ordre_tall'], 2)
+
+        # I no s'ha aplicat cap de les dues a mitges: mana el tall, que és qui té l'ordre
+        # pròpia, i el cosit el segueix (marge conservat).
+        peca = res.document.piece('P')
+        tall, cosit = peca.boundaries[0], peca.boundaries[1]
+        self.assertAlmostEqual(tall.points[2].x, 120.0, places=6)
+        self.assertAlmostEqual(cosit.points[2].x, 120.0, places=6)
+        self.assertEqual(res.informe.punts_cosit_normalitzats, 0)
+
+    def test_ordre_IDENTICA_a_les_dues_bandes_es_FUSIONA_sense_cridar(self):
+        """El mateix desplaçament demanat pel tall i pel cosit no és cap contradicció: és
+        la mateixa ordre dita dues vegades. Es fusiona, i callar aquí és legítim."""
+        doc = PatternDocument(pieces=(self._peca(),))
+        res = move_points(doc, {
+            PointRef('P', 0, 2): (20.0, 0.0),
+            PointRef('P', 1, 2): (20.0, 0.0),
+        }, poms=(self.POM_AL_COSIT,))
+
+        self.assertFalse([a for a in res.informe.avisos
+                          if a.codi.startswith('ordre_cosit_')])
+        peca = res.document.piece('P')
+        self.assertAlmostEqual(peca.boundaries[0].points[2].x, 120.0, places=6)
+        self.assertAlmostEqual(peca.boundaries[1].points[2].x, 120.0, places=6)
+
+    def test_ordre_del_cosit_sense_company_al_tall_es_diu_i_no_sinventa_res(self):
+        """Un cosit tan lluny del tall que no s'hi pot aparellar. No s'inventa cap company:
+        es diu que aquell moviment no entrarà a la niada."""
+        lluny = replace(
+            self._peca(),
+            boundaries=(
+                BoundaryData(role=LayerRole.CUT, layer='1', closed=False, points=(
+                    PointData(0.0, 0.0, PointKind.TURN),
+                    PointData(100.0, 0.0, PointKind.TURN),
+                )),
+                # 500 mm endins: molt més enllà de TOL_PARELLA_COSIT_MM (30 mm).
+                BoundaryData(role=LayerRole.SEW, layer='14', closed=False, points=(
+                    PointData(0.0, 500.0, PointKind.TURN),
+                    PointData(100.0, 500.0, PointKind.TURN),
+                )),
+            ),
+        )
+        doc = PatternDocument(pieces=(lluny,))
+        res = move_points(doc, {PointRef('P', 1, 1): (20.0, 0.0)})
+
+        orfes = [a for a in res.informe.avisos if a.codi == 'ordre_cosit_sense_company']
+        self.assertEqual(len(orfes), 1)
+        self.assertEqual(res.informe.punts_cosit_normalitzats, 0)
+
+    # ── 3. La peça sense cosit: res no ha de canviar ─────────────────────────
+
+    def test_peca_SENSE_sew_es_comporta_exactament_com_abans(self):
+        """`has_sew=False` és l'únic interruptor de tota aquesta capa. Amb ell abaixat, ni
+        es normalitza ni es propaga: l'ordre s'aplica on l'han posada i prou."""
+        doc = PatternDocument(pieces=(self._peca(has_sew=False),))
+        res = move_points(
+            doc, {PointRef('P', 1, 2): (20.0, 0.0)}, poms=(self.POM_AL_COSIT,))
+
+        peca = res.document.piece('P')
+        tall, cosit = peca.boundaries[0], peca.boundaries[1]
+
+        # El cosit s'ha mogut sol; el tall NO s'ha assabentat de res.
+        self.assertAlmostEqual(cosit.points[2].x, 120.0, places=6)
+        self.assertAlmostEqual(tall.points[2].x, 100.0, places=6)
+        self.assertEqual(res.informe.punts_cosit_normalitzats, 0)
+        self.assertEqual(res.informe.punts_cosit_propagats, 0)
+
+    def test_el_TALL_segueix_manant_igual_que_abans_de_la_normalitzacio(self):
+        """Guarda de no-regressió del camí que ja funcionava: una ordre sobre el TALL es
+        comporta exactament com a `SewCosidorAMBTallTest`, sense que la normalització hi
+        posi ni tregui res."""
+        doc = PatternDocument(pieces=(self._peca(),))
+        res = move_points(doc, {PointRef('P', 0, 2): (20.0, 0.0)})
+
+        peca = res.document.piece('P')
+        tall, cosit = peca.boundaries[0], peca.boundaries[1]
+        self.assertAlmostEqual(tall.points[2].x, 120.0, places=6)
+        self.assertAlmostEqual(cosit.points[2].x, 120.0, places=6)
+        self.assertEqual(res.informe.punts_cosit_normalitzats, 0)
+        self.assertEqual(res.informe.punts_cosit_propagats, 2)
+
+    # ── 4. L'ancoratge sobre CORBA no es toca (residu A5, anotat i no arreglat) ──
+
+    def test_ancoratge_sobre_CORBA_del_cosit_conserva_el_seu_moviment(self):
+        """Decisió d'aquest sprint: les ordres sobre punts de CORBA NO es normalitzen.
+
+        No és neutralitat: normalitzar-les seria PERDRE-LES. Un gir del cosit recupera del
+        tall exactament el que li hem donat (els aparella la mateixa regla); una corba, no
+        —la propagació re-deriva el cosit dels girs i la corba hi torna a fluir. Mesurat al
+        837 talla M: normalitzant la corba, el POM C creix 1,50 cm dels 3,00 que mana el
+        grading; deixant-la on és, creix 3,00 clavats.
+        """
+        doc = PatternDocument(pieces=(self._peca(),))
+        res = move_points(doc, {PointRef('P', 1, 1): (0.0, 7.0)})
+
+        peca = res.document.piece('P')
+        # La corba del cosit conserva el seu moviment...
+        self.assertAlmostEqual(peca.boundaries[1].points[1].y, self.MARGE_MM + 7.0, places=6)
+        # ...i no se n'ha traslladat res al tall.
+        self.assertAlmostEqual(peca.boundaries[0].points[1].y, 0.0, places=6)
+        self.assertEqual(res.informe.punts_cosit_normalitzats, 0)
+
+
+class ProblemesDEscalatTest(unittest.TestCase):
+    """S8/FIX — el que l'escalat NO ha pogut fer, dit amb la xifra al davant.
+
+    Fins ara l'única pista que un POM no creixia el que tocava era una columna de ⚠ a la
+    taula de pre-reconeixement, que és la gramàtica d'un error de mesura i no la d'una
+    limitació coneguda del motor. Qui exporta ha de poder llegir la diferència.
+    """
+
+    def _doc(self) -> PatternDocument:
+        punts = (
+            PointData(0.0, 0.0, PointKind.TURN),
+            PointData(50.0, 0.0, PointKind.CURVE),
+            PointData(100.0, 0.0, PointKind.TURN),
+        )
+        return PatternDocument(pieces=(PieceData(
+            nom_block='P',
+            boundaries=(BoundaryData(
+                role=LayerRole.CUT, layer='1', points=punts, closed=False),),
+        ),))
+
+    #: Ancorat a un gir i a una CORBA: el cas d'A i de C al 837.
+    POM_AMB_CORBA = POMSpec(
+        pom_code='A', nom='Chest', peca='P',
+        ref_a=PointRef('P', 0, 0), ref_b=PointRef('P', 0, 1), pom_id=1,
+    )
+    #: Ancorat als dos girs: el cas d'E, S i E1.
+    POM_DE_GIRS = POMSpec(
+        pom_code='S', nom='Shoulder', peca='P',
+        ref_a=PointRef('P', 0, 0), ref_b=PointRef('P', 0, 2), pom_id=2,
+    )
+
+    def _preview(self, pom_code, talla, desviament, llegit, manat):
+        return POMPreview(
+            pom_code=pom_code, peca='P', valor_cm=llegit, delta_llegit_cm=llegit,
+            delta_spec_cm=manat, desviament_cm=desviament,
+        )
+
+    def _projeccio_amb_avisos(self, avisos):
+        return SimpleNamespace(avisos=tuple(avisos))
+
+    def test_el_residu_es_diu_amb_la_XIFRA_i_a_la_talla_on_mes_es_nota(self):
+        """La talla que surt al missatge ha de ser la pitjor, no la primera: un residu de
+        0,07 cm a la M i de 4,5 cm a la XL són la mateixa causa i una decisió diferent."""
+        previews = (
+            SizePreview(talla='M', es_base=False, bbox=(0, 0, 0, 0), costures=(),
+                        poms=(self._preview('A', 'M', -1.5, 1.5, 3.0),)),
+            SizePreview(talla='XL', es_base=False, bbox=(0, 0, 0, 0), costures=(),
+                        poms=(self._preview('A', 'XL', -4.5, 4.5, 9.0),)),
+        )
+        linies = _problemes_escalat(
+            self._doc(), (self.POM_AMB_CORBA,), self._projeccio_amb_avisos([]), previews)
+
+        self.assertEqual(len(linies), 1)
+        self.assertIn('POM A', linies[0])
+        self.assertIn('XL', linies[0])
+        self.assertIn('-4.500', linies[0])
+        self.assertIn('CORBA', linies[0])
+        self.assertIn('extrem b', linies[0])
+
+    def test_un_POM_de_girs_NO_sacusa_a_la_corba(self):
+        """Si els dos extrems són girs, la causa és el repartiment simètric de la projecció
+        v1 i no la propagació al cosit. Dir-ne «corba» seria enviar l'Agus a mirar on no és."""
+        previews = (
+            SizePreview(talla='XL', es_base=False, bbox=(0, 0, 0, 0), costures=(),
+                        poms=(self._preview('S', 'XL', 3.359, 5.759, 2.4),)),
+        )
+        linies = _problemes_escalat(
+            self._doc(), (self.POM_DE_GIRS,), self._projeccio_amb_avisos([]), previews)
+
+        self.assertEqual(len(linies), 1)
+        self.assertIn('REPARTIMENT', linies[0])
+        self.assertNotIn('CORBA', linies[0])
+
+    def test_un_residu_per_sota_de_la_tolerancia_no_diu_res(self):
+        """Mig mil·límetre és més fi que el que una taula de tall distingeix. Omplir la
+        llista de soroll faria que ningú no la llegís."""
+        previews = (
+            SizePreview(talla='M', es_base=False, bbox=(0, 0, 0, 0), costures=(),
+                        poms=(self._preview('S', 'M', 0.004, 3.004, 3.0),)),
+        )
+        self.assertEqual(
+            _problemes_escalat(self._doc(), (self.POM_DE_GIRS,),
+                               self._projeccio_amb_avisos([]), previews),
+            (),
+        )
+
+    def test_el_mateix_conflicte_a_cinc_talles_es_diu_UNA_vegada(self):
+        """El motor es queixa del mateix punt a cada talla. Cinc vegades la mateixa frase
+        no informa cinc vegades més: ofega les altres quatre coses de la llista."""
+        avis = MoveIssue(
+            'ordre_cosit_en_conflicte', 'El punt 2 de la línia de cosit…', peca='P',
+            detall={'vora': 1, 'ordre': 2, 'ordre_tall': 2},
+        )
+        linies = _problemes_escalat(
+            self._doc(), (), self._projeccio_amb_avisos([avis] * 5), ())
+
+        self.assertEqual(len(linies), 1)
+        self.assertIn('[P]', linies[0])
+
+
+class CompatibilitatPolyPatternTest(unittest.TestCase):
+    """S8/WRITER — el fitxer ha de ser graduable pel CAD, no només fidel.
+
+    La niada del 1383 s'obria al PolyPattern amb geometria perfecta i **no desplegava les
+    talles**. Comparant-la amb el fitxer que el mateix CAD exporta d'aquest patró
+    (`837 CORS 194 VESTIT M3-4 AGUS.DXF`, que és l'origen de PF20) van sortir tres
+    diferències estructurals; aquesta classe les fixa una per una.
+
+    El banc que mesura el fitxer sencer contra la referència és
+    `ops/qa/banc_niada_vs_polypattern.py`; això són els guardians unitaris.
+    """
+
+    ES_REGLA = re.compile(r'#\s*\d+')
+
+    # ── El fixture: una peça amb tall i cosit, girs, corba i piquets ─────────
+
+    def _peca(self) -> PieceData:
+        tall = (
+            PointData(0.0, 0.0, PointKind.TURN, grade_rule=2),
+            PointData(50.0, 0.0, PointKind.CURVE),          # les corbes NO porten regla
+            PointData(100.0, 0.0, PointKind.TURN, grade_rule=1),
+        )
+        cosit = (
+            PointData(0.0, 10.0, PointKind.TURN, grade_rule=2),
+            PointData(50.0, 10.0, PointKind.CURVE),
+            PointData(100.0, 10.0, PointKind.TURN, grade_rule=1),
+        )
+        return PieceData(
+            nom_block='P',
+            boundaries=(
+                BoundaryData(role=LayerRole.CUT, layer='1', points=tall, closed=False),
+                BoundaryData(role=LayerRole.SEW, layer='14', points=cosit, closed=False),
+            ),
+            notches=(
+                NotchData(25.0, 0.0, grade_rule=1),
+                NotchData(75.0, 0.0, grade_rule=3),
+            ),
+            has_sew=True,
+        )
+
+    def _regles_emeses(self, doc=None):
+        """Els TEXT `# n` del DXF que emetem → [(capa, numero, (x, y))].
+
+        Es llegeix el fitxer CRU i no amb `AAMAReader` a posta: el que es mesura és què hi
+        ha al fitxer, i llegir-lo amb el nostre propi reader compararia la nostra idea del
+        fitxer amb la nostra idea del fitxer.
+        """
+        doc = doc if doc is not None else PatternDocument(pieces=(self._peca(),))
+        cru = AAMAWriter().write(doc, perfil='polypattern').decode('utf-8', 'replace')
+        linies = cru.splitlines()
+        fora, cur = [], None
+        for i in range(0, len(linies) - 1, 2):
+            codi, valor = linies[i].strip(), linies[i + 1].strip()
+            if codi == '0':
+                if cur and cur.get('t') and self.ES_REGLA.fullmatch(cur['t']):
+                    fora.append((cur.get('c'), int(cur['t'].split('#')[1]),
+                                 (cur.get('x'), cur.get('y'))))
+                cur = {}
+            elif cur is not None:
+                if codi == '8':
+                    cur['c'] = valor
+                elif codi == '1':
+                    cur['t'] = valor
+                elif codi in ('10', '20'):
+                    try:
+                        cur['x' if codi == '10' else 'y'] = round(float(valor), 4)
+                    except ValueError:
+                        pass
+        return fora
+
+    # ── ① CAP PUNT ORFE ──────────────────────────────────────────────────────
+
+    def test_cap_punt_de_gir_es_queda_sense_el_seu_TEXT_de_regla(self):
+        """Al fitxer del CAD, els 158 punts de gir porten els seus 158 TEXT: cap orfe.
+
+        Un punt de gir sense número no és «un punt que no es mou»: és un punt que el CAD
+        no sap què fer-ne. El que no es mou porta la regla de REPÒS, que és una altra cosa
+        i es diu explícitament.
+        """
+        regles = self._regles_emeses()
+        capa2 = [r for r in regles if r[0] == '2']
+        girs = [(p.x, p.y) for b in self._peca().boundaries
+                for p in b.points if p.kind is PointKind.TURN]
+        self.assertEqual(len(capa2), len(girs))
+        self.assertEqual({r[2] for r in capa2}, {(round(x, 4), round(y, 4))
+                                                 for x, y in girs})
+
+    def test_cap_piquet_es_queda_sense_el_seu_TEXT_de_regla(self):
+        regles = self._regles_emeses()
+        capa4 = [r for r in regles if r[0] == '4']
+        self.assertEqual(len(capa4), len(self._peca().notches))
+        self.assertEqual(sorted(r[1] for r in capa4), [1, 3])
+
+    def test_els_punts_de_CORBA_segueixen_sense_regla(self):
+        """No es graden: flueixen, i és el CAD del client qui els fa fluir. Posar-los regla
+        seria dir-li que no ho faci."""
+        corbes = {(50.0, 0.0), (50.0, 10.0)}
+        self.assertFalse([r for r in self._regles_emeses() if r[2] in corbes])
+
+    # ── ② EL COSIT, A LES SEVES CAPES ────────────────────────────────────────
+
+    def test_el_gir_del_COSIT_porta_el_numero_a_les_capes_2_8_i_14(self):
+        """La llei mesurada al fitxer del CAD: un gir de la línia de cosit porta el seu
+        número TRES vegades —capes 2, 8 i 14— a la mateixa coordenada (79 punts de 79).
+
+        Emetre'n només el de la capa 2 és el que deixava el cosit sense grading DINS el
+        fitxer: el moviment hi era, però el CAD el busca a les capes del cosit.
+        """
+        regles = self._regles_emeses()
+        for punt, numero in (((0.0, 10.0), 2), ((100.0, 10.0), 1)):
+            capes = sorted(r[0] for r in regles if r[2] == punt)
+            self.assertEqual(capes, ['14', '2', '8'], f'punt {punt}')
+            self.assertEqual({r[1] for r in regles if r[2] == punt}, {numero})
+
+    def test_el_gir_del_TALL_nomes_en_porta_un(self):
+        """El complement del test anterior: no s'omple el fitxer de números per si de cas.
+        Un gir del contorn de tall porta el seu a la capa 2 i prou."""
+        regles = self._regles_emeses()
+        for punt in ((0.0, 0.0), (100.0, 0.0)):
+            self.assertEqual([r[0] for r in regles if r[2] == punt], ['2'], f'punt {punt}')
+
+    # ── ③ LA NUMERACIÓ ───────────────────────────────────────────────────────
+
+    def _snapshot(self):
+        return GradingSnapshot(
+            grading_version_id=1, approved=True, base_size_label='S',
+            size_run=('S', 'M', 'L'),
+            deltas=(GradedPOMDelta(pom_id=1, pom_code='W', size_label='M',
+                                   value_cm=11.0, delta_cm=1.0, rule_applied='LINEAR'),
+                    GradedPOMDelta(pom_id=1, pom_code='W', size_label='L',
+                                   value_cm=12.0, delta_cm=2.0, rule_applied='LINEAR')),
+        )
+
+    def test_la_numeracio_comenca_a_1_i_la_regla_1_es_la_de_REPOS(self):
+        """El CAD numera `DELTA 1…238` i les peces que no graduen porten `# 1` a tot arreu:
+        per a ell la 1 ÉS la regla de repòs i el zero no és cap número de regla. Emetre
+        `DELTA 0` és oferir-li una taula que comença per una regla que no existeix."""
+        self.assertEqual(REGLA_ZERO, 1)
+        self.assertEqual(PRIMERA_REGLA_MOBIL, 2)
+
+        doc = PatternDocument(pieces=(self._peca(),))
+        pom = POMSpec(pom_code='W', nom='Width', peca='P',
+                      ref_a=PointRef('P', 1, 0), ref_b=PointRef('P', 1, 2), pom_id=1)
+        proj = project(doc, self._snapshot(), (pom,))
+
+        self.assertEqual(min(proj.grade_table.regles), 1)
+        self.assertNotIn(0, proj.grade_table.regles)
+        self.assertEqual(proj.grade_table.regles[1].deltes,
+                         {t: (0.0, 0.0) for t in ('S', 'M', 'L')})
+        self.assertFalse([n for n in proj.regles_per_punt.values() if n < 1])
+
+    def test_el_rul_no_emet_cap_DELTA_0(self):
+        doc = PatternDocument(pieces=(self._peca(),))
+        pom = POMSpec(pom_code='W', nom='Width', peca='P',
+                      ref_a=PointRef('P', 1, 0), ref_b=PointRef('P', 1, 2), pom_id=1)
+        proj = project(doc, self._snapshot(), (pom,))
+        rul = RULWriter().write(proj.grade_table).decode('utf-8')
+        self.assertNotIn('RULE: DELTA 0 ', rul)
+        self.assertIn('RULE: DELTA 1 ', rul)
+
+    # ── ④ LA CAPÇALERA DEL RUL ───────────────────────────────────────────────
+
+    def _doc_amb_capcalera(self, textos):
+        return PatternDocument(
+            pieces=(self._peca(),),
+            fingerprint=Fingerprint(textos_document=tuple(textos)),
+        )
+
+    def test_la_capcalera_surt_SENCERA_i_en_ordre(self):
+        """El RUL del CAD obre amb version + AUTHOR + UNITS + GRADE RULE TABLE. El nostre
+        n'emetia només `UNITS:`, perquè les altres tres eren condicionals i el patró venia
+        sense RUL d'origen (`grade_table` a NULL): no hi havia d'on copiar-les."""
+        doc = self._doc_amb_capcalera(
+            ['Author: PolyPattern', 'GRADE RULE TABLE:837 CORS 194 VESTIT M3-4 AGUS'])
+        taula = _taula(doc, self._snapshot(), {1: GradeRuleData(numero=1, deltes={})})
+        linies = RULWriter().write(taula).decode('utf-8').splitlines()
+
+        self.assertEqual(linies[:4], [
+            'version ANSI/AAMA-292-B',
+            'AUTHOR: FHORT Textile Tech',
+            'UNITS: METRIC',
+            'GRADE RULE TABLE:837 CORS 194 VESTIT M3-4 AGUS',
+        ])
+
+    def test_LAUTOR_es_el_NOSTRE_i_no_el_del_CAD_dorigen(self):
+        """Decisió d'Agus (24/08): el RUL el signem nosaltres. No l'ha escrit el
+        PolyPattern —l'hem escrit amb el grading de l'FTT— i signar-lo amb el nom del CAD
+        del client seria dir una cosa falsa sobre qui respon del fitxer."""
+        doc = self._doc_amb_capcalera(['Author: PolyPattern 11.0.1'])
+        taula = _taula(doc, self._snapshot(), {1: GradeRuleData(numero=1, deltes={})})
+        self.assertEqual(taula.autor, 'FHORT Textile Tech')
+        self.assertNotIn('PolyPattern', RULWriter().write(taula).decode('utf-8'))
+
+    def test_el_nom_de_la_taula_es_COPIA_del_dxf_i_mai_sinventa(self):
+        """Ha de ser EL MATEIX al DXF que emetem i al RUL germà: si no coincideixen, el CAD
+        té una taula i un fitxer que no parlen de la mateixa cosa."""
+        doc = self._doc_amb_capcalera(['GRADE RULE TABLE:UN NOM QUALSEVOL'])
+        taula = _taula(doc, self._snapshot(), {})
+        self.assertEqual(taula.nom, 'UN NOM QUALSEVOL')
+
+    def test_sense_nom_al_dxf_no_sen_inventa_cap_i_es_DIU(self):
+        """Un nom inventat és pitjor que cap. La línia no surt, i qui exporti ho llegeix a
+        la llista de problemes del modal."""
+        doc = self._doc_amb_capcalera(['Author: PolyPattern'])
+        taula = _taula(doc, self._snapshot(), {})
+        self.assertEqual(taula.nom, '')
+        self.assertNotIn('GRADE RULE TABLE', RULWriter().write(taula).decode('utf-8'))
+
+        problemes = _problemes_capcalera(SimpleNamespace(grade_table=taula))
+        self.assertEqual(len(problemes), 1)
+        self.assertIn('GRADE RULE TABLE', problemes[0])
+
+    def test_amb_nom_no_hi_ha_res_a_dir(self):
+        taula = _taula(self._doc_amb_capcalera(['GRADE RULE TABLE:X']),
+                       self._snapshot(), {})
+        self.assertEqual(_problemes_capcalera(SimpleNamespace(grade_table=taula)), ())
+
+    # ── La invariant que no es pot perdre ────────────────────────────────────
+
+    def test_els_TEXT_nous_no_toquen_la_geometria(self):
+        """Tres números en comptes d'un és més fitxer, no més patró. El round-trip ha de
+        seguir tornant la mateixa geometria."""
+        original = PatternDocument(pieces=(self._peca(),))
+        tornat = AAMAReader().read(AAMAWriter().write(original, perfil='polypattern'))
+        peca = tornat.piece('P')
+        for bv, bn in zip(original.piece('P').boundaries, peca.boundaries):
+            for a, b in zip(bv.points, bn.points):
+                self.assertAlmostEqual(a.x, b.x, places=6)
+                self.assertAlmostEqual(a.y, b.y, places=6)
+
+
 class EscalatTestBase(PatternsAPITestBase):
     """Un model amb grading APROVAT i un patró amb POMs ancorats: el terreny de S7."""
 
@@ -2271,11 +3564,16 @@ class ProjeccioTest(EscalatTestBase):
             self.assertAlmostEqual(dx, 0.0, places=9)
             self.assertAlmostEqual(dy, 0.0, places=9)
 
-    def test_una_regla_per_punt_mogut_i_la_regla_0_per_a_la_resta(self):
+    def test_una_regla_per_punt_mogut_i_la_regla_de_repos_per_a_la_resta(self):
+        """La regla de repòs ja no és la 0: des de 32ef5eb2 la numeració comença a 1,
+        perquè per al PolyPattern el zero no és cap número de regla. El que es prova
+        segueix sent el mateix —la de repòs no mou res—, i per això s'hi arriba per
+        `REGLA_ZERO` i no per un literal que caduca."""
         _, _, _, proj = self._projectar()
 
-        self.assertIn(0, proj.grade_table.regles)
-        for delta in proj.grade_table.regles[0].deltes.values():
+        self.assertIn(REGLA_ZERO, proj.grade_table.regles)
+        self.assertNotIn(0, proj.grade_table.regles, 'el zero ja no és número de regla')
+        for delta in proj.grade_table.regles[REGLA_ZERO].deltes.values():
             self.assertEqual(delta, (0.0, 0.0))
 
         # Els punts de corba no porten regla: flueixen, i és el CAD qui els fa fluir.
@@ -2528,11 +3826,14 @@ class AutovalidacioTest(EscalatTestBase):
 
         self.assertEqual(taula.talles, ('S', 'M', 'L', 'XL', 'XXL'))
         self.assertEqual(taula.talla_base, 'S')
-        self.assertIn(0, taula.regles)
+        # La de repòs és la `REGLA_ZERO` (=1 des de 32ef5eb2), no la 0: el RUL que
+        # emetem numera com el del PolyPattern, i el zero no hi és cap regla.
+        self.assertIn(REGLA_ZERO, taula.regles)
+        self.assertNotIn(0, taula.regles, 'el RUL emès no pot portar DELTA 0')
         # Hi ha d'haver com a mínim una regla que mogui alguna cosa de debò.
         self.assertTrue(any(
             any(d != (0.0, 0.0) for d in regla.deltes.values())
-            for num, regla in taula.regles.items() if num != 0
+            for num, regla in taula.regles.items() if num != REGLA_ZERO
         ))
 
 
@@ -2591,10 +3892,30 @@ class ExportSenseDoblecInvisibleTest(EscalatTestBase):
     d'entitats, i aquest test existeix justament per tancar aquesta porta."""
 
     TS = '2026-01-01T00:00:00Z'
-    #: sha256 del DXF de niada de l'AMELIA amb el segell congelat, mesurat sobre l'arbre
-    #: ANTERIOR al plegat (I0/T4a). Si algun dia es mou, el plegat —o el writer— ha
-    #: començat a tocar peces que no tenen doblec.
-    SHA_NIADA_SENSE_DOBLEC = 'a87451a218e198130f56a5b1e76d2d34105b7ae04072985732f7434fc530b1de'
+    #: sha256 del DXF de niada de l'AMELIA amb el segell congelat. Si algun dia es mou,
+    #: el plegat —o el writer— ha començat a tocar peces que no tenen doblec.
+    #:
+    #: ⚠️ RE-SEGELLAT el 2026-08-26. El segell anterior
+    #: (`a87451a218e198130f56a5b1e76d2d34105b7ae04072985732f7434fc530b1de`) es va mesurar
+    #: el 2026-07-30 (2b4132c9) i havia CADUCAT: el writer va canviar deliberadament el
+    #: 24/08 i cap segell no el va seguir. No és cap regressió, i s'ha adjudicat per DIFF
+    #: i no per intuïció (VEREDICTE_4_VERMELLS_2026-08-26.md):
+    #:
+    #:   * l'arbre a `32ef5eb2^` reprodueix el segell VELL byte a byte → el segell era
+    #:     autèntic i res entre el 30/07 i el 24/08 no havia mogut un sol byte;
+    #:   * segell vell → actual: 10.301 línies a banda i banda, 100 valors diferents, i
+    #:     TOTS són codi de grup 1 (contingut de TEXT: el número de regla, +1 exacte a
+    #:     cada un) o codi 1000 (el segell d'ezdxf, que `empremta_dxf` ja neutralitza).
+    #:     ZERO codis de coordenada tocats i cens d'entitats idèntic → cap geometria;
+    #:   * el fix del desplegat (3b7e4841) hi aporta ZERO bytes, MESURAT: amb l'aama_reader
+    #:     revertit el sha és el mateix. Concorda amb `test_cap_peca_de_lamelia_no_te_doblec`,
+    #:     que passa: sense doblec, desplegar és la identitat.
+    #:
+    #: Els canvis deliberats són 32ef5eb2 (capçalera RUL sencera + numeració des d'1) i
+    #: d8b80458 (el número de regla viatja a les capes). La validesa EXTERNA d'aquest
+    #: segell no la dona aquest test: la dona la paritat PolyPattern del 24/08, i el gate
+    #: de niada segueix PENDENT.
+    SHA_NIADA_SENSE_DOBLEC = '5f9a7aa77af994aa010672eddc75e276770f0abbad40d07d8182ae6801b059cd'
 
     def test_el_dxf_emes_no_es_mou_ni_un_byte(self):
         res = build_export(self.fp, self.gv.id, 'polypattern', ts=self.TS)

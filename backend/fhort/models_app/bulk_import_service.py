@@ -594,7 +594,7 @@ def _build_model(customer, codi_intern, seq, r, creat_per_profile):
         size_run_model='·'.join(r['run_labels']) if r['run_labels'] else None,
         base_size_label=r['base_size'] or None,
         responsable=creat_per_profile,
-        estat='Nou',
+        estat=Model.ESTAT_NOU,   # M3 · FIT-9 — mai el literal: v. `Model.ESTAT_CHOICES`
     )
 
 

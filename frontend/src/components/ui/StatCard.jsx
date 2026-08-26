@@ -13,7 +13,12 @@
 //
 // `subColor` es conserva perquè la §8c el necessita: **els KPI són NEUTRES i només els d'ALERTA
 // porten semàfor** («En risc · 1» en `--err`). Qui en tingui un el passa; qui no, no.
-export default function StatCard({ icon, label, value, sub, subColor }) {
+// `valueStyle` (M2): un KPI el valor del qual és una DATA no cap a `--fs-display`. El mockup del
+// registre per rondes ja ho deia (la seva targeta d'«Inici activitat» baixa el cos a mà mentre
+// les altres tres es queden al display), i sense això la data embolica a tres línies i la fila de
+// KPI queda desalineada. Additiu i opcional: cap muntatge existent canvia. Mateix precedent que
+// `subColor`, que ja hi era per la mateixa raó (una excepció per instància, no una variant nova).
+export default function StatCard({ icon, label, value, sub, subColor, valueStyle }) {
   return (
     <div style={{
       background: 'var(--panel)',
@@ -36,6 +41,7 @@ export default function StatCard({ icon, label, value, sub, subColor }) {
         fontSize: 'var(--fs-display)', fontWeight: 600,
         color: 'var(--text-main)', lineHeight: 1,
         marginBottom: 4,
+        ...valueStyle,
       }}>
         {value}
       </div>

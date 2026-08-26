@@ -86,9 +86,20 @@ MM_PER_CM = 10.0
 TOL_DIRECCIO_MM = 1e-6
 
 #: La regla dels punts que no es mouen. Existeix de debò al RUL (amb els deltes a zero):
-#: un punt sense regla és un punt que el CAD no sap què fer-ne; un punt amb regla 0 és un
-#: punt que es queda quiet **perquè ho hem dit**.
-REGLA_ZERO = 0
+#: un punt sense regla és un punt que el CAD no sap què fer-ne; un punt amb la regla de
+#: repòs és un punt que es queda quiet **perquè ho hem dit**.
+#:
+#: **És la número 1, i la numeració comença aquí.** Era la 0, i el material real diu que
+#: no pot ser-ho: el RUL que el PolyPattern exporta del 837 numera `DELTA 1…238` i les
+#: peces que no graduen (CUELLO, TAPETA) porten `# 1` a tots els punts — o sigui que per
+#: a aquell CAD la 1 ÉS la regla de repòs i el zero no és cap número de regla. Emetre
+#: `DELTA 0` és oferir-li una taula que comença per una regla que per a ell no existeix.
+REGLA_ZERO = 1
+
+#: El primer número lliure per a una regla que MOU alguna cosa. Ve just després de la de
+#: repòs, i no és una constant decorativa: si algú torna a moure `REGLA_ZERO`, aquesta l'ha
+#: de seguir sola.
+PRIMERA_REGLA_MOBIL = REGLA_ZERO + 1
 
 
 class GradingNotApproved(PatternEngineError):
@@ -369,7 +380,7 @@ def _regles_des_dels_deltes(
         )
     }
     regles_per_punt: dict[PointRef, int] = {}
-    seguent = 1
+    seguent = PRIMERA_REGLA_MOBIL
 
     for peca in doc.pieces:
         candidats: list[PointRef] = []
@@ -594,8 +605,11 @@ def _taula(
     perquè el grading que manem és el de l'FTT, no el que venia dins el fitxer.
     """
     original = doc.grade_table
+    # Quan el patró ve SENSE RUL (PF20 del 837: `grade_table` a NULL), la capçalera no és
+    # que no existeixi — és que viu al DXF. Es COPIA d'allà; mai s'inventa.
+    nom_doc = _nom_de_taula_del_document(doc)
     return GradeTable(
-        nom=original.nom if original else '',
+        nom=(original.nom if original and original.nom else nom_doc),
         talles=tuple(snapshot.size_run),
         talla_base=snapshot.base_size_label,
         regles=regles,
@@ -608,5 +622,39 @@ def _taula(
             if doc.fingerprint.unitats else 1.0
         ),
         aama_version=original.aama_version if original else '',
-        autor=original.autor if original else '',
+        # L'AUTOR és NOSTRE, sempre, i no es copia de l'origen (decisió d'Agus, 24/08).
+        # Aquest RUL no l'ha escrit el PolyPattern: l'hem escrit nosaltres, amb el grading
+        # de l'FTT, i signar-lo amb el nom del CAD del client seria dir una cosa falsa sobre
+        # qui respon del fitxer. No és una excepció a «reproduir, no inventar»: el que es
+        # reprodueix és el patró del client, i l'autoria d'aquesta taula de regles no ho és.
+        autor=AUTOR_RUL,
     )
+
+
+#: El TEXT del modelspace que porta el nom de la taula de regles. Es llegeix del DXF
+#: d'origen —el reader els desa literals a `textos_document`— perquè el nom ha de ser **el
+#: mateix** al DXF que emetem i al RUL germà: si no coincideixen, el CAD té una taula i un
+#: fitxer que no parlen de la mateixa cosa.
+PREFIX_NOM_TAULA = 'GRADE RULE TABLE:'
+
+#: Qui signa el RUL que emetem. **Decisió d'Agus, 24/08: el nostre nom.** El RUL que la
+#: Montse exporta del mateix patró diu `AUTHOR: PolyPattern 11.0.1`, i calcar-lo seria el
+#: camí segur si resultés que el CAD valida aquest camp — però això s'ha de DEMOSTRAR amb
+#: el fitxer rebutjat al davant, no suposar. L'ordre de prova és aquest primer.
+AUTOR_RUL = 'FHORT Textile Tech'
+
+
+def _nom_de_taula_del_document(doc: PatternDocument) -> str:
+    """El nom de la taula de regles, copiat del TEXT del DXF. → '' si no hi és.
+
+    No hi ha cap valor per defecte a posta. Un nom inventat és pitjor que cap: el DXF que
+    emetem porta el seu `GRADE RULE TABLE:` copiat de l'origen, i si el RUL en portés un
+    altre serien dos fitxers germans que es contradiuen. Si el DXF no en declara cap,
+    l'exportació ho diu (v. `export._problemes_capcalera`) i el RUL surt sense la línia,
+    que és honest: no sabem com es diu.
+    """
+    for text in (doc.fingerprint.textos_document if doc.fingerprint else ()):
+        net = (text or '').strip()
+        if net.upper().startswith(PREFIX_NOM_TAULA):
+            return net[len(PREFIX_NOM_TAULA):].strip()
+    return ''

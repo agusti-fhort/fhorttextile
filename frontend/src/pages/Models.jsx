@@ -8,6 +8,7 @@ import BadgeLliurable from '../components/model/BadgeLliurable'
 import ModelsFilterPanel from '../components/model/ModelsFilterPanel'
 import { useFilterOptions, garmentTypeLabel, garmentGroupLabel } from '../components/model/filterOptions'
 import Badge from '../components/ui/Badge'
+import { EstatBadge } from '../components/commercial/estats'
 import Feedback from '../components/ui/Feedback'
 import PageMenu from '../components/ui/PageMenu'
 import TaulaLlista from '../components/ui/TaulaLlista'
@@ -18,6 +19,10 @@ const SEASONS = ['SS', 'FW', 'CO', 'SP']
 const PAGE_SIZE = 25
 // Tots els keys de filtre que viuen a la URL (font de veritat + contracte de conjunt C2). Barra:
 // search/fase_actual/temporada. Panell avançat: la resta.
+// M3 · FIT-9 — cada vista de la llista és un estat del cicle de vida, i prou.
+const VISTA_ESTAT = { curs: 'nou', acabats: 'acabat', jubilats: 'jubilat' }
+const VISTES_VALIDES = Object.keys(VISTA_ESTAT)
+
 const FILTER_KEYS = [
   'search', 'fase_actual', 'temporada', 'customer', 'collection', 'any',
   'garment_type__in', 'garment_type_item__in', 'garment_group_codi__in',
@@ -73,12 +78,19 @@ export default function Models() {
   const [searchInput, setSearchInput] = useState(search)
 
   // §8e · FILTRES RÀPIDS DE VISTA AL MENÚ: «els elements acabats NO es llisten per defecte».
-  // 🚩 PROVISIONAL-DOMINI — el criteri exacte de «model acabat» encara no existeix: l'estat
-  // comercial el mana el Kanban i el Kanban no hi és. Mentre no hi sigui, la vista «acabats»
-  // NO endevina res: no demana res al backend i ho diu escrit. Inventar-hi un criteri (fase
-  // TOP? `estat='Tancat'`? `data_tancament`?) seria posar una decisió de domini dins d'un tram
-  // de pell, i la llista de «en curs» quedaria amputada sense que ningú ho hagués decidit.
-  const vista = sp.get('vista') === 'acabats' ? 'acabats' : 'curs'
+  //
+  // ✅ M3 · FIT-9 — **EL CRITERI JA EXISTEIX I ÉS UN ACTE, NO UNA ENDEVINALLA.** Aquí hi havia
+  // una 🚩 PROVISIONAL-DOMINI: la vista «acabats» no demanava res al backend perquè «model
+  // acabat» no estava definit, i inventar-ne un criteri (fase TOP? `data_tancament`?) hauria
+  // estat posar una decisió de domini dins d'un tram de pell. Ara `Model.estat` ÉS el cicle de
+  // vida i cada valor hi arriba per un acte humà amb autor i motiu (`tancar_model`), de manera
+  // que cada vista és un filtre exacte i cap fila és inventada.
+  //
+  // 🔒 I la vista per defecte passa a demanar `estat=nou`: fins avui ensenyava TOT (no hi havia
+  // res a excloure). «Els elements acabats no es llisten per defecte» és, finalment, cert.
+  // El JUBILAT té vista pròpia perquè és el que la llei demana: fora de les vistes normals,
+  // visible **només amb filtre explícit**.
+  const vista = VISTES_VALIDES.includes(sp.get('vista')) ? sp.get('vista') : 'curs'
 
   // ORDENACIÓ a la URL (`ordering`), com la resta de l'estat de la llista: recarregar la
   // conserva i es pot enllaçar. Es guarda com el backend l'espera (`-camp`).
@@ -115,6 +127,11 @@ export default function Models() {
   const filterParams = useMemo(() => {
     const f = {}
     FILTER_KEYS.forEach(k => { const v = sp.get(k); if (v && v.trim()) f[k] = v.trim() })
+    // M3 — l'estat del cicle NO és un filtre més del panell: és la VISTA. Va aquí i no a
+    // `load()` perquè els comptadors laterals (fases, prendes) comptin el mateix que la
+    // graella ensenya; si no, la vista «acabats» tindria una llista d'acabats i uns
+    // comptadors de tot.
+    f.estat = VISTA_ESTAT[vista]
     return f
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spStr])
@@ -183,8 +200,6 @@ export default function Models() {
   }, [faseKey])
 
   const load = useCallback(() => {
-    // Vista «acabats»: cap criteri de domini → cap crida i cap fila inventada (v. `vista`).
-    if (vista === 'acabats') { setItems([]); setCount(0); setLoading(false); return }
     setLoading(true)
     modelsApi.list({ ...filterParams, ordering: aOrdering(ordre), page, page_size: PAGE_SIZE })
       .then(r => {
@@ -368,14 +383,19 @@ export default function Models() {
       render: (m) => (m.fase_actual ? t(`model_sheet.dashboard.phase.${m.fase_actual}`, m.fase_actual) : '—'),
     },
     {
-      // 🚩 PROVISIONAL-DOMINI · l'ESTAT de la §8e és el COMERCIAL (el del Kanban: Començat
-      // neutre · En curs taronja · Acabat verd), i el Kanban no existeix. `Model.estat`
-      // (Nou/EnCurs/EnRevisio/Tancat) és l'estat INTERN i NO és aquest: pintar-lo aquí seria
-      // dir una cosa per una altra. La columna hi és, buida i amb el motiu escrit.
-      key: 'estat', label: t('models_list.col_estat'), min: 86, max: 100,
-      titolCap: t('models_list.estat_pendent'),
-      estil: { color: 'var(--text-faint)' },
-      render: () => '—',
+      // ✅ **LA COLUMNA JA DIU LA VERITAT (M5, 25/08).** Va néixer buida amb el motiu escrit
+      // (🚩 PROVISIONAL-DOMINI): l'estat de la §8e era el COMERCIAL, el Kanban no existia, i
+      // `Model.estat` era llavors l'intern (Nou/EnCurs/EnRevisio/Tancat) — pintar-lo hauria
+      // estat dir una cosa per una altra. **M3 · FIT-9 va canviar el camp**: avui `Model.estat`
+      // és el CICLE DE VIDA amb tres estats i cap més (`nou`/`acabat`/`jubilat`), és el criteri
+      // de domini de les tres vistes d'aquesta mateixa pantalla, i la llista ja el serveix.
+      //
+      // Es pinta amb el badge VIU (`commercial/estats`), amb els codis de `/vocabulari/` i el
+      // mapa de color de la §8e. **Cap estat nou**: els tres del domini, ni un més.
+      key: 'estat', label: t('models_list.col_estat'), min: 86, max: 100, sort: 'estat',
+      render: (m) => (m.estat
+        ? <EstatBadge clau="estats_model" codi={m.estat}>{t(`model.estats.${m.estat}`, m.estat)}</EstatBadge>
+        : '—'),
     },
     {
       key: 'del', amplada: 36,
@@ -389,6 +409,7 @@ export default function Models() {
   const VISTES = [
     ['curs', t('models_list.view_active')],
     ['acabats', t('models_list.view_done')],
+    ['jubilats', t('models_list.view_retired')],
   ]
 
   return (
@@ -487,11 +508,7 @@ export default function Models() {
         )}
 
         {/* Llistat */}
-        {vista === 'acabats' ? (
-          <div style={buitCaixa}>
-            <span style={buit}>{t('models_list.done_pending')}</span>
-          </div>
-        ) : loading ? (
+        {loading ? (
           <div style={buitCaixa}><span style={buit}>{t('models_list.loading')}</span></div>
         ) : visibleItems.length === 0 ? (
           <div style={buitCaixa}>
@@ -510,9 +527,6 @@ export default function Models() {
               triada={(m) => rowChecked(m.id)}
               onObrir={intentMode ? (m) => rowToggle(m.id) : (m) => navigate(`/models/${m.id}`)}
             />
-            {/* §8c — l'estat buit d'una COLUMNA també s'explica; el silenci d'una columna de
-                guions és pitjor que la columna. */}
-            <div style={{ ...buit, margin: '-8px 0 16px 2px' }}>{t('models_list.estat_pendent')}</div>
           </>
         )}
 

@@ -11,33 +11,138 @@
  */
 
 /** Bounding box d'un conjunt de peces (en mm). */
+//: La capsa de recanvi quan no hi ha res de què mesurar-ne cap. Existeix perquè el visor
+//: pugui dibuixar un llenç buit en lloc de quedar-se cec.
+const BBOX_BUIT = { minX: 0, minY: 0, maxX: 100, maxY: 100, ample: 100, alt: 100 }
+
 export function bboxDePeces(pieces) {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-  for (const p of pieces) {
-    for (const b of p.boundaries || []) {
-      for (const q of b.points || []) {
-        if (q.x < minX) minX = q.x
-        if (q.y < minY) minY = q.y
-        if (q.x > maxX) maxX = q.x
-        if (q.y > maxY) maxY = q.y
-      }
-    }
-    for (const n of p.notches || []) {
-      if (n.x < minX) minX = n.x
-      if (n.y < minY) minY = n.y
-      if (n.x > maxX) maxX = n.x
-      if (n.y > maxY) maxY = n.y
-    }
+
+  // 🚨 CADA PUNT PASSA PER `Number.isFinite` ABANS D'ENTRAR-HI.
+  //
+  // Un sol punt brut —un `null` d'un camp que el serializer encara no serveix, un
+  // `undefined` d'una forma nova— contamina el mínim i el màxim, i d'allà el NaN baixa fins
+  // al zoom i a la posició: el visor es queda EN BLANC amb «NaN%» al control. La pantalla no
+  // diu què ha passat i el patró sencer desapareix per un element.
+  //
+  // Comparar sense guard no salva: `null < Infinity` és cert, i el mínim passa a ser `null`.
+  const mira = (q) => {
+    if (!q || !Number.isFinite(q.x) || !Number.isFinite(q.y)) return
+    if (q.x < minX) minX = q.x
+    if (q.y < minY) minY = q.y
+    if (q.x > maxX) maxX = q.x
+    if (q.y > maxY) maxY = q.y
   }
-  if (!isFinite(minX)) return { minX: 0, minY: 0, maxX: 100, maxY: 100, ample: 100, alt: 100 }
+
+  for (const p of pieces || []) {
+    for (const b of p.boundaries || []) for (const q of b.points || []) mira(q)
+    for (const n of p.notches || []) mira(n)
+  }
+
+  if (!Number.isFinite(minX)) return { ...BBOX_BUIT }
   return { minX, minY, maxX, maxY, ample: maxX - minX, alt: maxY - minY }
 }
 
-/** Escala que fa cabre el bbox dins el viewport, amb un marge. */
+/**
+ * Escala que fa cabre el bbox dins el viewport, amb un marge.
+ *
+ * 🚨 **L'amplada i l'alçada es CALCULEN de les cantonades, no es llegeixen de l'objecte.**
+ * Llegir-les de `bbox.ample`/`bbox.alt` volia dir que un bbox amb les quatre cantonades
+ * bones però sense els dos camps derivats donava `Math.max(undefined, 1)` = NaN, i el NaN
+ * baixava fins al zoom: **els dos visors del patró, en blanc**. Va passar (v.
+ * `INFORME_NAN_VISOR_2026-08-24.md`), i va passar perquè aquesta funció demanava dades que
+ * ja tenia. Ara no en demana cap que no pugui deduir.
+ *
+ * I si el que arriba no és mesurable, es torna una escala d'1 en lloc d'un NaN: un patró a
+ * escala equivocada és un problema; un visor cec no es pot ni diagnosticar.
+ */
 export function escalaPerCabre(bbox, ampleViewport, altViewport, marge = 40) {
-  const w = Math.max(bbox.ample, 1)
-  const h = Math.max(bbox.alt, 1)
-  return Math.min((ampleViewport - marge) / w, (altViewport - marge) / h)
+  const finit = (v, defecte) => (Number.isFinite(v) ? v : defecte)
+  const w = Math.max(finit(bbox?.maxX, 1) - finit(bbox?.minX, 0), 1)
+  const h = Math.max(finit(bbox?.maxY, 1) - finit(bbox?.minY, 0), 1)
+  const z = Math.min((finit(ampleViewport, 0) - marge) / w, (finit(altViewport, 0) - marge) / h)
+  return Number.isFinite(z) && z > 0 ? z : 1
+}
+
+/**
+ * El PEU de la perpendicular de `p` sobre la recta que passa per `a` i `b`.
+ *
+ * El mateix càlcul que `engine/measure._ortogonal` fa al servidor, i aquí per la mateixa raó
+ * que la resta d'aquest fitxer existeix: el canvas ha de poder DIBUIXAR el que el servidor
+ * MESURA sense una anada i tornada per cada moviment del cursor. La xifra que val segueix
+ * sent la del servidor —aquí no se'n desa cap—; això només diu on va la línia.
+ *
+ * Torna `null` si les dues referències són el mateix punt: sense recta no hi ha
+ * perpendicular, exactament el mateix límit que el motor.
+ */
+export function peuPerpendicular(a, b, p) {
+  if (!a || !b || !p) return null
+  const vx = b.x - a.x
+  const vy = b.y - a.y
+  const base2 = vx * vx + vy * vy
+  if (base2 <= 1e-12) return null
+  const t = ((p.x - a.x) * vx + (p.y - a.y) * vy) / base2
+  return { x: a.x + t * vx, y: a.y + t * vy }
+}
+
+/**
+ * Els dos extrems de la COTA d'una projecció sobre un eix.
+ *
+ * Mirall de `engine/measure._projeccio`, i aquí pel mateix motiu que `peuPerpendicular`: el
+ * canvas ha de saber dibuixar el que el servidor mesura sense una anada i tornada. La xifra
+ * que val segueix sent la del servidor.
+ *
+ * `eix` buit = AUTO, l'eix de més recorregut, amb l'empat a l'horitzontal (com el motor).
+ */
+export function puntsDeLaCotaProjeccio(a, b, eix = '') {
+  if (!a || !b) return []
+  const quin = eix || (Math.abs(b.x - a.x) >= Math.abs(b.y - a.y) ? 'H' : 'V')
+  if (quin === 'H') {
+    const y = (a.y + b.y) / 2
+    return [{ x: a.x, y }, { x: b.x, y }]
+  }
+  const x = (a.x + b.x) / 2
+  return [{ x, y: a.y }, { x, y: b.y }]
+}
+
+/** El vector unitari perpendicular a a→b, girat +90°. `null` si els punts coincideixen. */
+export function normalDe(a, b) {
+  if (!a || !b) return null
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  const l = Math.hypot(dx, dy)
+  if (l <= 1e-9) return null
+  return { x: -dy / l, y: dx / l }
+}
+
+/**
+ * Una polilínia DESPLAÇADA en paral·lel a ella mateixa, `off` mm cap al costat de la normal.
+ *
+ * Cada vèrtex es mou per la seva normal LOCAL —la mitjana de les dels dos segments que hi
+ * toquen—, que és el que fa que una corba desplaçada segueixi sent paral·lela a l'original
+ * i no una còpia inclinada. Amb dos punts es redueix a moure'ls tots dos per la mateixa
+ * normal, que és el cas de la recta.
+ *
+ * No és un offset de corba EXACTE (no resol autointerseccions als colzes tancats), i no cal
+ * que ho sigui: això dibuixa una cota, no genera una trajectòria de tall.
+ */
+export function desplacaPolilinia(punts, off) {
+  const n = punts.length
+  if (n < 2) return punts
+  if (!off) return punts
+
+  const normals = []
+  for (let i = 0; i < n - 1; i++) normals.push(normalDe(punts[i], punts[i + 1]))
+
+  return punts.map((p, i) => {
+    const abans = normals[i - 1]
+    const despres = normals[i]
+    const nx = ((abans?.x || 0) + (despres?.x || 0))
+    const ny = ((abans?.y || 0) + (despres?.y || 0))
+    const l = Math.hypot(nx, ny)
+    if (l <= 1e-9) return p
+    return { x: p.x + (nx / l) * off, y: p.y + (ny / l) * off }
+  })
 }
 
 export function distancia(ax, ay, bx, by) {

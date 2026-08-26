@@ -9,6 +9,7 @@ from .views import (
     ai_analysis_view,
     consumption_delivery_view,
     model_dashboard_view,
+    tancar_model_view, reobrir_model_view, jubilar_model_view,
     model_timeline_view,
     create_model_wizard,
     generate_grading_view,
@@ -277,6 +278,12 @@ urlpatterns = (
         path('models/<int:model_id>/albara/', consumption_delivery_view),
         path('models/<int:model_id>/dashboard/', model_dashboard_view),
         path('models/<int:model_id>/timeline/', model_timeline_view),
+        # M3 · el CICLE DE VIDA del model (FIT-9/10/11). Tres portes i no una amb un `estat` al
+        # cos: cada acte té les seves precondicions i el seu rebuig propi, i una porta única
+        # («posa'm aquest estat») hauria tornat a ser el PATCH genèric que M3 acaba de tancar.
+        path('models/<int:model_id>/tancar/', tancar_model_view),
+        path('models/<int:model_id>/reobrir/', reobrir_model_view),
+        path('models/<int:model_id>/jubilar/', jubilar_model_view),
         path('registre-activitat/', registre_activitat_view),
     ]
     + _sprint6_paths

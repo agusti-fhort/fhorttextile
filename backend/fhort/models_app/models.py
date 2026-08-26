@@ -85,15 +85,42 @@ class Model(models.Model):
         ('SP', 'Special'),
     ]
 
-    ESTAT_NOU = 'Nou'
-    ESTAT_EN_CURS = 'EnCurs'
-    ESTAT_EN_REVISIO = 'EnRevisio'
-    ESTAT_TANCAT = 'Tancat'
+    # ── M3 · FIT-9 · ELS TRES ESTATS DEL MODEL (Agus, 24/08) ────────────────────────────────
+    #
+    # 🔄 **AQUEST CAMP S'HA REPROPOSAT, NO AMPLIAT.** Fins avui les choices eren
+    # `Nou/EnCurs/EnRevisio/Tancat` i **cap lector en depenia**: el cens d'M3 (FASE 0a) va
+    # trobar-hi dos escriptors, tots dos de CREACIÓ i tots dos amb el mateix valor
+    # (`views.crear_model` i `bulk_import_service`), i cap branca de codi —ni al backend ni al
+    # front— que preguntés pel valor. A PROD tot estava a `'Nou'`. Era un vocabulari mort.
+    #
+    # Els tres estats VIUS són el cicle de vida del model, i el que els separa és **on es veu**:
+    #   · `nou`     — al tauler. És el model viu, el que té feina i el que el Board ensenya.
+    #   · `acabat`  — FORA del tauler actiu, però consultable i **reoblible** (FIT-11). Hi entra
+    #                 per un ACTE HUMÀ (`services_cicle.tancar_model`), mai per deducció: ni
+    #                 «totes les tasques Done» ni «l'última ronda entregada» tanquen un model.
+    #   · `jubilat` — històric. Fora de les vistes normals, visible només amb filtre explícit.
+    #
+    # ⛔ **CAP AUTOMATISME EL MOU.** L'única escriptura d'aquest camp després de la creació és el
+    # servei del cicle de vida, i cada canvi deixa una fila a `ModelEstatEsdeveniment`.
+    ESTAT_NOU = 'nou'
+    ESTAT_ACABAT = 'acabat'
+    ESTAT_JUBILAT = 'jubilat'
     ESTAT_CHOICES = [
         (ESTAT_NOU, 'Nou'),
-        (ESTAT_EN_CURS, 'En curs'),
-        (ESTAT_EN_REVISIO, 'En revisió'),
-        (ESTAT_TANCAT, 'Tancat'),
+        (ESTAT_ACABAT, 'Acabat'),
+        (ESTAT_JUBILAT, 'Jubilat'),
+    ]
+
+    #: M3 · FIT-10 — per què s'ha tancat. Les dues vies del tancament NO són la mateixa cosa i
+    #: el sistema no les ha de confondre: `acabat` és una decisió interna («ja està») i
+    #: `tret_de_cataleg` és un fet del CLIENT («no es produirà»). Es persisteix perquè la fitxa
+    #: ho pugui dir en veu alta; el que cobra el comercial NO surt d'aquí (surt de `ModelTask`,
+    #: via `get_billable_items`), i per això aquest camp no té cap conseqüència de facturació.
+    MOTIU_TANCAMENT_ACABAT = 'acabat'
+    MOTIU_TANCAMENT_TRET_DE_CATALEG = 'tret_de_cataleg'
+    MOTIU_TANCAMENT_CHOICES = [
+        (MOTIU_TANCAMENT_ACABAT, 'Acabat'),
+        (MOTIU_TANCAMENT_TRET_DE_CATALEG, 'Tret de catàleg'),
     ]
 
     FASE_CHOICES = [
@@ -265,7 +292,14 @@ class Model(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     data_objectiu = models.DateField(null=True, blank=True)
+    # M3 · el camp hi era des de sempre i **no l'escrivia ningú** (cens FASE 0a: cap escriptor a
+    # tot `fhort`, només el llegia l'ordenació del board). Ara és la data del tancament del
+    # model, i l'escriu el mateix acte que hi posa `estat='acabat'`. Reobrir la buida: un model
+    # obert no té data de tancament, i la història sencera viu a `ModelEstatEsdeveniment`.
     data_tancament = models.DateField(null=True, blank=True)
+    # M3 · FIT-10 — el motiu del tancament VIGENT (null mentre el model és obert).
+    motiu_tancament = models.CharField(max_length=20, choices=MOTIU_TANCAMENT_CHOICES,
+                                       null=True, blank=True)
     predicted_start = models.DateField(null=True, blank=True)
     predicted_end = models.DateField(null=True, blank=True)
     # C4d — marcador "+": el model ha entrat/pujat al pla per INICI REAL d'una tasca (no per
@@ -369,6 +403,50 @@ class Model(models.Model):
 
     def __str__(self):
         return f'{self.codi_intern} · {self.nom_prenda}'
+
+
+class ModelEstatEsdeveniment(models.Model):
+    """M3 · FIT-10 + FIT-11 — EL RASTRE DEL CICLE DE VIDA: qui, quan, de què a què i per què.
+
+    🔑 **UN LOG, NO UN PARELL DE CAMPS.** Tancar i reobrir no passen un sol cop: un model es
+    pot acabar, reobrir per una rectificació, tornar-se a acabar i acabar jubilat. Amb
+    `tancat_per`/`reobert_per` a `Model`, cada volta n'esborraria l'anterior i la pregunta
+    «quantes vegades s'ha reobert això, i qui ho va demanar» no tindria resposta. És el mateix
+    raonament (i la mateixa forma) que `TaskTransition` per a les tasques.
+
+    `motiu` vol dir coses diferents segons la direcció, i és a posta:
+      · cap a `acabat`  → una de `Model.MOTIU_TANCAMENT_CHOICES` (decisió interna o tret de
+        catàleg). És el fet que FIT-10 demana persistit.
+      · cap a `nou`     → text lliure: **per què es reobre**. No hi ha vocabulari controlat
+        perquè els motius d'una reobertura els posa la vida (el client torna, s'ha trobat un
+        defecte, falta una talla), i inventar-ne una llista tancada els faria caber a la força.
+      · cap a `jubilat` → normalment buit: jubilar és arxivar, no explicar.
+
+    L'ESTAT VIU segueix sent `Model.estat`. Aquesta taula és la HISTÒRIA, no la font: derivar
+    l'estat de l'últim esdeveniment obligaria a llegir-la a cada pantalla i deixaria el sistema
+    sense estat quan la fila no hi fos.
+    """
+    model = models.ForeignKey('models_app.Model', on_delete=models.CASCADE,
+                              related_name='esdeveniments_estat')
+    de_estat = models.CharField(max_length=20, choices=Model.ESTAT_CHOICES)
+    a_estat = models.CharField(max_length=20, choices=Model.ESTAT_CHOICES)
+    motiu = models.CharField(max_length=200, blank=True, default='',
+                             help_text='Vocabulari de tancament cap a `acabat`; text lliure a '
+                                       'la reobertura.')
+    per = models.ForeignKey('accounts.UserProfile', on_delete=models.SET_NULL, null=True,
+                            blank=True, related_name='esdeveniments_estat_model',
+                            help_text='Qui ho ha decidit. SET_NULL: esborrar un usuari no '
+                                      'esborra la història.')
+    quan = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-quan', '-id']
+        verbose_name = 'Esdeveniment d\'estat de model'
+        verbose_name_plural = 'Esdeveniments d\'estat de model'
+        indexes = [models.Index(fields=['model', '-quan'])]
+
+    def __str__(self):
+        return f'{self.model_id} · {self.de_estat}→{self.a_estat} ({self.quan:%Y-%m-%d})'
 
 
 class ModelFitxer(models.Model):

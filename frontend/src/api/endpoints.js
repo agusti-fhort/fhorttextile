@@ -105,6 +105,18 @@ export const models = {
   // Una «correcció» és una volta d'una sola tasca: mateixa porta, motiu diferent. El backend hi
   // posa la genealogia (mare) sense que la UI l'hagi de saber.
   obrirRonda: (id, data) => client.post(`/api/v1/models/${id}/obrir-ronda/`, data),
+  // M1 · FIT-1 — LES VOLTES DEL MODEL, amb l'acte d'entrega NIUAT. Porta pròpia i no un camp
+  // del model: una ronda entregada és una ronda TANCADA, i `Model.ronda_oberta` no en pot
+  // ensenyar mai cap. Sense això l'Entrega seria una dada que no es pot llegir des d'enlloc.
+  rondes: (id) => client.get(`/api/v1/models/${id}/rondes/`),
+  // M3 · FIT-9/10/11 — EL CICLE DE VIDA. Tres portes i no un `estat` a l'`update()` del model:
+  // el camp és read-only al serializer a posta (cada acte té precondicions, motiu i rastre).
+  // `tancar` amb una volta oberta contesta **409 `ronda_oberta`**: no és un error, és la
+  // PREGUNTA («la R{n} està oberta; confirmo l'entrega i ho tanco tot?»). La segona crida hi
+  // afegeix `confirmar_entrega` + `destinatari` i el servidor ho fa tot en una transacció.
+  tancar: (id, data) => client.post(`/api/v1/models/${id}/tancar/`, data),
+  reobrir: (id, data = {}) => client.post(`/api/v1/models/${id}/reobrir/`, data),
+  jubilar: (id, data = {}) => client.post(`/api/v1/models/${id}/jubilar/`, data),
   // Sprint B — CÒPIA model→model. Mirall de `materialitzar-poms` amb la font canviada (un altre
   // MODEL en comptes de l'ITEM). body: {pom_ids?, copy_values?, copy_run?, copy_grading?,
   // copy_files?} — totes les banderes per defecte certes. Mai trepitja el patrimoni del destí.
@@ -417,6 +429,20 @@ export const gradingRules = {
 
 // Capa de Projecte — instàncies ModelTask (model-task-items/, ModelViewSet + row-level scope).
 // Filtres reals del backend: ?model & status & task_type & assignee.
+// M1 · FIT-1 + FIT-13 — LES DUES PORTES D'ESCRIPTURA DE L'ENTREGA.
+//
+// ⚠️ `entrega()` **TANCA LA RONDA** en la mateixa transacció (FIT-13), i tancar-la tanca la
+// feina viva de la volta (FIT-6). No és un efecte secundari amagat: la cara ho ha de DIR abans
+// de confirmar. `okClient()` és el senyal manual i posterior del client i no toca la ronda.
+export const rondes = {
+  entrega: (rondaId, data) => client.post(`/api/v1/rondes/${rondaId}/entrega/`, data),
+}
+
+export const entregues = {
+  // Un sol cop: és un FET, no un interruptor. El segon PATCH el rebutja el servei amb 400.
+  okClient: (entregaId, data) => client.patch(`/api/v1/entregues/${entregaId}/ok-client/`, data),
+}
+
 export const modelTasks = {
   list: (params) => client.get('/api/v1/model-task-items/', { params }),
   listByModel: (modelId) => client.get('/api/v1/model-task-items/', { params: { model: modelId } }),
@@ -996,6 +1022,12 @@ export const patterns = {
   poms: {
     list: (patternFileId) => client.get('/api/v1/patterns/pattern-poms/',
       { params: { pattern_piece__pattern_file: patternFileId } }),
+    // EL VOCABULARI DE MÈTODES (recta · vora · caiguda ortogonal), amb la gramàtica de
+    // cadascun: quantes àncores vol i com es diuen dins de la recepta. Ve del servidor pel
+    // mateix motiu que `vocabulariDomini` (v. la seva capçalera): una llista escrita a mà
+    // dins d'un `.jsx` deriva dels `choices` del model i ningú no se n'assabenta. Amb això
+    // el Taller sap quants clics ha de guiar sense saber quins mètodes existeixen.
+    metodes: () => client.get('/api/v1/patterns/pattern-poms/metodes/'),
     create: (data) => client.post('/api/v1/patterns/pattern-poms/', data),
     // REOBRIR (W4b/T5a): la recepta nova sobre el MATEIX PatternPOM, i el servidor RECALCULA
     // el valor. Mai esborrar-i-crear: corregir on és una mesura no és tornar-la a ancorar.

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { patterns, models, modelTasks } from '../api/endpoints'
-import PatternViewer, { METRICA_EINA } from '../components/pattern/PatternViewer'
+import PatternViewer, { METRICA_EINA, METRICA_EINA_COMPACTA } from '../components/pattern/PatternViewer'
 import {
   arcDirigit, longitudTram, puntsDelSegment, puntsEntreIndexs, situaPunt,
 } from '../components/pattern/patternGeometry'
@@ -14,6 +14,7 @@ import POMPicker from '../components/pattern/POMPicker'
 import SewEditor from '../components/pattern/SewEditor'
 import SegmentEditor from '../components/pattern/SegmentEditor'
 import Contenidor from '../components/ui/Contenidor'
+import Modal from '../components/ui/Modal'
 import { grauVisual, textCobertura, textEstat } from '../components/pattern/sewText'
 import { formatLen } from '../utils/format'
 import { useUnit } from './fittingShared'
@@ -88,6 +89,16 @@ export default function TallerPatro() {
   // cercador: A → B → ancorat. Sense pomActiu, el mode POM és la via secundària (el POM
   // que no és a la fitxa) i llavors sí que cal preguntar quin és — el picker.
   const [pomActiu, setPomActiu] = useState(null)
+  // ── El vocabulari de MÈTODES de mesura, servit pel backend (cap enum aquí). Cada entrada
+  // porta la seva gramàtica: `{codi, mode, ancores}`. `ancores` és el que fa que el gest
+  // sigui guiat sense que aquesta pantalla sàpiga què és una caiguda ortogonal — en diu
+  // quants clics vol i com es diu cadascun, i la guia i la recepta surten d'aquí.
+  const [metodes, setMetodes] = useState([])
+  const [metodeSel, setMetodeSel] = useState('')
+  // Les OPCIONS triades del mètode viu (`{eix: 'H'}`…). Un diccionari i no un estat per
+  // opció: quines n'hi ha ho diu el servidor, i una variable per cadascuna voldria dir
+  // saber-les aquí.
+  const [opcionsSel, setOpcionsSel] = useState({})
   const [nomTram, setNomTram] = useState('')
   const [creantTram, setCreantTram] = useState(false)
   const [tramRessaltat, setTramRessaltat] = useState(null)
@@ -100,6 +111,12 @@ export default function TallerPatro() {
   // ── W4b/T5. REOBRIR per editar. Amb un id posat, el gest no crea res nou: RECALCULA sobre
   // la mateixa fila. Mai esborrar-i-crear — les costures referencien els trams, i els POMs
   // porten la seva història.
+  // La COTA assenyalada al canvas. És selecció de PANTALLA, no d'edició: no obre res, només
+  // diu «aquesta», i és el que dona sentit a la tecla Supr.
+  const [pomSel, setPomSel] = useState(null)
+  // La cota que Supr ha assenyalat i que espera el vistiplau. Esborrar un ancoratge amb una
+  // tecla i sense preguntar seria l'única acció destructiva del Taller sense confirmació.
+  const [esborraCota, setEsborraCota] = useState(null)
   const [pomEditId, setPomEditId] = useState(null)
   const [tramEditId, setTramEditId] = useState(null)
   const [sewEditId, setSewEditId] = useState(null)
@@ -185,6 +202,22 @@ export default function TallerPatro() {
     } catch { /* la llista de rebuigs no és crítica: si no ve, no es diu res */ }
   }, [modelId])
 
+  // El vocabulari de mètodes: una sola lectura en obrir el taller. Si no ve (xarxa, permís),
+  // la pantalla es queda sense selector i el gest segueix sent el de dos punts de sempre —
+  // ni un mètode inventat aquí ni una eina que no es pot fer servir.
+  useEffect(() => {
+    let viu = true
+    patterns.poms.metodes()
+      .then(({ data }) => {
+        if (!viu) return
+        const llista = data || []
+        setMetodes(llista)
+        setMetodeSel(prev => prev || llista[0]?.codi || '')
+      })
+      .catch(() => { /* sense vocabulari, el Taller no ofereix el selector i prou */ })
+    return () => { viu = false }
+  }, [])
+
   // Els REBUIGS sí que es llegeixen en obrir (F/T3): és una consulta a una taula, no el motor.
   // El que T1 treu de l'arrencada és A2, que opina sobre tot el patró — no saber quants «no»
   // hi ha vius és el que fa que un recompte de zero propostes menteixi.
@@ -260,12 +293,34 @@ export default function TallerPatro() {
     })
   }
 
+  // El mètode viu i la seva gramàtica. Amb el vocabulari encara no arribat (o caigut), es
+  // cau al gest de sempre: dos punts. No és un enum escrit aquí —és el mínim que la pantalla
+  // sap fer sense servidor— i el selector no s'ofereix fins que el vocabulari hi és.
+  const metodeActiu = useMemo(
+    () => metodes.find(m => m.codi === metodeSel) || null,
+    [metodes, metodeSel])
+  const ancoresPom = metodeActiu?.ancores || ['a', 'b']
+  // `useMemo` i no un `||` pelat: entra a les dependències de `valorOpcio`, i un objecte
+  // literal nou a cada render li canviaria la identitat sempre.
+  const opcionsPom = useMemo(() => metodeActiu?.opcions || {}, [metodeActiu])
+
+  /** El valor triat d'una opció, o el primer que el vocabulari en dona (que és el defecte). */
+  const valorOpcio = useCallback(
+    (nom) => opcionsSel[nom] ?? (opcionsPom[nom]?.[0] ?? ''),
+    [opcionsSel, opcionsPom])
+
   // Clicar una fila PENDENT de la llista de treball ÉS l'ordre de col·locar aquell POM:
   // no obre cap cercador, perquè ja se sap quin POM és. El canvas passa a guiar.
   const colocarPOM = (fila) => {
     setPomActiu(fila)
     setPuntsPom([])
     setPickerObert(false)
+    // El mètode NO s'arrossega d'un POM al següent: haver mesurat una caiguda no vol dir que
+    // la mesura següent en sigui una, i heretar-lo en silenci faria que el canvas demanés
+    // tres clics per a una amplada. Es torna al primer del vocabulari, que és el per defecte
+    // del model.
+    setMetodeSel(metodes[0]?.codi || '')
+    setOpcionsSel({})
     setMode('pom')
   }
 
@@ -286,13 +341,56 @@ export default function TallerPatro() {
 
   const veredicteVist = () => setVeredicte(null)
 
-  // Esc surt. I la tecla d'INVERTIR (←/→/F) gira l'arc que s'està previsualitzant, abans de
+  // ⚠️ AQUESTS DOS VIUEN AQUÍ DALT, i pel mateix motiu que `llegirRebuigs` (v. la seva
+  // capçalera): `pomSelViu` entra a les dependències de l'efecte de teclat de sota, i les
+  // dependències s'avaluen DURANT el render. Declarats més avall, el render peta sencer
+  // contra la seva pròpia zona morta.
+  //
+  // Els POMs ancorats viuen a la geometria, penjats de la peça que mesuren. (El creuament
+  // amb la fitxa no es fa aquí: el fa el servidor, a `model-poms`. Fer-lo dues vegades i de
+  // dues maneres seria demanar que divergissin.)
+  const pomsAncorats = useMemo(() => (geometria?.pieces || []).flatMap(p =>
+    (p.poms || []).map(x => ({ ...x, peca: etiquetaPeca(p) }))), [geometria])
+
+  // I la cota assenyalada ha d'EXISTIR. Es comprova DERIVANT-HO i no netejant l'estat amb un
+  // efecte: si el POM desapareix —esborrat des d'una altra pestanya, o una versió nova del
+  // patró—, l'id mort deixa de pintar-se i Supr no hi arriba. Un efecte que fes
+  // `setPomSel(null)` faria el mateix amb un render de més i una cascada pel mig.
+  const pomSelViu = useMemo(
+    () => (pomsAncorats.some(p => p.id === pomSel) ? pomSel : null),
+    [pomsAncorats, pomSel])
+
+  // Esc surt. La tecla d'INVERTIR (←/→/F) gira l'arc que s'està previsualitzant, abans de
   // fixar-lo: dos punts d'una vora tancada defineixen dos camins, i el que el cursor no digui
-  // ho ha de poder dir el teclat. Només mentre hi ha un arc viu — una tecla que no fa res quan
-  // no toca ensenya a no fer-ne cas.
+  // ho ha de poder dir el teclat. I Supr esborra la cota assenyalada. Tot tres, només mentre
+  // toca — una tecla que no fa res quan no toca ensenya a no fer-ne cas.
+  //
+  // 🚨 **EL GUARD DE `e.target`, QUE FALTAVA.** Aquest listener és GLOBAL, i sense mirar d'on
+  // ve la tecla, escriure una «f» al nom d'un tram girava l'arc que s'estava previsualitzant
+  // — el bug conegut de la tecla F. La malaltia no és de la F: és del listener, i per això la
+  // porta es posa una sola vegada i val per a les tres tecles. Supr hi entrava de cap: el
+  // Taller té camps de text oberts (nom de tram, nom de costura) i esborrar caràcters hi
+  // hauria esborrat cotes.
+  //
+  // Escape en queda FORA a posta: cancel·lar el gest des d'un camp de text és el que la
+  // pantalla anuncia («Esc per sortir») i el que qualsevol espera.
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key === 'Escape') { cancelar(); return }
+      if (e.key === 'Escape') {
+        // Amb la confirmació d'esborrat oberta, Escape és SEVA. Sense això, desdir-se'n
+        // deixava el modal obert i, de propina, avortava la col·locació que hi havia a sota.
+        if (esborraCota != null) { setEsborraCota(null); return }
+        cancelar()
+        return
+      }
+      if (esCampDeText(e.target)) return
+
+      if ((e.key === 'Delete' || e.key === 'Backspace') && pomSelViu != null) {
+        e.preventDefault()
+        setEsborraCota(pomSelViu)
+        return
+      }
+
       const potInvertir = (mode === 'seg' || mode === 'pinca') && puntsPom.length > 0
       if (!potInvertir) return
       if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key.toLowerCase() === 'f') {
@@ -302,11 +400,14 @@ export default function TallerPatro() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [cancelar, mode, puntsPom])
+  }, [cancelar, mode, puntsPom, pomSelViu, esborraCota])
 
   const onClicPunt = (iman) => {
     const punt = iman.punt
-    const maxPunts = mode === 'pinca' ? 3 : 2
+    // Quants clics vol aquest gest. En mode POM ho diu el MÈTODE (dos per a una recta o una
+    // longitud per vora, tres per a una caiguda ortogonal), i ho diu el servidor: si un dia
+    // n'entra un de quatre àncores, aquesta línia ja el guia.
+    const maxPunts = mode === 'pinca' ? 3 : mode === 'pom' ? ancoresPom.length : 2
     // Forma FUNCIONAL a posta: llegir `puntsPom` del closure el faria servir el valor
     // d'abans del clic anterior si dos events arriben junts, i la mesura acabaria unint
     // un punt amb ell mateix.
@@ -325,12 +426,13 @@ export default function TallerPatro() {
       setArcInvertit(false)
 
       const nous = [...prev, punt]
-      if (nous.length === 2 && mode === 'pom') {
-        // Dos punts. Si sabem de quin POM es tracta —perquè s'està col·locant de la llista de
-        // treball, o perquè s'està REOBRINT un d'ancorat— s'ancora i s'acaba. Si no (via
-        // secundària: un POM que no és a la fitxa), llavors sí que cal preguntar quin és.
+      if (nous.length === maxPunts && mode === 'pom') {
+        // Totes les àncores posades. Si sabem de quin POM es tracta —perquè s'està col·locant
+        // de la llista de treball, o perquè s'està REOBRINT un d'ancorat— s'ancora i s'acaba.
+        // Si no (via secundària: un POM que no és a la fitxa), llavors sí que cal preguntar
+        // quin és.
         const master = pomActiu?.pom_master ?? ombra?.pomMaster
-        if (master) ancorar(master, nous[0], nous[1])
+        if (master) ancorar(master, nous)
         else setPickerObert(true)
       }
       // En mode TRAM i PINÇA no es crea res encara: falta el nom, i el vistiplau.
@@ -338,24 +440,71 @@ export default function TallerPatro() {
     })
   }
 
+  /**
+   * Arrossegar una cota: desa ON SEU, mai QUANT MESURA.
+   *
+   * El canvas s'actualitza abans que el servidor respongui —una cota que torna al seu lloc i
+   * hi salta mig segon després no s'assembla a arrossegar res— i, si el desat falla, la
+   * geometria es rellegeix sencera: val més que la cota reculi que no que la pantalla digui
+   * una posició que la BD no té.
+   */
+  const mouCota = async (pom, offset) => {
+    setGeometria(g => (g ? {
+      ...g,
+      pieces: (g.pieces || []).map(pc => ({
+        ...pc,
+        poms: (pc.poms || []).map(
+          q => (q.id === pom.id ? { ...q, cota_offset_mm: offset } : q)),
+      })),
+    } : g))
+    try {
+      await patterns.poms.update(pom.id, { cota_offset_mm: offset })
+    } catch {
+      setErrEina(t('pattern.taller.err_cota_moure'))
+      try {
+        const { data: geo } = await patterns.geometry(actual.id)
+        setGeometria(geo)
+      } catch { /* si tampoc es pot rellegir, l'error d'eina ja ho ha dit */ }
+    }
+  }
+
   /** L'ancoratge, un de sol per a tots els camins: el guiat, el del picker, i el de REOBRIR. */
-  const ancorar = async (pomMasterId, a, b) => {
-    const peca = pecaDelPunt(a)
+  const ancorar = async (pomMasterId, punts) => {
+    const peca = pecaDelPunt(punts[0])
     setPickerObert(false)
     try {
       // S'envia la RECEPTA, mai el valor: el valor el llegeix el servidor de la geometria.
-      const recepta = { mode: 'points', a: a.id, b: b.id }
+      // La forma de la recepta la dicta el MÈTODE, i el mètode ve del servidor: aquí no hi
+      // ha cap `{mode: 'points', a, b}` escrit a mà que el dia que entri un mètode nou es
+      // quedi enrere sense que ningú ho vegi.
+      const recepta = { mode: metodeActiu?.mode || 'points' }
+      ancoresPom.forEach((clau, i) => { recepta[clau] = punts[i].id })
+      // I les opcions del mètode, si en té. Van a la recepta i no a un camp propi perquè
+      // formen part del QUÈ es mesura: l'eix d'una cota no és una preferència de dibuix, és
+      // la meitat de la pregunta.
+      Object.keys(opcionsPom).forEach(nom => { recepta[nom] = valorOpcio(nom) })
+
       if (pomEditId) {
         // REOBERT (T5a): es RECALCULA sobre el MATEIX PatternPOM. Esborrar-lo i crear-ne un
         // altre li canviaria l'id i li esborraria la data —i qualsevol cosa que un dia hi
         // pengi—, per una feina que és una correcció, no un ancoratge nou.
-        await patterns.poms.update(pomEditId, { definicio_mesura: recepta })
+        //
+        // El `metode` hi viatja NOMÉS si se sap quin és. Amb el vocabulari caigut no hi ha
+        // mètode viu, i enviar-hi el recanvi ('recta') CONVERTIRIA en silenci el POM que
+        // s'està corregint —una caiguda o una longitud per vora passarien a recta sense que
+        // ningú ho digués. Omès, el servidor conserva el que ja hi ha desat, que és el que
+        // feia aquesta crida abans que hi hagués mètodes per triar.
+        const cos = { definicio_mesura: recepta }
+        if (metodeActiu) cos.metode = metodeActiu.codi
+        await patterns.poms.update(pomEditId, cos)
       } else {
+        // En crear, en canvi, no hi ha res a conservar: sense vocabulari s'ancora amb el
+        // mètode per defecte del model, que és el que la pantalla acaba de guiar.
         await patterns.poms.create({
           pattern_piece: peca.id,
           pom_master: pomMasterId,
           definicio_mesura: recepta,
-          metode: 'recta',
+          metode: metodeActiu?.codi || 'recta',
         })
       }
       // Feina feta: la fila passa a col·locada i el canvas deixa de guiar. Qui vulgui
@@ -719,7 +868,15 @@ export default function TallerPatro() {
     }
   }
 
-  const esborrarBlocPom = ids => enBloc(() => patterns.poms.bulkRemove(ids))
+  // 🚩 L'ESBORRAT EN BLOC DE POMS NO SOBREVIU A LA FUSIÓ DE PANELLS, i queda dit aquí perquè
+  // el client (`patterns.poms.bulkRemove` → `pattern-poms/bulk-delete/`) segueix existint i
+  // funcionant: el que ha desaparegut és la SUPERFÍCIE, no la capacitat.
+  //
+  // El motiu és de forma: el panell únic té una fila per MESURA DE LA FITXA, i un POM hi pot
+  // portar més d'un ancoratge (el pit, mesurat al davant i a l'esquena). Una casella per fila
+  // marcaria una fila d'espec, no un ancoratge, i «esborra els 3 marcats» hauria hagut de
+  // decidir sola quins dels ancoratges cauen. Tornar-hi vol una selecció per ANCORATGE, que
+  // és una peça pròpia i no aquest tram.
 
   // Costures i pinces comparteixen endpoint —una pinça ÉS una SewRelation— però no
   // selecció: al panell són dos grups, perquè esborrar costures i esborrar pinces són dues
@@ -810,16 +967,42 @@ export default function TallerPatro() {
     return null
   }, [geometria])
 
-  /** Reobrir un POM ancorat: la recepta torna al canvas i es torna a marcar A i B. */
+  /** Reobrir un POM ancorat: la recepta torna al canvas i es tornen a marcar les àncores.
+
+   * El selector es posa al mètode del POM que s'obre, i no al que hi hagués triat abans:
+   * reobrir una caiguda per corregir-la i que el canvas et demanés dos punts seria començar
+   * a fer-ne una altra cosa. Les àncores que es dibuixen de fons són les d'AQUELL mètode —
+   * llegir-hi sempre `a` i `b` deixaria l'ombra buida en tot el que no fos una recta.
+   */
   const reobrirPOM = (pom) => {
     const def = pom.definicio_mesura || {}
+    const conegut = metodes.find(m => m.codi === pom.metode)
+    // Sense el vocabulari no se sap quantes àncores vol aquest POM ni com es diuen, i el gest
+    // cauria al de dos punts: reobrir una caiguda per recol·locar-li un extrem li demanaria
+    // dos clics i n'enviaria una recepta de recta. Val més no obrir-lo i dir-ho.
+    if (metodes.length && !conegut) {
+      setErrEina(t('pattern.taller.err_metode_desconegut', { metode: pom.metode }))
+      return
+    }
+    if (!metodes.length) {
+      setErrEina(t('pattern.taller.err_sense_vocabulari'))
+      return
+    }
+    const claus = conegut.ancores
     netejarSeleccio()
     setPomEditId(pom.id)
+    if (pom.metode) setMetodeSel(pom.metode)
+    // Les opcions que la recepta ja porta: reobrir una cota en V i que el selector digués
+    // AUTO seria oferir-se a canviar-la sense dir-ho.
+    setOpcionsSel(Object.fromEntries(
+      Object.keys(conegut.opcions || {})
+        .filter(nom => def[nom] !== undefined)
+        .map(nom => [nom, def[nom]])))
     setOmbra({
       mena: 'pom',
       pomMaster: pom.pom_master,
       codi: pom.pom_code,
-      punts: [def.a, def.b].map(id => puntPerId(id)).filter(Boolean),
+      punts: claus.map(clau => puntPerId(def[clau])).filter(Boolean),
     })
     setMode('pom')
   }
@@ -876,12 +1059,6 @@ export default function TallerPatro() {
       throw e
     }
   }
-
-  // Els POMs ancorats, per al panell de RELACIONS: viuen a la geometria, penjats de la peça
-  // que mesuren. (El creuament amb la fitxa ja no es fa aquí: el fa el servidor, a
-  // `model-poms`. Fer-lo dues vegades i de dues maneres seria demanar que divergissin.)
-  const pomsAncorats = useMemo(() => (geometria?.pieces || []).flatMap(p =>
-    (p.poms || []).map(x => ({ ...x, peca: etiquetaPeca(p) }))), [geometria])
 
   /** La peça que conté un punt de la geometria. */
   const pecaDelPunt = useCallback((punt) => (geometria?.pieces || []).find(p =>
@@ -1121,16 +1298,21 @@ export default function TallerPatro() {
           >
             <ModelPomList
               files={feina?.results || []}
+              poms={pomsAncorats}
               pomActiu={pomActiu}
+              pomSelId={pomSelViu}
               onColocar={colocarPOM}
               onAfegirFora={afegirPOMForaDeFitxa}
+              onReobre={reobrirPOM}
+              onEsborra={id => setEsborraCota(id)}
+              onAssenyala={id => setPomSel(v => (v === id ? null : id))}
               unit={unit}
             />
           </Contenidor>
 
           <Contenidor titol={t('pattern.taller.relations')} icona="ti-link" pes={1}>
             <RelationsPanel
-              poms={pomsAncorats} sews={costures} pinces={pinces} segments={trams}
+              sews={costures} pinces={pinces} segments={trams}
               tramsPerId={tramsPerId} unit={unit}
               propostes={propostes} descartatsProp={descartatsProp}
               cercades={cercades} buscant={buscant}
@@ -1143,7 +1325,6 @@ export default function TallerPatro() {
               onConfirmaPinca={confirmarPinca}
               onRebutjaPinca={rebutjarPinca}
               onRessaltaPinca={c => setPincaPropRessaltada(c ? c.clau.join('-') : null)}
-              onEsborraPom={esborrarPOM} onReobrePom={reobrirPOM}
               onEsborraSew={esborrarSew} onReobreSew={reobrirSew}
               onReanomenaSew={reanomenarSew}
               onEsborraPinca={esborrarPinca} onReanomenaPinca={reanomenarSew}
@@ -1152,7 +1333,6 @@ export default function TallerPatro() {
               onAcceptaTolerancia={acceptarTolerancia}
               onDesacceptaTolerancia={desacceptarTolerancia}
               onRebutjaBlocProposta={rebutjarBlocProposta}
-              onEsborraBlocPom={esborrarBlocPom}
               onEsborraBlocSew={esborrarBlocSew}
               onEsborraBlocPinca={esborrarBlocSew}
               onEsborraBlocTram={esborrarBlocTram}
@@ -1179,19 +1359,42 @@ export default function TallerPatro() {
             <Veredicte t={t} v={veredicte} onTanca={veredicteVist} />
           )}
           {mode === 'pom' && (
-            <Avis
-              text={ombra?.mena === 'pom'
-                ? t('pattern.taller.pom_reopen_hint', { codi: ombra.codi })
-                : pomActiu
-                  ? t(puntsPom.length === 0
-                      ? 'pattern.taller.place_a' : 'pattern.taller.place_b',
-                      { codi: pomActiu.codi_client,
-                        nom: pomActiu.nom_client || pomActiu.nom_canonic })
-                  : t(puntsPom.length === 0
-                      ? 'pattern.pom_hint_first' : 'pattern.pom_hint_second')}
-              onTanca={cancelar}
-              tancaEtiqueta={t('pattern.taller.cancel_place')}
-            />
+            <>
+              {/* El selector només apareix si el servidor ha dit quins mètodes hi ha, i
+                  només si n'hi ha més d'un: una tria d'una sola opció no és una tria. */}
+              {metodes.length > 1 && (
+                <SelectorMetode
+                  t={t} metodes={metodes} triat={metodeSel}
+                  opcions={opcionsPom} valorOpcio={valorOpcio}
+                  onOpcio={(nom, valor) => {
+                    setOpcionsSel(o => ({ ...o, [nom]: valor }))
+                    // Canviar l'eix a mig gest no invalida els clics: les àncores són les
+                    // mateixes i el que canvia és què se'n projecta. No es reinicia res.
+                  }}
+                  onTria={codi => {
+                    setMetodeSel(codi)
+                    setPuntsPom([])
+                    // Les opcions són DEL mètode: un eix triat per a una cota no vol dir res
+                    // per a una caiguda, i arrossegar-lo faria que el vocabulari nou nasqués
+                    // amb un valor que no és seu.
+                    setOpcionsSel({})
+                    // I l'ombra de la reobertura se'n va amb els punts: dibuixava les àncores
+                    // del mètode VELL, i amb un recompte diferent deixava dos punts de fons
+                    // mentre el comptador en demanava tres. D'on es ve deixa de ser rellevant
+                    // quan es canvia el QUÈ es mesura.
+                    setOmbra(o => (o ? { ...o, punts: [] } : o))
+                  }}
+                  pas={puntsPom.length} ancores={ancoresPom}
+                />
+              )}
+              <Avis
+                text={textAncoratge(t, {
+                  ombra, pomActiu, fets: puntsPom.length, ancores: ancoresPom,
+                })}
+                onTanca={cancelar}
+                tancaEtiqueta={t('pattern.taller.cancel_place')}
+              />
+            </>
           )}
           {mode === 'seg' && (
             <Avis
@@ -1265,6 +1468,10 @@ export default function TallerPatro() {
               onTriaPeca={setPecaSel}
               mode={mode}
               puntsPom={puntsPom}
+              ancoresPom={ancoresPom}
+              pomSel={pomSelViu}
+              onSeleccionaPom={p => setPomSel(v => (v === p.id ? null : p.id))}
+              onMouPom={tascaId ? mouCota : null}
               onClicPunt={onClicPunt}
               segmentsA={segmentsA}
               segmentsB={segmentsB}
@@ -1289,8 +1496,26 @@ export default function TallerPatro() {
 
           {pickerObert && (
             <POMPicker
-              onTria={pom => ancorar(pom.id, puntsPom[0], puntsPom[1])}
+              onTria={pom => ancorar(pom.id, puntsPom)}
               onCancel={() => { setPickerObert(false); setPuntsPom([]) }}
+            />
+          )}
+
+          {/* Supr sobre una cota assenyalada: es pregunta, sempre. És l'única acció
+              destructiva que es pot disparar amb una tecla, i una tecla no és una decisió. */}
+          {esborraCota != null && (
+            <Modal
+              title={t('pattern.taller.cota_delete_title')}
+              subtitle={t('pattern.taller.cota_delete_body')}
+              confirmLabel={t('pattern.taller.cota_delete_ok')}
+              cancelLabel={t('app.cancel')}
+              onCancel={() => setEsborraCota(null)}
+              onConfirm={() => {
+                const id = esborraCota
+                setEsborraCota(null)
+                setPomSel(null)
+                esborrarPOM(id).catch(() => setErrEina(t('pattern.err_pom')))
+              }}
             />
           )}
         </section>
@@ -1300,6 +1525,25 @@ export default function TallerPatro() {
 }
 
 const round2 = (v) => Math.round(v * 100) / 100
+
+/**
+ * La tecla ve d'un camp on algú està escrivint?
+ *
+ * La porta que faltava al listener global del Taller. Un `keydown` a `window` no sap res del
+ * focus, i sense preguntar-ho una drecera d'una sola lletra és una bomba: escriure el nom
+ * d'un tram girava l'arc (el bug de la tecla F), i Supr hauria esborrat cotes mentre algú
+ * corregia un nom.
+ *
+ * `isContentEditable` hi entra perquè no tot camp de text és un `<input>`, i el `role` de
+ * `textbox` perquè un component pot fer-ne un sense ser cap dels dos.
+ */
+function esCampDeText(target) {
+  if (!target) return false
+  const tag = (target.tagName || '').toUpperCase()
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+    || target.isContentEditable === true
+    || target.getAttribute?.('role') === 'textbox'
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1435,6 +1679,188 @@ function Veredicte({ t, v, onTanca }) {
           <span>{a.text}</span>
         </div>
       ))}
+    </div>
+  )
+}
+
+/**
+ * La frase que guia el gest d'ancorar. Una funció i no un niu de ternaris dins del JSX
+ * perquè ara té dues famílies de casos i llegir-les barrejades no ho posava fàcil.
+ *
+ * Les mesures de DUES àncores conserven els textos de sempre, literals: són gest conformat
+ * i no hi havia cap motiu per reescriure'ls. Les de TRES o més entren per la branca nova,
+ * que diu sempre quina àncora toca i en quin pas va — un gest de tres clics sense guia és
+ * un gest que s'endevina (la mateixa llei que ja regeix el de la pinça).
+ */
+function textAncoratge(t, { ombra, pomActiu, fets, ancores }) {
+  const reobrint = ombra?.mena === 'pom'
+  const nom = ancores[Math.min(fets, ancores.length - 1)]
+
+  if (ancores.length <= 2) {
+    if (reobrint) return t('pattern.taller.pom_reopen_hint', { codi: ombra.codi })
+    if (pomActiu) {
+      return t(fets === 0 ? 'pattern.taller.place_a' : 'pattern.taller.place_b', {
+        codi: pomActiu.codi_client,
+        nom: pomActiu.nom_client || pomActiu.nom_canonic,
+      })
+    }
+    return t(fets === 0 ? 'pattern.pom_hint_first' : 'pattern.pom_hint_second')
+  }
+
+  const dades = {
+    ancora: t(`pattern.taller.ancora.${nom}`),
+    pas: fets + 1,
+    total: ancores.length,
+  }
+  if (reobrint) {
+    return t('pattern.taller.ancora_reopen', { ...dades, codi: ombra.codi })
+  }
+  if (pomActiu) {
+    return t('pattern.taller.ancora_pas', {
+      ...dades,
+      codi: pomActiu.codi_client,
+      nom: pomActiu.nom_client || pomActiu.nom_canonic,
+    })
+  }
+  return t('pattern.taller.ancora_pas_sense_pom', dades)
+}
+
+//: Pictograma per mètode. NOMÉS decoració: un codi que no hi sigui cau al genèric i el
+//: mètode segueix funcionant igual. El que no pot viure al client és QUINS mètodes hi ha
+//: (això ve del servidor); com es dibuixen, sí.
+const ICONA_METODE = {
+  // ⚠️ `ti-line` NO: a dos pams d'aquí, a la barra d'eines, ja vol dir «mode Tram»
+  // (BarraEines). Dos significats per al mateix glif a la mateixa pantalla és pitjor que un
+  // glif menys evocador.
+  recta: 'ti-arrows-horizontal',
+  vora: 'ti-vector-spline',
+  ortogonal: 'ti-corner-down-right',
+  // `ti-ruler-measure` NO: ja és el botó del mode POM a la barra d'eines. `ti-dimensions`
+  // és el glif de cota de tota la vida i no el fa servir ningú més al repo.
+  projeccio: 'ti-dimensions',
+}
+
+/**
+ * Tria del mètode de mesura, i —quan el mètode vol més de dues àncores— el comptador de
+ * passos amb l'àncora que toca ara marcada.
+ *
+ * Canviar de mètode REINICIA els punts clicats (ho fa qui el crida). No és una pèrdua de
+ * feina: dos punts posats per a una recta no són les dues primeres àncores d'una caiguda,
+ * i deixar-los-hi hauria fet que el tercer clic ancorés una cosa que ningú no ha marcat.
+ */
+/** La clau i18n d'un valor d'opció. El buit té nom («auto») perquè una clau no pot acabar
+ *  en punt: el vocabulari serveix `''` per a l'automàtic i aquí es bateja per poder-lo dir. */
+const clauValor = (valor) => valor || 'auto'
+
+function SelectorMetode({
+  t, metodes, triat, onTria, pas, ancores, opcions = {}, valorOpcio, onOpcio,
+}) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap',
+      flexShrink: 0, fontSize: 'var(--fs-caption)', color: 'var(--text-soft)',
+    }}>
+      <span>{t('pattern.taller.metode_label')}</span>
+      {/* `aria-pressed`, i NO `role="radio"`: el control visualment idèntic de la barra
+          d'eines ja parla així, i dues gramàtiques d'ARIA per a la mateixa pell a la mateixa
+          pantalla és pitjor que una de menys específica. Un `role="radiogroup"` de debò
+          voldria roving tabindex i navegació per fletxes, que aquí no hi ha. */}
+      <div style={{ display: 'flex', gap: '0.3rem' }}>
+        {metodes.map(m => {
+          const actiu = m.codi === triat
+          return (
+            <button
+              key={m.codi} aria-pressed={actiu}
+              onClick={() => onTria(m.codi)}
+              title={t(`pattern.taller.metode_ajuda.${m.codi}`)}
+              style={{
+                display: 'flex', alignItems: 'center', cursor: 'pointer',
+                color: 'var(--text-main)',
+                background: actiu ? 'var(--gold)' : 'var(--panel)',
+                border: `1px solid ${actiu ? 'var(--gold)' : 'var(--line)'}`,
+                ...METRICA_EINA_COMPACTA,
+              }}
+            >
+              <i className={`ti ${ICONA_METODE[m.codi] || 'ti-ruler-2'}`} />
+              {t(`pattern.taller.metode.${m.codi}`)}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* LES OPCIONS del mètode viu (avui, l'eix d'una cota de projecció). El bucle no sap
+          quantes n'hi ha ni com es diuen: les serveix el vocabulari, i el dia que un mètode
+          en porti una segona, surt sola. */}
+      {Object.entries(opcions).map(([nom, valors]) => (
+        <div key={nom} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+          <span>{t(`pattern.taller.opcio.${nom}`)}</span>
+          {valors.map(v => {
+            const actiu = valorOpcio(nom) === v
+            return (
+              <button
+                key={clauValor(v)} aria-pressed={actiu}
+                onClick={() => onOpcio(nom, v)}
+                title={t(`pattern.taller.opcio_ajuda.${nom}.${clauValor(v)}`)}
+                style={{
+                  display: 'flex', alignItems: 'center', cursor: 'pointer',
+                  color: 'var(--text-main)',
+                  background: actiu ? 'var(--gold)' : 'var(--panel)',
+                  border: `1px solid ${actiu ? 'var(--gold)' : 'var(--line)'}`,
+                  ...METRICA_EINA_COMPACTA,
+                }}
+              >
+                {t(`pattern.taller.opcio_valor.${nom}.${clauValor(v)}`)}
+              </button>
+            )
+          })}
+        </div>
+      ))}
+
+      {/* El comptador només per als gestos llargs: amb dos clics, la frase de l'avís ja ho diu
+          tot i una fila de xips seria soroll. */}
+      {ancores.length > 2 && (
+        // `role="list"`/`"listitem"`: un <span> pelat té rol implícit `generic`, i l'ARIA
+        // prohibeix el nom d'autor en aquest rol —o sigui que l'`aria-label` del xip no
+        // arribava a cap lector de pantalla i es llegia només el text de dins. `listitem`
+        // sí que l'admet. (`aria-current` és global i ja funcionava.)
+        <div role="list" style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+          {ancores.map((nom, i) => {
+            const fet = i < pas
+            const ara = i === pas
+            const estat = ara ? 'ara' : fet ? 'fet' : 'pendent'
+            return (
+              <span
+                key={nom} role="listitem"
+                aria-current={ara ? 'step' : undefined}
+                aria-label={t(`pattern.taller.ancora_estat.${estat}`, {
+                  ancora: t(`pattern.taller.ancora.${nom}`),
+                })}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '0.2rem',
+                  // Píndola i no radi 4: és un xip d'estat (NORMA §3). I «on soc» s'escriu
+                  // amb `--sel` + filet d'or, mai amb el daurat ple —el daurat de fons és de
+                  // CONTROL, i com a tinta de text no arriba a AA (3,16:1 sobre --sel).
+                  borderRadius: 'var(--r-pill)', padding: '0.1rem 0.5rem',
+                  border: `1px solid ${ara ? 'var(--gold-border)' : 'var(--line)'}`,
+                  background: ara ? 'var(--sel)' : 'transparent',
+                  // Sense `opacity`: apagar text de 10 px el deixava a 2,43:1. El que
+                  // distingeix «fet» de «pendent» és l'icona, que no es compra amb contrast.
+                  color: ara ? 'var(--text-main)' : 'var(--text-soft)',
+                  // El pes és el SEGON canal de «on soc». Els dos cromàtics que la norma
+                  // prescriu es queden, mesurats, per sota del llindar de visibilitat
+                  // (fons --sel vs --panel = 1,09:1 · filet --gold-border vs --line =
+                  // 1,29:1), i `ti-point` és el mateix glif que el del pas pendent. El pes
+                  // és la mateixa tècnica que la norma ja fa servir per compensar.
+                  fontWeight: ara ? 600 : 400,
+                }}
+              >
+                <i className={`ti ${fet ? 'ti-check' : 'ti-point'}`} aria-hidden="true" />
+                {t(`pattern.taller.ancora.${nom}`)}
+              </span>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

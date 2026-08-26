@@ -3,7 +3,8 @@ from rest_framework import serializers
 from fhort.accounts.capabilities import PodaEconomicaMixin
 
 from .models import (TaskType, ModelTask, Supplier, Production,
-                     GarmentTypeItem, GarmentTypeItemPart, TaskTimeEstimate, Customer)
+                     GarmentTypeItem, GarmentTypeItemPart, TaskTimeEstimate, Customer,
+                     Ronda, Entrega)
 from .services_c import rectification_count
 
 
@@ -31,7 +32,10 @@ class ModelTaskSerializer(serializers.ModelSerializer):
     Els sis camps derivats responen sis preguntes concretes, totes read-only:
 
       · `es_vigent`      — és AQUESTA la tasca que `tasca_vigent` resol per al seu code?
-      · `ronda_seq`      — de quina volta és (null = la 1a, implícita)
+      · `ronda_seq`      — de quina volta és. **null ja no vol dir «la 1a»** (M1-bis · FIT-4):
+                           la R1 és una fila com les altres i neix del primer gest. `null` =
+                           feina d'abans del canvi de llei, o feina nascuda amb totes les
+                           voltes del model tancades (espera un +Ronda explícit).
       · `albaranada`     — té línia en albarà EMÈS? (la paret de D-5; cara C del modal)
       · `obert_per`/`_nom` — QUI la té oberta ara, segons el TRAM (no segons `assignee`)
       · `es_lliurable`   — el seu tipus produeix lliurable (F2.7)
@@ -324,3 +328,54 @@ class TaskTimeEstimateSerializer(serializers.ModelSerializer):
     class Meta:
         model = TaskTimeEstimate
         fields = ['id', 'garment_type_item', 'task_type', 'estimated_minutes']
+
+
+# ── M1 · FIT-1 · L'ENTREGA I LA RONDA, LLEGIBLES ────────────────────────────────────────────
+
+class EntregaSerializer(serializers.ModelSerializer):
+    """L'acte d'entrega d'una ronda (M1 · FIT-1).
+
+    L'escriptura entra per les portes de `services_r` (`informar_entrega`,
+    `informar_ok_client`), no per aquí: aquest serializer valida la FORMA i llegeix. Per això
+    tot el que declara un FET —qui ho informa, l'ok del client, quan es va escriure la fila— és
+    read-only: qui ho fixa és el servei, amb l'usuari de la petició, i mai el client HTTP.
+    """
+    qui_informa_nom = serializers.CharField(source='qui_informa.nom_complet', read_only=True,
+                                            default=None)
+    qui_informa_ok_nom = serializers.CharField(source='qui_informa_ok.nom_complet',
+                                               read_only=True, default=None)
+    ronda_seq = serializers.IntegerField(source='ronda.seq', read_only=True)
+
+    class Meta:
+        model = Entrega
+        fields = ['id', 'ronda', 'ronda_seq', 'data', 'destinatari', 'descripcio',
+                  'qui_informa', 'qui_informa_nom',
+                  'data_ok', 'qui_informa_ok', 'qui_informa_ok_nom', 'created_at']
+        read_only_fields = ['ronda', 'qui_informa', 'data_ok', 'qui_informa_ok', 'created_at']
+
+
+class RondaSerializer(serializers.ModelSerializer):
+    """La volta, amb el seu acte d'entrega niuat.
+
+    `entregada` i `lliurable` responen dues preguntes DIFERENTS i el consumidor no les pot
+    confondre: `lliurable` és el senyal PREVI que es dedueix (`ronda_lliurable`: ja hi és tot),
+    i `entregada` és el FET declarat (hi ha `Entrega`). Una ronda pot ser lliurable i no
+    entregada durant setmanes, i pot ser entregada sense haver estat mai lliurable —s'entrega
+    el que hi ha.
+    """
+    entrega = EntregaSerializer(read_only=True)
+    entregada = serializers.SerializerMethodField()
+    lliurable = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Ronda
+        fields = ['id', 'model', 'seq', 'motiu', 'oberta_el', 'tancada_el',
+                  'entrega', 'entregada', 'lliurable']
+        read_only_fields = fields
+
+    def get_entregada(self, obj):
+        return hasattr(obj, 'entrega')
+
+    def get_lliurable(self, obj):
+        from .services_r import ronda_lliurable
+        return ronda_lliurable(obj)

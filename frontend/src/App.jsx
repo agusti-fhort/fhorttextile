@@ -10,6 +10,7 @@ import AvisSessio from './components/AvisSessio'
 import { modelFitxers } from './api/endpoints'
 import { botoSec } from './components/ui/buttons'
 import { overlayBase } from './components/ui/overlay'
+import { PATTERNS_ENABLED } from './utils/flags'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Models = lazy(() => import('./pages/Models'))
@@ -56,6 +57,7 @@ const ModelFabric = lazy(() => import('./pages/ModelFabric'))
 const ModelSheet = lazy(() => import('./pages/ModelSheet'))
 const TechSheetEditor = lazy(() => import('./pages/TechSheetEditor'))
 const TallerPatro = lazy(() => import('./pages/TallerPatro'))
+
 const TechSheetEntry = lazy(() => import('./pages/TechSheetEntry'))
 const DissenyPlaceholder = lazy(() => import('./pages/DissenyPlaceholder'))
 // U2 — `ItemAuthoring` retirat de rutes (la pantalla de l'item el substitueix). El FITXER es
@@ -430,9 +432,14 @@ export default function App() {
             (hi ha de ser, perquè la seva barra —fletxa i Exportar PDF— es teletransporta al
             forat que obre el Shell). Els dos camins són legítims i el guard accepta tots dos;
             el que no s'accepta és el tercer, que és el que va passar: dins i sense declarar. */}
+        {/* FASE A — amb `FTT_PATTERNS_ENABLED` apagat, el taller no es munta. Rebota a
+            l'arrel i no a /login pel mateix motiu que `RutaAmbCapacitat` (v. a dalt): qui hi
+            arriba TÉ sessió. La diferència amb aquell guard és que allà el tall de veritat és
+            un 403 i aquí és un 404 —el prefix `api/v1/patterns/` ni existeix (`fhort/urls.py`)—,
+            de manera que sense aquesta línia la pantalla es muntaria per omplir-se d'errors. */}
         <Route path="/models/:id/patro/taller" element={
           <ProtectedRoute>
-            <TallerPatro />
+            {PATTERNS_ENABLED ? <TallerPatro /> : <Navigate to="/" replace />}
           </ProtectedRoute>
         } />
         <Route path="/" element={

@@ -266,6 +266,11 @@ def _preview_payload(resultat) -> dict:
         ],
         'problemes_poms': list(resultat.problemes_poms),
         'problemes_costures': list(resultat.problemes_costures),
+        # El que ha sortit malament ESCALANT, no ancorant: ordres del cosit que no s'han
+        # pogut traslladar al tall, i re-mesures que no aterren al delta. Va a la mateixa
+        # llista del modal que les altres dues: qui exporta no ha de saber de quina capa
+        # del motor ve cada cosa, ha de saber què no farà el fitxer.
+        'problemes_escalat': list(resultat.problemes_escalat),
         'regles': proj.regles_actives,
         'autovalidacio': {
             'ok': resultat.autovalidacio.ok,

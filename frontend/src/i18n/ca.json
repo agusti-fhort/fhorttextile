@@ -73,8 +73,13 @@
     "show": "Mostrar",
     "remove_line": "Treure línia",
     "tray_title": "Safata d'albaranables",
-    "tray_hint": "Tasques acabades, extres, despeses i deduccions pendents d'albarar, agrupats per model.",
+    "tray_hint": "Tasques acabades, extres, despeses i deduccions pendents d'albarar, agrupats per model i per volta.",
     "tray_empty": "Cap ítem pendent d'albarar per a aquest client.",
+    "ronda_label": "R{{n}}",
+    "ronda_fora": "fora de comanda",
+    "ronda_oberta": "oberta",
+    "ronda_perque": "n>{{numeral}} de la comanda {{comanda}}: aquesta volta es factura a part.",
+    "ronda_perque_sense_comanda": "supera el numeral de {{numeral}} voltes: aquesta volta es factura a part.",
     "tray_add": "Afegir ({{n}})",
     "back_title": "Tornar al tauler",
     "entity": "albarans",
@@ -864,7 +869,6 @@
         "handoff_cancel": "Cancel·lar",
         "claim_denied": "No pots agafar una tasca d'aquest tipus (no és a la teva llista d'execució)",
         "claim_error": "No s'ha pogut reassignar la tasca",
-        "progress_label": "{{done}}/{{total}} tasques fetes",
         "time_total": "Temps acumulat sobre el model"
       },
       "timeline": {
@@ -997,7 +1001,37 @@
     "pas_sense_mesures": "Cal gravar el POM per generar la taula de talles",
     "pas_sense_regles": "Cal definir la graduació per generar la taula de talles",
     "pas_sense_propagacio": "Cal propagar per generar la taula de talles",
-    "measure_set": "Mesurar set"
+    "measure_set": "Mesurar set",
+    "cicle": {
+      "tancar": "Tancar model",
+      "tancar_confirm": "Tancar",
+      "tancar_ajuda": "Tancar el model el treu del tauler actiu. Segueix consultable i es pot reobrir.",
+      "motiu": "Motiu",
+      "motiu_acabat": "Acabat (decisió interna)",
+      "motiu_tret_de_cataleg": "Tret de catàleg (el client no el produirà)",
+      "motiu_tret": "Tret de catàleg (el client no el produirà)",
+      "ronda_oberta_avis": "La ronda R{{n}} està oberta. Confirmar l'entrega i tancar-ho tot: s'informarà l'entrega d'aquesta volta i es tancarà la feina que hi queda viva.",
+      "confirmar_i_tancar": "Confirmar l'entrega i tancar",
+      "destinatari": "Destinatari",
+      "descripcio": "Què s'ha entregat",
+      "jubilar": "Jubilar model",
+      "jubilar_ajuda": "Jubilar l'arxiva: queda fora de les vistes normals i només es veu amb el filtre «jubilats».",
+      "reobrir": "Reobrir model",
+      "reobrir_ajuda": "El model torna al tauler. A dins es decideix si es rectifica la darrera volta o se n'obre una de nova.",
+      "motiu_lliure": "Motiu (opcional)",
+      "confirmar": "Confirmar",
+      "tancat_ok": "Model {{codi}} tancat.",
+      "jubilat_ok": "Model {{codi}} jubilat.",
+      "reobert_ok": "Model {{codi}} reobert.",
+      "estat_titol": "Estat del model",
+      "estat": {
+        "acabat": "Acabat",
+        "jubilat": "Jubilat"
+      },
+      "banner_ajuda": "aquest model es consulta; per tornar-hi a treballar, reobre’l.",
+      "ronda_oberta_avis_tret": "La ronda R{{n}} està oberta. En tancar el model es tancarà aquesta volta i la feina que hi queda viva, SENSE declarar cap entrega: el client ha dit que la peça no es produirà i no s'ha enviat res.",
+      "tancar_volta_i_model": "Tancar la volta i el model"
+    }
   },
   "model_wizard": {
     "customer": "Client",
@@ -1185,8 +1219,8 @@
     "col_entrada_model": "Entrada",
     "col_deadline": "Deadline",
     "col_estat": "Estat",
-    "estat_pendent": "Estat comercial: pendent del Kanban.",
-    "select_page": "Selecciona tota la pàgina"
+    "select_page": "Selecciona tota la pàgina",
+    "view_retired": "Models jubilats"
   },
   "models_filters": {
     "button": "Filtres",
@@ -1669,6 +1703,11 @@
     "col_import_imputat": "Imputat",
     "col_price": "Preu unit.",
     "col_import": "Import",
+    "col_rounds": "Voltes incl.",
+    "rounds_unlimited": "Sense límit",
+    "rounds_help": "Quantes voltes (rondes) cobreix el preu d'aquesta línia. Buit = sense límit; 0 = cap volta inclosa.",
+    "rounds_saved": "Numeral de voltes actualitzat.",
+    "rounds_invalid": "El numeral de voltes ha de ser un enter igual o superior a 0.",
     "col_total": "Total",
     "col_created": "Creada",
     "status_OPEN": "Oberta",
@@ -1712,7 +1751,7 @@
     "pdf_error": "No s'ha pogut generar el PDF.",
     "status": "Estat",
     "status_saved": "Estat actualitzat.",
-    "readonly_note": "Comanda congelada: les línies i els preus no es poden editar (neixen de la conversió de l'oferta).",
+    "readonly_note": "Comanda congelada: les línies i els preus no es poden editar (neixen de la conversió de l'oferta). L'excepció és el numeral de voltes incloses, que és una condició del pacte i sí que es corregeix aquí.",
     "details": "Detalls",
     "source_quote": "Oferta origen",
     "issued_at": "Data d'emissió",
@@ -2219,10 +2258,9 @@
       "SP": "SP · Especial"
     },
     "estats": {
-      "Nou": "Nou",
-      "EnCurs": "En curs",
-      "EnRevisio": "En revisió",
-      "Tancat": "Tancat"
+      "nou": "Nou",
+      "acabat": "Acabat",
+      "jubilat": "Jubilat"
     }
   },
   "model": {
@@ -2265,10 +2303,9 @@
       "codi_tenant_help": "3 caràcters · si està buit es deriva del codi client"
     },
     "estats": {
-      "Nou": "Nou",
-      "EnCurs": "En curs",
-      "EnRevisio": "En revisió",
-      "Tancat": "Tancat"
+      "nou": "Nou",
+      "acabat": "Acabat",
+      "jubilat": "Jubilat"
     },
     "prioritats": {
       "1": "Baixa",
@@ -3487,7 +3524,12 @@
         "pending": "Pendents",
         "open": "En curs",
         "paused": "Pausats",
-        "done": "Fets"
+        "done": "Entregats"
+      },
+      "ronda": {
+        "oberta": "volta oberta",
+        "entregada": "entregada",
+        "tancada": "tancada"
       }
     },
     "milestones": {
@@ -4433,7 +4475,68 @@
       "value_pattern_t": "patró",
       "value_sheet": "fitxa {{cm}}",
       "value_sheet_none": "fitxa —",
-      "value_sheet_t": "fitxa"
+      "value_sheet_t": "fitxa",
+      "metode_label": "Mètode de mesura",
+      "metode": {
+        "recta": "Recta",
+        "vora": "Per vora",
+        "ortogonal": "Caiguda",
+        "projeccio": "Cota"
+      },
+      "metode_ajuda": {
+        "recta": "Distància recta entre dos punts, com una cinta estirada.",
+        "vora": "Longitud resseguint la vora entre dos punts, com una cinta que segueix la corba.",
+        "ortogonal": "Distància perpendicular d'un punt a la línia que marquen dues àncores (per exemple, la caiguda des del nivell HPS).",
+        "projeccio": "Distància entre dos punts projectada sobre l'eix horitzontal o el vertical del pla, com una cota de CAD."
+      },
+      "ancora": {
+        "a": "el punt A",
+        "b": "el punt B",
+        "ref_a": "la primera àncora de la línia de referència",
+        "ref_b": "la segona àncora de la línia de referència",
+        "p": "el punt que hi cau"
+      },
+      "ancora_pas": "Col·locant {{codi}} ({{nom}}) — clica {{ancora}} ({{pas}} de {{total}})",
+      "ancora_pas_sense_pom": "Clica {{ancora}} ({{pas}} de {{total}})",
+      "ancora_reopen": "Reobrint {{codi}} — torna a marcar {{ancora}} ({{pas}} de {{total}}). Esc per sortir sense tocar res",
+      "ancora_estat": {
+        "fet": "{{ancora}}: fet",
+        "ara": "{{ancora}}: toca ara",
+        "pendent": "{{ancora}}: pendent"
+      },
+      "pt_ref_a": "Ref A",
+      "pt_ref_b": "Ref B",
+      "pt_p": "Cau",
+      "err_metode_desconegut": "Aquest POM fa servir un mètode de mesura que la pantalla no coneix ({{metode}}). Recarrega el taller abans de reobrir-lo.",
+      "err_sense_vocabulari": "No s'han pogut llegir els mètodes de mesura. Recarrega el taller abans de reobrir un POM.",
+      "opcio": {
+        "eix": "Eix"
+      },
+      "opcio_valor": {
+        "eix": {
+          "auto": "Auto",
+          "H": "Horitzontal",
+          "V": "Vertical"
+        }
+      },
+      "opcio_ajuda": {
+        "eix": {
+          "auto": "L'eix on els dos punts tenen més recorregut.",
+          "H": "Horitzontal DEL PLA. Compte: si la peça seu girada al patró, no és l'amplada de la prenda.",
+          "V": "Vertical DEL PLA. Compte: si la peça seu girada al patró, no és el llarg de la prenda."
+        }
+      },
+      "err_cota_moure": "No s'ha pogut desar la posició de la cota. Torna-ho a provar.",
+      "cota_delete_title": "Esborrar aquesta cota?",
+      "cota_delete_body": "S'esborra l'ancoratge del POM sobre el patró. La mesura de la fitxa no es toca, i el POM es pot tornar a col·locar.",
+      "cota_delete_ok": "Esborrar la cota",
+      "act_menu": "Accions",
+      "act_place": "Col·locar al patró",
+      "act_reanchor": "Re-ancorar",
+      "act_delete": "Esborrar la cota",
+      "act_point": "Assenyalar al patró",
+      "act_unpoint": "Deixar d'assenyalar",
+      "pom_outside_group": "Ancorats que no són a la fitxa ({{n}})"
     },
     "loading": "Carregant el patró…",
     "empty_title": "Encara no hi ha cap patró",
@@ -4507,8 +4610,6 @@
     "pom_search": "Cerca un POM pel codi o pel nom…",
     "pom_none": "Cap POM trobat.",
     "pom_unmeasured": "sense mesura",
-    "poms_anchored": "POMs ancorats ({{n}})",
-    "poms_empty": "Cap POM ancorat encara. Entra en mode «Marcar POM» per començar.",
     "sews": "Costures ({{n}})",
     "sews_empty": "Cap costura declarada.",
     "sew_type": {
@@ -5105,5 +5206,62 @@
     "step_base_copiada_avis": "{{count}} mesura/es amb regla STEP sense valor: s’hi ha posat el valor de la talla base i s’ha de corregir a mà a l’Escalat → {{detall}}",
     "step_posar_valor": "Posar el valor d’aquesta talla a la regla",
     "step_valor_err": "No s’ha pogut desar el valor."
+  },
+  "rondes": {
+    "nom": "RONDA {{n}}",
+    "sense_volta": "SENSE VOLTA",
+    "estat_entregada": "Entregada",
+    "estat_tancada": "Tancada",
+    "estat_oberta": "En curs",
+    "inici": "inici",
+    "fi": "fi",
+    "temps": "temps",
+    "n_tasques_one": "{{count}} tasca",
+    "n_tasques_other": "{{count}} tasques",
+    "rectificacions_one": "/ rectificació {{count}}",
+    "rectificacions_other": "/ rectificacions {{count}}",
+    "rectificacions_titol": "Vegades que s'ha reobert feina d'aquesta volta DESPRÉS d'entregar-la",
+    "plega": "Plegar la volta",
+    "desplega": "Desplegar la volta",
+    "volta_buida": "Aquesta volta encara no té cap tasca",
+    "peu_segellades": "Les tasques d'una ronda entregada queden segellades — rectificar obre ronda nova.",
+    "marcar_entregable": "Marcar entregable",
+    "nova": "+ Nova ronda",
+    "nova_ok": "Ronda {{n}} oberta",
+    "nova_replicats_one": "{{count}} tasca replicada",
+    "nova_replicats_other": "{{count}} tasques replicades",
+    "nova_adoptats_one": "{{count}} tasca recollida",
+    "nova_adoptats_other": "{{count}} tasques recollides",
+    "nova_omesos": "omeses (fora de catàleg): {{codes}}",
+    "nova_error": "No s'ha pogut obrir la ronda",
+    "entrega_titol": "Informar l'entrega de la ronda {{n}}",
+    "entrega_destinatari": "A qui s'ha entregat",
+    "entrega_destinatari_ph": "Nom del client o del contacte",
+    "entrega_descripcio": "Què s'ha entregat",
+    "entrega_descripcio_ph": "Fitxa tècnica v1, patró + escalat…",
+    "entrega_avis": "En confirmar, la ronda {{n}} quedarà TANCADA.",
+    "entrega_avis_viues_one": "També es tancarà {{count}} tasca que encara és viva.",
+    "entrega_avis_viues_other": "També es tancaran {{count}} tasques que encara són vives.",
+    "entrega_confirma": "Informar l'entrega i tancar la ronda",
+    "entrega_error": "No s'ha pogut informar l'entrega",
+    "entrega_ok": "Entrega informada · ronda {{n}} tancada",
+    "entrega_linia": "Entrega {{data}} a {{destinatari}}",
+    "entrega_per": "per {{qui}}",
+    "ok_client_pendent": "OK client pendent",
+    "ok_client_fet": "OK client {{data}}",
+    "ok_client_titol": "Informar l'OK del client",
+    "ok_client_cos": "El client ({{destinatari}}) ha confirmat que ho ha rebut bé. S'informa un sol cop.",
+    "ok_client_data": "Data de l'OK",
+    "ok_client_data_nota": "Si no la dius, hi va la d'ara.",
+    "ok_client_confirma": "Informar l'OK",
+    "ok_client_error": "No s'ha pogut informar l'OK del client",
+    "ok_client_ok": "OK del client informat",
+    "reg_titol": "Activitat per rondes",
+    "reg_kpi_rondes": "Rondes",
+    "reg_kpi_entregues": "Entregues",
+    "reg_col_qui": "Qui",
+    "reg_entrega_a": "Entrega a {{destinatari}}",
+    "reg_buit": "Aquest model encara no té activitat registrada",
+    "lliurable": "Lliurable"
   }
 }

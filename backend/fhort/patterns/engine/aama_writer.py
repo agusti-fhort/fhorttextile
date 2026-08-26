@@ -234,19 +234,34 @@ class AAMAWriter:
         for raw in piece.raw_entities:
             self._write_raw(block, raw, factor)
 
+    #: Les capes EXTRA on el CAD repeteix el número de regla d'un punt de gir, segons a
+    #: quina línia pertany el punt. Mesurat sobre `837 CORS 194 VESTIT M3-4 AGUS.DXF`, que
+    #: és el fitxer que el PolyPattern de la Montse exporta d'aquest mateix patró:
+    #:
+    #:   · un gir de la línia de COSIT porta el seu número TRES vegades — capes 2, 8 i 14,
+    #:     en aquest ordre i a la mateixa coordenada (79 punts de 79, a les cinc peces);
+    #:   · un gir d'una línia INTERNA el porta dues — capes 2 i 8.
+    #:
+    #: Emetre'n només el de la capa 2 era el que deixava el cosit sense grading dins el
+    #: fitxer: el moviment hi era (el motor el calcula des del fix del cosit) però no
+    #: viatjava, perquè el CAD busca la regla del cosit a les seves capes i no a la 2.
+    CAPES_EXTRA_DE_REGLA: dict = {
+        LayerRole.SEW: (LayerRole.INTERNAL, LayerRole.SEW),
+        LayerRole.INTERNAL: (LayerRole.INTERNAL,),
+    }
+
     def _write_rule_texts(self, block, piece: PieceData, factor: float, height: float) -> None:
         for boundary in piece.boundaries:
-            interna = boundary.role is LayerRole.INTERNAL
+            extres = self.CAPES_EXTRA_DE_REGLA.get(boundary.role, ())
             for p in boundary.points:
                 if p.grade_rule is None:
                     continue
                 etiqueta = f'# {p.grade_rule}'
                 self._add_text(block, etiqueta, (p.x, p.y), factor, height,
                                ROLE_TO_LAYER[LayerRole.TURN])
-                if interna:
-                    # El CAD duplica l'etiqueta a la capa de la línia interna.
+                for rol in extres:
                     self._add_text(block, etiqueta, (p.x, p.y), factor, height,
-                                   ROLE_TO_LAYER[LayerRole.INTERNAL])
+                                   ROLE_TO_LAYER[rol])
 
         for n in piece.notches:
             if n.grade_rule is not None:

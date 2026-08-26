@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 
 
 class TimerEntrada(models.Model):
@@ -143,9 +144,26 @@ class Ronda(models.Model):
       · `correccio`   = ho refem nosaltres (feina de reparació)
     La decisió comercial NO viu aquí: aquest camp és el fet, no la tarifa.
 
-    `seq` és el número de volta **dins del model** (la ronda 1 és implícita: tota la feina
-    històrica té `ModelTask.ronda = NULL`). No hi ha cap backfill i no n'hi ha d'haver: inventar
-    una fila Ronda per a 101 tasques que mai no van ser una «volta» seria escriure història.
+    `seq` és el número de volta **dins del model**, i **comença a 1**.
+
+    🔄 **LA LLEI HA CANVIAT (M1-bis · FIT-4, Agus 24/08).** Fins avui la R1 era **implícita**:
+    no existia com a fila i es reconeixia perquè les seves tasques tenien `ronda = NULL`. Ara
+    **la R1 neix sola del PRIMER GEST DE TREBALL** —programar, assignar, o entrar-hi i
+    executar—, amb `seq=1` i sense que ningú l'hagi de declarar. Qui la crea és
+    `services_r.ronda_del_gest`, i és l'ÚNICA volta que es crea sola: la 2 i següents segueixen
+    volent el gest explícit de `obrir_ronda`.
+
+    ✅ **I EL PASSAT JA ESTÀ RESOLT (M5 · retroactiu, 25/08).** M1-bis va declarar una
+    PROHIBICIÓ DE BACKFILL —«el dia que es faci, es farà com a acte declarat»— i **aquell dia ja
+    ha passat**: `ops/retroactius/retroactiu_r1_m5.py` va donar la seva R1 a tot model amb feina,
+    validat en sec i aplicat amb guarda de recompte. Les R1 retroactives van néixer **OBERTES i
+    sense cap `Entrega`** (FIT-1: una entrega és un fet informat, no se'n fabrica cap), i van
+    adoptar **totes** les tasques `ronda = NULL` del seu model.
+
+    ⛔ **La prohibició segueix vigent per a tot el que no sigui aquell acte.** L'obertura
+    automàtica **només mira endavant** i no adopta res: en un model amb feina prèvia, el primer
+    gest nou crea la R1 amb només la tasca d'aquell gest. El retroactiu era d'una sola vegada, i
+    ja s'ha gastat — **no hi ha cap població pre-llei viva** i tornar-hi seria escriure història.
 
     Oberta = `tancada_el IS NULL`. N'hi pot haver **una de sola** oberta per model, i qui ho
     imposa és `obrir_ronda` (`services_r`), no la BD: tancar-la és un acte humà i una constraint
@@ -164,6 +182,39 @@ class Ronda(models.Model):
     tancada_el = models.DateTimeField(null=True, blank=True,
                                       help_text='null = oberta. És la definició de «vigent».')
 
+    # ── M4 · FIT-12 (Agus, 24/08) — DINS O FORA DEL NUMERAL DE LA COMANDA. ─────────────────────
+    #
+    # Quan les voltes reals superen el que la comanda admet (`SalesOrderLine.rounds_included`),
+    # la volta R(n) **amb les seves tasques** passa a encàrrecs per ser albaranada i facturada A
+    # PART. La volta SEGUEIX SENT la R(n) del model: la numeració no es toca, la genealogia no es
+    # toca, i **la cara del tècnic queda EXACTAMENT IGUAL** — el desbordament és un fet comercial,
+    # i qui l'autoritza o l'atura és el responsable, de paraula. Aquí només se n'escriu el FET.
+    #
+    # 🔒 **ES RESOL UNA VEGADA, EN OBRIR, I NO ES RECALCULA.** El numeral de la comanda és
+    # editable (FIT-5), i si el veredicte es tornés a calcular a cada lectura, pujar el numeral
+    # de 2 a 3 REESCRIURIA la història: la R3 que es va treballar sabent que anava a part
+    # apareixeria de sobte com a inclosa, i una safata que ja l'hagués mostrat canviaria sola.
+    # Per això els tres camps són una FOTO del moment de l'obertura, i per això `numeral_vigent`
+    # es desa al costat del booleà: el «perquè» («n>2 de la comanda C-…») ha de seguir sent
+    # llegible encara que el numeral hagi canviat després.
+    #
+    # 🚩 CONSEQÜÈNCIA DECLARADA: pujar el numeral NO torna les voltes ja obertes a dins. Si el
+    # comercial vol repescar-ne una, avui és un acte a mà sobre la fila. És la mateixa disciplina
+    # de no-backfill que M1-bis i M3 ja apliquen; si Agus el vol automàtic, és una decisió seva.
+    fora_de_comanda = models.BooleanField(
+        default=False,
+        help_text='FIT-12: aquesta volta supera el numeral de la comanda i es factura a part. '
+                  'Es resol en obrir i no es recalcula.')
+    linia_comanda = models.ForeignKey(
+        'commerce.SalesOrderLine', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='rondes',
+        help_text="Línia de comanda que governava el numeral en obrir la volta. SET_NULL: "
+                  "esborrar la línia no ha d'esborrar la història de la volta. "
+                  'null = el model no tenia comanda (llavors no hi ha límit i no es desborda mai).')
+    numeral_vigent = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text='El numeral que hi havia en obrir la volta (foto). null = sense límit.')
+
     class Meta:
         ordering = ['model', 'seq']
         verbose_name = 'Ronda'
@@ -174,6 +225,67 @@ class Ronda(models.Model):
 
     def __str__(self):
         return f'{self.model_id} · ronda {self.seq} ({self.motiu})'
+
+
+class Entrega(models.Model):
+    """M1 · FIT-1 — L'ACTE d'entregar una ronda: qui ho diu, quan, a qui i què.
+
+    Fins avui «la volta ja s'ha lliurat» es **deduïa** (`services_r.ronda_lliurable`: totes les
+    tasques `es_lliurable` de la ronda a `Done`). Deduir-ho respon «ja hi és tot?», que no és la
+    mateixa pregunta que «s'ha enviat?»: una fitxa acabada i no enviada dona `True`, i una volta
+    enviada a mitges no en dona cap. L'entrega passa a **DECLARAR-SE** amb un acte datat, i
+    `ronda_lliurable` es queda com el que sempre va poder ser: el senyal PREVI («ja es pot
+    marcar entregable»), no la definició d'entregada.
+
+    🔑 **ÉS UN EVENT INFORMAT, NO UN ARTEFACTE CONTROLAT** (FIT-1). Per això no hi ha **cap FK a
+    `ModelFitxer`, a la fitxa ni al patró**: el que s'ha enviat es diu amb paraules
+    (`descripcio`), perquè l'enviament passa fora de l'eina —un correu, un WeTransfer, una
+    caixa— i lligar-hi un document faria que l'acte només es pogués informar quan l'eina hagués
+    generat l'artefacte. El destinatari, pel mateix motiu, és **text lliure** i no un FK a
+    `Customer`: s'entrega a persones i a adreces, no sempre al client que factura.
+
+    `data` l'aporta qui informa (per defecte ara) i `created_at` diu quan es va ESCRIURE la
+    fila: informar dilluns una entrega de divendres és el cas normal, i les dues dates no poden
+    ser el mateix camp.
+
+    `ok_client` és un senyal **MANUAL i POSTERIOR** (`data_ok` + `qui_informa_ok`, tots dos
+    nullables): el client ha dit que li ha arribat bé. No es dedueix de res i no té cap efecte
+    sobre la ronda —quan arriba, la ronda ja fa estona que és tancada.
+
+    **Una entrega per ronda** (decisió 25 del fil): `OneToOneField`, que és el que la casa ja fa
+    servir per a aquest patró (`ConsumptionRecord.model`, `ConsumptionRecord.garment_set`,
+    `WorkOrder.source_quote`, `UserProfile.user`) — a `fhort` no hi ha ni un sol
+    `UniqueConstraint` d'un camp sol sobre un FK. Reentregar és entregar una ALTRA volta.
+    """
+    ronda = models.OneToOneField('Ronda', on_delete=models.CASCADE, related_name='entrega')
+    data = models.DateTimeField(
+        default=timezone.now,
+        help_text="Quan es va entregar, segons qui ho informa. Per defecte ara.")
+    destinatari = models.CharField(
+        max_length=200,
+        help_text='A qui se li ha entregat. TEXT LLIURE: no és el client que factura.')
+    qui_informa = models.ForeignKey('accounts.UserProfile', on_delete=models.SET_NULL,
+                                    null=True, blank=True, related_name='entregues_informades',
+                                    help_text="Qui informa l'acte. SET_NULL: esborrar un usuari "
+                                              'no esborra la història.')
+    descripcio = models.TextField(
+        blank=True,
+        help_text="Què s'ha enviat, dit amb paraules. TEXT LLIURE: no hi ha cap artefacte lligat.")
+    # ── El senyal posterior del client. MANUAL: ningú no el dedueix. ────────────────────────
+    data_ok = models.DateTimeField(null=True, blank=True,
+                                   help_text='null = el client encara no ha dit res.')
+    qui_informa_ok = models.ForeignKey('accounts.UserProfile', on_delete=models.SET_NULL,
+                                       null=True, blank=True, related_name='oks_informats')
+    created_at = models.DateTimeField(auto_now_add=True,
+                                      help_text="Quan es va ESCRIURE la fila (≠ `data`).")
+
+    class Meta:
+        ordering = ['-data']
+        verbose_name = 'Entrega'
+        verbose_name_plural = 'Entregues'
+
+    def __str__(self):
+        return f'entrega ronda {self.ronda_id} → {self.destinatari}'
 
 
 class ModelTask(models.Model):
@@ -269,6 +381,24 @@ class TaskTransition(models.Model):
     auto = models.CharField(max_length=32, null=True, blank=True,
                             help_text="Marca d'automatisme. null = gest humà del tècnic; "
                                       "slug del guard que ha actuat en cas contrari.")
+    # M1 · FIT-2 — EL RASTRE, i va AQUÍ i no a `ModelTask.motiu`.
+    #
+    # `ModelTask.motiu` és genealogia MUTABLE amb `choices` (`nova_mostra`/`correccio`): diu
+    # PER QUÈ EXISTEIX la tasca, i escriure-hi «reoberta després d'entrega» hi encabiria una
+    # frase que no és cap dels dos valors i, sobretot, **esborraria** el motiu de la volta —una
+    # dada que ningú no podria recuperar. `TaskTransition` és el **log immutable** (v. docstring
+    # de la classe): una fila per gest, que no es reescriu mai, i el rastre d'una reobertura ÉS
+    # un gest. Per això el rastre és una NOTA d'aquesta fila i no un camp de la tasca.
+    #
+    # I NO va a `auto`, encara que hi cabria: aquell camp significa «això no ho ha fet una
+    # persona» (null = gest humà), i reobrir una tasca entregada és exactament un gest humà —el
+    # segell és TOU i Done→InProgress segueix sent legal. Posar-l'hi faria mentir el log a
+    # canvi d'estalviar una columna.
+    #
+    # Text lliure i nullable: mirall de `GateEvent.notes`, la nota de l'altre log d'actes
+    # d'aquesta mateixa app. null = la immensa majoria de transicions, que no tenen res a dir.
+    nota = models.TextField(null=True, blank=True,
+                            help_text='Rastre en text del context del gest. null = res a dir.')
 
     class Meta:
         ordering = ['at']

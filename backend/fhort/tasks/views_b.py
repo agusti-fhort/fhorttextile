@@ -6,7 +6,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.filters import OrderingFilter, SearchFilter
 from django_filters.rest_framework import DjangoFilterBackend
-from django.db.models import Count, Q, ProtectedError, Min
+from django.db import transaction
+from django.db.models import Count, Q, ProtectedError, Min, OuterRef, Subquery
 from django.db.models.functions import Coalesce
 
 from rest_framework.exceptions import ValidationError
@@ -16,7 +17,7 @@ from fhort.accounts.capabilities import (HasCapability, DEFINE_TASKS, EXECUTE_TA
 from fhort.models_app.models import Model
 from .models import (TaskType, ModelTask, Supplier, Production,
                      GarmentTypeItem, GarmentTypeItemPart, TaskTimeEstimate,
-                     TaskTransition, Customer, TimeSeed)
+                     TaskTransition, Customer, TimeSeed, Ronda)
 from .serializers_b import (TaskTypeSerializer, ModelTaskSerializer,
                             SupplierSerializer, ProductionSerializer,
                             GarmentTypeItemSerializer, TaskTimeEstimateSerializer,
@@ -28,7 +29,7 @@ from .services_d import (advance_phase_gate, advance_phases_chain, regress_phase
 from .services_e import (request_production, set_production_status,
                          ProductionError, has_delivered_production)
 from .services_g import lookup_estimated_minutes
-from .services_r import tasca_vigent
+from .services_r import ronda_del_gest, tasca_vigent
 
 
 class TaskTypeViewSet(viewsets.ReadOnlyModelViewSet):
@@ -150,8 +151,30 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
         # NB: `.qs` d'un ModelFilter instanciat directament és lenient (valors invàlids
         # s'ignoren, no peta) — es preserva el comportament històric de by_model.
         from fhort.models_app.views import ModelFilter
-        model_ids = ModelFilter(qp, queryset=Model.objects.all(), request=request).qs.values('id')
-        qs = qs.filter(model_id__in=model_ids)
+        models_qs = ModelFilter(qp, queryset=Model.objects.all(), request=request).qs
+        # ── M3 · FASE 4 · FIT-9 — EL BOARD ÉS EL TAULER DELS MODELS VIUS ────────────────────
+        # Un model `acabat` o `jubilat` SURT del board: és exactament el que volen dir aquells
+        # dos estats («fora del tauler actiu, consultable» i «històric»). No s'amaga cap dada —
+        # la fitxa del model segueix sencera i les llistes els ensenyen amb filtre explícit—,
+        # el que es treu és el SOROLL d'una columna de feina acabada que no torna.
+        #
+        # ⚠️ I ES POT DEMANAR EXPLÍCITAMENT: `?estat=acabat` (o `jubilat`) els torna a ensenyar.
+        # L'exclusió és el DEFAULT, no una paret: qui pregunta per ells, els vol. Mateix criteri
+        # que `?inclou=` del catàleg («el que està EN ÚS no s'amaga mai»).
+        # Un `?estat=` que NO és cap de les choices s'ignora com l'ignora el filtre (regla
+        # lenient de C1), i llavors l'exclusió **torna a manar**: si no, un valor mal escrit
+        # obriria el board als acabats sense que ningú ho hagués demanat.
+        if (qp.get('estat') or '').strip() not in dict(Model.ESTAT_CHOICES):
+            models_qs = models_qs.exclude(estat__in=[Model.ESTAT_ACABAT, Model.ESTAT_JUBILAT])
+        qs = qs.filter(model_id__in=models_qs.values('id'))
+
+        # M3 · FASE 4 + CODA — LA VOLTA VIGENT DEL MODEL, per files i sense N+1. Ja no és
+        # només informativa: **`kanban_state` en depèn**. La 4a columna és ara un FET D'ENTREGA
+        # (darrera volta tancada AMB entrega i cap d'oberta), i això no es pot derivar dels
+        # comptadors de tasques — cal saber si aquella volta es va ENVIAR. La fila segueix
+        # portant-ho també cap a fora (`ronda: {seq, estat}`), que és el que deixa que la
+        # targeta digui «R3 entregada» i no una paraula que valgui per a tres casos diferents.
+        ultima_ronda = Ronda.objects.filter(model_id=OuterRef('model_id')).order_by('-seq')
 
         agg = (qs.values(
                    'model_id', 'model__codi_intern', 'model__nom_prenda', 'model__fase_actual',
@@ -168,6 +191,11 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
                    # del model (fallback a qualsevol tasca, per als models tot-Done amb all=true).
                    plan_start=Min('planned_start', filter=~Q(status='Done')),
                    plan_start_all=Min('planned_start'),
+                   # M3 · la darrera volta del model (seq, si és tancada i si té entrega). Tres
+                   # subqueries d'una fila cadascuna: el board segueix sent una sola consulta.
+                   ronda_seq=Subquery(ultima_ronda.values('seq')[:1]),
+                   ronda_tancada_el=Subquery(ultima_ronda.values('tancada_el')[:1]),
+                   ronda_entrega_id=Subquery(ultima_ronda.values('entrega__id')[:1]),
                ))
 
         # --- Ordenació: whitelist estricta; default si res vàlid ---
@@ -187,24 +215,70 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
         agg = agg.filter(plan_start_all__isnull=False)
 
         if qp.get('all') != 'true':
-            # Per defecte només models amb alguna tasca no-Done (HAVING sobre els comptadors).
-            agg = agg.filter(Q(pending__gt=0) | Q(paused__gt=0) | Q(in_progress__gt=0))
+            # Per defecte només models amb alguna tasca no-Done (HAVING sobre els comptadors)…
+            #
+            # M3 · CODA — …**i els que tenen una VOLTA OBERTA**, encara que no els quedi cap
+            # tasca viva. És la conseqüència directa de la llei nova: aquell model ja no cau a
+            # la 4a columna sinó a les d'estat de feina, i un model classificat «pendent» que la
+            # consulta per defecte amaga seria una fila que existeix a la columna i no a la
+            # llista. El que el filtre vol treure és la feina ACABADA, i una volta oberta no ho és.
+            agg = agg.filter(Q(pending__gt=0) | Q(paused__gt=0) | Q(in_progress__gt=0)
+                             | Q(ronda_seq__isnull=False, ronda_tancada_el__isnull=True))
 
-        def kanban_state(pending, paused, in_progress, done):
+        def kanban_state(row):
             """Estat-kanban derivat del model (única font de veritat al backend, Sprint 5 1c).
-            ∈ {pending, open, paused, done}. Ordre: feina viva mana sobre l'estàtica.
-              open    si in_progress>0
-              paused  si paused>0 i in_progress=0
-              pending si queda pendent (i res actiu/pausat)
-              done    si tot Done (cap pending/paused/in_progress)
-            Així el frontend no recalcula la classificació."""
-            if in_progress > 0:
+            ∈ {pending, open, paused, done}. Ordre: **la feina viva mana sobre tota la resta**.
+
+              open    si in_progress > 0
+              paused  si paused > 0 i cap en curs
+              pending si en queda alguna de pendent (i res actiu ni pausat)
+
+            …i quan no queda cap feina viva, mana **LA VOLTA** (M3 · CODA · decisió d'Agus):
+
+              done    la darrera volta és TANCADA i té ENTREGA (i per tant cap d'oberta)
+              pending qualsevol altre cas: la volta és OBERTA, o es va tancar sense declarar
+                      cap entrega
+
+            🔒 **LA 4a COLUMNA ÉS UN FET D'ENTREGA, NO UN RECOMPTE DE TASQUES.** Fins ara hi
+            queia tot el que no tenia feina viva, i això barrejava dues coses ben diferents:
+            una volta ENTREGADA (feina que ja és a fora, esperant el retorn del client) i una
+            volta ACABADA DE TREBALLAR PERÒ NO ENVIADA, que és feina nostra i encara ho és. La
+            segona torna a les columnes d'estat de feina —el gest que falta és humà, no una
+            tasca— i el senyal de que ja es pot enviar el porta el badge LLIURABLE, que existeix
+            des d'F2.7 i diu exactament això.
+
+            ✅ **L'EXCEPCIÓ PRE-LLEI JA NO HI ÉS (M5, 25/08).** Mentre la prohibició de backfill
+            va durar, un model sense cap `Ronda` conservava la lectura vella (tot Done → 4a
+            columna): la seva feina no podia tenir volta, i per tant tampoc entrega, i aplicar-hi
+            la llei nova l'hauria empès a «pendent» per sempre per una cosa que no era seva. Era
+            **autoextingible a posta**, i el retroactiu de M5 li ha donat la seva R1 a tot model
+            amb feina —**població pre-llei = 0**, verificat per SQL—, o sigui que la branca ja no
+            trobava ningú. S'ha retirat, i amb ella el test que la mesurava.
+            """
+            if row['in_progress'] > 0:
                 return 'open'
-            if paused > 0:
+            if row['paused'] > 0:
                 return 'paused'
-            if pending > 0:
+            if row['pending'] > 0:
                 return 'pending'
-            return 'done'
+            # ── cap feina viva: mana la volta ────────────────────────────────────────────────
+            # `ronda_*` és la volta de `seq` més ALT, i per la llei «una ronda oberta per model»
+            # (ratificada 24/08, `services_r.obrir_ronda`) una volta oberta només pot ser
+            # aquesta: si aquesta és tancada, no n'hi ha cap d'oberta. Per això no cal una quarta
+            # subconsulta per preguntar-ho.
+            if row['ronda_tancada_el'] is not None and row['ronda_entrega_id'] is not None:
+                return 'done'
+            return 'pending'
+
+        def ronda_estat(row):
+            """L'estat de la DARRERA volta del model — les tres que la BD pot donar, i cap més.
+            Són les mateixes tres que M2 ja pinta a la fitxa (§9.3 de la seva acta): una volta
+            pot estar tancada SENSE entrega, i pintar-la «entregada» seria mentir a seques."""
+            if row['ronda_seq'] is None:
+                return None
+            if row['ronda_tancada_el'] is None:
+                return 'oberta'
+            return 'entregada' if row['ronda_entrega_id'] is not None else 'tancada'
 
         def shape(row):
             return {
@@ -218,8 +292,7 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
                     'in_progress': row['in_progress'],
                     'done': row['done'],
                 },
-                'kanban_state': kanban_state(
-                    row['pending'], row['paused'], row['in_progress'], row['done']),
+                'kanban_state': kanban_state(row),
                 # Extres additius (la UI els pot etiquetar sense una segona crida):
                 'prioritat': row['model__prioritat'],
                 'temporada': row['model__temporada'],
@@ -228,6 +301,10 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
                 'responsable_id': row['model__responsable_id'],
                 # C4d — marcador "+": el model s'ha mogut sol al pla per un inici real.
                 'reanchored_by_start': row['model__reanchored_by_start'],
+                # M3 · FASE 4 — la darrera volta, perquè la 4a columna pugui dir QUÈ espera.
+                # `null` = aquest model no té cap volta (feina llegada): no és una omissió.
+                'ronda': (None if row['ronda_seq'] is None
+                          else {'seq': row['ronda_seq'], 'estat': ronda_estat(row)}),
             }
 
         page = self.paginate_queryset(agg)
@@ -288,9 +365,13 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
             return Response({'error': 'TaskType no trobat o inactiu.'},
                             status=status.HTTP_404_NOT_FOUND)
         order = ModelTask.objects.filter(model=model).count()
-        task = ModelTask.objects.create(
-            model=model, task_type=tt, order=order, status='Pending',
-            origen='ad_hoc', off_recipe=True, work_order=wo)
+        # M1-bis · FIT-4 — un extra també és un GEST DE TREBALL: si el model encara no té cap
+        # volta, aquesta la fa néixer (R1). Atòmic: no pot quedar la tasca sense la seva ronda.
+        with transaction.atomic():
+            task = ModelTask.objects.create(
+                model=model, task_type=tt, order=order, status='Pending',
+                origen='ad_hoc', off_recipe=True, work_order=wo,
+                ronda=ronda_del_gest(model))
         return Response(ModelTaskSerializer(task).data, status=status.HTTP_201_CREATED)
 
     def perform_create(self, serializer):
@@ -344,14 +425,20 @@ def define_model_tasks_view(request, model_id):
     created = []
     base_order = (ModelTask.objects.filter(model_id=model_id)
                   .count())  # afegeix al final de l'ordre existent
-    for i, t in enumerate(types):
-        if t.id in existing:
-            continue
-        est = lookup_estimated_minutes(model, t)   # snapshot del temps estimat (None si no n'hi ha)
-        mt = ModelTask.objects.create(model_id=model_id, task_type=t,
-                                      order=base_order + i, status='Pending',
-                                      origen='prevista', estimated_minutes=est)
-        created.append(mt.id)
+    # M1-bis · FIT-4 — definir la feina d'un model ÉS el gest de programació, i és el primer que
+    # rep un model nou. La ronda es resol UN COP per a tot el lot: totes les tasques d'aquesta
+    # crida són del mateix gest i han d'anar a la mateixa volta.
+    with transaction.atomic():
+        ronda = ronda_del_gest(model)
+        for i, t in enumerate(types):
+            if t.id in existing:
+                continue
+            est = lookup_estimated_minutes(model, t)   # snapshot del temps estimat (None si no n'hi ha)
+            mt = ModelTask.objects.create(model_id=model_id, task_type=t,
+                                          order=base_order + i, status='Pending',
+                                          origen='prevista', estimated_minutes=est,
+                                          ronda=ronda)
+            created.append(mt.id)
     return Response({'created_ids': created, 'skipped_existing': sorted(existing)},
                     status=status.HTTP_201_CREATED)
 
@@ -363,7 +450,7 @@ def model_task_log_view(request, model_id):
     de les ModelTask del model, ordenat per data/hora desc. Font: TaskTransition."""
     qs = (TaskTransition.objects
           .filter(model_task__model_id=model_id)
-          .select_related('model_task__task_type', 'by')
+          .select_related('model_task__task_type', 'model_task__ronda', 'by')
           .order_by('-at'))
     log = [{
         'id': tr.id,
@@ -374,6 +461,14 @@ def model_task_log_view(request, model_id):
         # null = gest del tècnic; slug = el guard que ha actuat. Sense això el log diria que la
         # pausa la va fer `by`, que en una auto-pausa és fals.
         'auto': tr.auto,
+        # M2 · LA CARA DE FIT-8 — el rastre de la reobertura post-entrega ja s'escrivia (M1 · §6)
+        # i **no sortia per cap porta**: la dada existia i no es podia llegir. `nota` no és null
+        # NOMÉS quan la tasca pertany a una volta amb entrega informada
+        # (`_nota_reobertura_post_entrega`), o sigui que la seva PRESÈNCIA ja és el marcador: el
+        # comptador de rectificacions es compta, no es dedueix parsejant la frase.
+        # `ronda_seq` l'hi acompanya per agrupar-lo per volta sense haver de llegir el text.
+        'nota': tr.nota,
+        'ronda_seq': tr.model_task.ronda.seq if tr.model_task.ronda_id else None,
         'at': tr.at.isoformat(),
     } for tr in qs[:300]]
     return Response({'log': log}, status=status.HTTP_200_OK)
@@ -578,9 +673,14 @@ def open_model_task_view(request, model_id):
     if task is None:
         order = ModelTask.objects.filter(model=model).count()
         est = lookup_estimated_minutes(model, tt)
-        task = ModelTask.objects.create(model=model, task_type=tt, order=order,
-                                        status='Pending', origen='prevista',
-                                        estimated_minutes=est)
+        # M1-bis · FIT-4 — entrar-hi i executar és el gest de treball més directe de tots.
+        # ⚠️ NOMÉS quan la tasca es CREA. Si `tasca_vigent` n'ha trobat una, aquella tasca ja té
+        # la ronda que li toca i moure-la seria migrar feina entre voltes: FIT-6 ho prohibeix.
+        with transaction.atomic():
+            task = ModelTask.objects.create(model=model, task_type=tt, order=order,
+                                            status='Pending', origen='prevista',
+                                            estimated_minutes=est,
+                                            ronda=ronda_del_gest(model))
         created = True
     # ── J · R3 · ENTRAR NO ENDÚ NI REOBRE ────────────────────────────────────────────────────
     #
@@ -1643,10 +1743,13 @@ def crono_declarat_view(request, model_id):
         if accio != 'engegar':
             return Response({'error': 'Aquesta tasca no té cap crono.'},
                             status=http_status.HTTP_404_NOT_FOUND)
-        task = ModelTask.objects.create(
-            model=model, task_type=tt, order=ModelTask.objects.filter(model=model).count(),
-            status='Pending', origen='prevista',
-            estimated_minutes=lookup_estimated_minutes(model, tt))
+        # M1-bis · FIT-4 — engegar el crono d'una externa és treballar-hi: mateix gest, mateixa llei.
+        with transaction.atomic():
+            task = ModelTask.objects.create(
+                model=model, task_type=tt, order=ModelTask.objects.filter(model=model).count(),
+                status='Pending', origen='prevista',
+                estimated_minutes=lookup_estimated_minutes(model, tt),
+                ronda=ronda_del_gest(model))
 
     def _tram_per_id():
         """El tram sobre el qual s'actua. Sempre d'AQUESTA tasca: un id de fora no val."""
@@ -1715,6 +1818,12 @@ def obrir_ronda_view(request, model_id):
     codes = dades.get('codes') or []
     # Els codes han de ser executables per qui obre la ronda: la mateixa allow-list que
     # `open-task`. Obrir una volta és crear feina, i no es crea feina que un mateix no pot fer.
+    #
+    # M1-bis · FIT-4 — I EL GUARD ES QUEDA NOMÉS AMB EL QUE ES DEMANA. El joc REPLICAT de la volta
+    # anterior no passa per aquí a posta: no és una tria de qui obre, és el que el model ja
+    # arrossega. Amb el guard aplicat també a la rèplica, un PM que no executi (posem) `pattern_cad`
+    # no podria obrir cap volta d'un model que en va fer —o sigui que la porta de +Ronda quedaria
+    # tancada precisament per a qui l'ha de fer servir.
     permesos = get_allowed_task_types(request.user)
     fora = [c for c in codes if c not in permesos]
     if fora:
@@ -1739,5 +1848,118 @@ def obrir_ronda_view(request, model_id):
     return Response({'ronda_id': ronda.pk if ronda else None,
                      'seq': ronda.seq if ronda else None,
                      'motiu': motiu,
+                     # M1-bis — què ha entrat per rèplica i què s'ha quedat pel camí perquè el
+                     # catàleg l'ha desactivat. La UI de M2 ho ha de poder dir en veu alta.
+                     'codes_replicats': getattr(ronda, '_codes_replicats', []),
+                     'codes_omesos': getattr(ronda, '_codes_omesos', []),
+                     # …i què s'ha ADOPTAT del buit entre voltes (feina que ja existia i que
+                     # aquesta volta recull). No són tasques noves: la UI no les pot pintar igual.
+                     'codes_adoptats': getattr(ronda, '_codes_adoptats', []),
                      'tasques': [t.id for t in tasques]},
                     status=http_status.HTTP_201_CREATED)
+
+
+# ── M1 · FIT-1 + FIT-13 · LES PORTES DE L'ENTREGA ───────────────────────────────────────────
+#
+# ✅ PERMISOS — RESOLT (decisió d'Agus, M1-bis 24/08): **`_ExecuteTasks`, la mateixa que obre**.
+# «Qui pot treballar pot entregar.» El TODO d'M1 queda retirat: hi vaig deixar `IsAuthenticated`
+# perquè `tancar_ronda` no havia tingut mai porta HTTP i per tant cap capability que heretar, i
+# la conseqüència era que la porta que TANCA la ronda era més oberta que la que l'obre. Ara les
+# dues van amb `EXECUTE_TASKS` i aquella asimetria desapareix.
+
+@api_view(['POST'])
+@permission_classes([_ExecuteTasks])
+def entrega_ronda_view(request, ronda_id):
+    """POST /api/v1/rondes/<ronda_id>/entrega/  ·  {destinatari, descripcio?, data?}
+
+    Informa l'entrega d'una ronda. **I amb això la tanca** (FIT-13), i el tancament tanca la
+    feina viva de la volta (FIT-6) — tot dins la mateixa transacció.
+    """
+    from .models import Ronda
+    from .serializers_b import EntregaSerializer
+    from .services_r import EntregaError, RondaError, informar_entrega
+
+    profile = getattr(request.user, 'profile', None)
+    if profile is None:
+        return Response({'error': 'Usuari sense perfil en aquest tenant.', 'code': 'no_profile'},
+                        status=http_status.HTTP_403_FORBIDDEN)
+    try:
+        ronda = Ronda.objects.get(pk=ronda_id)
+    except Ronda.DoesNotExist:
+        return Response({'error': 'Ronda no trobada.'}, status=http_status.HTTP_404_NOT_FOUND)
+
+    # La FORMA la valida el serializer i el FET el decideix el servei. `data` arriba com a text
+    # per HTTP: passar-la crua al model la desaria sense parsejar (o petaria en cru, segons el
+    # backend). Aquí ja arriba `datetime` o ja s'ha rebutjat amb el 400 de sempre de DRF.
+    forma = EntregaSerializer(data=request.data or {})
+    if not forma.is_valid():
+        return Response(forma.errors, status=http_status.HTTP_400_BAD_REQUEST)
+    dades = forma.validated_data
+    try:
+        entrega = informar_entrega(ronda, destinatari=dades.get('destinatari'),
+                                   descripcio=dades.get('descripcio') or '',
+                                   data=dades.get('data') or None, profile=profile)
+    except EntregaError as e:
+        return Response({'error': str(e), 'code': 'entrega_invalida'},
+                        status=http_status.HTTP_400_BAD_REQUEST)
+    except RondaError as e:
+        # El tancament forçat (FIT-6) ha topat amb una paret: l'entrega NO s'ha escrit (la
+        # transacció d'`informar_entrega` és una sola) i el client ha de saber que el motiu és
+        # la feina de la volta, no la forma de l'entrega.
+        return Response({'error': str(e), 'code': 'ronda_no_tancable'},
+                        status=http_status.HTTP_409_CONFLICT)
+    return Response(EntregaSerializer(entrega).data, status=http_status.HTTP_201_CREATED)
+
+
+@api_view(['PATCH'])
+@permission_classes([_ExecuteTasks])
+def entrega_ok_client_view(request, entrega_id):
+    """PATCH /api/v1/entregues/<entrega_id>/ok-client/  ·  {data_ok?}
+
+    El senyal MANUAL i posterior: el client diu que li ha arribat bé. No toca la ronda.
+    """
+    from rest_framework import serializers
+
+    from .models import Entrega
+    from .serializers_b import EntregaSerializer
+    from .services_r import EntregaError, informar_ok_client
+
+    profile = getattr(request.user, 'profile', None)
+    if profile is None:
+        return Response({'error': 'Usuari sense perfil en aquest tenant.', 'code': 'no_profile'},
+                        status=http_status.HTTP_403_FORBIDDEN)
+    try:
+        entrega = Entrega.objects.get(pk=entrega_id)
+    except Entrega.DoesNotExist:
+        return Response({'error': 'Entrega no trobada.'}, status=http_status.HTTP_404_NOT_FOUND)
+
+    data_ok = (request.data or {}).get('data_ok') or None
+    if data_ok is not None:
+        try:
+            data_ok = serializers.DateTimeField().to_internal_value(data_ok)
+        except ValidationError as e:
+            return Response({'data_ok': e.detail}, status=http_status.HTTP_400_BAD_REQUEST)
+    try:
+        entrega = informar_ok_client(entrega, profile=profile, data_ok=data_ok)
+    except EntregaError as e:
+        return Response({'error': str(e), 'code': 'ok_client_invalid'},
+                        status=http_status.HTTP_400_BAD_REQUEST)
+    return Response(EntregaSerializer(entrega).data, status=http_status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def rondes_del_model_view(request, model_id):
+    """GET /api/v1/models/<model_id>/rondes/ — les voltes del model, amb la seva entrega.
+
+    Sense aquesta porta l'Entrega seria una dada que no es pot llegir: `ronda_oberta` (a
+    `models_app`) no la pot ensenyar mai, perquè una ronda entregada és una ronda TANCADA.
+    """
+    from .models import Ronda
+    from .serializers_b import RondaSerializer
+
+    if not Model.objects.filter(pk=model_id).exists():
+        return Response({'error': 'Model no trobat.'}, status=http_status.HTTP_404_NOT_FOUND)
+    qs = (Ronda.objects.filter(model_id=model_id)
+          .select_related('entrega__qui_informa', 'entrega__qui_informa_ok').order_by('seq'))
+    return Response(RondaSerializer(qs, many=True).data, status=http_status.HTTP_200_OK)

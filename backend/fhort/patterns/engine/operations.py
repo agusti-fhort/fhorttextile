@@ -39,6 +39,32 @@ de costura es conserva. Això és CORRESPONDÈNCIA, no offset, i és el que fa
 són aritmètica de polilínies i prou. Un offset de veritat —canviar el marge de costura—
 és una operació de CREACIÓ i és post-traçadora.)
 
+D'ON MANA EL MOVIMENT: SEMPRE DEL TALL
+---------------------------------------
+La correspondència del paràgraf anterior té una direcció: el tall mana i el cosit el
+segueix. Això no es negocia —el marge de costura ha de ser el mateix a totes les talles i
+la manera de garantir-ho és que les dues línies rebin el MATEIX desplaçament—, però tenia
+una conseqüència que va costar una niada morta: **una ordre que aterrava sobre la línia de
+cosit s'esborrava en silenci**, perquè `_propagar_al_cosit` re-deriva el cosit sencer del
+tall i no mirava si el cosit portava res de propi.
+
+I ancorar un POM sobre la línia de cosit no és cap raresa: és el cas NORMAL. Al 837, 26
+dels 27 extrems ancorats seuen sobre el cosit, i la niada sencera donava zero moviments
+amb tots els verds posats (v. `docs/diagnosis/INFORME_NIADA_SENSE_MOVIMENT_2026-08-24.md`).
+
+Des d'ara, abans de propagar res, `_normalitzar_ordres_al_tall` **trasllada tota ordre del
+cosit al seu company del tall amb el mateix desplaçament**. Després la propagació de sempre
+re-deriva el cosit, i les dues línies es mouen juntes. Les tres coses que poden sortir
+malament es diuen, cap no es calla:
+
+  · el company del tall ja tenia una ordre IDÈNTICA  → fusió, silenci legítim;
+  · el company del tall tenia una ordre DIFERENT     → `ordre_cosit_en_conflicte`;
+  · no hi ha cap company a menys de la tolerància    → `ordre_cosit_sense_company`.
+
+En els dos casos d'error l'ordre del cosit **es deixa on era** —o sigui, es comporta com
+abans— i qui exporti ho llegeix a la llista de problemes. Inventar-se un company o triar
+per l'usuari quin dels dos POMs mana seria pitjor que no fer res.
+
 POSTCONDICIONS
 --------------
 No hi ha `assert` muts. Tot el que ha passat —i tot el que NO ha pogut passar— surt a
@@ -76,6 +102,11 @@ TOL_PIQUET_MM = 0.5
 #: tall. És el marge de costura típic (1 cm) amb aire: si no en troba cap a menys d'això,
 #: no s'inventa la parella — ho diu.
 TOL_PARELLA_COSIT_MM = 30.0
+
+#: Per sota d'això, dues ordres són LA MATEIXA ordre. No és una tolerància de patronatge
+#: —un nanòmetre no és una decisió de ningú—: és el llindar per no confondre el soroll de
+#: coma flotant amb una contradicció entre dos POMs.
+TOL_ORDRE_IDENTICA_MM = 1e-6
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -166,6 +197,9 @@ class MoveReport:
     punts_reflow: int = 0
     piquets_reposicionats: int = 0
     punts_cosit_propagats: int = 0
+    #: Ordres que aterraven sobre la línia de cosit i s'han traslladat al seu company del
+    #: tall perquè les dues línies es moguin juntes (v. §"D'ON MANA EL MOVIMENT").
+    punts_cosit_normalitzats: int = 0
     poms: tuple[POMReading, ...] = ()
     costures: tuple[SewReading, ...] = ()
     avisos: tuple[MoveIssue, ...] = ()
@@ -182,6 +216,9 @@ class MoveReport:
             f'{self.punts_moguts} punts moguts · {self.punts_reflow} de corba reflowats · '
             f'{self.piquets_reposicionats} piquets reposicionats'
         ]
+        if self.punts_cosit_normalitzats:
+            linies.append(
+                f'{self.punts_cosit_normalitzats} ordres del cosit normalitzades al tall')
         if self.punts_cosit_propagats:
             linies.append(f'{self.punts_cosit_propagats} punts de cosit propagats')
         for p in self.poms:
@@ -221,16 +258,19 @@ def move_points(
     l'operació sigui atòmica — no és "moure un punt", és "moure el patró per aquest punt".
     """
     avisos: list[MoveIssue] = []
-    moguts = reflow = piquets = cosits = 0
+    moguts = reflow = piquets = cosits = normalitzats = 0
     peces_noves: list[PieceData] = []
 
     for piece in doc.pieces:
-        nova, comptes, issues = _move_piece(piece, deltes, avisos_peca=piece.nom_block)
+        nova, comptes, issues = _move_piece(
+            piece, deltes, avisos_peca=piece.nom_block, poms=poms,
+        )
         peces_noves.append(nova)
         moguts += comptes['moguts']
         reflow += comptes['reflow']
         piquets += comptes['piquets']
         cosits += comptes['cosits']
+        normalitzats += comptes['normalitzats']
         avisos += issues
 
     doc_nou = replace(doc, pieces=tuple(peces_noves))
@@ -264,6 +304,7 @@ def move_points(
             punts_reflow=reflow,
             piquets_reposicionats=piquets,
             punts_cosit_propagats=cosits,
+            punts_cosit_normalitzats=normalitzats,
             poms=tuple(lectures),
             costures=tuple(costures),
             avisos=tuple(avisos),
@@ -276,10 +317,20 @@ def move_points(
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _move_piece(
-    piece: PieceData, deltes: dict[PointRef, tuple[float, float]], avisos_peca: str
+    piece: PieceData,
+    deltes: dict[PointRef, tuple[float, float]],
+    avisos_peca: str,
+    poms: tuple[POMSpec, ...] = (),
 ) -> tuple[PieceData, dict, list[MoveIssue]]:
     avisos: list[MoveIssue] = []
-    comptes = {'moguts': 0, 'reflow': 0, 'piquets': 0, 'cosits': 0}
+    comptes = {'moguts': 0, 'reflow': 0, 'piquets': 0, 'cosits': 0, 'normalitzats': 0}
+
+    # ── 0. Les ordres del COSIT passen al TALL abans de res (v. §"D'ON MANA EL MOVIMENT").
+    #      Ha d'anar davant de tot: si es fes després, `_propagar_al_cosit` ja les hauria
+    #      esborrades i estaríem normalitzant un zero.
+    deltes, n_norm, issues = _normalitzar_ordres_al_tall(piece, deltes, poms)
+    comptes['normalitzats'] += n_norm
+    avisos += issues
 
     # ── 1+2. Cada vora: moure els seus punts i fer fluir els de corba.
     desplacaments: list[list[tuple[float, float]]] = []
@@ -294,7 +345,7 @@ def _move_piece(
 
     # ── 3. La línia de cosit segueix el tall per CORRESPONDÈNCIA (mai per offset).
     if piece.has_sew:
-        n_cosit, issues = _propagar_al_cosit(piece, desplacaments)
+        n_cosit, issues = _propagar_al_cosit(piece, desplacaments, deltes)
         comptes['cosits'] += n_cosit
         avisos += issues
 
@@ -447,8 +498,159 @@ def _arc(segments: list[float], desde: int, fins: int, n: int, closed: bool) -> 
     return total
 
 
+def _poms_del_punt(poms: tuple[POMSpec, ...], ref: PointRef) -> tuple[str, ...]:
+    """Quins POMs ancoren en aquest punt. Serveix per no reportar mai una adreça pelada:
+    a qui exporta, «vora 1, ordre 370» no li diu res; «el POM A» sí."""
+    return tuple(sorted({
+        p.pom_code for p in poms if p.ref_a == ref or p.ref_b == ref
+    }))
+
+
+def _company_al_tall(
+    tall: BoundaryData, punt: PointData
+) -> tuple[Optional[int], float]:
+    """El company d'un punt de GIR del cosit al contorn de tall: el gir més proper.
+
+    «El gir més proper» i no «el punt més proper», i el motiu és de coherència amb
+    `_propagar_al_cosit`: aquella funció aparella gir de cosit ↔ gir de tall, i si aquí
+    normalitzéssim contra un punt de corba veí, la propagació aniria després a buscar un
+    ALTRE punt —el gir— que no duria cap ordre, i el desplaçament es tornaria a perdre.
+    Aparellant igual que ella, el que injectem aquí és exactament el que ens tornarà.
+    """
+    candidats = [
+        (j, hypot(q.x - punt.x, q.y - punt.y))
+        for j, q in enumerate(tall.points) if q.kind is PointKind.TURN
+    ]
+    if not candidats:
+        return None, float('inf')
+    return min(candidats, key=lambda c: c[1])
+
+
+def _normalitzar_ordres_al_tall(
+    piece: PieceData,
+    deltes: dict[PointRef, tuple[float, float]],
+    poms: tuple[POMSpec, ...] = (),
+) -> tuple[dict[PointRef, tuple[float, float]], int, list[MoveIssue]]:
+    """Trasllada al TALL tota ordre que aterri sobre la línia de COSIT. → (deltes, n, avisos).
+
+    És la peça que arregla la niada morta del 837: ancorar un POM sobre la línia de cosit
+    és el cas normal, i fins ara el seu moviment moria a `_propagar_al_cosit`, que re-deriva
+    el cosit sencer del tall sense mirar si el cosit portava res de propi.
+
+    **No muta l'entrada**: torna un diccionari nou. Les ordres que s'han pogut traslladar
+    s'ESBORREN de la vora de cosit, perquè el cosit ha de quedar derivat i prou —deixar-les-hi
+    faria que la vora s'ancorés dues vegades pel mateix moviment i que un ancoratge sobre
+    corba emetés un `delta_sobre_corba` que ja no descriu on passa la cosa.
+
+    Les que NO s'han pogut traslladar es queden EXACTAMENT on eren: el comportament d'abans,
+    que és dolent però conegut, i amb el problema dit en veu alta. Escollir un company
+    inventat, o decidir quin de dos POMs en conflicte mana, no és feina d'aquesta capa.
+
+    Només actua si la peça té línia de cosit: sense `has_sew` no hi ha propagació que
+    esborri res, i normalitzar seria canviar un comportament que no està trencat.
+    """
+    avisos: list[MoveIssue] = []
+    if not piece.has_sew:
+        return deltes, 0, avisos
+
+    idx_tall = next(
+        (i for i, b in enumerate(piece.boundaries) if b.role is LayerRole.CUT), None
+    )
+    if idx_tall is None:
+        # `_propagar_al_cosit` ja reporta `cosit_sense_tall`; no el dupliquem.
+        return deltes, 0, avisos
+
+    tall = piece.boundaries[idx_tall]
+    afegits: dict[PointRef, tuple[float, float]] = {}
+    treure: list[PointRef] = []
+    normalitzats = 0
+
+    for i, boundary in enumerate(piece.boundaries):
+        if boundary.role is not LayerRole.SEW:
+            continue
+
+        for j, q in enumerate(boundary.points):
+            ref = PointRef(piece.nom_block, i, j)
+            d = deltes.get(ref)
+            if d is None or (abs(d[0]) < TOL_ORDRE_IDENTICA_MM
+                             and abs(d[1]) < TOL_ORDRE_IDENTICA_MM):
+                continue
+
+            # Els punts de CORBA no passen per aquí, i és una decisió amb xifres al
+            # darrere. Un gir del cosit recupera del tall EXACTAMENT el que li hem donat
+            # (els aparella la mateixa regla); una corba, no —la propagació re-deriva el
+            # cosit dels girs i la corba hi torna a fluir—, o sigui que traslladar-li
+            # l'ordre al tall no és neutre: és PERDRE-LA. Mesurat al 837, talla M:
+            # normalitzant les corbes, el POM C creix 1,50 cm dels 3,00 que mana el
+            # grading; deixant-les on són, creix 3,00 clavats. La corba es queda al cosit
+            # i `_propagar_al_cosit` la respecta com a ancoratge propi.
+            if q.kind is not PointKind.TURN:
+                continue
+
+            k, dist = _company_al_tall(tall, q)
+            qui = _poms_del_punt(poms, ref)
+            de_qui = f' (POM {", ".join(qui)})' if qui else ''
+
+            if k is None or dist > TOL_PARELLA_COSIT_MM:
+                avisos.append(MoveIssue(
+                    'ordre_cosit_sense_company',
+                    f'El punt {j} de la línia de cosit (vora {i}){de_qui} ha de moure\'s, '
+                    f'però no té cap company de la mateixa mena al contorn de tall a menys '
+                    f'de {TOL_PARELLA_COSIT_MM:.0f} mm'
+                    + (f' (el més proper és a {dist:.1f} mm)' if k is not None else '')
+                    + '. El seu moviment NO entrarà a la niada: el cosit es deriva del tall '
+                      'i aquest punt no hi té a qui passar-li l\'ordre.',
+                    peca=piece.nom_block,
+                    detall={'vora': i, 'ordre': j, 'poms': list(qui),
+                            'distancia_mm': (None if k is None else dist)},
+                ))
+                continue
+
+            ref_tall = PointRef(piece.nom_block, idx_tall, k)
+            ja = afegits.get(ref_tall, deltes.get(ref_tall))
+            if ja is not None and (abs(ja[0] - d[0]) > TOL_ORDRE_IDENTICA_MM
+                                   or abs(ja[1] - d[1]) > TOL_ORDRE_IDENTICA_MM):
+                avisos.append(MoveIssue(
+                    'ordre_cosit_en_conflicte',
+                    f'El punt {j} de la línia de cosit (vora {i}){de_qui} vol moure\'s '
+                    f'({d[0]:+.2f}, {d[1]:+.2f}) mm, però el seu company del tall '
+                    f'(punt {k}){_de_qui_tall(poms, ref_tall)} ja té una ordre DIFERENT '
+                    f'({ja[0]:+.2f}, {ja[1]:+.2f}) mm. Les dues línies han de moure\'s '
+                    f'juntes per conservar el marge de costura, o sigui que una de les dues '
+                    f'ordres no es pot complir: no s\'endevina quina mana i el moviment '
+                    f'd\'aquest punt del cosit NO entra a la niada.',
+                    peca=piece.nom_block,
+                    detall={'vora': i, 'ordre': j, 'ordre_tall': k, 'poms': list(qui),
+                            'delta_cosit_mm': list(d), 'delta_tall_mm': list(ja)},
+                ))
+                continue
+
+            afegits[ref_tall] = d
+            treure.append(ref)
+            normalitzats += 1
+
+    if not normalitzats:
+        return deltes, 0, avisos
+
+    nous = {**deltes, **afegits}
+    for ref in treure:
+        # Un punt del cosit que era ALHORA company d'ell mateix no existeix (el tall i el
+        # cosit són vores diferents), però el guard és barat i evita esborrar el que acabem
+        # d'escriure si algun dia una peça declarés la mateixa vora amb els dos rols.
+        if ref not in afegits:
+            nous.pop(ref, None)
+    return nous, normalitzats, avisos
+
+
+def _de_qui_tall(poms: tuple[POMSpec, ...], ref: PointRef) -> str:
+    qui = _poms_del_punt(poms, ref)
+    return f' (POM {", ".join(qui)})' if qui else ''
+
+
 def _propagar_al_cosit(
-    piece: PieceData, desplacaments: list[list[tuple[float, float]]]
+    piece: PieceData,
+    desplacaments: list[list[tuple[float, float]]],
+    deltes: Optional[dict[PointRef, tuple[float, float]]] = None,
 ) -> tuple[int, list[MoveIssue]]:
     """La línia de cosit segueix el tall per CORRESPONDÈNCIA (v. docstring del mòdul).
 
@@ -457,6 +659,15 @@ def _propagar_al_cosit(
     girs a `_desplacaments_vora`. Amb això el marge de costura es conserva a totes les
     talles, que és la invariant que ha d'aguantar. **Muta `desplacaments` in situ** (és
     una llista de treball, no el document).
+
+    `deltes` són les ordres originals, i serveixen per a UNA cosa: **els ancoratges PROPIS
+    del cosit que no són girs**. La re-derivació de sota reconstruïa la vora sencera només
+    a partir de les parelles, i per tant esborrava qualsevol ordre que visqués sobre un
+    punt de corba del cosit. Els girs ja no hi passen —`_normalitzar_ordres_al_tall` els ha
+    traslladat al tall abans d'arribar aquí—, però una corba sí que hi viu, i perdre-la vol
+    dir que el POM que hi ancora creix la meitat del que el grading mana (mesurat: POM C
+    del 837, 1,50 cm de 3,00). Amb `deltes` a la mà, la corba entra com a ancoratge i el
+    reflow es fa entre el que el tall ha portat i el que la corba demana.
     """
     avisos: list[MoveIssue] = []
     idx_tall = next(
@@ -503,17 +714,32 @@ def _propagar_al_cosit(
                 continue
             parelles[j] = k
 
+        # Els ancoratges que el cosit porta de seu i que no són girs (v. docstring): es
+        # llegeixen ABANS de tocar res, perquè `desplacaments[i]` està a punt de canviar.
+        propis: dict[PointRef, tuple[float, float]] = {}
+        for j, p in enumerate(boundary.points):
+            if p.kind is PointKind.TURN:
+                continue
+            ref = PointRef(piece.nom_block, i, j)
+            d = (deltes or {}).get(ref)
+            if d is not None:
+                propis[ref] = d
+
         if not parelles:
+            # Sense parelles no hi ha res a propagar, i el que la vora ja hagi calculat a
+            # `_desplacaments_vora` —ancoratges propis inclosos— es queda tal com és.
             continue
 
         for j, k in parelles.items():
             desplacaments[i][j] = desplacaments[idx_tall][k]
             propagats += 1
 
-        # Els punts de corba del cosit tornen a fluir, ara entre girs que ja s'han mogut.
+        # Els punts de corba del cosit tornen a fluir, ara entre girs que ja s'han mogut
+        # i entre els ancoratges propis que la vora tingués.
+        ancores = {PointRef(piece.nom_block, i, j): desplacaments[i][j] for j in parelles}
+        ancores.update(propis)
         refluits, _, _, _ = _desplacaments_vora(
-            boundary, i, piece.nom_block,
-            {PointRef(piece.nom_block, i, j): desplacaments[i][j] for j in parelles},
+            boundary, i, piece.nom_block, ancores,
         )
         desplacaments[i] = refluits
 

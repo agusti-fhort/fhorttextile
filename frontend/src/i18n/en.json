@@ -73,8 +73,13 @@
     "show": "Show",
     "remove_line": "Remove line",
     "tray_title": "Billable tray",
-    "tray_hint": "Finished tasks, extras, expenses and deductions pending delivery, grouped by model.",
+    "tray_hint": "Finished tasks, extras, expenses and deductions pending delivery, grouped by model and by round.",
     "tray_empty": "No items pending delivery for this customer.",
+    "ronda_label": "R{{n}}",
+    "ronda_fora": "outside the order",
+    "ronda_oberta": "open",
+    "ronda_perque": "n>{{numeral}} on order {{comanda}}: this round is billed separately.",
+    "ronda_perque_sense_comanda": "over the {{numeral}}-round allowance: this round is billed separately.",
     "tray_add": "Add ({{n}})",
     "back_title": "Back to dashboard",
     "entity": "delivery notes",
@@ -864,7 +869,6 @@
         "handoff_cancel": "Cancel",
         "claim_denied": "You can't take a task of this type (it's not in your execution list)",
         "claim_error": "Could not reassign the task",
-        "progress_label": "{{done}}/{{total}} tasks done",
         "time_total": "Time accrued on the model"
       },
       "timeline": {
@@ -997,7 +1001,37 @@
     "pas_sense_mesures": "Save the POM to generate the size table",
     "pas_sense_regles": "Define the grading to generate the size table",
     "pas_sense_propagacio": "Propagate to generate the size table",
-    "measure_set": "Size set"
+    "measure_set": "Size set",
+    "cicle": {
+      "tancar": "Close model",
+      "tancar_confirm": "Close",
+      "tancar_ajuda": "Closing the model takes it off the active board. It stays available and can be reopened.",
+      "motiu": "Reason",
+      "motiu_acabat": "Finished (internal decision)",
+      "motiu_tret_de_cataleg": "Dropped from catalogue (the client will not produce it)",
+      "motiu_tret": "Dropped from catalogue (the client will not produce it)",
+      "ronda_oberta_avis": "Round R{{n}} is open. Confirming the delivery closes everything: this round is reported as delivered and its remaining live work is closed.",
+      "confirmar_i_tancar": "Confirm delivery and close",
+      "destinatari": "Recipient",
+      "descripcio": "What was delivered",
+      "jubilar": "Retire model",
+      "jubilar_ajuda": "Retiring archives it: it leaves the normal views and only shows under the “retired” filter.",
+      "reobrir": "Reopen model",
+      "reobrir_ajuda": "The model returns to the board. Inside, you decide whether to amend the last round or open a new one.",
+      "motiu_lliure": "Reason (optional)",
+      "confirmar": "Confirm",
+      "tancat_ok": "Model {{codi}} closed.",
+      "jubilat_ok": "Model {{codi}} retired.",
+      "reobert_ok": "Model {{codi}} reopened.",
+      "estat_titol": "Model state",
+      "estat": {
+        "acabat": "Finished",
+        "jubilat": "Retired"
+      },
+      "banner_ajuda": "this model is read-only; reopen it to work on it again.",
+      "ronda_oberta_avis_tret": "Round R{{n}} is open. Closing the model closes this round and the work still live in it, WITHOUT reporting any delivery: the client said the piece will not be produced and nothing was sent.",
+      "tancar_volta_i_model": "Close the round and the model"
+    }
   },
   "model_wizard": {
     "customer": "Customer",
@@ -1185,8 +1219,8 @@
     "col_entrada_model": "Entry",
     "col_deadline": "Deadline",
     "col_estat": "Status",
-    "estat_pendent": "Commercial status: pending the Kanban.",
-    "select_page": "Select the whole page"
+    "select_page": "Select the whole page",
+    "view_retired": "Retired models"
   },
   "models_filters": {
     "button": "Filters",
@@ -1669,6 +1703,11 @@
     "col_import_imputat": "Allocated",
     "col_price": "Unit price",
     "col_import": "Amount",
+    "col_rounds": "Rounds incl.",
+    "rounds_unlimited": "No limit",
+    "rounds_help": "How many rounds this line's price covers. Empty = no limit; 0 = no round included.",
+    "rounds_saved": "Round allowance updated.",
+    "rounds_invalid": "The round allowance must be an integer of 0 or more.",
     "col_total": "Total",
     "col_created": "Created",
     "status_OPEN": "Open",
@@ -1712,7 +1751,7 @@
     "pdf_error": "The PDF could not be generated.",
     "status": "Status",
     "status_saved": "Status updated.",
-    "readonly_note": "Frozen order: lines and prices cannot be edited (created from the quote conversion).",
+    "readonly_note": "Order frozen: lines and prices cannot be edited (they come from the quote conversion). The exception is the rounds allowance, a condition of the deal that can be corrected here.",
     "details": "Details",
     "source_quote": "Source quote",
     "issued_at": "Issue date",
@@ -2219,10 +2258,9 @@
       "SP": "SP · Special"
     },
     "estats": {
-      "Nou": "New",
-      "EnCurs": "In progress",
-      "EnRevisio": "In review",
-      "Tancat": "Closed"
+      "nou": "New",
+      "acabat": "Finished",
+      "jubilat": "Retired"
     }
   },
   "model": {
@@ -2265,10 +2303,9 @@
       "codi_tenant_help": "3 chars · auto-derived from customer code if empty"
     },
     "estats": {
-      "Nou": "New",
-      "EnCurs": "In progress",
-      "EnRevisio": "In review",
-      "Tancat": "Closed"
+      "nou": "New",
+      "acabat": "Finished",
+      "jubilat": "Retired"
     },
     "prioritats": {
       "1": "Low",
@@ -3487,7 +3524,12 @@
         "pending": "Pending",
         "open": "Open",
         "paused": "Paused",
-        "done": "Done"
+        "done": "Delivered"
+      },
+      "ronda": {
+        "oberta": "round open",
+        "entregada": "delivered",
+        "tancada": "closed"
       }
     },
     "milestones": {
@@ -4433,7 +4475,68 @@
       "value_pattern_t": "pattern",
       "value_sheet": "spec {{cm}}",
       "value_sheet_none": "sheet —",
-      "value_sheet_t": "spec"
+      "value_sheet_t": "spec",
+      "metode_label": "Measurement method",
+      "metode": {
+        "recta": "Straight",
+        "vora": "Along edge",
+        "ortogonal": "Drop",
+        "projeccio": "Dimension"
+      },
+      "metode_ajuda": {
+        "recta": "Straight distance between two points, like a taut tape.",
+        "vora": "Length following the edge between two points, like a tape tracing the curve.",
+        "ortogonal": "Perpendicular distance from a point to the line set by two anchors (for example, the drop from HPS level).",
+        "projeccio": "Distance between two points projected onto the horizontal or vertical axis of the plan, like a CAD dimension."
+      },
+      "ancora": {
+        "a": "point A",
+        "b": "point B",
+        "ref_a": "the first anchor of the reference line",
+        "ref_b": "the second anchor of the reference line",
+        "p": "the point that drops"
+      },
+      "ancora_pas": "Placing {{codi}} ({{nom}}) — click {{ancora}} ({{pas}} of {{total}})",
+      "ancora_pas_sense_pom": "Click {{ancora}} ({{pas}} of {{total}})",
+      "ancora_reopen": "Reopening {{codi}} — mark {{ancora}} again ({{pas}} of {{total}}). Esc to leave without changing anything",
+      "ancora_estat": {
+        "fet": "{{ancora}}: done",
+        "ara": "{{ancora}}: current step",
+        "pendent": "{{ancora}}: pending"
+      },
+      "pt_ref_a": "Ref A",
+      "pt_ref_b": "Ref B",
+      "pt_p": "Drop",
+      "err_metode_desconegut": "This POM uses a measurement method the screen does not know ({{metode}}). Reload the workshop before reopening it.",
+      "err_sense_vocabulari": "The measurement methods could not be read. Reload the workshop before reopening a POM.",
+      "opcio": {
+        "eix": "Axis"
+      },
+      "opcio_valor": {
+        "eix": {
+          "auto": "Auto",
+          "H": "Horizontal",
+          "V": "Vertical"
+        }
+      },
+      "opcio_ajuda": {
+        "eix": {
+          "auto": "The axis along which the two points travel furthest.",
+          "H": "Horizontal OF THE PLAN. Careful: if the piece sits rotated on the pattern, this is not the garment width.",
+          "V": "Vertical OF THE PLAN. Careful: if the piece sits rotated on the pattern, this is not the garment length."
+        }
+      },
+      "err_cota_moure": "The dimension position could not be saved. Please try again.",
+      "cota_delete_title": "Delete this dimension?",
+      "cota_delete_body": "This removes the POM's anchoring on the pattern. The sheet measurement is not touched, and the POM can be placed again.",
+      "cota_delete_ok": "Delete dimension",
+      "act_menu": "Actions",
+      "act_place": "Place on pattern",
+      "act_reanchor": "Re-anchor",
+      "act_delete": "Delete dimension",
+      "act_point": "Point out on pattern",
+      "act_unpoint": "Stop pointing out",
+      "pom_outside_group": "Anchored but not on the sheet ({{n}})"
     },
     "loading": "Loading pattern…",
     "empty_title": "No pattern yet",
@@ -4507,8 +4610,6 @@
     "pom_search": "Search a POM by code or name…",
     "pom_none": "No POM found.",
     "pom_unmeasured": "not measured",
-    "poms_anchored": "Anchored POMs ({{n}})",
-    "poms_empty": "No POM anchored yet. Enter “Mark POM” mode to start.",
     "sews": "Seams ({{n}})",
     "sews_empty": "No seam declared.",
     "sew_type": {
@@ -5105,5 +5206,62 @@
     "step_base_copiada_avis": "{{count}} measurement(s) with a STEP rule and no value: the base size value was copied and must be fixed by hand in Scaling → {{detall}}",
     "step_posar_valor": "Set this size’s value in the rule",
     "step_valor_err": "The value could not be saved."
+  },
+  "rondes": {
+    "nom": "ROUND {{n}}",
+    "sense_volta": "NO ROUND",
+    "estat_entregada": "Delivered",
+    "estat_tancada": "Closed",
+    "estat_oberta": "In progress",
+    "inici": "start",
+    "fi": "end",
+    "temps": "time",
+    "n_tasques_one": "{{count}} task",
+    "n_tasques_other": "{{count}} tasks",
+    "rectificacions_one": "/ rectification {{count}}",
+    "rectificacions_other": "/ rectifications {{count}}",
+    "rectificacions_titol": "Times work from this round was reopened AFTER it was delivered",
+    "plega": "Collapse round",
+    "desplega": "Expand round",
+    "volta_buida": "This round has no tasks yet",
+    "peu_segellades": "Tasks in a delivered round are sealed — rectifying opens a new round.",
+    "marcar_entregable": "Mark as deliverable",
+    "nova": "+ New round",
+    "nova_ok": "Round {{n}} opened",
+    "nova_replicats_one": "{{count}} task replicated",
+    "nova_replicats_other": "{{count}} tasks replicated",
+    "nova_adoptats_one": "{{count}} task picked up",
+    "nova_adoptats_other": "{{count}} tasks picked up",
+    "nova_omesos": "skipped (no longer in the catalogue): {{codes}}",
+    "nova_error": "The round could not be opened",
+    "entrega_titol": "Report delivery of round {{n}}",
+    "entrega_destinatari": "Delivered to",
+    "entrega_destinatari_ph": "Customer or contact name",
+    "entrega_descripcio": "What was delivered",
+    "entrega_descripcio_ph": "Tech pack v1, pattern + grading…",
+    "entrega_avis": "On confirming, round {{n}} will be CLOSED.",
+    "entrega_avis_viues_one": "{{count}} task that is still live will also be closed.",
+    "entrega_avis_viues_other": "{{count}} tasks that are still live will also be closed.",
+    "entrega_confirma": "Report delivery and close the round",
+    "entrega_error": "The delivery could not be reported",
+    "entrega_ok": "Delivery reported · round {{n}} closed",
+    "entrega_linia": "Delivered {{data}} to {{destinatari}}",
+    "entrega_per": "by {{qui}}",
+    "ok_client_pendent": "Customer OK pending",
+    "ok_client_fet": "Customer OK {{data}}",
+    "ok_client_titol": "Report the customer's OK",
+    "ok_client_cos": "The customer ({{destinatari}}) confirmed it arrived fine. Reported once only.",
+    "ok_client_data": "OK date",
+    "ok_client_data_nota": "Left blank, today's date is used.",
+    "ok_client_confirma": "Report the OK",
+    "ok_client_error": "The customer's OK could not be reported",
+    "ok_client_ok": "Customer's OK reported",
+    "reg_titol": "Activity by round",
+    "reg_kpi_rondes": "Rounds",
+    "reg_kpi_entregues": "Deliveries",
+    "reg_col_qui": "Who",
+    "reg_entrega_a": "Delivered to {{destinatari}}",
+    "reg_buit": "This model has no recorded activity yet",
+    "lliurable": "Deliverable"
   }
 }

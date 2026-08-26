@@ -578,7 +578,10 @@ class Command(BaseCommand):
             sequencial=m['sequencial'], nom_prenda=m['nom_prenda'],
             descripcio=m['descripcio'], collection=m['collection'],
             color_referencia=m['color_referencia'], fit_type=m['fit_type'],
-            estat=m['estat'], fase_actual=m['fase_actual'], prioritat=m['prioritat'],
+            # M3 · FIT-9 — l'export porta el vocabulari VELL (`'Nou'`), que ja no és cap
+            # choice. La sembra no és el lloc de conservar un valor mort: tot el que neix
+            # d'aquí neix VIU, com el backfill de la migració 0087.
+            estat=Model.ESTAT_NOU, fase_actual=m['fase_actual'], prioritat=m['prioritat'],
             target=m['target'], construction=m['construction'],
             base_size_label=m['base_size_label'], size_run_model=m['size_run_model'],
             measurements_version=m['measurements_version'], origen=m['origen'],

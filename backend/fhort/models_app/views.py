@@ -4,6 +4,7 @@ from decimal import Decimal, InvalidOperation
 from django.db import connection, transaction
 from django.db.models import Exists, OuterRef
 from rest_framework import mixins, viewsets
+from rest_framework import status as http_status
 from rest_framework.decorators import api_view, parser_classes, permission_classes, action
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -12,7 +13,7 @@ from rest_framework.filters import OrderingFilter, SearchFilter
 from django_filters.rest_framework import DjangoFilterBackend
 import django_filters
 
-from fhort.accounts.capabilities import HasCapability, EXECUTE_TASKS, CONFIGURE
+from fhort.accounts.capabilities import HasCapability, EXECUTE_TASKS, CONFIGURE, CLOSE_GATES
 from fhort.pom.services import SealedGradingVersionError, _te_regles
 from fhort.pom.grading_regime import (
     CODI_LINEAR_ZERO, MISSATGE_LINEAR_ZERO, es_linear_degenerada, valida_breaks,
@@ -964,7 +965,9 @@ def create_model_wizard(request):
             descripcio=descripcio or None,
             collection=collection or '',
             created_by=creator,
-            estat='Nou',
+            # M3 · FIT-9 — el vocabulari d'estat viu a `Model.ESTAT_CHOICES` i no s'escriu a mà:
+            # aquest literal deia `'Nou'` i el dia del repropòsit hauria escrit un valor mort.
+            estat=Model.ESTAT_NOU,
             data_objectiu=data_objectiu,
             **garment_fields,
         )
@@ -3303,14 +3306,38 @@ class _ExecuteTasksCap(HasCapability):
 @api_view(['POST'])
 @permission_classes([_ExecuteTasksCap])
 def set_size_override_view(request, model_id):
-    """POST /api/v1/models/<model_id>/set-size-override/  Body: {pom_id, size_label, valor}
+    """POST /api/v1/models/<model_id>/set-size-override/  Body: {pom_id, size_label, valor, garment?}
 
     Edita el valor d'UNA talla NO-base com a ModelGradingOverride (per-model,
     traçable) i RE-PROPAGA el grading (generate_graded_specs) sobre la
     GradingVersion vigent (criteri de PEÇA 0). L'override té precedència màxima
     al motor (override→exception→regla→FIXED), per tant editar una 2a talla
     manté la 1a. NO toca GradedSpec directament (és sortida del motor) ni
-    PieceFittingLine. Idempotent per (model, pom, size_label).
+    PieceFittingLine.
+
+    ── F2 (2026-08-25) · **IDEMPOTENT PER `(model, pom, size_label, garment)`** ─────────
+    Ho era per `(model, pom, size_label)`, i era la frase d'abans que el model tingués peces.
+    La `unique` real de `ModelGradingOverride` són SIS columnes
+    —`(model, pom, size_label, capa, instancia, garment)`— i aquest camí en deia CINC: el
+    `garment` no hi era ni al lookup ni al payload, o sigui que no es podia ni dir ni
+    distingir. Amb dues peces vives que comparteixin un POM, el `filter` de cinc columnes
+    casa DUES files i l'`update_or_create` peta amb `MultipleObjectsReturned` (500); i abans
+    d'arribar-hi, el `prev` ja ha pogut llegir el valor de l'ALTRA peça i deixar un
+    `MeasurementChangeLog` que diu que s'ha canviat una mesura que ningú no ha tocat.
+    El defecte NO era latent: `fhort` ja té tres parells `(model, pom)` amb mesura a dues
+    peces (1320/904, 1379/962, 1380/962) — v. `docs/ordres/CENS_INSTANCIES_POM_2026-08-25.md`,
+    fila 9 del veredicte.
+
+    És el MIRALL del germà `escalat_ajustar_talla_view`, que ja el diu i ja el passa des de
+    SET-2/T8. El `garment` surt del punt únic `_identitat_de_mesura`: **qui no el diu rep
+    `''`, la peça MARE**, que és el comportament d'avui byte a byte per a tot model d'una
+    sola peça (i per a tot client antic, que no el sabrà enviar mai).
+
+    ⚠️ `capa` i `instancia` segueixen sent LITERALS aquí, i no és un oblit: aquest fix obre
+    UN eix, el que tenia el defecte. Amb el `garment` al lookup la clau ja és la `unique`
+    sencera i cap `update_or_create` d'aquest camí pot tornar a casar dues files. Que aquesta
+    porta no sàpiga adreçar una GERMANA d'instància és una limitació coneguda i separada
+    (mateix cens, fila 12-13); obrir-la és una altra decisió i un altre tram.
     """
     from fhort.models_app.models import ModelGradingOverride, MeasurementChangeLog
     from fhort.pom.models import POMMaster
@@ -3329,6 +3356,11 @@ def set_size_override_view(request, model_id):
     pom_id = data.get('pom_id')
     size_label = (data.get('size_label') or '').strip()
     valor = data.get('valor')
+    # F2 — EL GARMENT, PEL PUNT ÚNIC. `_identitat_de_mesura` és qui decideix què rep qui no
+    # el diu (v. la seva acta): `''` = peça MARE, i un `None` explícit al cos val el mateix
+    # que no dir-ho, perquè la columna és NOT NULL amb default. Se'n pren NOMÉS el tercer
+    # eix: els altres dos segueixen literals en aquesta porta (v. el docstring).
+    garment = _identitat_de_mesura(data)[2]
     if pom_id is None or not size_label or valor is None:
         return Response({'error': 'Calen pom_id, size_label i valor.'}, status=400)
     try:
@@ -3366,13 +3398,21 @@ def set_size_override_view(request, model_id):
         # FASE_3/C1-ins — literals als TRES punts d'aquest bloc (la lectura de `prev`,
         # l'upsert i el log): han de parlar de la MATEIXA fila o el rastre diria que s'ha
         # canviat una mesura que no s'ha tocat. V. `_write_base`.
+        # F2 — i el `garment` va als TRES pel mateix motiu, que aquí és el més urgent dels
+        # tres: al lookup perquè la clau ha d'anar SEMPRE alineada amb la unicitat real de la
+        # taula (sis columnes, no cinc) i sense ell l'`update_or_create` casa dues files; a
+        # `prev` perquè el valor d'abans ha de ser el D'AQUESTA peça; i al log perquè
+        # `MeasurementChangeLog` és APPEND-ONLY i no té unicitat — una fila mal atribuïda no
+        # es pot corregir després.
         prev = (ModelGradingOverride.objects
                 .filter(model=model, pom=pom, size_label=size_label,
-                        capa=MeasurementLayer.SLUG_DEFECTE, instancia='')
+                        capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
+                        garment=garment)
                 .values_list('value_cm', flat=True).first())
         ModelGradingOverride.objects.update_or_create(
             model=model, pom=pom, size_label=size_label,
             capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
+            garment=garment,
             defaults={
                 'value_cm': valor,
                 'motiu': 'Edició manual de talla (taula propagada)',
@@ -3387,6 +3427,7 @@ def set_size_override_view(request, model_id):
             MeasurementChangeLog.objects.create(
                 model=model, pom=pom, base_measurement=None,
                 capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
+                garment=garment,
                 valor_anterior=(float(prev) if prev is not None else None),
                 valor_nou=valor,
                 context='manual',
@@ -3415,15 +3456,26 @@ def set_size_override_view(request, model_id):
             return Response({'error': str(e)}, status=400)
 
     # 9. Retorna el GradedSpec resultant de la talla editada (reflecteix l'override).
+    # F2 — LA LECTURA DE RETORN TAMBÉ VOL LA IDENTITAT, i era el segon forat d'aquest camí.
+    # La `unique` de `GradedSpec` són sis columnes i aquest filtre en deia TRES: amb una
+    # germana viva —d'instància o de peça— el `.first()` sense `order_by` retorna la fila que
+    # el planner de Postgres vulgui, o sigui que la resposta podia dir el `graded_value_cm`
+    # d'una ALTRA mesura amb un 200 OK. S'hi posen els tres eixos, i els dos literals són
+    # exactament els que aquest camí acaba d'escriure: la resposta descriu la fila escrita.
+    # Mirall del germà (`escalat_ajustar_talla_view`), que ja hi filtra per identitat sencera.
     gv = vigent_grading_version(sf)
     graded = (GradedSpec.objects
-              .filter(grading_version=gv, pom=pom, size_label=size_label)
+              .filter(grading_version=gv, pom=pom, size_label=size_label,
+                      capa=MeasurementLayer.SLUG_DEFECTE, instancia='', garment=garment)
               .values_list('graded_value_cm', flat=True).first()) if gv else None
     return Response({
         'ok': True,
         'model_id': model.id,
         'pom_id': pom.id,
         'size_label': size_label,
+        # F2 — QUINA PEÇA s'ha escrit. Additiu: un client que no el llegeixi no en nota res,
+        # i el que l'envia pot comprovar que ha aterrat on volia (l'`''` és la mare).
+        'garment': garment,
         'override_value_cm': valor,
         'grading_version_id': gv.id if gv else None,
         'graded_value_cm': float(graded) if graded is not None else None,
@@ -4256,6 +4308,7 @@ def consumption_delivery_view(request, model_id):
     try:
         model = Model.objects.select_related('consumption_record').prefetch_related(
             'model_tasks__task_type',
+            'model_tasks__ronda',
             'model_tasks__timers__tecnic',
             'model_tasks__transitions__by',
         ).get(id=model_id)
@@ -4275,6 +4328,7 @@ def consumption_delivery_view(request, model_id):
     tasks = sorted(model.model_tasks.all(), key=lambda t: (t.order, t.id))
     for mt in tasks:
         task_minutes = 0
+        minuts_per_tecnic = {}   # M2 · etiqueta -> minuts SANS d'aquest pas (per al `qui`)
         for tm in mt.timers.all():
             if not tram_compta(tm):      # timer obert (B1-a) o tram desbocat → fora
                 continue
@@ -4284,12 +4338,31 @@ def consumption_delivery_view(request, model_id):
                 label = (tm.tecnic.nom_complet or tm.tecnic.user.get_username()) if tm.tecnic else str(tm.tecnic_id)
                 slot = per_tech.setdefault(tm.tecnic_id, {'technician_id': tm.tecnic_id, 'label': label, 'minutes': 0})
                 slot['minutes'] += tm.minuts
+                minuts_per_tecnic[label] = minuts_per_tecnic.get(label, 0) + tm.minuts
+        # M2 — DUES ADDICIONS READ-ONLY, i cap camp nou a cap taula.
+        #
+        # `ronda_seq`: el registre d'activitat s'agrupa per VOLTA (mockup B v3) i el pas no deia
+        # de quina era. Creuar-ho pel `task_type` seria ambigu precisament al cas que importa:
+        # amb rondes, el MATEIX code apareix un cop per volta i les files no es podrien
+        # distingir. `null` = feina d'abans del canvi de llei o nascuda al buit entre voltes
+        # (mateix contracte que `ModelTaskSerializer.ronda_seq`).
+        #
+        # `qui`: el tècnic que hi ha posat MÉS MINUTS SANS, no l'`assignee`. La lliçó és la de
+        # F1.5 i la repeteix `ModelTaskSerializer.obert_per`: `assignee` és PLANIFICACIÓ i el
+        # rellotge és REALITAT, i un registre d'ACTIVITAT ha de dir qui la va fer. Sense cap
+        # tram sa, `null` — «ningú no hi ha treballat» és una dada, no un forat a omplir amb
+        # el nom de qui la tenia assignada.
+        qui = None
+        if minuts_per_tecnic:
+            qui = max(minuts_per_tecnic.items(), key=lambda kv: (kv[1], kv[0]))[0]
         steps.append({
             'task_type': mt.task_type.name if mt.task_type_id else None,
             'status': mt.status,
             'minutes': task_minutes,
             'started_at': mt.started_at,
             'finished_at': mt.finished_at,
+            'ronda_seq': mt.ronda.seq if mt.ronda_id else None,
+            'qui': qui,
         })
         for tr in mt.transitions.all():
             if tr.from_status == 'Done' and tr.to_status == 'InProgress':
@@ -4360,6 +4433,11 @@ def model_dashboard_view(request, model_id):
     on_soc = {
         'fase': model.fase_actual,
         'estat': model.estat,
+        # M3 · FIT-9/10 — el banner de la fitxa ha de poder dir PER QUÈ està acabat i des de
+        # quan. Sense el motiu, «Acabat» i «Tret de catàleg» —que són fets ben diferents— es
+        # pintarien igual, i el segon és el que explica per què no hi haurà més voltes.
+        'motiu_tancament': model.motiu_tancament,
+        'data_tancament': model.data_tancament.isoformat() if model.data_tancament else None,
         'ready_for_gate': model_ready_for_gate(model.id),
         'next_phase': next_phase,
         'blockers': {'tasks_open': tasks_open},
@@ -4397,7 +4475,7 @@ def model_dashboard_view(request, model_id):
 
     pla_tasks = (_ModelTask.objects
                  .filter(model_id=model.id)
-                 .select_related('task_type', 'assignee')
+                 .select_related('task_type', 'assignee', 'ronda')
                  .order_by('task_type__default_order', 'task_type__code'))
     # Temps consumit per tasca amb la regla d'higiene (== helper canònic _real_minutes). 1 query.
     from fhort.tasks.services_i import minuts_per_model_task
@@ -4423,6 +4501,16 @@ def model_dashboard_view(request, model_id):
         # B4a — origen/off_recipe per pintar el filet grana (extra fora de recepta) al board.
         'origen': t.origen,
         'off_recipe': t.off_recipe,
+        # M2 — ADDICIÓ READ-ONLY: de quina VOLTA és la tasca. El Pla de treball s'agrupa per
+        # ronda (mockup A v2) i aquest compositor era l'únic lloc que no ho deia. NO es fa
+        # llegint `/model-task-items/`, que ja porta `ronda`/`ronda_seq`: aquell endpoint té
+        # ABAST PER FILA (`scope_model_task_queryset`) i a un tècnic sense VIEW_TEAM_TASKS li
+        # amagaria les tasques d'altri — el Pla passaria a ensenyar-ne menys de les que ensenya
+        # avui, i en silenci. El compositor no scopa, i per això la volta ha de sortir d'aquí.
+        # `ronda_seq` null = feina d'abans del canvi de llei (M1-bis · FIT-4) o nascuda al buit
+        # entre voltes: mateix contracte que `ModelTaskSerializer.ronda_seq`.
+        'ronda': t.ronda_id,
+        'ronda_seq': t.ronda.seq if t.ronda_id else None,
     } for t in pla_tasks]
 
     # --- Q3: atenció tècnica — alertes POM PENDENTS de resoldre ---
@@ -5538,3 +5626,138 @@ def set_pom_regim_view(request, model_id, pom_id):
         # de poder confirmar què ha quedat desat sense tornar a demanar la taula.
         'breaks': rule.breaks or [],
     })
+
+
+# ── M3 · EL CICLE DE VIDA DEL MODEL — les tres portes (FIT-9 · FIT-10 · FIT-11) ──────────────
+#
+# ✅ CAPABILITY: **`CLOSE_GATES`**, i no és una tria per analogia. És la capacitat de GOVERN de
+# la casa: és la que gateja els actes que mouen un MODEL sense executar-ne cap tasca —
+# `gate_model_view`, `regress_model_view` i `gate_bulk_view` («accions de govern post-reunió»,
+# `tasks/views_b.py:827-897`)— i la que segella una versió de graduació (`fitting/views.py:75`:
+# «aprovar és un gate, i els gates són decisió humana i gated»). Acabar, jubilar i reobrir un
+# model són exactament això: decisions de responsable sobre el model sencer. Per rol la tenen
+# `manager` i `admin`, no el `technician` ni el `product_manager` (`accounts/capabilities.py`).
+#
+# Per què NO `_ExecuteTasks` (la d'M1 per a l'entrega): entregar una volta és feina de qui
+# treballa —«qui pot treballar pot entregar»—, i tancar el model és tancar-ho tot, inclosa la
+# feina viva d'altri. Aquí NO cal el TODO que M1 va haver de declarar: la capability existia.
+
+class _CloseGates(HasCapability):
+    """Gate de GOVERN (CLOSE_GATES) per als actes del cicle de vida del model."""
+    required_capability = CLOSE_GATES
+
+
+def _model_i_perfil(request, model_id):
+    """(model, profile, resposta_d_error). La resposta és None quan tot va bé."""
+    profile = getattr(request.user, 'profile', None)
+    if profile is None:
+        return None, None, Response({'error': 'Usuari sense perfil en aquest tenant.',
+                                     'code': 'no_profile'}, status=http_status.HTTP_403_FORBIDDEN)
+    try:
+        model = Model.objects.get(pk=model_id)
+    except Model.DoesNotExist:
+        return None, None, Response({'error': 'Model no trobat.'},
+                                    status=http_status.HTTP_404_NOT_FOUND)
+    return model, profile, None
+
+
+def _estat_del_model(model, entrega=None):
+    """La forma que tornen les tres portes: l'estat VIU + l'últim rastre. Una sola forma per a
+    les tres, perquè la cara no hagi d'aprendre'n tres."""
+    ultim = model.esdeveniments_estat.select_related('per').first()   # ordering: -quan
+    return {
+        'model_id': model.pk,
+        'estat': model.estat,
+        'motiu_tancament': model.motiu_tancament,
+        'data_tancament': model.data_tancament.isoformat() if model.data_tancament else None,
+        'rastre': None if ultim is None else {
+            'de': ultim.de_estat, 'a': ultim.a_estat, 'motiu': ultim.motiu,
+            'per': ultim.per.nom_complet if ultim.per_id else None,
+            'quan': ultim.quan.isoformat(),
+        },
+        'entrega': None if entrega is None else {
+            'id': entrega.pk, 'ronda_seq': entrega.ronda.seq,
+            'destinatari': entrega.destinatari, 'data': entrega.data.isoformat(),
+        },
+    }
+
+
+@api_view(['POST'])
+@permission_classes([_CloseGates])
+def tancar_model_view(request, model_id):
+    """POST /api/v1/models/<model_id>/tancar/ · {motiu, confirmar_entrega?, destinatari?, descripcio?}
+
+    FIT-10 — l'acte humà que acaba un model. `motiu` ∈ {`acabat`, `tret_de_cataleg`}.
+
+    🚨 **AMB RONDA OBERTA CONTESTA 409, I EL 409 ÉS LA PREGUNTA.** Porta `code='ronda_oberta'`,
+    les dades de la volta i **`requereix_entrega`**, perquè la cara sàpiga quina pregunta ha de
+    fer. Amb `confirmar=true` la segona crida ho fa tot en una transacció, i el que fa amb la
+    volta depèn del motiu (CODA d'M3):
+
+      · `acabat`           → entrega (porta d'M1) → tancament de la volta i de la feina viva
+                             (FIT-13 + FIT-6) → `estat='acabat'`. Demana `destinatari`.
+      · `tret_de_cataleg`  → **cap entrega** (FIT-1: l'Entrega registra fets que han passat) →
+                             `tancar_ronda` → `estat='acabat'`.
+
+    `confirmar_entrega` s'accepta com a àlies de `confirmar`: és el nom que la porta va publicar
+    a M3 i el que els fums escrits abans de la CODA segueixen enviant.
+    """
+    from .services_cicle import CicleVidaError, tancar_model
+
+    model, profile, err = _model_i_perfil(request, model_id)
+    if err is not None:
+        return err
+    dades = request.data or {}
+    try:
+        entrega = tancar_model(
+            model, motiu=dades.get('motiu'), profile=profile,
+            confirmar=_truthy(dades.get('confirmar')) or _truthy(dades.get('confirmar_entrega')),
+            destinatari=(dades.get('destinatari') or '').strip(),
+            descripcio=(dades.get('descripcio') or '').strip())
+    except CicleVidaError as e:
+        codi = (http_status.HTTP_409_CONFLICT if e.code == 'ronda_oberta'
+                else http_status.HTTP_400_BAD_REQUEST)
+        return Response({'error': str(e), 'code': e.code, **e.dades}, status=codi)
+    model.refresh_from_db()
+    return Response(_estat_del_model(model, entrega), status=http_status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([_CloseGates])
+def reobrir_model_view(request, model_id):
+    """POST /api/v1/models/<model_id>/reobrir/ · {motiu?}
+
+    FIT-11 — el model torna a OBERT. Què es fa a dins (rectificar la darrera volta o obrir-ne
+    una de nova) és una decisió posterior i separada, i el guard d'FIT-11 viu a
+    `transition_task`, no aquí.
+    """
+    from .services_cicle import CicleVidaError, reobrir_model
+
+    model, profile, err = _model_i_perfil(request, model_id)
+    if err is not None:
+        return err
+    try:
+        reobrir_model(model, profile=profile,
+                      motiu=((request.data or {}).get('motiu') or '').strip())
+    except CicleVidaError as e:
+        return Response({'error': str(e), 'code': e.code}, status=http_status.HTTP_400_BAD_REQUEST)
+    model.refresh_from_db()
+    return Response(_estat_del_model(model), status=http_status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([_CloseGates])
+def jubilar_model_view(request, model_id):
+    """POST /api/v1/models/<model_id>/jubilar/ · {motiu?}  — FIT-9, l'arxiu. Només des d'`acabat`."""
+    from .services_cicle import CicleVidaError, jubilar_model
+
+    model, profile, err = _model_i_perfil(request, model_id)
+    if err is not None:
+        return err
+    try:
+        jubilar_model(model, profile=profile,
+                      motiu=((request.data or {}).get('motiu') or '').strip())
+    except CicleVidaError as e:
+        return Response({'error': str(e), 'code': e.code}, status=http_status.HTTP_400_BAD_REQUEST)
+    model.refresh_from_db()
+    return Response(_estat_del_model(model), status=http_status.HTTP_200_OK)
