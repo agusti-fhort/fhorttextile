@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path
 from drf_spectacular.views import (
@@ -50,7 +51,23 @@ urlpatterns = [
     path('api/v1/', include('fhort.tasks.urls')),
     path('api/v1/', include('fhort.planning.urls')),
     path('api/v1/', include('fhort.commerce.urls')),
-    path('api/v1/', include('fhort.patterns.urls')),
+    # FASE A — EL MOTOR DE PATRONS, DARRERE L'INTERRUPTOR (`FTT_PATTERNS_ENABLED`, settings.py).
+    #
+    # EL PANY VIU AQUÍ I NO DINS DE L'APP, per tres raons:
+    #   1. És UN sol punt. Tota l'API del motor penja d'aquest únic `include`: les set rutes de
+    #      `patterns/urls.py` (pattern-files, piece-roles, pattern-poms, pattern-segments,
+    #      sew-relations, sew-proposal-rejections, sew-tolerance-acceptances) i totes les
+    #      `@action` que en pengen (render.svg, geometry, download-links, identificar,
+    #      export…). Cap altre `urls.py` importa l'app: no hi ha cap ruta de patrons a fora.
+    #   2. Dona un 404 DE VERITAT. Un permís de DRF donaria 403, que és una altra frase: diria
+    #      «això existeix i no hi pots entrar» quan el que volem dir és «això aquí no hi és».
+    #      Amb el flag apagat el resolutor no coneix el prefix i respon el 404 de Django sol.
+    #   3. No toca cap vista del motor — que és, a més, on hi ha una altra mà treballant.
+    #
+    # S'escriu desplegant una llista i no amb un `if` que faci `append` al final del fitxer
+    # perquè la POSICIÓ s'ha de conservar: amb el flag encès, aquest `urlpatterns` és element
+    # per element el d'abans d'existir el flag, amb `patterns` entre `commerce` i `tenants`.
+    *([path('api/v1/', include('fhort.patterns.urls'))] if settings.FTT_PATTERNS_ENABLED else []),
     # P7 — els RECURSOS del Brand (vincles de federació). App SHARED servida des de l'URLconf
     # de tenant a posta: la taula és a `public` però qui la consulta és el tenant (vegeu
     # fhort/tenants/urls.py). Cap ruta al public: un Brand mira els seus vincles des de casa.
