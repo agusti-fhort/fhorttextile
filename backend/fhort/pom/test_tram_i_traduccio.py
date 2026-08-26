@@ -192,6 +192,43 @@ class TramTraduccioTest(TenantTestCase):
         )
         self.assertEqual(r.status_code, 400)
 
+    # ── F4 (26/08) · EL LÍMIT, UNA SOLA POLÍTICA ──────────────────────────────────────────
+    #
+    # Hi havia DUES respostes per al mateix sostre: la vista rebutjava per sobre de `MAX_IDS`
+    # i el servei, a més, truncava amb `[:MAX_IDS]`. La del servei era codi mort (mai s'hi
+    # arribava amb més), però deia el contrari de la porta — i si algun dia hagués manat,
+    # hauria respost 200 OK amb un terç de la resposta que falta i sense dir-ho. La decisió és
+    # una: **s'accepta fins a MAX_IDS i es refusa per sobre amb un error que parla.**
+
+    def test_exactament_max_ids_ES_ACCEPTA(self):
+        # El sostre és INCLUSIU: 300 passa. És la vora que el trossejat del client toca.
+        self._mock()
+        ids = list(range(1, ts.MAX_IDS + 1))
+        r = self.api.get('/api/v1/translate/pom/',
+                         {'pom_ids': ','.join(str(i) for i in ids), 'lang': 'es'})
+        self.assertEqual(r.status_code, 200)
+
+    def test_un_de_mes_es_refusa_DIENT_EL_NUMERO(self):
+        # Un 400 mut obliga el client a endevinar el sostre; aquest el diu.
+        ids = list(range(1, ts.MAX_IDS + 2))
+        r = self.api.get('/api/v1/translate/pom/',
+                         {'pom_ids': ','.join(str(i) for i in ids), 'lang': 'es'})
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.data['codi'], 'MASSA_POMS')
+        self.assertEqual(r.data['max'], ts.MAX_IDS)
+        self.assertEqual(r.data['rebuts'], ts.MAX_IDS + 1)
+        self.assertIn(str(ts.MAX_IDS), r.data['detail'])
+
+    def test_el_servei_ja_no_trunca_en_silenci(self):
+        # La meitat de la llei que no es veu des de l'HTTP: amb el tall viu, qui cridés el
+        # servei sense passar per la vista es quedaria amb 300 de 400 i cap avís.
+        self._mock()
+        poms = [POMMaster.objects.create(codi_client=f'F4{i}', nom_client=f'Mesura {i}',
+                                         actiu=True)
+                for i in range(3)]
+        out = ts.tradueix_poms([p.id for p in poms], 'es')
+        self.assertEqual(len(out), 3)
+
     def test_cal_estar_autenticat(self):
         r = APIClient(SERVER_NAME=self.get_test_tenant_domain()).get(
             '/api/v1/translate/pom/', {'pom_ids': '1', 'lang': 'es'})
