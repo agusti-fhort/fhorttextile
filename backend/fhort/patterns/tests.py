@@ -3564,11 +3564,16 @@ class ProjeccioTest(EscalatTestBase):
             self.assertAlmostEqual(dx, 0.0, places=9)
             self.assertAlmostEqual(dy, 0.0, places=9)
 
-    def test_una_regla_per_punt_mogut_i_la_regla_0_per_a_la_resta(self):
+    def test_una_regla_per_punt_mogut_i_la_regla_de_repos_per_a_la_resta(self):
+        """La regla de repòs ja no és la 0: des de 32ef5eb2 la numeració comença a 1,
+        perquè per al PolyPattern el zero no és cap número de regla. El que es prova
+        segueix sent el mateix —la de repòs no mou res—, i per això s'hi arriba per
+        `REGLA_ZERO` i no per un literal que caduca."""
         _, _, _, proj = self._projectar()
 
-        self.assertIn(0, proj.grade_table.regles)
-        for delta in proj.grade_table.regles[0].deltes.values():
+        self.assertIn(REGLA_ZERO, proj.grade_table.regles)
+        self.assertNotIn(0, proj.grade_table.regles, 'el zero ja no és número de regla')
+        for delta in proj.grade_table.regles[REGLA_ZERO].deltes.values():
             self.assertEqual(delta, (0.0, 0.0))
 
         # Els punts de corba no porten regla: flueixen, i és el CAD qui els fa fluir.
@@ -3821,11 +3826,14 @@ class AutovalidacioTest(EscalatTestBase):
 
         self.assertEqual(taula.talles, ('S', 'M', 'L', 'XL', 'XXL'))
         self.assertEqual(taula.talla_base, 'S')
-        self.assertIn(0, taula.regles)
+        # La de repòs és la `REGLA_ZERO` (=1 des de 32ef5eb2), no la 0: el RUL que
+        # emetem numera com el del PolyPattern, i el zero no hi és cap regla.
+        self.assertIn(REGLA_ZERO, taula.regles)
+        self.assertNotIn(0, taula.regles, 'el RUL emès no pot portar DELTA 0')
         # Hi ha d'haver com a mínim una regla que mogui alguna cosa de debò.
         self.assertTrue(any(
             any(d != (0.0, 0.0) for d in regla.deltes.values())
-            for num, regla in taula.regles.items() if num != 0
+            for num, regla in taula.regles.items() if num != REGLA_ZERO
         ))
 
 
