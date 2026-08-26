@@ -194,6 +194,20 @@ nou va a `FTT_RECOGNITION_MIN_SCORE` (settings) i cal reiniciar `ftt-staging.ser
 | cap peça confirmada per nosaltres | ✅ 0 |
 | 1383 / 162 tocats | ✅ cap escriptura |
 
+### 🚩 Un desplegament pendent que NO és d'aquesta prep
+
+Mentre es preparava això, **dues altres sessions han fusionat feina a `dev` i no l'han
+desplegada**: `coda-t3-families` i `fixos-formacio-1`. Ara mateix staging serveix codi de
+les **15:18** i el darrer commit és de les **15:52** — 34 fitxers de diferència.
+
+- **No afecta la sessió**: cap dels 34 toca `patterns/`, `PatternTab`, `PieceIdentityList`
+  ni `ModelSheet`, i les claus i18n del reconeixedor hi són als tres idiomes (comprovat).
+- **Les verificacions d'aquesta taula valen per al procés que corre ARA.** Si algú
+  desplega aquelles dues branques abans de la sessió, val la pena repetir el smoke de la
+  taula: són cinc minuts.
+- **No s'ha reiniciat des d'aquí**: no és feina d'aquest tram i desplegar la feina d'altri
+  sense verificar-la, just abans d'una sessió amb la Montse, seria pitjor que el decalatge.
+
 **Signe negatiu de l'àrea del CALLIE:** és l'únic material de la casa en sentit **horari**
 (`fixtures/README.md`), o sigui que l'àrea signada negativa és una propietat del fitxer i no
 un defecte. El que importa és la magnitud: el doble de la meitat.
