@@ -2,6 +2,9 @@ from django.conf import settings
 from django.db import models
 from django.db.models.functions import Upper
 
+# La llei de les famílies d'instància (26/08). V. la nota a `MeasurementInstance`.
+from fhort.pom import families as _fam
+
 
 # ─────────────────────────────────────────────────────────────
 # FHORT global catalog ('public' schema)
@@ -346,80 +349,126 @@ class MeasurementInstance(models.Model):
     #: es fa un cop no té res a qualificar (v. `sufixIdentitat`, que hi torna `''`).
     SLUG_UNICA = ''
 
-    # ═══ ELS DOS EIXOS DE LA POSICIÓ (Agus, 22-23/08) ══════════════════════════════════════
+    # ═══ LES FAMÍLIES D'EIXOS (LA LLEI D'AGUS, 26/08) ═════════════════════════════════════
     #
-    # 🚨 LA POSICIÓ NO ÉS UNA LLISTA D'OPCIONS EXCLOENTS: en són DUES. Una mesura pot ser «la
-    # de l'esquena, banda esquerra» —CARA i LATERAL alhora—, i no pot ser «esquerra i dreta»
-    # ni «davant i darrere». Dins d'un sub-eix, excloents; entre sub-eixos, combinables.
+    # 🚨 LA POSICIÓ NO ÉS UNA LLISTA D'OPCIONS EXCLOENTS: són CINC FAMÍLIES. Una mesura pot ser
+    # «la del davant, banda esquerra, per dalt» —tres famílies alhora—, i no pot ser «esquerra i
+    # dreta». **Excloents DINS de família; combinables ENTRE totes.**
     #
-    # ⚠️ **L'ORDRE D'AQUESTA TUPLA ÉS L'ORDRE DEL SUFIX**, no el de presentació: CARA primer i
-    # LATERAL després (`BL`, mai `LB`; `FR`, mai `RF`). El `display_order` de les files diu
-    # una altra cosa —en quin ordre s'OFEREIXEN els xips (Left · Right · Front · Back)— i les
-    # dues coses no han de coincidir: el codi que va al fabricant es llegeix cara-i-banda, i
-    # els xips s'ofereixen pel que es fa servir cada dia.
+    # Això substitueix els dos sub-eixos del 22-23/08 (`CARA` i `LATERAL`), que deixaven **6
+    # dels 10 slugs de posició sense família** —`top`, `bottom`, `cf`, `cb`, `side`,
+    # `waistband_seam`—, i un slug sense família era EXCLOENT AMB TOT. D'aquí venia el símptoma
+    # de la formació: prémer «Top» apagava «Left». Ara no hi ha cap slug orfe.
     #
-    # ⚠️ PER QUÈ UNA CONSTANT I NO UNA COLUMNA. El sub-eix no és una dada que un tenant pugui
+    # ⚠️ **`cf`/`cb` són família PRÒPIA (LÍNIA), NO són peça.** El centre davant és una LÍNIA de
+    # la peça, no la seva cara: per això `front`+`cf` és legal. És redundant —qui ho digui ja
+    # sap què vol dir— i **el sistema no fa de policia semàntic**: la redundància és criteri de
+    # qui mesura, no un error.
+    #
+    # ⚠️ **L'ORDRE D'AQUESTA TUPLA ÉS L'ORDRE CANÒNIC**, i és el de la llei:
+    #     peça → banda → verticalitat → costura → línia → estat.
+    # Mana el slug que es desa (`back-left`, mai `left-back`) i el sufix que es proposa. **MAI
+    # l'alfabet**: v. la nota de `EIX_CHOICES` i el defecte que això tanca.
+    # El `display_order` de les files diu una altra cosa —en quin ordre s'OFEREIXEN els xips— i
+    # les dues coses no han de coincidir.
+    #
+    # ⚠️ **EL MIRALL ÉS PROPIETAT DE LA FAMÍLIA, i només el tenen les BINOMIALS.** `COSTURA` no
+    # en té: «side seam» i «waistband seam» no són l'una el revers de l'altra, són dues costures
+    # diferents. Es declaren com a DADA per al dia que el motor demani girar una peça o copiar
+    # left→right; **cap operació de gir s'implementa aquí** (v. l'acta: fora d'abast).
+    #
+    # ⚠️ PER QUÈ UNA CONSTANT I NO UNA COLUMNA. La família no és una dada que un tenant pugui
     # informar: és la GEOMETRIA de la peça —que left i right són la mateixa pregunta— i és la
     # mateixa a tot arreu. Una columna la faria editable per schema i el dia que dos schemes
     # discrepessin, la mateixa germana tindria dos codis. El que SÍ que viatja és la
     # publicació: `GET /api/v1/mesures/diccionari/` l'emet, i el front no se la reescriu.
-    SUBEIX_CARA = 'CARA'
-    SUBEIX_LATERAL = 'LATERAL'
-    SUBEIXOS = (
-        (SUBEIX_CARA, ('front', 'back')),
-        (SUBEIX_LATERAL, ('left', 'right')),
-    )
+    # 🚨 LA LLEI VIU A `fhort/pom/families.py`, NO AQUÍ. Les migracions de dades treballen amb
+    # models HISTÒRICS, que no porten els mètodes de la classe viva: una migració que hagi de
+    # recompondre un slug no pot cridar cap `@classmethod` d'aquí. Si la llei visqués al model,
+    # la migració se n'hauria d'escriure una còpia — i una còpia de l'ordre canònic és
+    # exactament el defecte que aquest tram tanca. Aquest model n'és CONSUMIDOR, no propietari.
+    FAM_PECA = _fam.FAM_PECA
+    FAM_BANDA = _fam.FAM_BANDA
+    FAM_VERTICALITAT = _fam.FAM_VERTICALITAT
+    FAM_COSTURA = _fam.FAM_COSTURA
+    FAM_LINIA = _fam.FAM_LINIA
+    FAM_ESTAT = _fam.FAM_ESTAT
+
+    #: `(família, (slugs...), mirall)` EN ORDRE CANÒNIC — v. `families.FAMILIES`.
+    FAMILIES = _fam.FAMILIES
+
+    #: Compatibilitat de nom: `SUBEIXOS` era la forma vella (dues famílies i sense mirall) i és
+    #: el que llegeixen el publicador i el front. Es manté el NOM —és el contracte publicat a
+    #: `GET /api/v1/mesures/diccionari/`— amb el contingut nou, que és el que la llei diu.
+    SUBEIXOS = tuple((clau, slugs) for clau, slugs, _ in _fam.FAMILIES)
 
     @classmethod
-    def subeix_de(cls, slug):
-        """El sub-eix d'un slug simple, o `''` si no en té cap de declarat.
+    def familia_de(cls, slug):
+        """La família d'un slug simple, o `''` si el diccionari no el coneix."""
+        return _fam.familia_de(slug)
 
-        Sense sub-eix (`top`, `cf`, `side`, `waistband_seam`…) la posició es comporta com fins
-        avui: EXCLOENT amb tota la resta de l'eix. Només les quatre declarades es creuen.
+    #: Àlies històric. `subeix_de` és com es deia quan les famílies eren dues i es deien
+    #: «sub-eixos»; el nom viu a la publicació i al front, i canviar-lo seria un tram propi.
+    subeix_de = familia_de
+
+    @classmethod
+    def mirall_de(cls, slug):
+        """El slug que és el REVERS d'aquest dins de la seva família, o `''` si no en té.
+
+        És DADA, no operació: qui giri una peça o copiï left→right la llegirà d'aquí. **Aquí no
+        es gira res** (llei d'Agus 26/08: els miralls es declaren, el motor ja els demanarà).
         """
-        for clau, slugs in cls.SUBEIXOS:
-            if slug in slugs:
-                return clau
-        return ''
+        return _fam.mirall_de(slug)
+
+    @classmethod
+    def ordre_canonic(cls, slug):
+        """El PES d'un slug per a l'ordre canònic. Com més baix, més a l'esquerra."""
+        return _fam.ordre_canonic(slug)
+
+    @classmethod
+    def composa(cls, trams, separador=_fam.SEPARADOR):
+        """Els trams en ORDRE CANÒNIC, sense repetits. La porta única de composició."""
+        return _fam.composa(trams, separador)
 
     @classmethod
     def error_de_combinacio(cls, valor, separador='-'):
         """El motiu pel qual aquesta instància composta és il·legal, o `''` si és bona.
 
-        LA REGLA, EN UNA FRASE: **fins a UNA etiqueta per eix**, i a la POSICIÓ fins a una per
-        SUB-EIX —amb una excepció que conserva el comportament d'abans: una posició SENSE
-        sub-eix declarat no es combina amb cap altra posició.
+        LA REGLA, EN UNA FRASE (llei d'Agus, 26/08): **fins a UNA etiqueta per FAMÍLIA**, i res
+        més. Entre famílies, tot combina.
+
+        🚨 AIXÒ ÉS MÉS PERMISSIU QUE EL QUE HI HAVIA, i a posta. Abans es jutjava per EIX i les
+        posicions sense sub-eix eren excloents amb tota la resta de l'eix: `top`+`left` era
+        il·legal i `cf`+`left` també, que és el que la formació va veure com «els xips es
+        comporten com un grup exclusiu». Ara les úniques parelles impossibles són les de dins
+        d'una família.
+
+        ⚠️ **LES REDUNDÀNCIES SÓN LEGALS.** `front`+`cf` diu dues vegades que és del davant, i
+        no és cap error: és criteri de qui mesura. El sistema **no fa de policia semàntic**.
 
         Torna un missatge i no un booleà perquè qui el crida el pinta tal qual: la persona ha
         de llegir QUINES dues etiquetes es barallen, no «valor invàlid».
 
         El vocabulari que el diccionari no conté NO es jutja (un tenant pot crear-se la seva
-        instància, i un slug desconegut no diu de quin eix és): es deixa passar, com ja fa el
-        front, que el pinta cru en comptes de fer-lo desaparèixer.
+        instància, i un slug desconegut no diu de quina família és): es deixa passar, com ja fa
+        el front, que el pinta cru en comptes de fer-lo desaparèixer.
         """
         trams = [t for t in str(valor or '').split(separador) if t]
         if len(trams) < 2:
             return ''
-        files = {r.slug: r for r in cls.objects.filter(slug__in=trams)}
-        per_eix = {}
+        # Només es jutja el vocabulari que el diccionari declara: la resta passa.
+        coneguts = set(cls.objects.filter(slug__in=trams).values_list('slug', flat=True))
+        per_familia = {}
         for t in trams:
-            fila = files.get(t)
-            if fila is not None:
-                per_eix.setdefault(fila.eix, []).append(t)
-        for eix, slugs in per_eix.items():
-            if len(slugs) < 2:
+            if t not in coneguts:
                 continue
-            subeixos = [cls.subeix_de(s) for s in slugs]
-            nom_eix = cls.EIX_NOMS.get(eix, {}).get('nom_ca', eix)
-            sense = [s for s, sx in zip(slugs, subeixos) if not sx]
-            if sense:
-                return (f'«{sense[0]}» no es combina amb cap altra etiqueta de la mateixa '
-                        f'columna ({nom_eix}): {" + ".join(slugs)}.')
-            if len(set(subeixos)) != len(subeixos):
-                repetit = next(sx for sx in subeixos if subeixos.count(sx) > 1)
-                iguals = [s for s, sx in zip(slugs, subeixos) if sx == repetit]
-                return (f'«{iguals[0]}» i «{iguals[1]}» són del mateix eix de {nom_eix.lower()} '
-                        f'({repetit}): una mesura no pot ser totes dues.')
+            fam = cls.familia_de(t)
+            if fam:
+                per_familia.setdefault(fam, []).append(t)
+        for fam, slugs in per_familia.items():
+            if len(slugs) > 1:
+                return (f'«{slugs[0]}» i «{slugs[1]}» són de la mateixa família ({fam}): '
+                        f'una mesura no pot ser totes dues.')
         return ''
 
     slug = models.SlugField(max_length=30, unique=True)
