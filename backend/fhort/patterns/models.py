@@ -207,6 +207,29 @@ class PatternPiece(models.Model):
     lateralitat = models.CharField(
         max_length=1, choices=LAT_CHOICES, blank=True, default=LAT_CAP)
 
+    FACE_CAP = ''
+    FACE_FRONT = 'front'
+    FACE_BACK = 'back'
+    FACE_CHOICES = [
+        (FACE_CAP, 'Sense cara'),
+        (FACE_FRONT, 'Davant'),
+        (FACE_BACK, 'Darrere'),
+    ]
+    #: L'eix DAVANT/DARRERE (decisió D1, 2026-08-26). **Un eix, no un rol nou.**
+    #:
+    #: El catàleg de rols de peça (`pom.PatternPieceRole`, 30 slugs) és un contracte entre
+    #: tenants i entre versions d'un patró: partir-lo en `sleeve_front`/`sleeve_back` el
+    #: doblaria i posaria la mateixa distinció en dos llocs, perquè `front` i `back` ja hi
+    #: són com a rols de COS. Va aquí, amb la mateixa forma que `lateralitat`, que és l'eix
+    #: germà i ja funciona.
+    #:
+    #: Buit NO vol dir «encara no ho sabem»: vol dir que la peça **no té cara** —una
+    #: cinturilla tallada al doblec, un panell de godet. Igual que la lateralitat.
+    #:
+    #: Indexat perquè el banc de veïns (F4) filtra per cara abans de comparar contorns.
+    face = models.CharField(
+        max_length=6, choices=FACE_CHOICES, blank=True, default=FACE_CAP, db_index=True)
+
     #: Quan el mateix rol es repeteix a la mateixa peça de roba (tres vistes, dues traves).
     #: null = no cal distingir-la de cap germana.
     ordinal = models.PositiveSmallIntegerField(null=True, blank=True)
@@ -361,6 +384,24 @@ class PatternSegment(models.Model):
     #: Nom lliure del patronista ("costura lateral", "sisa davant"). Només té sentit als
     #: declarats: un tram derivat no l'ha batejat ningú.
     nom = models.CharField(max_length=120, null=True, blank=True)
+
+    #: QUÈ és aquesta vora, del catàleg semàntic (F3, 2026-08-26): escot, sisa, costat.
+    #:
+    #: **`nom` ES QUEDA i conviuen**: el rol diu què és la vora en vocabulari de la casa,
+    #: `nom` diu com en diu aquest taller. És la mateixa coexistència que `PatternPiece` ja
+    #: té entre `piece_role`, `nom_block` i `nom`.
+    #:
+    #: `RESTRICT` i no `PROTECT`: un rol de vora que algun segment reclama no pot
+    #: desaparèixer, i RESTRICT ho fa complir a la BD i no només a l'ORM —el catàleg és de
+    #: sistema i el que el reclama viu a un altre schema del mateix tenant.
+    #:
+    #: ⚠️ Neix BUIT a tot arreu i F3 no l'omple (D2): els rols de vora no vindran mai del
+    #: DXF. Qui els sabrà escriure és un reconeixedor amb confirmació humana, o el
+    #: patronista declarant-los —el camí que `ORIGEN_DECLARAT` ja obre avui.
+    edge_role = models.ForeignKey(
+        'pom.EdgeRole', on_delete=models.RESTRICT,
+        null=True, blank=True, related_name='segments',
+    )
 
     class Meta:
         verbose_name = 'Segment de patró'
