@@ -30,7 +30,8 @@ import ModalAcabarTasca from '../components/model/ModalAcabarTasca'
 import BadgeLliurable from '../components/model/BadgeLliurable'
 import { CARA_CAP, caraDeError, caraObrirTasca } from '../utils/caraObrirTasca'
 import { CODE_PER_TAB, saltDeSuperficie, minutsDeSessio } from '../utils/sessioActiva'
-import { SECCIONS_MODEL, ETIQUETA_SECCIO, pindolesDeModel } from '../utils/modelSeccions'
+import { seccionsVisibles, ETIQUETA_SECCIO, pindolesDeModel } from '../utils/modelSeccions'
+import { PATTERNS_ENABLED } from '../utils/flags'
 import { motiuPasMesurarSet, motiuPasPresa } from '../utils/motiuPasPresa'
 import { estatDeLaPresa } from '../utils/estatPresa'
 import { UPLOAD_ACCEPT } from '../utils/uploads'
@@ -51,7 +52,9 @@ const API = import.meta.env.VITE_API_URL || ''
 // LA LLISTA CANÒNICA VIU A `utils/modelSeccions.js` des que l'editor .ftt també la pinta: dues
 // còpies d'una llista d'ordre són dues llistes que es poden contradir, i el dia que se
 // n'afegís una, l'editor ensenyaria un model amb una secció menys.
-const TABS = SECCIONS_MODEL
+// FASE A: la llista canònica, MENYS el que aquest desplegament no ensenya (`utils/flags.js`).
+// Amb el motor encès —que és el default i el cas de staging— això ÉS `SECCIONS_MODEL`.
+const TABS = seccionsVisibles(PATTERNS_ENABLED)
 
 // ELS PARÀMETRES QUE OBREN UNA SUPERFÍCIE DE TREBALL, i que per tant s'han de netejar en sortir-ne
 // (v. `netejaEdicio`). Els tres diuen «entra a treballar», no «mira aquesta pantalla»:
@@ -1170,7 +1173,7 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
         <PageMenu
           backTo="/models"
           backTitle={t('model_sheet.back_title')}
-          items={pindolesDeModel({ activa: activeTab, onTria: triaTab, t })}
+          items={pindolesDeModel({ activa: activeTab, onTria: triaTab, t, seccions: TABS })}
           rightChildren={
             /* B — Watchpoints: PORTA transversal (§8b), en secundari petit i a la dreta.
                Obre el drawer flotant (escriptura); visible des de qualsevol tab. */
@@ -1590,7 +1593,10 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
             onConfirm={() => execPropagar(propStatus.segellada)}
           />
         )}
-        {activeTab === 'Patró' && <PatternTab modelId={parseInt(id)} />}
+        {/* FASE A: el `PATTERNS_ENABLED` és redundant amb el filtre de `TABS` —sense la
+            secció, `activeTab` no hi pot arribar mai— i s'hi posa igualment perquè aquesta
+            línia no depengui d'una lectura a 1.400 línies de distància. */}
+        {activeTab === 'Patró' && PATTERNS_ENABLED && <PatternTab modelId={parseInt(id)} />}
         {activeTab === 'Fitxers' && <TabFiles modelId={parseInt(id)} onEditFitxa={obreFitxa} />}
         {activeTab === 'Fitxa tècnica' && <TechSheetTab modelId={id} navigate={navigate} onModificar={obreFitxa} />}
         {activeTab === 'Anàlisi IA' && <TabAIAnalysis modelId={parseInt(id)} />}

@@ -31,6 +31,26 @@ export const ETIQUETA_SECCIO = {
 }
 
 /**
+ * FASE A — les seccions que aquest DESPLEGAMENT ensenya.
+ *
+ * `SECCIONS_MODEL` segueix sent la llei: diu quines seccions té un model i en quin ordre, i no
+ * es toca. El que aquesta funció retorna és una altra cosa —què es pinta AQUÍ—, i la diferència
+ * entre les dues és exactament el que l'interruptor decideix.
+ *
+ * És PURA i rep el booleà en lloc de llegir-lo (`utils/flags.js` el llegeix un sol cop): així
+ * es pot provar amb `node --test`, que no sap què és `import.meta.env`.
+ *
+ * Filtrar la llista TAMBÉ tanca el `?tab=Patró` de l'URL, i no per casualitat: `ModelSheet`
+ * només accepta el paràmetre si la secció hi és (`TABS.includes(tabParam)`), de manera que un
+ * enllaç antic cau al tab per defecte en comptes d'obrir una pantalla que aquí no existeix.
+ *
+ * @param {boolean} patternsEnabled  si el motor de patrons és visible en aquest desplegament
+ */
+export function seccionsVisibles(patternsEnabled) {
+  return patternsEnabled ? SECCIONS_MODEL : SECCIONS_MODEL.filter((s) => s !== 'Patró')
+}
+
+/**
  * Les píndoles del menú de pantalla d'un model, per a `ui/PageMenu`.
  *
  * Les dues superfícies que el pinten hi arriben per camins diferents i per això `onTria` és
@@ -42,8 +62,8 @@ export const ETIQUETA_SECCIO = {
  * @param {string}   activa   la secció que s'està mirant
  * @param {Function} t        el `t()` de qui crida (les etiquetes són claus d'i18n)
  */
-export function pindolesDeModel({ activa, onTria, t }) {
-  return SECCIONS_MODEL.map((seccio) => ({
+export function pindolesDeModel({ activa, onTria, t, seccions = SECCIONS_MODEL }) {
+  return seccions.map((seccio) => ({
     key: seccio,
     label: t(ETIQUETA_SECCIO[seccio]),
     active: activa === seccio,
