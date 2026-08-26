@@ -143,33 +143,50 @@ EDGE_ROLES = [
 #: un extrem del pont d'espatlla que `hps_pont.txt` va mesurar. Els altres sis són regles
 #: escrites amb el mateix patró però **mai mesurades**, i van amb `NULL` — no amb un zero
 #: ni amb el 2 371 manllevat del veí.
+#: La llei d'ofici, en anglès perquè és contracte i viatja al `source_ref` de la fila.
+LLEI_ESCOT = (
+    'neckline+shoulder_seam are evaluated on the piece that CARRIES THE NECKLINE — '
+    'front/back OR YOKE; FTT extension, GarmentCode has no yoke'
+)
+
+#: 🚨 **LLEI D'OFICI (Agus, 26/08): l'escot i l'espatlla s'avaluen sobre LA PEÇA QUE PORTA
+#: L'ESCOT, que no sempre és el davant o l'esquena — pot ser el CANESÚ (`yoke`).** Aquesta
+#: és una extensió d'FTT i no una lectura de GarmentCode: **GarmentCode no té canesú**
+#: (informe §5.1: `yoke` és un dels 22 slugs que no pot produir), o sigui que el
+#: 2.371/2.371 està mesurat sobre un món on la peça de l'escot és sempre el tors. Als
+#: patrons de casa no ho és: el TATE en porta un (`TATE_FRONT_YOKE`).
+#:
+#: Per això `hps` porta ara `derivation_tiebreak='highest_y'`: **un verificador de
+#: sanitat**, no un desempat de veritat. `shared_endpoint` ja exigeix un únic extrem comú;
+#: si en surt un que NO és el més alt de la peça, alguna cosa no és el que dèiem —una vora
+#: mal etiquetada, una peça girada al plànol— i val més que canti que no pas que passi.
 LANDMARK_ROLES = [
     ('hps', Z.SHOULDER, True, LandmarkRole.OP_SHARED_ENDPOINT,
-     {'a': 'neckline', 'b': 'shoulder_seam'}, '', 2371, 2371,
+     {'a': 'neckline', 'b': 'shoulder_seam'}, 'highest_y', 2371, 2371,
      'n2_gym/out/hps_pont.txt · pont escot↔sisa = 1 vora en 2371 de 2371',
-     'High point shoulder', "Punt alt d'espatlla", 'Punto alto de hombro'),
+     'High point shoulder', "Punt alt d'espatlla", 'Punto alto de hombro', LLEI_ESCOT),
     ('shoulder_point', Z.SHOULDER, True, LandmarkRole.OP_SHARED_ENDPOINT,
      {'a': 'shoulder_seam', 'b': 'armhole'}, '', 2371, 2371,
      'n2_gym/out/hps_pont.txt · mateix pont, extrem oposat',
-     'Shoulder point', "Punt d'espatlla", 'Punto de hombro'),
+     'Shoulder point', "Punt d'espatlla", 'Punto de hombro', LLEI_ESCOT),
     ('underarm_point', Z.ARM, True, LandmarkRole.OP_FAR_ENDPOINT,
      {'a': 'armhole'}, 'lowest_y', None, None, '',
-     'Underarm point', 'Punt de sota-braç', 'Punto de axila'),
+     'Underarm point', 'Punt de sota-braç', 'Punto de axila', ''),
     ('neck_centre_point', Z.NECK, True, LandmarkRole.OP_FAR_ENDPOINT,
      {'a': 'neckline'}, 'away_from:hps', None, None, '',
-     'Neck centre point', "Punt central d'escot", 'Punto central de escote'),
+     'Neck centre point', "Punt central d'escot", 'Punto central de escote', ''),
     ('waist_side_point', Z.WAIST, True, LandmarkRole.OP_SHARED_ENDPOINT,
      {'a': 'side_seam', 'b': 'waistline'}, '', None, None, '',
-     'Waist side point', 'Punt de cintura al costat', 'Punto de cintura en el costado'),
+     'Waist side point', 'Punt de cintura al costat', 'Punto de cintura en el costado', ''),
     ('hem_side_point', Z.ANY, True, LandmarkRole.OP_SHARED_ENDPOINT,
      {'a': 'side_seam', 'b': 'hem'}, '', None, None, '',
-     'Hem side point', 'Punt de baix al costat', 'Punto de bajo en el costado'),
+     'Hem side point', 'Punt de baix al costat', 'Punto de bajo en el costado', ''),
     ('crotch_point', Z.LEG, True, LandmarkRole.OP_SHARED_ENDPOINT,
      {'a': 'inseam', 'b': 'crotch_seam'}, '', None, None, '',
-     'Crotch point', 'Punt de tir', 'Punto de tiro'),
+     'Crotch point', 'Punt de tir', 'Punto de tiro', ''),
     ('underarm_seam_point', Z.ARM, True, LandmarkRole.OP_SHARED_ENDPOINT,
      {'a': 'sleeve_cap', 'b': 'sleeve_underarm_seam'}, '', None, None, '',
-     'Underarm seam point', 'Punt de sota-màniga', 'Punto de bajo manga'),
+     'Underarm seam point', 'Punt de sota-màniga', 'Punto de bajo manga', ''),
 ]
 
 #: El mapa GarmentCode→FTT (informe §5.1 + `scripts/mapping.py`), amb els cinc forats
@@ -622,7 +639,7 @@ def sembra(schema: str, cens: dict | None, meta: dict, dry_run: bool = False) ->
                     })
                 r['edge_roles'][0 if creat else 1] += 1
 
-            for ordre, (slug, zone, deriv, op, inp, tb, evn, evd, evr, en, ca, es) in \
+            for ordre, (slug, zone, deriv, op, inp, tb, evn, evd, evr, en, ca, es, llei) in \
                     enumerate(LANDMARK_ROLES, start=1):
                 _, creat = LandmarkRole.objects.update_or_create(
                     slug=slug,
@@ -634,7 +651,8 @@ def sembra(schema: str, cens: dict | None, meta: dict, dry_run: bool = False) ->
                         'is_system': True, 'pendent_revisio': False,
                         'origen': LandmarkRole.ORIGEN_SEED,
                         'display_order': ordre * 10,
-                        'source_ref': '{} §6.1'.format(INF),
+                        'source_ref': '{} §6.1{}'.format(
+                            INF, ' · ' + llei if llei else ''),
                     })
                 r['landmark_roles'][0 if creat else 1] += 1
 
@@ -826,7 +844,7 @@ class Command(BaseCommand):
         w('## LandmarkRole ({} files)'.format(len(LANDMARK_ROLES)))
         w('| # | slug | zone | derivable | op | input | tiebreak | evidencia | nom_en | nom_ca | nom_es |')
         w('|---|---|---|---|---|---|---|---|---|---|---|')
-        for i, (slug, zone, d, op, inp, tb, evn, evd, evr, en, ca, es) in \
+        for i, (slug, zone, d, op, inp, tb, evn, evd, evr, en, ca, es, _llei) in \
                 enumerate(LANDMARK_ROLES, 1):
             ev = '{}/{}'.format(evn, evd) if evn is not None else 'NO MESURADA'
             w('| {} | `{}` | {} | {} | {} | {} | {} | {} | {} | {} | {} |'.format(

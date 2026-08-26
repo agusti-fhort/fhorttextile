@@ -129,6 +129,26 @@ DATABASES = {
 DATABASE_ROUTERS = ['django_tenants.routers.TenantSyncRouter']
 
 
+# ── Reconeixedor de peces (F4.1) ─────────────────────────────────────────────
+#: Banc de veïns del corpus: es queda una peça de cada N. **Proporcional i no
+#: estratificat**: la distribució natural de rols ÉS el prior, i el gimnàs va mesurar que
+#: el prior val +8,1 punts sobre famílies. Aplanar-la per igualar classes seria llençar-ho.
+#: 1 = corpus sencer (1,4 M panells, 229 MB per worker).
+FTT_RECOGNITION_CORPUS_FRACTION = int(os.environ.get('FTT_RECOGNITION_CORPUS_FRACTION', 5))
+#: On es cacheja el banc construït. Construir-lo val ~17 s; carregar-lo, menys d'un segon.
+FTT_RECOGNITION_CACHE_DIR = os.environ.get(
+    'FTT_RECOGNITION_CACHE_DIR', str(BASE_DIR / 'var' / 'recognition'))
+#: Conninfo de libpq cap a `ftt_corpus` (rol `corpus_ro`, NOMÉS lectura).
+FTT_CORPUS_CONNINFO_FILE = os.environ.get(
+    'FTT_CORPUS_CONNINFO_FILE', '/root/gcd_corpus/corpus_ro.pgpass')
+#: 🚨 El llindar de SILENCI (N4). Per sota d'això el reconeixedor **no proposa res**.
+#: Calibrat a l'examen REAL i no al laboratori: el valor és el més baix que manté ZERO
+#: propostes errònies sobre 837/TATE/CALLIE/MEREDITH. Vegeu REPORT_F41 §D3.
+FTT_RECOGNITION_MIN_SCORE = float(os.environ.get('FTT_RECOGNITION_MIN_SCORE', 0.55))
+#: Veïns que es demanen al banc del corpus per peça.
+FTT_RECOGNITION_K = int(os.environ.get('FTT_RECOGNITION_K', 200))
+
+
 # Anthropic Claude API — usat per extraction_service.py (sprint 6)
 ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
 
