@@ -175,11 +175,12 @@ LANDMARK_ROLES = [
 #: El mapa GarmentCode→FTT (informe §5.1 + `scripts/mapping.py`), amb els cinc forats
 #: tancats pels tres slugs de D6. **24 rols de GarmentCode → 11 slugs d'FTT × cara.**
 #:
-#: 🚨 Quatre rols de GarmentCode cauen tots sobre `cuff`: puny de màniga, puny de màniga
-#: acampanat, puny de cama i puny de cama acampanat. **La col·lisió és volguda** —
-#: l'acampanament és un eix de variant, no una peça diferent— però vol dir que UNA
-#: plantilla de costura d'FTT pot recollir més d'una parella del corpus, i per això les
-#: freqüències s'agreguen a la BD del corpus i no sumant a mà.
+#: 🚨 **VUIT dels 24 rols cauen sobre `cuff`**: quatre conceptes (puny de màniga, puny de
+#: màniga acampanat, puny de cama, puny de cama acampanat) × dues cares que l'eix `face`
+#: absorbeix, o sigui vuit rols a dos destins. **La col·lisió és volguda** —l'acampanament
+#: és un eix de variant, no una peça diferent— però vol dir que UNA plantilla de costura
+#: d'FTT pot recollir més d'una parella del corpus, i per això les freqüències s'agreguen
+#: a la BD del corpus i no sumant a mà.
 GC_MAP = [
     ('ftorso', 'front', Face.FRONT, 'directe'),
     ('btorso', 'back', Face.BACK, 'directe'),

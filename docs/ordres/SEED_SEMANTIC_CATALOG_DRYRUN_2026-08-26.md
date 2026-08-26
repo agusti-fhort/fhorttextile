@@ -62,7 +62,26 @@ generador, no una llei d'ofici, i queda registrada com a xifra i no com a absèn
 `observed_seams=0`, `observed_den=90.273`, i `observed_ref` diu literalment
 `ZERO MESURAT`. **NULL vol dir «no s'ha mirat»; aquí s'ha mirat tot.**
 
-### 1.3 🚩 Dues parelles reals que l'ontologia NO sap anomenar
+### 1.3 🚨 El test va trobar que el `UNIQUE` no protegia RES
+
+La convenció d'ordenació estava implementada (`ordena()` + `canonitza()` a `save()`) i el
+`UniqueConstraint` sobre les 8 columnes escrit. **El test va escriure la mateixa costura
+dues vegades, girada, i la segona va ENTRAR.**
+
+`garment_type_item` és nul·lable i a Postgres **dos NULL no són iguals**: un `UNIQUE` que
+el porti a la clau no casa mai quan la columna és NULL. I genèriques —`garment_type_item
+= NULL`— ho són **les 53 files que aquesta sembra escriuria**. El pany hi era i no tancava
+cap porta.
+
+És la mateixa llei que ja ens va mossegar a `ftt-diagnosi-pre-sembra-v4`: *una FK
+nul·lable a la clau trenca la unicitat EN SILENCI*. Partit en dues constraints parcials
+(`WHERE garment_type_item_id IS NULL` / `IS NOT NULL`), migració `0085`, verificat amb
+`\d` als tres esquemes.
+
+> 🔑 Un test d'igualtat que no has vist VERMELL no val: aquest va donar
+> `IntegrityError not raised`, que és exactament la frase que calia veure.
+
+### 1.4 🚩 Dues parelles reals que l'ontologia NO sap anomenar
 
 Queden dues òrfenes, i no s'inventa cap slug per tapar-les:
 
@@ -139,12 +158,13 @@ una evidencia que no tenen.
 
 ## 4 · `GCPieceRoleMap` — 24 files
 
-Els 24 rols de GarmentCode cauen sobre **11 slugs d'FTT x cara**. Els tres slugs
-nous (D6) tanquen els cinc unics forats. **Quatre rols cauen tots sobre `cuff`**
-(puny de maniga, puny de maniga acampanat, puny de cama, puny de cama acampanat):
-la col.lisio es volguda —l'acampanament es un eix de variant, no una peca— pero vol
-dir que una plantilla d'FTT recull mes d'una parella del corpus, i per aixo les
-frequencies s'agreguen a la BD i no sumant a ma.
+Els 24 rols de GarmentCode cauen sobre **11 slugs d'FTT** (els 8 que el catàleg ja tenia
+més els tres de D6, que tanquen els cinc únics forats). La reducció és forta i volguda:
+**vuit rols cauen tots sobre `cuff`** —quatre conceptes (puny de màniga, puny de màniga
+acampanat, puny de cama, puny de cama acampanat) × dues cares, que l'eix `face` absorbeix
+en dos destins. L'acampanament és un eix de variant, no una peça diferent. Però vol dir
+que **una plantilla d'FTT recull més d'una parella del corpus**, i per això les
+freqüències s'agreguen dins de la BD i no sumant a mà.
 
 | # | gc_role | ftt_slug | face | nota |
 |---|---|---|---|---|
@@ -279,7 +299,7 @@ Al schema `fhort` hi ha GTIs reals; a `los`, els que hi hagi. **Cap dels dos s'h
 | desviació | motiu |
 |---|---|
 | `db_constraint=False` a les dues FK cap a `tasks.GarmentTypeItem` | **Mesurat**: sense això `migrate_schemas` PETA a `public` amb `relation "tasks_garmenttypeitem" does not exist`. `pom` viu a SHARED i TENANT, `tasks` només a TENANT. És el que ja fan les migracions 0025, 0040 i 0047. |
-| `UNIQUE` canònic a `SeamPairTemplate` | El DDL de l'informe no en porta cap i només **comenta** la convenció d'ordenació. Sense constraint la mateixa costura entra dos cops amb els costats girats. Implementada a `ordena()`/`canonitza()` + `UniqueConstraint`. |
+| **DOS** `UNIQUE` parcials a `SeamPairTemplate` | El DDL de l'informe no en porta cap i només **comenta** la convenció d'ordenació. Un de sol no bastava: amb `garment_type_item` NULL no casa mai (§1.3). Migració 0085. |
 | `UNIQUE` canònic a `GarmentTypeItemEdgeProfile` | El DDL el porta; s'hi afegeix `face`, que el DDL ja llistava però no incloïa a la clau. |
 | `mates_slug` és `''` i no `NULL` | Estil de casa: cap `CharField` nul·lable al catàleg (`PatternPieceRole`, `MeasurementLayer`). Buit = no es cus amb res. |
 | `zone` de `cuff_line` és `any`, no `arm/leg` | El camp té 12 caràcters i un valor tancat. Un puny és de màniga **i** de cama; `any` és més honest que triar-ne una. |

@@ -2424,11 +2424,27 @@ class SeamPairTemplate(CatalegSemanticOrigenMixin):
         verbose_name_plural = 'Plantilles de parella de costura'
         ordering = ['display_order', 'seam_kind', 'piece_role_a_slug', 'edge_role_a_slug']
         constraints = [
+            # 🚨 DUES constraints i no una, i el motiu és una llei que ja ens ha mossegat
+            # (`ftt-diagnosi-pre-sembra-v4`): **una FK NULLABLE dins d'una clau única
+            # trenca la unicitat EN SILENCI.** A Postgres dos NULL no són iguals, o sigui
+            # que un únic UNIQUE sobre les 8 columnes NO protegeix cap plantilla
+            # genèrica —i genèriques ho són TOTES les que F3 sembra. Partir-lo en dues
+            # constraints parcials és el que fa que la protecció existeixi de debò als dos
+            # costats. Mesurat amb un test que primer va donar VERMELL i va deixar entrar
+            # la fila duplicada.
             models.UniqueConstraint(
                 fields=['garment_type_item', 'seam_kind',
                         'piece_role_a_slug', 'face_a', 'edge_role_a_slug',
                         'piece_role_b_slug', 'face_b', 'edge_role_b_slug'],
+                condition=models.Q(garment_type_item__isnull=False),
                 name='uniq_seampairtemplate_canonic',
+            ),
+            models.UniqueConstraint(
+                fields=['seam_kind',
+                        'piece_role_a_slug', 'face_a', 'edge_role_a_slug',
+                        'piece_role_b_slug', 'face_b', 'edge_role_b_slug'],
+                condition=models.Q(garment_type_item__isnull=True),
+                name='uniq_seampairtemplate_canonic_generic',
             ),
         ]
 
@@ -2533,8 +2549,10 @@ class GarmentTypeItemEdgeProfile(CatalegSemanticOrigenMixin):
 class GCPieceRoleMap(models.Model):
     """El traductor GarmentCode → FTT, com a taula i no com a diccionari amagat en un script.
 
-    24 rols de GarmentCode cauen sobre 8 slugs d'FTT × cara (D1) més els tres slugs que
-    D6 hi afegeix. Existeix com a TAULA perquè el banc de veïns (F4) l'ha de consultar en
+    24 rols de GarmentCode cauen sobre **11 slugs d'FTT × cara** (D1): els 8 que el catàleg
+    ja tenia més els tres que D6 hi afegeix. La reducció és forta i volguda —vuit rols
+    cauen tots sobre `cuff`, perquè l'acampanament d'un puny és un eix de variant i no una
+    peça diferent. Existeix com a TAULA perquè el banc de veïns (F4) l'ha de consultar en
     calent per traduir un panell del corpus a vocabulari de casa, i perquè quan un rol de
     GarmentCode canviï de destí es vegi a la BD i no en un diff d'un script.
 
