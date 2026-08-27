@@ -884,3 +884,117 @@ class CoupledSolveTests(SimpleTestCase):
         for t in ('M', 'L', 'XL'):
             self.assertLess(float(np.abs(rep.points[t] - base).max()), 1e-9)
         self.assertLess(rep.worst_leak_mm, 1e-9)
+
+
+class DeclaredScheduleTests(SimpleTestCase):
+    """F6.3 · the four sizes under a schedule the PATTERN declares, one per axis.
+
+    The RUL of the 837 says two things that no amount of solving could have produced, and
+    both are load-bearing here: every turn point carries its own rule (so there is no
+    grouping of points to exploit) and X and Y grade on different schedules (so a single
+    direction per point cannot express even ONE point's grading). These tests are the
+    second fact turned into an instrument.
+    """
+
+    SIZES = ('M', 'L', 'XL')
+    #: The 837's own shape: the body's width stops short at XL (2,5 where the length does 3).
+    AX = (1.0, 2.0, 2.5)
+    AY = (1.0, 2.0, 3.0)
+
+    @staticmethod
+    def two_axis_problem(ax, ay, step=10.0):
+        """A square told to grow `step·ax(t)` wide and `step·ay(t)` tall at each size."""
+        piece = big_square()
+        base = np.array(piece.base_points)
+        width = float(np.linalg.norm(base[5] - base[0]))
+        height = float(np.linalg.norm(base[10] - base[5]))
+        per_size = {}
+        for i, size in enumerate(DeclaredScheduleTests.SIZES):
+            per_size[size] = [
+                PomDelta('w', 'recta', (on_vertex(piece, 0), on_vertex(piece, 5)),
+                         width + step * ax[i]),
+                PomDelta('h', 'recta', (on_vertex(piece, 5), on_vertex(piece, 10)),
+                         height + step * ay[i]),
+                Anchor('o', 0), GrainDirection(),
+            ]
+        return piece, per_size
+
+    def test_the_field_of_a_size_is_the_schedule_times_the_coefficients(self):
+        from fhort.patterns.engine.grading_solver import ScheduleShape
+        shape = ScheduleShape(n_turns=3, schedule_x=(0.0, 1.0, 2.5),
+                              schedule_y=(-0.5, 1.0, 3.0))
+        coef = np.array([1.0, 10.0, 2.0, 20.0, 3.0, 30.0])
+        f = shape.fields(shape.pack(coef, np.zeros((3, 6))))
+        self.assertTrue(np.allclose(f[0], [0.0, -5.0, 0.0, -10.0, 0.0, -15.0]))
+        self.assertTrue(np.allclose(f[1], coef))
+        self.assertTrue(np.allclose(f[2], [2.5, 30.0, 5.0, 60.0, 7.5, 90.0]))
+        self.assertEqual(shape.size, 6 + 3 * 6)
+        self.assertEqual(shape.n_amp, 0)
+
+    def test_the_composition_is_constant_and_is_the_exact_jacobian(self):
+        """🔑 What makes this shape cheaper than `RuleShape`: the model is LINEAR."""
+        from fhort.patterns.engine.grading_solver import ScheduleShape
+        shape = ScheduleShape(n_turns=2, schedule_x=(1.0, 2.5), schedule_y=(1.0, 3.0))
+        z = np.arange(shape.size, dtype=float) / 7.0
+        b = shape.composition(z)
+        self.assertTrue(np.allclose(b, shape.composition(z * 3.0 + 11.0)))
+        self.assertTrue(np.allclose((b @ z).reshape(2, shape.n_field), shape.fields(z)))
+
+    def test_normalise_is_the_identity_because_there_is_no_scale_to_fix(self):
+        from fhort.patterns.engine.grading_solver import ScheduleShape
+        shape = ScheduleShape(n_turns=2, schedule_x=(1.0, 2.0), schedule_y=(1.0, 3.0))
+        z = np.arange(shape.size, dtype=float)
+        self.assertTrue(np.array_equal(shape.normalise(z), z))
+
+    def test_a_schedule_of_the_wrong_length_is_refused(self):
+        from fhort.patterns.engine.grading_solver import solve_declared
+        piece, per_size = self.two_axis_problem(self.AX, self.AY)
+        with self.assertRaises(SolverError):
+            solve_declared(piece, per_size, (1.0, 2.0), self.AY)
+
+    def test_two_axis_targets_are_served_with_no_leak(self):
+        """The thesis: when the garment grades by the declared schedule, nothing leaks."""
+        from fhort.patterns.engine.grading_solver import solve_declared
+        piece, per_size = self.two_axis_problem(self.AX, self.AY)
+        rep = solve_declared(piece, per_size, self.AX, self.AY)
+        self.assertTrue(rep.success)
+        self.assertLess(rep.worst_residual_mm, 1e-6)
+        # ⚠️ «Zero» is 0,014 mm, not 0. The leak is a SOFT penalty, so it always buys a
+        # little smoothness even where the schedule suffices — the same floor the rank-1
+        # test above records. What makes it an instrument is the distance to the cases that
+        # genuinely do not fit: rank 1 on these very targets pays 0,68 mm (50×) and a wrong
+        # schedule pays 0,49 mm (36×). Measured, both, in the two tests that follow.
+        self.assertLess(rep.worst_leak_mm, 0.02)
+        # And the sizes really are the schedule applied to one field, not four solves.
+        base = np.array(piece.base_points)
+        f = {t: rep.points[t] - base for t in self.SIZES}
+        self.assertLess(float(np.abs(f['XL'][:, 0] - 2.5 * f['M'][:, 0]).max()), 0.05)
+        self.assertLess(float(np.abs(f['XL'][:, 1] - 3.0 * f['M'][:, 1]).max()), 0.05)
+
+    def test_one_direction_per_point_cannot_serve_two_axis_schedules(self):
+        """🚨 The F6.3 finding as a measurement, and the reason this mode exists.
+
+        The SAME targets, given to the rank-1 coupled solver — one direction per point with
+        one amplitude per size, which is the structure F6.2 imposed. It cannot express a
+        width that grows 1·2·2,5 and a length that grows 1·2·3 at the same time, so it pays
+        in leak. The declared schedule can, and does not.
+
+        If this ever stops failing for `solve_coupled`, the instrument is broken and the
+        comparison in the F6.3 report means nothing.
+        """
+        from fhort.patterns.engine.grading_solver import solve_coupled, solve_declared
+        piece, per_size = self.two_axis_problem(self.AX, self.AY)
+        rank1 = solve_coupled(piece, per_size, rank=1)
+        declared = solve_declared(piece, per_size, self.AX, self.AY)
+        self.assertLess(rank1.worst_residual_mm, 1e-6)      # the contract is never traded
+        self.assertLess(declared.worst_residual_mm, 1e-6)
+        self.assertGreater(rank1.worst_leak_mm, 20 * max(declared.worst_leak_mm, 1e-6))
+
+    def test_a_declared_schedule_that_is_wrong_costs_leak(self):
+        """The mode is not a free pass: a schedule the targets do not follow shows up."""
+        from fhort.patterns.engine.grading_solver import solve_declared
+        piece, per_size = self.two_axis_problem(self.AX, self.AY)
+        right = solve_declared(piece, per_size, self.AX, self.AY)
+        wrong = solve_declared(piece, per_size, self.AX, (1.0, 1.0, 1.0))
+        self.assertLess(wrong.worst_residual_mm, 1e-6)      # contract still kept
+        self.assertGreater(wrong.worst_leak_mm, 10 * max(right.worst_leak_mm, 1e-6))

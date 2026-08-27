@@ -1147,6 +1147,21 @@ class RuleShape:
                 a[k] *= s
         return self.pack(d, a, leak)
 
+    def composition(self, z: np.ndarray) -> np.ndarray:
+        """B = ∂(all size fields)/∂z. Exact, and cheap to write down."""
+        d, a, _leak = self.unpack(z)
+        nf, ns, rk = self.n_field, self.n_sizes, self.rank
+        b = np.zeros((ns * nf, self.size))
+        eye = np.eye(nf)
+        for t in range(ns):
+            rows = slice(t * nf, (t + 1) * nf)
+            for k in range(rk):
+                b[rows, k * nf:(k + 1) * nf] = a[k, t] * eye
+                b[rows, self.n_dir + k * ns + t] = d[k]
+            base = self.n_dir + self.n_amp + t * nf
+            b[rows, base:base + nf] = eye
+        return b
+
 
 @dataclass
 class CoupledReport:
@@ -1196,20 +1211,15 @@ def field_jacobian(piece: PieceProblem, constraints: Sequence[Constraint],
     return _jacobian(piece, constraints, NoReduction(len(piece.turn_indices)), field)
 
 
-def _composition_matrix(shape: RuleShape, z: np.ndarray) -> np.ndarray:
-    """B = ∂(all size fields)/∂z, at the current z. Exact, and cheap to write down."""
-    d, a, _leak = shape.unpack(z)
-    nf, ns, rk = shape.n_field, shape.n_sizes, shape.rank
-    b = np.zeros((ns * nf, shape.size))
-    eye = np.eye(nf)
-    for t in range(ns):
-        rows = slice(t * nf, (t + 1) * nf)
-        for k in range(rk):
-            b[rows, k * nf:(k + 1) * nf] = a[k, t] * eye
-            b[rows, shape.n_dir + k * ns + t] = d[k]
-        base = shape.n_dir + shape.n_amp + t * nf
-        b[rows, base:base + nf] = eye
-    return b
+def _composition_matrix(shape, z: np.ndarray) -> np.ndarray:
+    """B = ∂(all size fields)/∂z, at the current z.
+
+    Delegated to the shape because there is more than one: `RuleShape` composes bilinearly
+    (directions × amplitudes, so B moves with z) and `ScheduleShape` composes linearly (the
+    amplitudes are DECLARED, so B is a constant). Everything downstream — the KKT step, the
+    restoration, the joint diagnosis — only ever asks for B and does not care which.
+    """
+    return shape.composition(z)
 
 
 def solve_coupled(piece: PieceProblem,
@@ -1271,6 +1281,22 @@ def _solve_coupled_once(piece: PieceProblem,
     amplitudes[:k] = (u[:, :k] * sv[:k]).T
     z = shape.normalise(shape.pack(directions, amplitudes,
                                    seeded - amplitudes.T @ directions))
+    return _coupled_iterate(piece, per_size, shape, z, per_size_diag, w)
+
+
+def _coupled_iterate(piece: PieceProblem, per_size, shape, z: np.ndarray,
+                     per_size_diag: dict, w: Weights):
+    """The Gauss-Newton loop, shared by every multi-size shape.
+
+    It is written against the SHAPE and never against a particular factorisation: all it
+    needs is `fields`, `composition`, `normalise` and the block sizes. That is what lets the
+    declared-schedule mode (F6.3) reuse it instead of growing a second copy — and a second
+    copy is exactly what should be avoided here, because this loop carries three fixes that
+    were each measured and are each easy to lose (the restoration, the pseudo-inverse the
+    iteration already built, and the merit that prices infeasibility absolutely).
+    """
+    sizes = tuple(per_size)
+    m = shape.n_turns
 
     # 🔑 The bending energy of a real piece is of order 10⁻⁸ (its stencil is 1/length²),
     # while the leak is measured in millimetres. Normalising H by its own mean diagonal makes
@@ -1353,6 +1379,183 @@ def _solve_coupled_once(piece: PieceProblem,
 
     return _coupled_report(piece, shape, sizes, z, diagnosis, per_size_diag, per_size,
                            True, converged, iterations, kkt_deficient, '')
+
+
+@dataclass(frozen=True)
+class ScheduleShape:
+    """The four sizes under a DECLARED inter-size schedule, one per axis.
+
+    ── WHY A SECOND SHAPE, AND WHY THIS ONE ────────────────────────────────────────
+    `RuleShape` asks the solver to discover both halves of a grading rule: the directions
+    the points move in AND the amplitude each size applies. F6.2 measured that giving it
+    that structure buys nothing (6,177 → 6,140 mm at vertex level), and F6.3 read the RUL
+    of the 837 and found out why. Two facts from the file itself:
+
+      · **Every turn point carries its own rule.** 28 on the front, 24 on the back, 9 on
+        the sleeve, all distinct. The pattern declares NO grouping of points — so a mode
+        that shares a direction between points has nothing in the CAD to stand on.
+      · 🚨 **A single point's grading is not rank one.** Its four displacements do not lie
+        on a line: fitting one leaves 3,0 mm rms and 7,2 mm at worst. X and Y grade on
+        DIFFERENT schedules — on the 837's body, X goes (0 · 1 · 2 · 2,5) and Y goes
+        (−0,67 · 1 · 2 · 3). One amplitude per size cannot produce both.
+
+    So the structure the pattern really declares is separable by axis: for a point *i* and
+    a size *t*, `dx_i(t) = ax(t) · u_i` and `dy_i(t) = ay(t) · v_i`. The schedules are the
+    data the RUL contributes; `u` and `v` are what the measurements still have to determine.
+
+    🔑 **The consequence for the solve is the collapse F6.2 went looking for and did not
+    find.** The unknowns are `u` and `v` — 2m of them, exactly ONE size's field — and the
+    other three sizes follow for free. Against `RuleShape` at rank 2 (which needs 2·2m for
+    the directions alone) that is a genuine halving, and against solving the sizes apart it
+    is a factor of four.
+
+    It is expressed in the `RuleShape` vocabulary on purpose — rank 2, with direction 0
+    supported on the X slots and direction 1 on the Y slots — so that the report, the
+    diagnosis and the Gauss-Newton loop are shared and not re-implemented.
+    """
+
+    n_turns: int
+    #: The declared amplitude of each size, per axis, in the order of `per_size`.
+    schedule_x: tuple[float, ...]
+    schedule_y: tuple[float, ...]
+
+    #: Reported as rank 2 because that is what it is: two directions, two amplitude rows.
+    rank: int = 2
+
+    @property
+    def n_sizes(self) -> int:
+        return len(self.schedule_x)
+
+    @property
+    def n_field(self) -> int:
+        return 2 * self.n_turns
+
+    @property
+    def n_dir(self) -> int:
+        """The STRUCTURAL unknowns: the per-point coefficients, u and v interleaved."""
+        return self.n_field
+
+    @property
+    def n_amp(self) -> int:
+        """Zero. The amplitudes are declared, not solved — that is the whole point."""
+        return 0
+
+    @property
+    def n_leak(self) -> int:
+        return self.n_sizes * self.n_field
+
+    @property
+    def size(self) -> int:
+        return self.n_dir + self.n_leak
+
+    def _masks(self) -> tuple[np.ndarray, np.ndarray]:
+        mx = np.zeros(self.n_field)
+        mx[0::2] = 1.0
+        return mx, 1.0 - mx
+
+    def unpack(self, z: np.ndarray):
+        """(directions, amplitudes, leak) — in `RuleShape`'s own vocabulary."""
+        mx, my = self._masks()
+        coef = z[:self.n_dir]
+        d = np.vstack([coef * mx, coef * my])
+        a = np.vstack([np.asarray(self.schedule_x, dtype=float),
+                       np.asarray(self.schedule_y, dtype=float)])
+        leak = z[self.n_dir:].reshape(self.n_sizes, self.n_field)
+        return d, a, leak
+
+    def pack(self, coef: np.ndarray, leak: np.ndarray) -> np.ndarray:
+        return np.concatenate([coef.ravel(), leak.ravel()])
+
+    def fields(self, z: np.ndarray) -> np.ndarray:
+        d, a, leak = self.unpack(z)
+        return a.T @ d + leak
+
+    def normalise(self, z: np.ndarray) -> np.ndarray:
+        """Identity, and that is the point.
+
+        `RuleShape` has to renormalise because `amplitude · direction` is invariant under
+        rescaling. Here the amplitudes are DECLARED, so that freedom does not exist: the
+        coefficients are in millimetres per unit of the M step and rescaling them would
+        change the field. Nothing to fix, so nothing is fixed.
+        """
+        return z
+
+    def composition(self, z: np.ndarray) -> np.ndarray:
+        """B = ∂(all size fields)/∂z. Constant — the model is LINEAR in its unknowns."""
+        nf, ns = self.n_field, self.n_sizes
+        mx, my = self._masks()
+        b = np.zeros((ns * nf, self.size))
+        eye = np.eye(nf)
+        for t in range(ns):
+            rows = slice(t * nf, (t + 1) * nf)
+            b[rows, :nf] = np.diag(self.schedule_x[t] * mx + self.schedule_y[t] * my)
+            base = self.n_dir + t * nf
+            b[rows, base:base + nf] = eye
+        return b
+
+
+def solve_declared(piece: PieceProblem,
+                   per_size: dict,
+                   schedule_x: Sequence[float],
+                   schedule_y: Sequence[float],
+                   weights: Weights | None = None,
+                   seed: dict | None = None) -> CoupledReport:
+    """The four sizes under a declared per-axis schedule. Same contract guard as `solve_coupled`.
+
+    `schedule_x` and `schedule_y` are the amplitude of each size relative to the base, in the
+    order of `per_size`. They come from the pattern's own RUL when there is one
+    (`ops/rosetta/rul_837.py` derives them); nothing here assumes where they came from.
+    """
+    w = weights or Weights()
+    report = None
+    for attempt in range(CONTRACT_BACKOFF):
+        report = _solve_declared_once(piece, per_size, schedule_x, schedule_y,
+                                      replace(w, leak=w.leak / (10.0 ** attempt)), seed)
+        if report.worst_residual_mm <= CONTRACT_GUARD_MM:
+            if attempt:
+                report.message = (
+                    f'{report.message} Leak weight backed off {attempt}× (to '
+                    f'{w.leak / (10.0 ** attempt):.0e}) to keep the contract.').strip()
+            return report
+    report.message = (f'{report.message} The contract was still missed after '
+                      f'{CONTRACT_BACKOFF} back-offs of the leak weight.').strip()
+    return report
+
+
+def _solve_declared_once(piece: PieceProblem, per_size: dict,
+                         schedule_x: Sequence[float], schedule_y: Sequence[float],
+                         weights: Weights | None = None,
+                         seed: dict | None = None) -> CoupledReport:
+    """Seed the coefficients from the per-size solves, then hand over to the shared loop.
+
+    **The seed is still our own answer and never Montse's** — the same rule F6.2 set. Each
+    size is solved on its own and the four fields are projected onto the declared schedule
+    in least squares, axis by axis; what does not fit becomes the initial leak. With the
+    amplitudes fixed the projection has a closed form, so there is no SVD to take here.
+    """
+    w = weights or Weights()
+    sizes = tuple(per_size)
+    shape = ScheduleShape(n_turns=len(piece.turn_indices),
+                          schedule_x=tuple(float(v) for v in schedule_x),
+                          schedule_y=tuple(float(v) for v in schedule_y))
+    if len(shape.schedule_x) != len(sizes) or len(shape.schedule_y) != len(sizes):
+        raise SolverError(f'The schedule declares {len(shape.schedule_x)}/'
+                          f'{len(shape.schedule_y)} sizes and the problem has {len(sizes)}.')
+
+    seed = seed or {t: solve(piece, per_size[t], w) for t in sizes}
+    per_size_diag = {t: seed[t].diagnosis for t in sizes}
+    seeded = np.array([seed[t].displacement.ravel() for t in sizes])
+
+    ax = np.asarray(shape.schedule_x, dtype=float)
+    ay = np.asarray(shape.schedule_y, dtype=float)
+    coef = np.zeros(shape.n_field)
+    for a, slots in ((ax, slice(0, shape.n_field, 2)), (ay, slice(1, shape.n_field, 2))):
+        denom = float(a @ a)
+        if denom > 1e-12:
+            coef[slots] = (a @ seeded[:, slots]) / denom
+    z = shape.pack(coef, seeded - shape.fields(shape.pack(coef, np.zeros(
+        (len(sizes), shape.n_field)))))
+    return _coupled_iterate(piece, per_size, shape, z, per_size_diag, w)
 
 
 def _restore_with(piece: PieceProblem, per_size, shape: RuleShape, z: np.ndarray,
