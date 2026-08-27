@@ -108,6 +108,32 @@ def _verifica_highest_y(punt, candidats, slug: str) -> None:
             .format(slug, y_punt, max(ys)))
 
 
+def _junctura_del_mateix_rol(graf, rol: str, slug: str):
+    """El vèrtex on es TOQUEN dos trams del MATEIX rol. L'àpex d'una pinça.
+
+    🚨 **És el cas invers d'`_extrems_de_rol`, i per això no es podia resoldre amb ell.**
+    Aquella funció torna els punts que apareixen UN cop —els caps del conjunt— i cancel·la
+    els que apareixen dos, que són justament les juntures interiors. L'àpex d'una pinça és
+    exactament un d'aquests: els dos braços hi arriben, o sigui que hi apareix dos cops i
+    la funció germana el llençava.
+
+    Una pinça són dos braços i un àpex (Montse C.09: «punt de pinça, o de plec»). Si en
+    surt més d'un, la peça porta més d'una pinça i la regla no diu quina: es queixa en
+    comptes de triar-ne una.
+    """
+    trams = _trams_amb_rol(graf, rol)
+    comptes: dict = {}
+    for t in trams:
+        for p in t.extrems:
+            comptes[p] = comptes.get(p, 0) + 1
+    junctures = {p for p, n in comptes.items() if n == 2}
+    if len(junctures) != 1:
+        raise LandmarkNoResolt(
+            '«{}»: hi ha {} juntures de «{}» i la regla en vol exactament 1 '
+            '(la peça deu portar més d\'una pinça)'.format(slug, len(junctures), rol))
+    return junctures.pop()
+
+
 def _shared_endpoint(graf, entrada: dict, tiebreak: str = '', slug: str = ''):
     """L'extrem que dos rols comparteixen. **N'hi ha d'haver exactament un.**
 
@@ -116,6 +142,10 @@ def _shared_endpoint(graf, entrada: dict, tiebreak: str = '', slug: str = ''):
     la regla descrivia. Cap dels dos casos no s'ha de resoldre «triant-ne un».
     """
     a, b = entrada['a'], entrada['b']
+    # Els dos operands SÓN el mateix rol: no es busca un extrem compartit entre dues
+    # vores, es busca la JUNTURA de dues vores germanes. És l'àpex de la pinça.
+    if a == b:
+        return _junctura_del_mateix_rol(graf, a, slug or a)
     extrems_a = _extrems_de_rol(graf, a)
     extrems_b = _extrems_de_rol(graf, b)
     comuns = extrems_a & extrems_b

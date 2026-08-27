@@ -1,0 +1,34 @@
+# SESSIO MONTSE — respostes
+# data export: 2026-08-26T18:24:14.158Z
+
+B.11	si, és bajo manga
+B.15	No, és diferent
+B.22	si, bajo = hem
+B.24	ES = Largo de pinza
+B.ORF1	Center collar seam / Costura del centre del coll / Costura centro cuello
+B.ORF2	el mateix
+C.09	Punt de cadera, punt de pit,punt de genoll, punt de colze,punt de pinça (o de plec), punt de bessó (calf), punt biceps, punt de turmell, punt de puny,
+D.01.core	75
+D.01.common	30
+D.03	No hi ha un perquè, va en funció del disseny i del volum que es vol donar a una prenda. Tanmateix, les pinces habitualment es fan a darrera per ajustar la forma del cul. Per tant el que has trobat s'ajusta al què és normal.
+E.P1.gti	Brusa
+E.P2.gti	Pantaló
+E.P2.falten	Tapeta de butxaca, obertura de butxaca, tapeta cremallera
+E.P3.gti	Vestit
+E.P3.falten	Obertures laterals, escot, tapeta, punys, baix de faldilla. Si un vestit obrusa o top va sense mànigues, la sisa portarà vora.
+F.01	837 VESTIT
+F.02	XS-S-M-L-XL
+F.03	DXF-AAMA DE POLIPATTERN
+F.04	2026-08-27
+C.01	OK
+C.02	OK
+C.03	OK
+C.04	OK
+C.05	OK
+C.06	OK
+C.07	OK
+C.08	OK
+D.02	LLEI
+E.P1.vores	Escot, Canto exterior del coll, Escot sense tirants, Línia de puny, Centre davant, Baix, Canto de l'obertura
+E.P2.vores	Línia de cintura, Baix, Canto de l'obertura
+E.P3.vores	Escot, Escot sense tirants, Baix
