@@ -6,10 +6,15 @@ shape. It was an adopted hypothesis (from PyGarment) and had never been checked 
 real graded nest. This checks it against Montse's, and the answer decides what the solver's
 unknowns are.
 
-**The test.** For every piece × size, take the curve points of the base, express each in
-the local frame of its own turn-to-turn segment, rebuild it in the frame the same segment
-has at size T — using the turn points Montse actually drew — and measure how far the result
-lands from the point she actually drew.
+**The test.** For every piece × size × LOOP, take the curve points of the base, express
+each in the local frame of its own turn-to-turn segment, rebuild it in the frame the same
+segment has at size T — using the turn points Montse actually drew — and measure how far
+the result lands from the point she actually drew.
+
+**Both loops, since the A0 amendment (Agus, 27/08).** The bank now carries the sewing line,
+and that is where 19 of the 20 POM anchors of the 1383 live. The hypothesis has to hold
+where the measurements are taken, not only where the piece is cut — a cut contour that
+graded by similarity while its sewing line did not would leave every POM value in the air.
 
 **Why there are rival models in here.** A probe that only ever runs the model it wants to
 confirm cannot fail, and a residual of zero from such a probe means nothing. Four models
@@ -47,6 +52,11 @@ class Segment:
     start: int
     end: int
     interior: tuple[int, ...]
+
+
+def loops(bank, name):
+    """(layer, loop dict) for every contour the bank carries for this piece."""
+    return sorted(bank['peces'][name]['bucles'].items())
 
 
 def segments(kinds, n) -> list[Segment]:
@@ -99,43 +109,43 @@ def predict(model, base, cur, seg) -> list[tuple[float, float]]:
 
 def residuals(bank, model, skip_null=True):
     base_size = bank['meta']['talla_base']
-    per_cell: dict[tuple[str, str], list[float]] = {}
-    for name, piece in bank['peces'].items():
-        kinds = piece['tipus_vertex']
-        n = piece['n_vertexs']
-        base = [tuple(p) for p in piece['talles'][base_size]['contorn_alineat']]
-        segs = segments(kinds, n)
-        for size in bank['meta']['talles']:
-            if size == base_size:
-                continue
-            cur = [tuple(p) for p in piece['talles'][size]['contorn_alineat']]
-            if skip_null and max(math.dist(a, b) for a, b in zip(base, cur)) < 1e-9:
-                continue
-            vals = []
-            for seg in segs:
-                if not seg.interior:
+    per_cell: dict[tuple[str, str, str], list[float]] = {}
+    for name in bank['peces']:
+        for layer, loop in loops(bank, name):
+            base = [tuple(p) for p in loop['talles'][base_size]['contorn_alineat']]
+            segs = segments(loop['tipus_vertex'], loop['n_vertexs'])
+            for size in bank['meta']['talles']:
+                if size == base_size:
                     continue
-                for i, q in zip(seg.interior, predict(model, base, cur, seg)):
-                    vals.append(math.dist(q, cur[i]))
-            per_cell[(name, size)] = vals
+                cur = [tuple(p) for p in loop['talles'][size]['contorn_alineat']]
+                if skip_null and max(math.dist(a, b) for a, b in zip(base, cur)) < 1e-9:
+                    continue
+                vals = []
+                for seg in segs:
+                    if not seg.interior:
+                        continue
+                    for i, q in zip(seg.interior, predict(model, base, cur, seg)):
+                        vals.append(math.dist(q, cur[i]))
+                per_cell[(name, loop['rol'], size)] = vals
     return per_cell
 
 
 def render(bank) -> str:
     out = []
-    out.append('── FASE A · per piece × size, similarity model ' + '─' * 34)
-    out.append(f'  {"piece":16s} {"size":5s} {"segments":>8s} {"curve pts":>9s} '
+    out.append('── FASE A · per piece × loop × size, similarity model ' + '─' * 27)
+    out.append(f'  {"piece":16s} {"loop":6s} {"size":5s} {"segments":>8s} {"curve pts":>9s} '
                f'{"mean":>8s} {"p95":>8s} {"max":>8s}')
     cells = residuals(bank, 'similarity', skip_null=False)
-    base_size = bank['meta']['talla_base']
-    for (name, size), vals in cells.items():
-        segs = len(segments(bank['peces'][name]['tipus_vertex'],
-                            bank['peces'][name]['n_vertexs']))
+    by_loop = {(n, l): loop for n in bank['peces'] for l, loop in loops(bank, n)}
+    layer_of = {loop['rol']: l for (n, l), loop in by_loop.items()}
+    for (name, rol, size), vals in cells.items():
+        loop = by_loop[(name, layer_of[rol])]
+        segs = len(segments(loop['tipus_vertex'], loop['n_vertexs']))
         if not vals:
-            out.append(f'  {name:16s} {size:5s} {segs:8d} {0:9d}       —        —        —')
+            out.append(f'  {name:16s} {rol:6s} {size:5s} {segs:8d} {0:9d}       —        —        —')
             continue
         s = sorted(vals)
-        out.append(f'  {name:16s} {size:5s} {segs:8d} {len(vals):9d} '
+        out.append(f'  {name:16s} {rol:6s} {size:5s} {segs:8d} {len(vals):9d} '
                    f'{statistics.mean(vals):8.4f} {s[int(0.95 * len(s))]:8.4f} '
                    f'{max(vals):8.4f}')
 
@@ -154,6 +164,16 @@ def render(bank) -> str:
         bar = '#' * int(round(60 * c / len(every)))
         out.append(f'  [{bins[i]:6.3f}, {bins[i + 1]:6.3f})  {c:6d}  '
                    f'{100 * c / len(every):5.1f}%  {bar}')
+
+    out.append('')
+    out.append('── FASE A · per loop ' + '─' * 59)
+    agg: dict[str, list[float]] = {}
+    for (name, rol, size), vals in cells.items():
+        agg.setdefault(rol, []).extend(vals)
+    for rol, vals in sorted(agg.items()):
+        s = sorted(vals)
+        out.append(f'  {rol:6s} n={len(vals):6d} mean={statistics.mean(vals):.4f} '
+                   f'p95={s[int(0.95 * len(s))]:.4f} max={max(vals):.4f} mm')
 
     out.append('')
     out.append('── FASE A · rival models, same data ' + '─' * 44)

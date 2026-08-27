@@ -5,52 +5,33 @@ fer cada POM a cada talla. El camp de la Montse diu on és cada punt del patró 
 Són dues descripcions del MATEIX vestit fetes per camins que no s'han tocat mai. El Rosetta
 és posar-les una al costat de l'altra i mirar quant es separen, en mil·límetres.
 
-── EL FORAT QUE MANA SOBRE TOT EL MÈTODE ────────────────────────────────────────
-Les receptes `PatternPOM` del 1383 ancoren **19 de 20 àncores a la línia de COSIT** (capa
-14 del patró mestre). El camp de la Montse **no porta capa 14**: només el contorn de TALL.
-Les àncores, tal com estan escrites, no es poden resoldre damunt del banc.
+── ESMENA A0 (27/08) · EL FORAT QUE MANAVA SOBRE EL MÈTODE S'HA TANCAT ─────────
+La primera versió d'aquest mòdul existia gairebé sencera per a un problema que ja no hi és.
+El banc del 26/08 no portava capa 14 i **19 de les 20 àncores de POM del 1383 hi viuen**, de
+manera que cada mesura s'havia de TRANSPORTAR des del contorn de tall — per tres portadors
+alhora (projecció, vèrtex més proper, fracció homòloga), amb la dispersió entre ells com a
+barra d'error. Sis POMs quedaven **no resolubles**: la seva xifra depenia més de quin
+portador es triés que del vestit.
 
-No es resol ni ignorant-ho ni re-ancorant els POMs a mà. Es resol **transportant**:
+El banc nou porta la capa 14, i el seu cosit a la talla base és **idèntic al del patró
+mestre del 1383, 0,000000000 mm a les cinc peces** (verificació A5). Per tant:
 
-  1. El camp només grada el contorn de TALL, i el grada com un camp de desplaçament per
-     vèrtex (`camp_montse.PecaCamp.desplacaments`).
-  2. Tota la resta de la geometria de la peça —la línia de cosit, els piquets— és una
-     OFFSET d'aquell contorn. Sota grading, una offset segueix el seu contorn.
-  3. Així que cada punt del patró mestre s'ancora al contorn de tall de la BASE per
-     projecció —(aresta, t), que sota CONVENCIÓ-1 és una FRACCIÓ— i es mou amb el
-     desplaçament interpolat d'aquella fracció.
+  🔑 **Cada àncora té homòloga NATIVA a cada talla, pel seu propi índex.** No hi ha
+  transport, no hi ha portador, no hi ha barra d'error de portador. La `PatternPoint` diu
+  `(boundary_index, ordre)`; `boundary_index` 0 és el tall i 1 el cosit; l'homòloga a la
+  talla T és el vèrtex del MATEIX índex d'aquell bucle. Res més.
 
-**Què costa, i com se sap què costa.** El transport és exacte per als punts que JA són al
-contorn de tall. Per als de la línia de cosit és una hipòtesi —«la costura grada com el tall
-que té al costat»— i «al costat» no vol dir una sola cosa. Per això se'n mesuren TRES, i la
-taula no en tria una: les corre totes.
-
-  · `projeccio` — el punt més proper del contorn de tall (peu de la perpendicular).
-  · `vertex`    — el VÈRTEX de tall més proper. És el portador més cru i el més independent:
-                  no interpola res.
-  · `fraccio`   — el punt del tall a la MATEIXA fracció d'arc, comptada des de l'origen de
-                  CONVENCIÓ-1 de cada bucle. És el més fidel al que és una offset.
-
-🚨 **I les tres no diuen el mateix.** A la sisa del DELANTERO, la projecció d'una àncora de
-cosit cau a l'aresta 301 i el vèrtex més proper és el 306: **cinc vèrtexs de distància**,
-perquè en una corba «el més proper» i «el de la mateixa posició» divergeixen. Allà on
-divergeixen, el Δ del POM depèn del portador i **no és una mesura del vestit**: és una
-mesura de la tria. La dispersió entre les tres vies va a la taula com a `incertesa`, i el
-POM que la té més gran que la tolerància queda declarat **no resoluble sobre aquest banc**
-—no «desviat»—, que és una cosa diferent i s'ha de dir diferent.
-
-🔑 **I té una porta d'entrada que no es podia demanar millor:** a la talla BASE el
-desplaçament és zero per construcció, o sigui que el valor que en surt ha de reproduir
-`PatternPOM.valor_mesurat_cm` —el que el motor va llegir del patró de debò— **a l'últim
-decimal**. Si no el reprodueix, el transport està trencat i la resta de la taula no val
-res. És la verificació C0 i és la primera que corre.
+Tot el bastiment de portadors s'ha RETIRAT en comptes de deixar-lo desactivat. El que
+mesurava —quant costava no tenir la capa 14— és història i viu a
+`REPORT_ROSETTA_837_2026-08-27.md`; mantenir-lo viu seria mantenir dos camins per a la
+mateixa pregunta i que el dia de demà algú n'agafés el dolent.
 
 ── LES DUES COMPARACIONS, I PER QUÈ EN CALEN DUES ───────────────────────────────
   · **absoluta** — `valor_camp(talla) − GradedSpec(talla)`. Inclou el desacord que ja hi ha
-    a la BASE entre el que el patró MESURA i el que la fitxa DECLARA, que no és grading:
-    és la distància entre el patró i la fitxa, i al 837 no és zero.
+    a la BASE entre el que el patró MESURA i el que la fitxa DECLARA, que no és grading: és
+    la distància entre el patró i la fitxa, i al 837 no és zero.
   · **de deltes** — `Δ_camp(talla) − Δ_fitxa(talla)`, amb Δ comptat des de la base. Aquí el
-    desacord de base se'n va sol, i el que queda és NOMÉS grading. **És la xifra del
+    desacord de base se'n va sol i el que queda és NOMÉS grading. **És la xifra del
     Rosetta**: si la nostra GV i el camp de la Montse expliquen el mateix vestit, aquesta
     columna ha de ser zero.
 
@@ -65,11 +46,10 @@ from __future__ import annotations
 
 import hashlib
 import json
-from bisect import bisect_right
 import math
 import os
 import sys
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
@@ -77,8 +57,8 @@ sys.path.insert(0, str(REPO / 'backend'))
 sys.path.insert(0, str(REPO / 'ops'))
 
 from rosetta.camp_montse import (                                    # noqa: E402
-    BASE, CAMP_837, MESTRE_837, TALLES, Camp, alinea, fraccio_de_projeccio,
-    fraccions, llegeix_camp, projecta_sobre_bucle, verifica, verifica_contra_mestre,
+    BASE, CAPA_COSIT, CAPA_TALL, CAPES, MESTRE_837, TALLES, Camp, alinea, fraccions,
+    llegeix_camp, verifica, verifica_contra_mestre, verifica_superseeix,
 )
 
 #: El model del banc i la seva versió de grading segellada. Escrits i no descoberts: un
@@ -91,134 +71,59 @@ GRADING_VERSION = 201          # v9, aprovada 24/08, is_active
 #: punt i talla) i que l'Agus encara ha de ratificar; viu aquí per poder-la moure en un lloc.
 LLINDAR_MM = 0.5
 
-#: Els tres portadors. El canònic és `projeccio` perquè és el determinista i el que
-#: reprodueix la base exacta; els altres dos hi corren al costat per posar-hi la barra d'error.
-PORTADORS = ('projeccio', 'vertex', 'fraccio')
-PORTADOR_CANONIC = 'projeccio'
-
 #: `PatternPOM.valor_mesurat_cm` es desa amb DOS decimals de cm. La reproducció a la base
 #: no pot ser millor que mig decimal, i exigir-li més seria exigir-li que menteixi.
 TOL_ARRODONIMENT_MM = 0.05
 
-#: Per sobre d'això, l'àncora és massa lluny del contorn de tall perquè el transport
-#: («la costura grada com el tall que té al costat») es pugui donar per bo sense mirar-s'ho.
-#: El marge de la casa és ~8 mm; es dobla i s'hi posa un dit de marge.
-CARRIER_SOSPITOS_MM = 18.0
+#: `PatternPoint.boundary_index` → capa del camp. L'ordre de vores del patró mestre és
+#: [0]=tall (capa 1), [1]=cosit (capa 14), i el camp el reprodueix exactament (A5).
+CAPA_PER_BOUNDARY = {0: CAPA_TALL, 1: CAPA_COSIT}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Transport
+# La geometria d'una talla, tal com el motor de mesura la vol
 # ─────────────────────────────────────────────────────────────────────────────
 
-@dataclass(frozen=True)
-class Carrier:
-    """On s'agafa un punt al contorn de tall de la base, perquè el grading se l'endugui."""
+def peca_a_la_talla(pc, talla: str):
+    """`PieceData` d'una peça del camp a una talla: els dos bucles i els piquets.
 
-    aresta: int
-    t: float
-    distancia_mm: float
-    fraccio: float
-
-
-def carrier_de(p, contorn_base, origen: int) -> Carrier:
-    aresta, t, d = projecta_sobre_bucle(p, contorn_base)
-    return Carrier(aresta=aresta, t=t, distancia_mm=d,
-                   fraccio=fraccio_de_projeccio(contorn_base, origen, aresta, t))
-
-
-def desplacament_a_fraccio(f: float, fr_ordenades, ordre, camp_desp) -> tuple[float, float]:
-    """El desplaçament del contorn de tall a una FRACCIÓ del bucle.
-
-    És el tercer portador i el més fidel a la naturalesa d'una offset: dos bucles paral·lels
-    recorren la mateixa frontera, i el punt de la costura que correspon al punt del tall és
-    **el que és a la mateixa fracció d'arc**, no el que té més a prop. En una corba les dues
-    coses divergeixen, i divergeixen just on més importa (sisa, escot).
+    Es construeix per poder cridar `engine/measure.resoldre` **tal qual**, que és el que fa
+    que el valor mesurat aquí i el valor que el Taller ensenya siguin literalment la mateixa
+    funció. El mètode `vora` necessita la vora sencera per resseguir-la: per això hi van els
+    dos bucles i no només els punts que la recepta cita.
     """
-    n = len(ordre)
-    k = bisect_right(fr_ordenades, f) - 1
-    if k < 0:
-        k = n - 1
-    i0, i1 = ordre[k % n], ordre[(k + 1) % n]
-    f0 = fr_ordenades[k % n]
-    f1 = fr_ordenades[(k + 1) % n] if (k + 1) < n else 1.0
-    t = 0.0 if f1 <= f0 else (f - f0) / (f1 - f0)
-    d0, d1 = camp_desp[i0], camp_desp[i1]
-    return (d0[0] + t * (d1[0] - d0[0]), d0[1] + t * (d1[1] - d0[1]))
-
-
-def fraccions_ordenades(contorn, origen: int):
-    """(fraccions creixents, índexs de vèrtex en ordre de recorregut) — per a `bisect`."""
-    n = len(contorn)
-    ordre = [(origen + k) % n for k in range(n)]
-    fr = fraccions(contorn, origen)
-    return [fr[i] for i in ordre], ordre
-
-
-def desplacament_a(carrier: Carrier, camp_desp) -> tuple[float, float]:
-    """El desplaçament interpolat a la fracció del carrier.
-
-    Lineal DINS de l'aresta i prou: la fracció d'arc dins d'una aresta recta ja és lineal
-    en `t`, o sigui que interpolar per `t` i interpolar per fracció són la mateixa cosa.
-    """
-    n = len(camp_desp)
-    d0 = camp_desp[carrier.aresta]
-    d1 = camp_desp[(carrier.aresta + 1) % n]
-    return (d0[0] + carrier.t * (d1[0] - d0[0]),
-            d0[1] + carrier.t * (d1[1] - d0[1]))
-
-
-def transporta_peca(mestre, contorn_base, origen: int, camp_desp, portador: str = 'projeccio'):
-    """El `PieceData` del patró mestre, mogut a una talla del camp.
-
-    Torna una peça sencera —les dues vores, els piquets— perquè el motor de mesura la pugui
-    fer servir tal qual: el mètode `vora` resegueix la vora, i sense vora no hi ha res a
-    resseguir.
-    """
-    fr_ord, ordre = fraccions_ordenades(contorn_base, origen)
-
-    def per_projeccio(x, y):
-        return desplacament_a(carrier_de((x, y), contorn_base, origen), camp_desp)
-
-    def per_vertex(x, y):
-        j = min(range(len(contorn_base)), key=lambda i: math.dist((x, y), contorn_base[i]))
-        return camp_desp[j]
-
+    from fhort.patterns.engine.geometry import (BoundaryData, LayerRole, PieceData,
+                                                PointData, PointKind)
+    rols = {CAPA_TALL: LayerRole.CUT, CAPA_COSIT: LayerRole.SEW}
     vores = []
-    for bi, b in enumerate(mestre.boundaries):
-        if portador == 'fraccio':
-            # 🚨 L'origen del bucle de la COSTURA no es busca amb l'argmin de Y: es pren el
-            # punt de la costura més proper a l'origen del bucle de TALL. Les dues coses
-            # coincideixen a quatre peces i a la TAPETA no: allà l'argmin de Y cau a l'altra
-            # punta i la fracció s'esbiaixa 0,368 del perímetre (209 mm d'arc) en comptes de
-            # 0,0099 (7,8 mm). Dues parametritzacions només es poden comparar si tenen
-            # l'origen al MATEIX lloc material, i «Y mínima» no ho garanteix en un bucle que
-            # no és el mateix bucle.
-            propies = None
-            if b.closed:
-                pts = [(q.x, q.y) for q in b.points]
-                ancora_cut = contorn_base[origen]
-                oi = min(range(len(pts)), key=lambda i: math.dist(pts[i], ancora_cut))
-                propies = fraccions(pts, oi)
-            punts = tuple(
-                replace(q, x=q.x + d[0], y=q.y + d[1])
-                for q, d in (
-                    (q, desplacament_a_fraccio(propies[k], fr_ord, ordre, camp_desp)
-                        if propies is not None else per_projeccio(q.x, q.y))
-                    for k, q in enumerate(b.points)
-                )
-            )
-        else:
-            mou = per_vertex if portador == 'vertex' else per_projeccio
-            punts = tuple(
-                replace(q, x=q.x + d[0], y=q.y + d[1])
-                for q, d in ((q, mou(q.x, q.y)) for q in b.points)
-            )
-        vores.append(replace(b, points=punts))
-    piquets = tuple(
-        replace(nz, x=nz.x + d[0], y=nz.y + d[1])
-        for nz, d in ((nz, per_projeccio(nz.x, nz.y)) for nz in mestre.notches)
-    )
-    return replace(mestre, boundaries=tuple(vores), notches=piquets)
+    for capa in CAPES:
+        if capa not in pc.bucles:
+            continue
+        b = pc.bucle(capa)
+        punts = tuple(
+            PointData(x=x, y=y, kind=PointKind(k))
+            for (x, y), k in zip(b.contorn[talla], b.tipus)
+        )
+        vores.append(BoundaryData(role=rols[capa], layer=capa, points=punts, closed=True))
+    piquets = tuple(PointData(x=x, y=y, kind=PointKind.UNCLASSIFIED)
+                    for x, y in pc.piquets[talla])
+    return PieceData(nom_block=pc.nom, boundaries=tuple(vores), notches=piquets)
+
+
+def posicio_ancora(pc, boundary_index, ordre, mena, talla) -> tuple[float, float]:
+    """On és una àncora de `PatternPoint` a una talla del camp. Per ÍNDEX, sense transport.
+
+    🔑 Això és tota la simplificació de l'esmena A0 en quatre línies. Abans calia projectar
+    l'àncora sobre el contorn de tall, interpolar-hi el desplaçament i acceptar una barra
+    d'error; ara el bucle on viu l'àncora existeix a totes cinc talles amb la mateixa
+    numeració, i la resposta és el vèrtex del mateix índex.
+    """
+    if mena == 'notch':
+        return pc.piquets[talla][ordre]
+    capa = CAPA_PER_BOUNDARY.get(boundary_index)
+    if capa is None or capa not in pc.bucles:
+        raise KeyError(f'boundary_index {boundary_index} no té capa al camp')
+    return pc.bucle(capa).contorn[talla][ordre]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -297,92 +202,63 @@ class FilaPOM:
     tipus_grading: str
     #: el que el motor va llegir del patró mestre (2 decimals de cm, com es desa)
     valor_patro_cm: float | None
-    #: portador → talla → cm, mesurat damunt del camp
-    valor_camp: dict[str, dict[str, float]]
-    valor_fitxa: dict[str, float]
-    #: distància màxima de les seves àncores al contorn de tall de la base
-    carrier_max_mm: float
+    valor_camp: dict[str, float]            # talla → cm, mesurat damunt del camp
+    valor_fitxa: dict[str, float]           # talla → cm, GradedSpec
+    #: on viu cada àncora: 'cosit', 'tall' o 'mixt'. Ja no hi ha portador, però SÍ que
+    #: importa saber-ho: un POM que travessa els dos bucles mesura la sagnadura, no la peça.
+    bucles: str = ''
     motiu_exclusio: str = ''
 
     @property
     def mesurable(self) -> bool:
         return not self.motiu_exclusio
 
-    def valor(self, talla: str, portador: str = PORTADOR_CANONIC) -> float:
-        return self.valor_camp[portador][talla]
+    def delta_absolut_mm(self, talla: str) -> float:
+        return (self.valor_camp[talla] - self.valor_fitxa[talla]) * 10.0
 
-    def delta_absolut_mm(self, talla: str, portador: str = PORTADOR_CANONIC) -> float:
-        return (self.valor(talla, portador) - self.valor_fitxa[talla]) * 10.0
-
-    def delta_de_deltes_mm(self, talla: str, portador: str = PORTADOR_CANONIC) -> float:
+    def delta_de_deltes_mm(self, talla: str) -> float:
         """La xifra del Rosetta: quant grada el camp menys quant diu la fitxa que grada."""
-        v = self.valor_camp[portador]
-        d_camp = v[talla] - v[BASE]
+        d_camp = self.valor_camp[talla] - self.valor_camp[BASE]
         d_fitxa = self.valor_fitxa[talla] - self.valor_fitxa[BASE]
         return (d_camp - d_fitxa) * 10.0
-
-    def incertesa_mm(self) -> float:
-        """Dispersió del Δ entre els tres portadors. És la barra d'error de la fila."""
-        return max(
-            max(self.delta_de_deltes_mm(t, p) for p in PORTADORS)
-            - min(self.delta_de_deltes_mm(t, p) for p in PORTADORS)
-            for t in TALLES
-        )
 
     def desviacio_mm(self) -> float:
         return max(abs(self.delta_de_deltes_mm(t)) for t in TALLES)
 
     def veredicte(self) -> str:
-        """Desviació i incertesa es comparen ENTRE ELLES, no cadascuna amb el llindar.
+        """Tres sortides, i ja no n'hi ha cap per «no se sap».
 
-        Una barra d'error de 0,8 mm damunt d'una desviació de 75 mm no fa dubtosa la
-        desviació: la deixa igual de certa. I una desviació de 0,01 mm amb una barra de
-        0,93 mm no és paritat: és que no se sap. Les tres sortides, doncs:
-
-          · **DESVIAT** — |Δ| − incertesa > llindar: el desacord sobreviu a l'error.
-          · **PARITAT** — |Δ| + incertesa ≤ llindar: l'acord sobreviu a l'error.
-          · **NO RESOLUBLE** — la barra travessa el llindar. Sobre AQUEST banc no es pot
-            dir, i el que falta per poder-ho dir és la capa 14 graduada.
+        A F6-PRE existia NO RESOLUBLE, que volia dir que la barra d'error del portador
+        travessava la tolerància. El banc amb capa 14 la retira: cada mesura és exacta sobre
+        la geometria que la Montse va dibuixar, i el que en surt és PARITAT o DESVIAT.
         """
         if not self.mesurable:
             return 'NO MESURABLE'
-        d, u = self.desviacio_mm(), self.incertesa_mm()
-        if d - u > LLINDAR_MM:
-            return 'DESVIAT'
-        if d + u <= LLINDAR_MM:
-            return 'PARITAT'
-        return 'NO RESOLUBLE'
+        return 'PARITAT' if self.desviacio_mm() <= LLINDAR_MM else 'DESVIAT'
 
 
 def executa(camp: Camp | None = None) -> dict:
-    from fhort.patterns.engine.aama_reader import AAMAReader
     from fhort.patterns.engine.measure import MeasureError, resoldre
 
     camp = camp or llegeix_camp()
     bd = llegeix_bd()
     mestre_bytes = MESTRE_837.read_bytes()
-    mestre = {p.nom_block: p for p in AAMAReader().read(mestre_bytes).pieces}
 
-    # ── el transport, peça × talla × portador ────────────────────────────────
-    transportades: dict[str, dict[str, dict[str, object]]] = {}
-    for nom, pc in camp.peces.items():
-        base = pc.contorn[BASE]
-        transportades[nom] = {
-            port: {t: transporta_peca(mestre[nom], base, pc.origen_bucle,
-                                      pc.desplacaments(t), port)
-                   for t in TALLES}
-            for port in PORTADORS
-        }
+    geometria = {nom: {t: peca_a_la_talla(pc, t) for t in TALLES}
+                 for nom, pc in camp.peces.items()}
 
-    # ── els PatternPoint han de casar amb el patró mestre, o res no val ──────
-    incoherents = [
-        pid for pid, (peca, bi, ordre, mena, x, y) in bd['punts'].items()
-        if (lambda q: q is None or math.dist((q.x, q.y), (x, y)) > 1e-6)(
-            _punt_del_mestre(mestre[peca], bi, ordre, mena))
-    ]
+    # Les àncores del patró han de casar amb el camp, o res del que segueix no val.
+    incoherents = []
+    for pid, (peca, bi, ordre, mena, x, y) in bd['punts'].items():
+        try:
+            q = posicio_ancora(camp.peces[peca], bi, ordre, mena, BASE)
+        except (KeyError, IndexError):
+            incoherents.append(pid)
+            continue
+        if math.dist(q, (x, y)) > 1e-9:
+            incoherents.append(pid)
 
-    files = [_fila(pom, bd, camp, transportades, resoldre, MeasureError)
-             for pom in bd['poms']]
+    files = [_fila(pom, bd, camp, geometria, resoldre, MeasureError) for pom in bd['poms']]
 
     ancorats = {f.codi for f in files}
     for codi, per_talla in sorted(bd['specs'].items()):
@@ -392,7 +268,6 @@ def executa(camp: Camp | None = None) -> dict:
             codi=codi, nom=bd['noms_spec'].get(codi, codi), peca='—', metode='—',
             tipus_grading=per_talla[BASE]['tipus'], valor_patro_cm=None,
             valor_camp={}, valor_fitxa={t: per_talla[t]['valor_cm'] for t in TALLES},
-            carrier_max_mm=float('nan'),
             motiu_exclusio='sense recepta PatternPOM al 1383 (POM de fitxa, no ancorat)',
         ))
 
@@ -404,15 +279,15 @@ def executa(camp: Camp | None = None) -> dict:
     }
 
 
-def _fila(pom, bd, camp, transportades, resoldre, MeasureError) -> FilaPOM:
+def _fila(pom, bd, camp, geometria, resoldre, MeasureError) -> FilaPOM:
     codi, peca = pom['codi'], pom['peca']
     spec = bd['specs'].get(codi)
     tipus = spec[BASE]['tipus'] if spec else '—'
     fitxa = {t: spec[t]['valor_cm'] for t in TALLES} if spec else {}
 
-    def exclos(motiu, carrier=float('nan')):
+    def exclos(motiu, bucles=''):
         return FilaPOM(codi, pom['nom'], peca, pom['metode'], tipus,
-                       pom['valor_mesurat_cm'], {}, fitxa, carrier, motiu_exclusio=motiu)
+                       pom['valor_mesurat_cm'], {}, fitxa, bucles, motiu)
 
     if spec is None:
         return exclos(f'sense GradedSpec actiu a la GV{GRADING_VERSION}')
@@ -423,45 +298,32 @@ def _fila(pom, bd, camp, transportades, resoldre, MeasureError) -> FilaPOM:
     if not ancores:
         return exclos(f'recepta sense àncores: {pom["definicio"]}')
 
-    carrier_max = 0.0
+    capes = set()
     for pid in ancores:
         dades = bd['punts'].get(pid)
         if dades is None:
             return exclos(f'àncora #{pid} no existeix a la geometria del patró')
-        carrier_max = max(
-            carrier_max,
-            carrier_de((dades[4], dades[5]), pc.contorn[BASE], pc.origen_bucle).distancia_mm,
-        )
+        capes.add(CAPA_PER_BOUNDARY.get(dades[1]))
+    bucles = ('cosit' if capes == {CAPA_COSIT} else
+              'tall' if capes == {CAPA_TALL} else 'mixt')
 
-    valors: dict[str, dict[str, float]] = {}
-    for port in PORTADORS:
-        valors[port] = {}
-        for t in TALLES:
-            peca_t = transportades[peca][port][t]
-            per_id = {}
-            for pid in ancores:
-                _, bi, ordre, mena, _, _ = bd['punts'][pid]
-                q = _punt_del_mestre(peca_t, bi, ordre, mena)
-                if q is None:
-                    return exclos(f'àncora #{pid} sense homòloga transportada', carrier_max)
-                per_id[pid] = (q.x, q.y)
+    valors = {}
+    for t in TALLES:
+        per_id = {}
+        for pid in ancores:
+            _, bi, ordre, mena, _, _ = bd['punts'][pid]
             try:
-                valors[port][t] = resoldre(peca_t, pom['definicio'], per_id,
-                                           pom['metode']).valor_cm
-            except MeasureError as exc:
-                return exclos(f'la recepta no resol: {exc}', carrier_max)
+                per_id[pid] = posicio_ancora(pc, bi, ordre, mena, t)
+            except (KeyError, IndexError):
+                return exclos(f'àncora #{pid} sense homòloga al camp', bucles)
+        try:
+            valors[t] = resoldre(geometria[peca][t], pom['definicio'], per_id,
+                                 pom['metode']).valor_cm
+        except MeasureError as exc:
+            return exclos(f'la recepta no resol: {exc}', bucles)
 
     return FilaPOM(codi, pom['nom'], peca, pom['metode'], tipus, pom['valor_mesurat_cm'],
-                   valors, fitxa, carrier_max)
-
-
-def _punt_del_mestre(peca, boundary_index, ordre, mena):
-    if mena == 'notch':
-        return peca.notches[ordre] if ordre < len(peca.notches) else None
-    if boundary_index is None or boundary_index >= len(peca.boundaries):
-        return None
-    pts = peca.boundaries[boundary_index].points
-    return pts[ordre] if ordre < len(pts) else None
+                   valors, fitxa, bucles)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -471,60 +333,70 @@ def _punt_del_mestre(peca, boundary_index, ordre, mena):
 def dataset(res: dict) -> dict:
     """`parity_837.json` — el que el solver F6 carregarà com a banc.
 
-    Porta el camp ALINEAT (grading sense la posició del full), els desplaçaments per vèrtex
-    respecte de la base, l'origen de bucle de CONVENCIÓ-1 i les fraccions que en surten, i
-    la classe de restricció de cada POM. Les coordenades van a 4 decimals: el DXF en porta 3.
+    Porta els DOS bucles per peça × talla (esmena A0), cadascun alineat, amb els
+    desplaçaments per vèrtex respecte de la base, el seu origen de CONVENCIÓ-1 i les
+    fraccions que en surten. Coordenades a 4 decimals: el DXF en porta 3.
     """
     camp: Camp = res['camp']
     peces = {}
     for nom, pc in camp.peces.items():
-        al = alinea(pc)
-        base = pc.contorn[BASE]
-        talles = {}
-        for t in TALLES:
-            tx, ty = al.translacio[t]
-            desp = pc.desplacaments(t)
-            talles[t] = {
-                'contorn_alineat': [[round(x - tx, 4), round(y - ty, 4)]
-                                    for x, y in pc.contorn[t]],
-                'desplacament_vs_base': [[round(dx - tx, 4), round(dy - ty, 4)]
-                                         for dx, dy in desp],
-                'piquets': [[round(x, 4), round(y, 4)] for x, y in pc.piquets[t]],
-                'fil': [round(v, 4) for v in pc.fil[t]],
-                'residu_max_mm': round(al.residu_max[t], 4),
+        bucles = {}
+        for capa in camp.capes:
+            b = pc.bucle(capa)
+            al = alinea(b)
+            talles = {}
+            for t in TALLES:
+                tx, ty = al.translacio[t]
+                desp = b.desplacaments(t)
+                talles[t] = {
+                    'contorn_alineat': [[round(x - tx, 4), round(y - ty, 4)]
+                                        for x, y in b.contorn[t]],
+                    'desplacament_vs_base': [[round(dx - tx, 4), round(dy - ty, 4)]
+                                             for dx, dy in desp],
+                    'residu_max_mm': round(al.residu_max[t], 4),
+                }
+            bucles[capa] = {
+                'capa': capa,
+                'rol': 'tall' if capa == CAPA_TALL else 'cosit',
+                'n_vertexs': b.n_vertexs,
+                'origen_bucle': b.origen_bucle,
+                'tipus_vertex': list(b.tipus),
+                'fraccio_vertex': [round(f, 8) for f in fraccions(b.contorn[BASE],
+                                                                  b.origen_bucle)],
+                'alineacio': {
+                    'metode': al.metode, 'ancora': al.ancora,
+                    'translacio': {t: [round(v, 4) for v in al.translacio[t]]
+                                   for t in TALLES},
+                    'candidats_mm': {k: round(v, 4) for k, v in al.candidats.items()},
+                },
+                'talles': talles,
             }
         peces[nom] = {
-            'n_vertexs': pc.n_vertexs,
-            'origen_bucle': pc.origen_bucle,
-            'tipus_vertex': list(pc.tipus),
-            'fraccio_vertex': [round(f, 8) for f in fraccions(base, pc.origen_bucle)],
-            'alineacio': {'metode': al.metode, 'ancora': al.ancora,
-                          'translacio': {t: [round(v, 4) for v in al.translacio[t]]
-                                         for t in TALLES},
-                          'candidats_mm': {k: round(v, 4) for k, v in al.candidats.items()}},
-            'talles': talles,
+            'bucles': bucles,
+            'piquets': {t: [[round(x, 4), round(y, 4)] for x, y in pc.piquets[t]]
+                        for t in TALLES},
+            'fil': {t: [round(v, 4) for v in pc.fil[t]] for t in TALLES},
         }
 
     poms = []
     for f in res['files']:
         poms.append({
             'codi': f.codi, 'nom': f.nom, 'peca': f.peca, 'metode': f.metode,
+            'bucles_ancora': f.bucles,
             'tipus_grading': f.tipus_grading,
             'classe_restriccio': ('delta_zero_dur' if f.tipus_grading == 'FIXED'
                                   else 'delta_lliure' if f.tipus_grading == 'LINEAR'
                                   else f.tipus_grading.lower()),
             'veredicte': f.veredicte(),
             'motiu_exclusio': f.motiu_exclusio,
-            'carrier_max_mm': None if math.isnan(f.carrier_max_mm) else round(f.carrier_max_mm, 4),
             'valor_patro_cm': f.valor_patro_cm,
             'valor_fitxa_cm': f.valor_fitxa,
-            'valor_camp_cm': ({p: {t: round(v, 6) for t, v in f.valor_camp[p].items()}
-                               for p in PORTADORS} if f.mesurable else {}),
+            'valor_camp_cm': ({t: round(v, 6) for t, v in f.valor_camp.items()}
+                              if f.mesurable else {}),
             'delta_de_deltes_mm': ({t: round(f.delta_de_deltes_mm(t), 4) for t in TALLES}
                                    if f.mesurable else {}),
             'delta_absolut_mm': ({t: round(f.delta_absolut_mm(t), 4) for t in TALLES}
                                  if f.mesurable else {}),
-            'incertesa_portador_mm': round(f.incertesa_mm(), 4) if f.mesurable else None,
         })
 
     return {
@@ -532,6 +404,8 @@ def dataset(res: dict) -> dict:
             'nom': 'parity_837',
             'proposit': 'Banc de paritat del solver F6: el grading real de la Montse '
                         'aparellat vèrtex a vèrtex amb el patró del model 1383.',
+            'esmena': 'A0 (Agus, 27/08) — regenerat des del fitxer amb capa 14; '
+                      'superseeix el banc del 26/08 sense moure cap vèrtex de tall.',
             'font_camp': camp.fitxer.name,
             'md5_camp': camp.md5,
             'font_mestre': MESTRE_837.name,
@@ -540,23 +414,21 @@ def dataset(res: dict) -> dict:
             'unitats': camp.unitats + ' · totes les coordenades i deltes del fitxer, en mm',
             'talles': list(TALLES),
             'talla_base': BASE,
+            'capes': list(camp.capes),
             'model': MODEL_BANC,
             'pattern_file': res['bd']['pattern_file'],
             'grading_version': res['bd']['gv'],
-            'portador_canonic': PORTADOR_CANONIC,
-            'portadors': list(PORTADORS),
-            'convencio_1': ("origen del bucle = vèrtex de Y mínima del contorn de tall a la "
-                            "talla base; les altres talles l'hereten per identitat d'índex. "
-                            "Únic a les cinc peces (verificació A4)."),
+            'convencio_1': ("bucle de TALL: origen = vèrtex de Y mínima a la talla base. "
+                            "bucle de COSIT: origen = el punt més proper a l'origen del "
+                            "tall (l'argmin de Y propi erra a la TAPETA). Les altres talles "
+                            "l'hereten per identitat d'índex. Únic als dos bucles (A4)."),
             'correspondencia': ("vèrtex a vèrtex per identitat d'índex; recompte i "
-                                "classificació gir/corba invariants a les cinc talles (A1, A2); "
-                                "la base del camp és el MATEIX contorn que el patró mestre "
-                                "del 1383, desviació 0,000000000 mm (A5)."),
+                                "classificació gir/corba invariants a les cinc talles (A1, "
+                                "A2) als DOS bucles; la base del camp és el MATEIX contorn "
+                                "que el patró mestre del 1383, desviació 0,000000000 mm "
+                                "als dos bucles (A5). Les àncores de POM no es transporten: "
+                                "són vèrtexs natius."),
             'llindar_mm': LLINDAR_MM,
-            'avis_capa_14': ("El camp NO porta línia de cosit. Les receptes del 1383 hi "
-                             "ancoren 19 de 20 àncores, i s'hi transporten. Els POMs amb "
-                             "veredicte NO RESOLUBLE són els que depenen de quin portador "
-                             "es triï més que del vestit."),
         },
         'peces': peces,
         'poms': poms,
@@ -583,51 +455,46 @@ def informe(res: dict) -> str:
     files: list[FilaPOM] = res['files']
     mesurables = [f for f in files if f.mesurable]
 
-    out.append(_capcalera("A · VERIFICACIONS D'INGESTA"))
-    for v in verifica(camp) + verifica_contra_mestre(camp):
-        out.append(f'  {"OK  " if v.ok else "FAIL"} {v.nom} — {v.detall}')
+    out.append(_capcalera("A · VERIFICACIONS D'INGESTA (els dos bucles)"))
+    vs = verifica(camp) + verifica_contra_mestre(camp) + verifica_superseeix(camp)
+    dolentes = [v for v in vs if not v.ok]
+    out.append(f'  {len(vs)} verificacions · {len(dolentes)} vermelles')
+    for v in dolentes:
+        out.append(f'  FAIL {v.nom} — {v.detall}')
+    for v in vs:
+        if v.nom.startswith(('A5 · base ≡ mestre · cosit', 'A6')):
+            out.append(f'  {"OK  " if v.ok else "FAIL"} {v.nom} — {v.detall}')
 
-    out.append(_capcalera('B · ALINEACIÓ'))
+    out.append(_capcalera('B · ALINEACIÓ (per bucle)'))
     for nom, pc in camp.peces.items():
-        al = alinea(pc)
-        cand = ' · '.join(f'{k}={v:.2f}' for k, v in al.candidats.items())
-        out.append(f'  {nom:16s} mètode={al.metode:18s} àncora={al.ancora} '
-                   f'residu_max(XL)={al.residu_max["XL"]:6.2f} mm  [{cand}]')
+        for capa in camp.capes:
+            al = alinea(pc.bucle(capa))
+            cand = ' · '.join(f'{k}={v:.2f}' for k, v in al.candidats.items())
+            rol = 'tall ' if capa == CAPA_TALL else 'cosit'
+            out.append(f'  {nom:16s} {rol} mètode={al.metode:18s} àncora={al.ancora} '
+                       f'residu_max(XL)={al.residu_max["XL"]:6.2f} mm  [{cand}]')
 
-    out.append(_capcalera('C0 · EL TRANSPORT REPRODUEIX EL PATRÓ A LA BASE'))
-    pitjor = max((abs(f.valor(BASE, p) - f.valor_patro_cm) * 10.0
-                  for f in mesurables if f.valor_patro_cm is not None
-                  for p in PORTADORS), default=0.0)
+    out.append(_capcalera('C0 · LES ÀNCORES SÓN NATIVES (cap transport)'))
+    pitjor = max((abs(f.valor_camp[BASE] - f.valor_patro_cm) * 10.0
+                  for f in mesurables if f.valor_patro_cm is not None), default=0.0)
     out.append(f'  {"OK  " if pitjor <= TOL_ARRODONIMENT_MM else "FAIL"} desviació màxima '
-               f'base↔patró: {pitjor:.4f} mm sobre {len(mesurables)} POMs × '
-               f'{len(PORTADORS)} portadors (tolerància {TOL_ARRODONIMENT_MM} mm = mig '
-               f'decimal de com es desa `valor_mesurat_cm`)')
+               f'base↔patró: {pitjor:.4f} mm sobre {len(mesurables)} POMs '
+               f'(tolerància {TOL_ARRODONIMENT_MM} mm = mig decimal de com es desa '
+               f'`valor_mesurat_cm`)')
     out.append(f'  {"OK  " if not res["punts_incoherents"] else "FAIL"} '
-               f'{len(res["bd"]["punts"])} PatternPoint contra el patró mestre: '
+               f'{len(res["bd"]["punts"])} PatternPoint contra el camp: '
                f'{len(res["punts_incoherents"])} incoherents')
 
-    out.append(_capcalera(f'C · PARITAT · Δ DE DELTES (mm) · portador «{PORTADOR_CANONIC}»'))
-    out.append(f'  {"POM":5s} {"peça":10s} {"tipus":6s} {"mèt.":9s} '
-               + ' '.join(f'{t:>7s}' for t in TALLES)
-               + f' {"|Δ|max":>7s} {"incert.":>8s}  veredicte')
+    out.append(_capcalera('C · PARITAT · Δ DE DELTES (mm)'))
+    out.append(f'  {"POM":5s} {"peça":10s} {"tipus":6s} {"mèt.":9s} {"bucle":5s} '
+               + ' '.join(f'{t:>7s}' for t in TALLES) + f' {"|Δ|max":>7s}  veredicte')
     for f in files:
         if not f.mesurable:
             continue
         ds = [f.delta_de_deltes_mm(t) for t in TALLES]
         out.append(f'  {f.codi:5s} {f.peca.replace("837.",""):10s} {f.tipus_grading:6s} '
-                   f'{f.metode:9s} ' + ' '.join(f'{d:+7.2f}' for d in ds)
-                   + f' {f.desviacio_mm():7.2f} {f.incertesa_mm():8.2f}  {f.veredicte()}')
-
-    out.append(_capcalera('C · LES TRES VIES, allà on no diuen el mateix'))
-    out.append('  (dispersió > llindar: el Δ és una propietat de la tria, no del vestit)')
-    for f in sorted(mesurables, key=lambda f: -f.incertesa_mm()):
-        if f.incertesa_mm() <= LLINDAR_MM:
-            continue
-        out.append(f'  {f.codi:5s} {f.peca.replace("837.",""):10s} incertesa='
-                   f'{f.incertesa_mm():5.2f} mm')
-        for p in PORTADORS:
-            out.append(f'      {p:10s} ' + ' '.join(
-                f'{f.delta_de_deltes_mm(t, p):+7.2f}' for t in TALLES))
+                   f'{f.metode:9s} {f.bucles:5s} ' + ' '.join(f'{d:+7.2f}' for d in ds)
+                   + f' {f.desviacio_mm():7.2f}  {f.veredicte()}')
 
     out.append(_capcalera('C · EL QUE LA FITXA DEMANA vs EL QUE EL CAMP GRADA (cm)'))
     out.append(f'  {"POM":5s} {"peça":10s} {"font":6s} '
@@ -639,7 +506,8 @@ def informe(res: dict) -> str:
                    + ' '.join(f'{f.valor_fitxa[t] - f.valor_fitxa[BASE]:+7.2f}'
                               for t in TALLES))
         out.append(f'  {"":5s} {"":10s} {"camp":6s} '
-                   + ' '.join(f'{f.valor(t) - f.valor(BASE):+7.2f}' for t in TALLES))
+                   + ' '.join(f'{f.valor_camp[t] - f.valor_camp[BASE]:+7.2f}'
+                              for t in TALLES))
 
     out.append(_capcalera('C · PARITAT · Δ ABSOLUT camp − fitxa (mm)'))
     out.append(f'  {"POM":5s} {"peça":10s} {"patró":>8s} {"fitxa@S":>8s} '
@@ -667,8 +535,7 @@ def informe(res: dict) -> str:
         if f.mesurable and f.tipus_grading == 'FIXED':
             m = f.desviacio_mm()
             out.append(f'  {"OK  " if m <= LLINDAR_MM else "🚩  "} {f.codi:5s} '
-                       f'{f.peca.replace("837.",""):10s} |Δ|max={m:6.2f} mm  '
-                       f'({f.veredicte()})')
+                       f'{f.peca.replace("837.",""):10s} |Δ|max={m:6.2f} mm')
 
     out.append(_capcalera('C3 · NO MESURABLES SOBRE EL BANC'))
     exclosos = [f for f in files if not f.mesurable]
@@ -681,7 +548,7 @@ def informe(res: dict) -> str:
     per_v: dict[str, list[str]] = {}
     for f in files:
         per_v.setdefault(f.veredicte(), []).append(f.codi)
-    for v in ('PARITAT', 'DESVIAT', 'NO RESOLUBLE', 'NO MESURABLE'):
+    for v in ('PARITAT', 'DESVIAT', 'NO MESURABLE'):
         if v in per_v:
             out.append(f'  {v:13s} {len(per_v[v]):2d}/{len(files)}  '
                        f'{" ".join(sorted(per_v[v]))}')
