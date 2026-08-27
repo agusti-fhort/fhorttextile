@@ -36,13 +36,20 @@ from django.db import transaction
 from django_tenants.utils import get_tenant_model, schema_context
 
 from fhort.pom.models import (
-    EdgeRole, Face, GCPieceRoleMap, LandmarkRole, SeamPairTemplate, ZonaAnatomica,
+    EdgeRole, Face, GarmentTypeItemEdgeProfile, GCPieceRoleMap, LandmarkRole,
+    SeamPairTemplate, ZonaAnatomica,
 )
 
 #: Commit fixat de GarmentCode del qual surt tot el vocabulari. Viatja a cada `source_ref`.
 GC = 'GarmentCode@d449629'
 #: L'informe que va fer la lectura. Qui dubti d'una fila té dos llocs on anar.
 INF = 'REPORT_GCD_ONTOLOGY_2026-08-25.md'
+#: 🚨 **La sessió amb la Montse (26/08) és FONT D'AUTORITAT, i per això té constant pròpia.**
+#: Tot el que porta aquesta marca al `source_ref` ve d'una patronista dient com se'n diu al
+#: taller — no d'una lectura de GarmentCode. Quan les dues fonts diguin coses diferents,
+#: aquesta mana: GarmentCode és un generador, i el vocabulari d'ofici és d'ofici.
+MONTSE = 'Montse session 2026-08-26'
+
 #: Conninfo de libpq (per paraules clau, una per línia). **No és un `.pgpass`** malgrat
 #: el nom: `PGPASSFILE` no se'l menja (vegeu REPORT_GCD_CORPUS_IMPORT_2026-08-26 §3.7).
 CORPUS_CONNINFO_FILE = '/root/gcd_corpus/corpus_ro.pgpass'
@@ -55,7 +62,10 @@ CORPUS_CONNINFO_FILE = '/root/gcd_corpus/corpus_ro.pgpass'
 Z = ZonaAnatomica
 K = EdgeRole
 
-#: (slug, zone, kind, mates_slug, needs_piece_role, nom_en, nom_ca, nom_es, source_ref)
+#: (slug, zone, kind, mates_slug, needs_piece_role, nom_en, nom_ca, nom_es, source_ref,
+#:  nota)  ← la NOTA és opcional i va al `source_ref` de la fila. És on van les lleis
+#:  d'ofici de la sessió Montse: no hi ha camp d'estat ni de validació al catàleg, i
+#:  inventar-ne un seria un segon vocabulari per a una cosa que `source_ref` ja diu.
 #:
 #: Els 24 primers són ANATÒMICS (informe §2.4): diuen on seu la vora al cos. Els tres
 #: últims són ESTRUCTURALS: diuen com s'ha muntat la peça, no on seu — i per això
@@ -67,71 +77,102 @@ K = EdgeRole
 #: pantaló. Aquestes NO es poden llegir soles: es llegeixen amb el rol de la peça.
 EDGE_ROLES = [
     ('neckline', Z.NECK, K.KIND_OPENING, 'collar_attach', False,
-     'Neckline', 'Escot', 'Escote', 'bodice.py:351; collars.py:12-88'),
+     'Neckline', 'Escot', 'Escote', 'bodice.py:351; collars.py:12-88', ''),
     ('collar_attach', Z.NECK, K.KIND_SEAM, 'neckline', False,
-     'Collar attach', 'Unió de coll', 'Unión de cuello', 'collars.py:169,259; bodice.py:333'),
+     'Collar attach', 'Unió de coll', 'Unión de cuello', 'collars.py:169,259; bodice.py:333', ''),
     ('collar_outer_edge', Z.NECK, K.KIND_FINISHED, '', True,
-     'Collar outer edge', 'Vora exterior del coll', 'Borde exterior del cuello', 'bands.py:24'),
+     'Collar outer edge', 'Vora exterior del coll', 'Borde exterior del cuello', 'bands.py:24', ''),
     ('collar_side_seam', Z.NECK, K.KIND_SEAM, 'collar_side_seam', True,
      'Collar side seam', 'Costura lateral del coll', 'Costura lateral del cuello',
-     'collars.py:161-163'),
+     'collars.py:161-163', ''),
     ('hood_attach', Z.NECK, K.KIND_SEAM, 'neckline', False,
-     'Hood attach', 'Unió de caputxa', 'Unión de capucha', 'collars.py:324'),
+     'Hood attach', 'Unió de caputxa', 'Unión de capucha', 'collars.py:324', ''),
     ('hood_centre_seam', Z.NECK, K.KIND_SEAM, 'hood_centre_seam', False,
      'Hood centre seam', 'Costura central de la caputxa', 'Costura central de la capucha',
-     'collars.py:323'),
+     'collars.py:323', ''),
     ('strapless_top', Z.TORSO, K.KIND_FINISHED, '', False,
      'Strapless top edge', 'Vora de cos sense tirants', 'Borde de cuerpo sin tirantes',
-     'bodice.py:382-383'),
+     'bodice.py:382-383', ''),
     ('shoulder_seam', Z.SHOULDER, K.KIND_SEAM, 'shoulder_seam', False,
      'Shoulder seam', "Costura d'espatlla", 'Costura de hombro',
-     'bodice.py:75; bodice.py:211-213'),
+     'bodice.py:75; bodice.py:211-213', ''),
+    # 🚨 LLEI D'OFICI per al matcher (Montse E.P3): **una sisa sense màniga porta vora.**
+    # O sigui que en un sense-mànigues s'espera una costura `armhole ↔ facing`, que
+    # GarmentCode no pot conèixer —no té `facing`— i que cap plantilla recull encara.
+    # **No es crea la plantilla**: `facing` no té rols de vora definits, i inventar-n'hi un
+    # per tancar la frase seria vocabulari sense evidència. Va a la llista d'extensió.
     ('armhole', Z.ARM, K.KIND_OPENING, 'sleeve_cap', False,
-     'Armhole', 'Sisa', 'Sisa', 'bodice.py:306; sleeves.py:11-105'),
+     'Armhole', 'Sisa', 'Sisa', 'bodice.py:306; sleeves.py:11-105',
+     MONTSE + ' · E.P3: una sisa sense màniga porta vora (armhole↔facing en sleeveless); '
+              'plantilla PENDENT de definir rols de vora a facing'),
     ('sleeve_cap', Z.ARM, K.KIND_SEAM, 'armhole', False,
-     'Sleeve cap', 'Cap de màniga', 'Copa de manga', 'sleeves.py:180,289'),
+     'Sleeve cap', 'Cap de màniga', 'Copa de manga', 'sleeves.py:180,289', ''),
     ('sleeve_underarm_seam', Z.ARM, K.KIND_SEAM, 'sleeve_underarm_seam', True,
      'Sleeve underarm seam', 'Costura de sota-màniga', 'Costura de bajo manga',
-     'sleeves.py:281-284'),
+     'sleeves.py:281-284', ''),
     ('cuff_line', Z.ANY, K.KIND_SEAM, 'band_attach_upper', True,
-     'Cuff line', 'Línia de puny', 'Línea de puño', 'sleeves.py:181,328-331'),
+     'Cuff line', 'Línia de puny', 'Línea de puño', 'sleeves.py:181,328-331', ''),
     ('centre_front', Z.TORSO, K.KIND_SEAM, 'centre_front', True,
-     'Centre front', 'Centre davant', 'Centro delantero', 'bodice.py:74; bodice.py:443-444'),
+     'Centre front', 'Centre davant', 'Centro delantero', 'bodice.py:74; bodice.py:443-444', ''),
     ('centre_back', Z.TORSO, K.KIND_SEAM, 'centre_back', True,
-     'Centre back', 'Centre esquena', 'Centro espalda', 'bodice.py:126; bodice.py:445-446'),
+     'Centre back', 'Centre esquena', 'Centro espalda', 'bodice.py:126; bodice.py:445-446', ''),
+    # 🚩 Sense canvi de nom, i amb una nota que val més que un canvi: el **costadillo** de
+    # sastreria NO és el `side_seam` (Montse B.15). És un rol de peça de sastreria que el
+    # catàleg encara no té, i confondre'ls faria que un patró de sastre s'etiquetés malament
+    # amb 200 OK. **No es crea ara**: va a la llista d'extensió del report.
     ('side_seam', Z.TORSO, K.KIND_SEAM, 'side_seam', True,
      'Side seam', 'Costura lateral', 'Costura lateral',
-     'bodice.py:73,217; pants.py:115,232'),
+     'bodice.py:73,217; pants.py:115,232',
+     MONTSE + ' · B.15: costadillo ≠ side_seam — rol de sastreria FUTUR, no crear ara'),
     ('waistline', Z.WAIST, K.KIND_SEAM, 'band_attach_upper', True,
      'Waistline', 'Línia de cintura', 'Línea de cintura',
-     'meta_garment.py:75; skirt_paneled.py:45'),
+     'meta_garment.py:75; skirt_paneled.py:45', ''),
     ('band_attach_upper', Z.WAIST, K.KIND_SEAM, 'waistline', True,
-     'Band upper attach', 'Unió superior de banda', 'Unión superior de banda', 'bands.py:19'),
+     'Band upper attach', 'Unió superior de banda', 'Unión superior de banda', 'bands.py:19', ''),
     ('band_attach_lower', Z.WAIST, K.KIND_SEAM, 'waistline', True,
-     'Band lower attach', 'Unió inferior de banda', 'Unión inferior de banda', 'bands.py:24'),
+     'Band lower attach', 'Unió inferior de banda', 'Unión inferior de banda', 'bands.py:24', ''),
     ('band_side_seam', Z.WAIST, K.KIND_SEAM, 'band_side_seam', True,
      'Band side seam', 'Costura lateral de banda', 'Costura lateral de banda',
-     'bands.py:74-75'),
+     'bands.py:74-75', ''),
     ('inseam', Z.LEG, K.KIND_SEAM, 'inseam', True,
-     'Inseam', 'Entrecuix', 'Entrepierna', 'pants.py:120,233'),
+     'Inseam', 'Entrecuix', 'Entrepierna', 'pants.py:120,233', ''),
     ('crotch_seam', Z.LEG, K.KIND_SEAM, 'crotch_seam', False,
-     'Crotch seam', 'Costura de tir', 'Costura de tiro', 'pants.py:119,289-290'),
+     'Crotch seam', 'Costura de tir', 'Costura de tiro', 'pants.py:119,289-290', ''),
     ('hem', Z.ANY, K.KIND_FINISHED, '', True,
-     'Hem', 'Baix', 'Bajo', 'skirt_paneled.py:49; pants.py:121'),
+     'Hem', 'Baix', 'Bajo', 'skirt_paneled.py:49; pants.py:121', ''),
     ('gore_seam', Z.ANY, K.KIND_SEAM, 'gore_seam', True,
-     'Gore seam', 'Costura de gaia', 'Costura de nesga', 'skirt_paneled.py:497-501'),
+     'Gore seam', 'Costura de gaia', 'Costura de nesga', 'skirt_paneled.py:497-501', ''),
+    # `nom_es` corregit per la Montse (B.24): al taller no se'n diu «brazo».
     ('dart_leg', Z.ANY, K.KIND_INTERNAL, 'dart_leg', False,
-     'Dart leg', 'Braç de pinça', 'Brazo de pinza', 'panel.py:238; edge_factory.py:313'),
+     'Dart leg', 'Braç de pinça', 'Largo de pinza', 'panel.py:238; edge_factory.py:313',
+     MONTSE + ' · B.24 (nom_es)'),
     # ── ESTRUCTURALS (informe §2.4, últim paràgraf) ──────────────────────────────
     ('godet_insert_seam', Z.ANY, K.KIND_STRUCTURAL, 'slit_edge', False,
      'Godet insert seam', "Costura d'inserció de godet", 'Costura de inserción de godet',
-     'godet.py:113-114'),
+     'godet.py:113-114', ''),
     ('level_join_seam', Z.ANY, K.KIND_STRUCTURAL, 'level_join_seam', False,
      'Level join seam', "Costura d'unió de nivells", 'Costura de unión de niveles',
-     'skirt_levels.py:62-64'),
+     'skirt_levels.py:62-64', ''),
     ('slit_edge', Z.ANY, K.KIND_STRUCTURAL, '', True,
      'Slit edge', "Vora d'obertura", 'Borde de abertura',
-     'skirt_paneled.py:192,218; circle_skirt.py:216; edge_factory.py:292'),
+     'skirt_paneled.py:192,218; circle_skirt.py:216; edge_factory.py:292', ''),
+
+    # ── SESSIÓ MONTSE 26/08 · el slug que faltava ────────────────────────────
+    # 🚩 F3 va deixar DUES parelles del cens sense nom («centre · collar/back ↔
+    # collar/back» amb 16.296 costures i la seva bessona del davant amb 7.077) i no se'n va
+    # inventar cap slug: §2.4 té el costat del coll i la vora exterior, però **no el
+    # centre**. La Montse el bateja (B.ORF1/2) i amb ell les dues òrfenes deixen d'existir.
+    #
+    # `mates_slug` a si mateix és com el catàleg diu «es cus amb ella mateixa» —el mateix
+    # que ja fan `shoulder_seam`, `centre_front` o `gore_seam`. **No hi ha camp
+    # `symmetric`**, i afegir-ne un seria un segon vocabulari per a una cosa que
+    # l'autoreferència ja diu.
+    #
+    # La zona és `neck` i no `collar`: el vocabulari de zones és TANCAT
+    # (neck|shoulder|arm|torso|waist|leg|any) i un coll seu al coll.
+    ('collar_centre_seam', Z.NECK, K.KIND_SEAM, 'collar_centre_seam', True,
+     'Collar centre seam', 'Costura del centre del coll', 'Costura centro cuello',
+     'sense evidència a GarmentCode: §2.4 no el nomena', MONTSE + ' · B.ORF1/2'),
 ]
 
 #: (slug, zone, derivable, op, input, tiebreak, ev_num, ev_den, ev_ref, en, ca, es)
@@ -187,6 +228,64 @@ LANDMARK_ROLES = [
     ('underarm_seam_point', Z.ARM, True, LandmarkRole.OP_SHARED_ENDPOINT,
      {'a': 'sleeve_cap', 'b': 'sleeve_underarm_seam'}, '', None, None, '',
      'Underarm seam point', 'Punt de sota-màniga', 'Punto de bajo manga', ''),
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # SESSIÓ MONTSE 26/08 · C.09 — els NOU punts que el vocabulari no tenia
+    # ═══════════════════════════════════════════════════════════════════════
+    # Els noms `ca` són literalment els seus. Els vuit d'abans surten d'una lectura de
+    # GarmentCode; aquests surten d'una patronista dient com se'n diu al taller, i per això
+    # van amb `pendent_revisio=False`: **paraula d'ofici directa, no proposta**.
+    #
+    # 🚨 **Només UN dels nou és derivable, i és el que ho és de debò.** La temptació era
+    # encadenar-los —«el punt de pit surt del de pinça»— i el brief ho prohibeix
+    # explícitament: *NO assumir*. Un punt marcat com a derivable que després no es pugui
+    # calcular és pitjor que un de manual, perquè F4 el buscarà i no el trobarà mai.
+    #
+    # 🚩 **`BodyMeasurementISO` és BUIDA** (0 files, comprovat 27/08), o sigui que
+    # l'enllaç «a la mesura ISO corresponent» que el brief demanava per als corporals **no
+    # existeix per a cap dels sis**. Queda dit a la nota de cada fila i no s'hi inventa cap
+    # codi: un `codi_iso` fals seria pitjor que cap.
+
+    #: L'ÚNIC derivable dels nou: l'àpex de la pinça és on es toquen els dos braços.
+    ('dart_point', Z.ANY, True, LandmarkRole.OP_SHARED_ENDPOINT,
+     {'a': 'dart_leg', 'b': 'dart_leg'}, '', None, None, '',
+     'Dart point', 'Punt de pinça', 'Punto de pinza',
+     MONTSE + ' · C.09 «punt de pinça (o de plec)» · àpex = juntura dels dos braços'),
+
+    #: 🚩 Derivació BUIDA a posta. Passa pel punt de pinça en molts patrons, però **no
+    #: sempre**: un davant sense pinça té punt de pit igualment, i un patró amb dues
+    #: pinces en té un de sol. Marcar-lo derivable seria una promesa que no es pot complir.
+    ('bust_point', Z.TORSO, False, LandmarkRole.OP_MANUAL, {}, '', None, None, '',
+     'Bust point', 'Punt de pit', 'Punto de pecho',
+     MONTSE + ' · C.09 · derivació NO assumida: pot coincidir amb dart_point però no '
+              'sempre (un davant sense pinça en té igualment)'),
+
+    #: Els SIS corporals. Es marquen o es mesuren sobre el cos; del patró no surten.
+    ('hip_point', Z.WAIST, False, LandmarkRole.OP_MANUAL, {}, '', None, None, '',
+     'Hip point', 'Punt de cadera', 'Punto de cadera',
+     MONTSE + ' · C.09 · corporal; sense mesura ISO al catàleg (taula buida 27/08)'),
+    ('knee_point', Z.LEG, False, LandmarkRole.OP_MANUAL, {}, '', None, None, '',
+     'Knee point', 'Punt de genoll', 'Punto de rodilla',
+     MONTSE + ' · C.09 · corporal; sense mesura ISO al catàleg (taula buida 27/08)'),
+    ('elbow_point', Z.ARM, False, LandmarkRole.OP_MANUAL, {}, '', None, None, '',
+     'Elbow point', 'Punt de colze', 'Punto de codo',
+     MONTSE + ' · C.09 · corporal; sense mesura ISO al catàleg (taula buida 27/08)'),
+    ('calf_point', Z.LEG, False, LandmarkRole.OP_MANUAL, {}, '', None, None, '',
+     'Calf point', 'Punt de bessó', 'Punto de gemelo',
+     MONTSE + ' · C.09 «punt de bessó (calf)» · corporal; sense mesura ISO (taula buida)'),
+    ('biceps_point', Z.ARM, False, LandmarkRole.OP_MANUAL, {}, '', None, None, '',
+     'Biceps point', 'Punt de bíceps', 'Punto de bíceps',
+     MONTSE + ' · C.09 «punt biceps» · corporal; sense mesura ISO (taula buida)'),
+    ('ankle_point', Z.LEG, False, LandmarkRole.OP_MANUAL, {}, '', None, None, '',
+     'Ankle point', 'Punt de turmell', 'Punto de tobillo',
+     MONTSE + ' · C.09 · corporal; sense mesura ISO al catàleg (taula buida 27/08)'),
+
+    #: No és corporal ni derivable v1: és un punt de CONSTRUCCIÓ sobre la línia de puny, i
+    #: qui el sabrà calcular és F4.2, quan els trams portin rol de vora.
+    ('cuff_point', Z.ANY, False, LandmarkRole.OP_MANUAL, {}, '', None, None, '',
+     'Cuff point', 'Punt de puny', 'Punto de puño',
+     MONTSE + ' · C.09 · punt de construcció sobre `cuff_line`; derivable quan els trams '
+              'portin rol de vora (F4.2)'),
 ]
 
 #: El mapa GarmentCode→FTT (informe §5.1 + `scripts/mapping.py`), amb els cinc forats
@@ -223,6 +322,79 @@ GC_MAP = [
     ('hood', 'hood', Face.CAP, 'slug NOU (D6): FTT no tenia caputxa'),
     ('ins_skirt_front', 'godet_insert', Face.FRONT, 'slug NOU (D6): FTT no tenia godet'),
     ('ins_skirt_back', 'godet_insert', Face.BACK, 'slug NOU (D6): FTT no tenia godet'),
+]
+
+# ═════════════════════════════════════════════════════════════════════════════
+# E · ELS TRES PERFILS GTI PILOT (sessió Montse, E.P1-P3)
+# ═════════════════════════════════════════════════════════════════════════════
+#: 🚨 **La Montse va respondre a nivell de PRENDA i la taula és per PEÇA.**
+#: «Una brusa porta escot» és cert; `GarmentTypeItemEdgeProfile` vol saber *quina peça* el
+#: porta, perquè sense això la fila no es pot llegir (és la primera frase del docstring del
+#: model: *un garment no té escot, el té el seu coll o el seu davant*). El pont l'he fet jo
+#: i **cada fila diu si és unívoca o proposada**, perquè es pugui ratificar o corregir
+#: d'una ullada en comptes de creure-se-la.
+#:
+#: L'origen de cada assignació, per ordre de força:
+#:   `catàleg`  — les plantilles de costura només la col·loquen en aquesta peça
+#:   `definició`— la vora ÉS d'aquella peça per definició (una vora exterior de coll)
+#:   `ofici`    — el catàleg diu una altra cosa perquè GarmentCode parteix les peces
+#:                d'una altra manera (el baix d'una brusa és al cos, no a cap faldilla)
+#:
+#: 🚩 **`presence` és NOT NULL i no hi ha cap mesura per GTI.** El que hi ha és el judici
+#: de la Montse: aquestes vores pertanyen a aquesta peça. Per això `observed_*` van a NULL
+#: —no s'ha mesurat res— i el grau surt d'una lectura meva que s'ha de ratificar: `core`
+#: quan la vora hi és sempre, `rare` quan és una ALTERNATIVA a una altra de la mateixa
+#: llista (una brusa amb escot sense tirants no té escot, i al revés) o una opció de
+#: disseny. **El 75/30 de D.01 no s'hi aplica: és per a graus MESURATS.**
+
+#: 🚨 **La clau és el `code`, MAI la pk** (llei G9). Aquest seed corre als TRES esquemes,
+#: i les pks de `tasks_garmenttypeitem` són locals de cada tenant: sembrar per id voldria
+#: dir que el dia que `los` creï el seu GTI número 5, li enganxaríem un perfil de «Blusa»
+#: en silenci. Avui no xocaria —`los` en té un de sol i no és cap dels tres— però la
+#: bomba quedaria armada. Els codes són únics dins de cada tenant (comprovat) i no
+#: viatgen entre esquemes.
+#:
+#: (gti_code, etiqueta, [(piece_role, face, edge_role, presence, origen_assignacio)])
+GTI_PROFILES = [
+    ('blouse', 'E.P1 · Blusa (Buttoned Tops)', [
+        ('front', Face.FRONT, 'neckline', 'core', 'catàleg'),
+        ('back', Face.BACK, 'neckline', 'core', 'catàleg'),
+        ('collar', Face.CAP, 'collar_outer_edge', 'core', 'definició'),
+        ('front', Face.FRONT, 'strapless_top', 'rare', 'ofici · alternativa a neckline'),
+        ('sleeve', Face.FRONT, 'cuff_line', 'core', 'catàleg'),
+        ('sleeve', Face.BACK, 'cuff_line', 'core', 'catàleg'),
+        ('front', Face.FRONT, 'centre_front', 'core', 'catàleg'),
+        ('front', Face.FRONT, 'hem', 'core', 'ofici · el baix d\'una brusa és al cos'),
+        ('back', Face.BACK, 'hem', 'core', 'ofici · el baix d\'una brusa és al cos'),
+        ('front', Face.FRONT, 'slit_edge', 'rare', 'ofici · opció de disseny'),
+    ]),
+    ('trousers', 'E.P2 · Pantaló estructurat (Tailored & Rigid Pants)', [
+        ('pant', Face.FRONT, 'waistline', 'core', 'catàleg'),
+        ('pant', Face.BACK, 'waistline', 'core', 'catàleg'),
+        ('pant', Face.FRONT, 'hem', 'core', 'ofici · el baix d\'un pantaló és a la cama'),
+        ('pant', Face.BACK, 'hem', 'core', 'ofici · el baix d\'un pantaló és a la cama'),
+        ('pant', Face.FRONT, 'slit_edge', 'rare', 'ofici · opció de disseny'),
+    ]),
+    ('dress_simple', 'E.P3 · Vestit pla simple (Dresses)', [
+        ('front', Face.FRONT, 'neckline', 'core', 'catàleg'),
+        ('back', Face.BACK, 'neckline', 'core', 'catàleg'),
+        ('front', Face.FRONT, 'strapless_top', 'rare', 'ofici · alternativa a neckline'),
+        ('front', Face.FRONT, 'hem', 'core', 'ofici · un vestit pla es talla sencer'),
+        ('back', Face.BACK, 'hem', 'core', 'ofici · un vestit pla es talla sencer'),
+    ]),
+]
+
+#: El vocabulari que la Montse troba A FALTAR i que **NO es crea** (E.P2.falten,
+#: E.P3.falten). Decidir un slug és decidir un contracte, i això és de l'Agus. Va al report.
+EXTENSIONS_PENDENTS = [
+    ('pocket_flap_edge', 'Tapeta de butxaca', 'E.P2.falten'),
+    ('pocket_opening', 'Obertura de butxaca', 'E.P2.falten'),
+    ('zip_placket_edge', 'Tapeta cremallera', 'E.P2.falten'),
+    ('side_opening', 'Obertures laterals', 'E.P3.falten'),
+    ('placket_edge', 'Tapeta (vora)', 'E.P3.falten'),
+    ('cuff_edge', 'Punys (vora)', 'E.P3.falten'),
+    ('skirt_hem', 'Baix de faldilla', 'E.P3.falten · potser ja és `hem` + peça `skirt`'),
+    ('costadillo', 'Costadillo (rol de PEÇA, no de vora)', 'B.15 · sastreria'),
 ]
 
 S = SeamPairTemplate
@@ -381,7 +553,78 @@ SEAM_PAIRS = [
      ('hood', Face.CAP, 'hood_centre_seam'), False, 'collars.py:323'),
     ('§2.4', S.KIND_UNION, ('collar', Face.FRONT, 'collar_side_seam'),
      ('collar', Face.BACK, 'collar_side_seam'), False, 'collars.py:161-163'),
+    # ── SESSIÓ MONTSE 26/08 · les dues òrfenes del cens, batejades ───────────
+    # F3 les va deixar fora a posta perquè no hi havia slug per al centre del coll. Ara
+    # n'hi ha (B.ORF1/2) i el cens es tanca: de 51 parelles mesurades, 0 sense plantilla.
+    ('Montse B.ORF1', S.KIND_CENTRE, ('collar', Face.BACK, 'collar_centre_seam'),
+     ('collar', Face.BACK, 'collar_centre_seam'), False, 'sense regla a §4.2'),
+    ('Montse B.ORF2', S.KIND_CENTRE, ('collar', Face.FRONT, 'collar_centre_seam'),
+     ('collar', Face.FRONT, 'collar_centre_seam'), False, 'sense regla a §4.2'),
 ]
+
+#: 🚨 **LLEIS D'OFICI de la sessió Montse, per plantilla.** Van al `source_ref` de la fila:
+#: expliquen per què la plantilla ÉS com és, que és el que `source_ref` vol dir.
+#: `{clau_de_mesura: text}`.
+#:
+#: 🔑 **D.02 · el cap de màniga bascula endavant.** La plantilla creuada
+#: `back.armhole ↔ sleeve/front.sleeve_cap` va sortir a ZERO mesurat, i el zero no és un
+#: buit de dades: la meitat del DARRERE de la màniga cus contra la sisa del DAVANT perquè
+#: el cap bascula cap endavant, i **el mirall invers no s'espera mai**. Era la resposta
+#: correcta i ara diu per què.
+#:
+#: 🚩 **L'ALTRA fila de zero mesurat NO porta aquesta llei, i és a posta.**
+#: `cuff/back.band_attach_upper ↔ pant/front.cuff_line` també surt a zero, però el brief
+#: descrivia D.02 com «cap de màniga creuant espatlla» — i un puny de CAMA no té cap ni
+#: espatlla. Aplicar-hi la mateixa frase seria posar una explicació de màniga a un pantaló i
+#: deixar-la escrita per sempre amb el nom de la Montse a sota. **Queda sense lectura
+#: d'ofici i va a la llista de preguntes del report.**
+LLEIS_DE_PLANTILLA = {
+    ('union', ('back', 'back'), ('sleeve', 'front')):
+        MONTSE + " · D.02 LLEI d'ofici: el cap de màniga bascula endavant; el mirall "
+                 "invers NO s'espera",
+}
+
+#: 🔑 **D.03 · la lectura de la Montse sobre les pinces, literal.** Va a `observed_ref` de
+#: TOTES les files de pinça i no a `source_ref` perquè el que matisa és la XIFRA: que el
+#: 52 % dels patrons del corpus portin pinça al darrere i cap al davant no és una llei
+#: d'ofici, i ella ho diu amb totes les lletres —**«no hi ha un perquè»**. Sense aquesta
+#: nota, algú llegiria el 52 % com una regla.
+#:
+#: Es transcriu SENCERA i sense retocar. Una cita atribuïda que s'escurça deixa de ser-ho.
+CITA_D03 = (
+    MONTSE + ' · D.03 (literal): «No hi ha un perquè, va en funció del disseny i del '
+             'volum que es vol donar a una prenda. Tanmateix, les pinces habitualment es '
+             'fan a darrera per ajustar la forma del cul. Per tant el que has trobat '
+             "s'ajusta al què és normal.»"
+)
+
+# ═════════════════════════════════════════════════════════════════════════════
+# D.01 · ELS LLINDARS DE GRAU
+# ═════════════════════════════════════════════════════════════════════════════
+#: 🚨 **Els llindars de la Montse (D.01): core ≥ 75 % · common ≥ 30 % · la resta, rara.**
+#: Substitueixen els 90/25 del precedent, que eren una proposta sense ofici a sota.
+PRESENCE_CORE_PCT = 75
+PRESENCE_COMMON_PCT = 30
+
+#: 🚩 **`SeamPairTemplate` NO té columna de grau.** El brief demanava «recalcular el grade
+#: de TOTES les plantilles», i l'únic lloc del catàleg amb `presence` és
+#: `GarmentTypeItemEdgeProfile`. Afegir-ne una columna hauria estat una migració que el
+#: brief deia que no s'esperava, i deixar-ho córrer hauria perdut la decisió.
+#: **El grau es CALCULA i s'escriu dins d'`observed_ref`**: queda visible, queda auditable,
+#: i el dia que faci falta com a columna, la llei ja és aquí i el valor es pot migrar.
+def grau_de(patrons, den) -> str:
+    """`core` | `common` | `rare` segons els llindars de la Montse. → etiqueta llegible."""
+    if not den or patrons is None:
+        return ''
+    pct = 100.0 * patrons / den
+    if pct >= PRESENCE_CORE_PCT:
+        grau = 'core'
+    elif pct >= PRESENCE_COMMON_PCT:
+        grau = 'common'
+    else:
+        grau = 'rare'
+    return 'grau={} ({:.1f} % · llindars {}/{} de {} D.01)'.format(
+        grau, pct, PRESENCE_CORE_PCT, PRESENCE_COMMON_PCT, MONTSE)
 
 
 # =============================================================================
@@ -573,10 +816,14 @@ def clau_de_mesura(kind, costat_a, costat_b):
 # LA SEMBRA. `update_or_create` per clau natural, mai `delete`.
 # =============================================================================
 
-def _observed_ref(mesura, clau, conflictes) -> str:
-    """La frase que acompanya cada xifra. Sense aixo, un percentatge menteix sol."""
+def _observed_ref(mesura, clau, conflictes, llei: str = '') -> str:
+    """La frase que acompanya cada xifra. Sense aixo, un percentatge menteix sol.
+
+    `llei` és la lectura d'ofici de la Montse quan n'hi ha: la xifra diu QUÈ passa i la
+    llei diu PER QUÈ. Un zero sense el seu perquè es llegeix com una dada que falta.
+    """
     if mesura is None:
-        return ''
+        return llei
     kind, a, b = clau
     parts = [
         'ftt_corpus@2026-08-26 (128.974 designs)',
@@ -587,6 +834,12 @@ def _observed_ref(mesura, clau, conflictes) -> str:
         parts.append(
             'ZERO MESURAT: la parella no surt cap cop al corpus sencer (no es una '
             'absencia de mesura)')
+    grau = grau_de(mesura['patterns'] if 'patterns' in mesura else mesura['pats'],
+                   mesura['den'])
+    if grau:
+        parts.append(grau)
+    if llei:
+        parts.append(llei)
     if conflictes > 1:
         parts.append(
             'ATENCIO: {} plantilles comparteixen aquesta xifra -- el corpus no serialitza '
@@ -604,7 +857,7 @@ def sembra(schema: str, cens: dict | None, meta: dict, dry_run: bool = False) ->
             conflictes.get(clau_de_mesura(kind, a, b), 0) + 1
 
     r = {'edge_roles': [0, 0], 'landmark_roles': [0, 0],
-         'seam_pairs': [0, 0], 'gc_map': [0, 0]}
+         'seam_pairs': [0, 0], 'gc_map': [0, 0], 'gti_profiles': [0, 0]}
 
     with schema_context(schema):
         if dry_run:
@@ -621,10 +874,11 @@ def sembra(schema: str, cens: dict | None, meta: dict, dry_run: bool = False) ->
                 if (None, kind) + ca + cb not in existents:
                     nous += 1
             r['seam_pairs'] = [nous, len(SEAM_PAIRS) - nous]
+            r['gti_profiles'] = _dry_gti()
             return r
 
         with transaction.atomic():
-            for ordre, (slug, zone, kind, mates, needs, en, ca, es, ref) in \
+            for ordre, (slug, zone, kind, mates, needs, en, ca, es, ref, nota) in \
                     enumerate(EDGE_ROLES, start=1):
                 _, creat = EdgeRole.objects.update_or_create(
                     slug=slug,
@@ -635,7 +889,8 @@ def sembra(schema: str, cens: dict | None, meta: dict, dry_run: bool = False) ->
                         'is_system': True, 'pendent_revisio': False,
                         'origen': EdgeRole.ORIGEN_SEED,
                         'display_order': ordre * 10,
-                        'source_ref': '{} {} · {} §2.4'.format(GC, ref, INF),
+                        'source_ref': '{} {} · {} §2.4{}'.format(
+                            GC, ref, INF, ' · ' + nota if nota else ''),
                     })
                 r['edge_roles'][0 if creat else 1] += 1
 
@@ -651,8 +906,19 @@ def sembra(schema: str, cens: dict | None, meta: dict, dry_run: bool = False) ->
                         'is_system': True, 'pendent_revisio': False,
                         'origen': LandmarkRole.ORIGEN_SEED,
                         'display_order': ordre * 10,
-                        'source_ref': '{} §6.1{}'.format(
-                            INF, ' · ' + llei if llei else ''),
+                        # C1 · la sessió Montse repassa les vuit regles. Les dues que
+                        # portaven mesura les CONFIRMA; les sis que no en portaven cap les
+                        # VALIDA — que és una cosa diferent i val la pena que la fila ho
+                        # digui: una regla validada per ofici i una regla mesurada sobre
+                        # 2.371 patrons no tenen el mateix pes, i el dia que una falli
+                        # convé saber de quina de les dues es fiava el sistema.
+                        #
+                        # Es deriva de l'evidència i no s'escriu a mà una llista de sis:
+                        # una llista a mà caduca la primera vegada que algú mesuri'n una.
+                        'source_ref': '{} §6.1{} · {}'.format(
+                            INF, ' · ' + llei if llei else '',
+                            MONTSE + (' · C.01-02 confirmada' if evn is not None
+                                      else ' · C.03-08 validada')),
                     })
                 r['landmark_roles'][0 if creat else 1] += 1
 
@@ -681,7 +947,8 @@ def sembra(schema: str, cens: dict | None, meta: dict, dry_run: bool = False) ->
                         'observed_patterns': mesura['pats'] if mesura else None,
                         'observed_den': mesura['den'] if mesura else None,
                         'observed_ref': _observed_ref(
-                            mesura, clau, conflictes.get(clau, 1)),
+                            mesura, clau, conflictes.get(clau, 1),
+                            CITA_D03 if kind == S.KIND_DART else ''),
                         'is_system': True,
                         # Les xifres son d'un corpus de tercers i els llindars de D3
                         # encara no els ha fixat ningu: aixo es exactament el que
@@ -689,10 +956,86 @@ def sembra(schema: str, cens: dict | None, meta: dict, dry_run: bool = False) ->
                         'pendent_revisio': True,
                         'origen': SeamPairTemplate.ORIGEN_IMPORT,
                         'display_order': ordre * 10,
-                        'source_ref': '{} regla {} {} · {} §4.2'.format(GC, regla, ref, INF),
+                        'source_ref': '{} regla {} {} · {} §4.2{}'.format(
+                            GC, regla, ref, INF,
+                            ' · ' + LLEIS_DE_PLANTILLA[clau]
+                            if clau in LLEIS_DE_PLANTILLA else ''),
                     })
                 r['seam_pairs'][0 if creat else 1] += 1
+
+            # ── E · els perfils GTI pilot ────────────────────────────────────
+            # 🚨 **Es SALTEN els GTI que no existeixen en aquest schema**, i no és
+            # tolerància: els tres pilots són ids del tenant `fhort`, i `public` i `los`
+            # no tenen per què tenir-los. Petar-hi seria fer que la sembra d'un catàleg
+            # compartit depengués de les dades d'UN tenant.
+            gtis = _gtis_del_schema() or {}
+            for code, _etiqueta, files in GTI_PROFILES:
+                gti_id = gtis.get(code)
+                if gti_id is None:
+                    continue
+                for ordre, (peca, cara, vora, presencia, origen) in enumerate(files, 1):
+                    _, creat = GarmentTypeItemEdgeProfile.objects.update_or_create(
+                        garment_type_item_id=gti_id, piece_role_slug=peca,
+                        face=cara, edge_role_slug=vora,
+                        defaults={
+                            'presence': presencia,
+                            # NULL i no zero: no s'ha mesurat res per GTI. Un zero diria
+                            # «mesurat i no hi és», que és el contrari del que passa.
+                            'observed_n': None, 'observed_den': None,
+                            'observed_ref': MONTSE + ' · judici d\'ofici, NO mesurat · '
+                                            'assignació de peça: ' + origen,
+                            'is_system': True,
+                            'pendent_revisio': True,
+                            'origen': GarmentTypeItemEdgeProfile.ORIGEN_MANUAL,
+                            'display_order': ordre * 10,
+                            'source_ref': MONTSE + ' · E.P1-P3',
+                        })
+                    r['gti_profiles'][0 if creat else 1] += 1
     return r
+
+
+def _gtis_del_schema() -> dict | None:
+    """`{code: pk}` dels GTI d'aquest schema, o `None` si aquí no n'hi pot haver.
+
+    🚨 **`public` NO té `tasks_garmenttypeitem` i no en tindrà mai**: `tasks` és
+    tenant-only i `pom` viu a SHARED *i* a TENANT. És la mateixa llei que va obligar a
+    `db_constraint=False` a les dues FK (F3 §1.3), vista des de l'altra banda: allà petava
+    la migració, aquí peta la consulta.
+
+    Es comprova mirant si la TAULA hi és, no si l'schema es diu `public`: el dia que hi
+    hagi un segon schema compartit, un `if schema == 'public'` seria una bomba de rellotgeria.
+    """
+    from django.db import connection
+
+    from fhort.tasks.models import GarmentTypeItem
+
+    taula = GarmentTypeItem._meta.db_table
+    with connection.cursor() as cur:
+        if taula not in connection.introspection.table_names(cur):
+            return None
+    return dict(GarmentTypeItem.objects.values_list('code', 'pk'))
+
+
+def _dry_gti() -> list:
+    """Quantes files de perfil GTI es crearien en aquest schema, i quantes ja hi són."""
+    gtis = _gtis_del_schema()
+    if gtis is None:
+        return [0, 0]
+    existents = {
+        (p.garment_type_item_id, p.piece_role_slug, p.face, p.edge_role_slug)
+        for p in GarmentTypeItemEdgeProfile.objects.all()
+    }
+    nous = vells = 0
+    for code, _e, files in GTI_PROFILES:
+        gti_id = gtis.get(code)
+        if gti_id is None:
+            continue
+        for peca, cara, vora, _p, _o in files:
+            if (gti_id, peca, str(cara), vora) in existents:
+                vells += 1
+            else:
+                nous += 1
+    return [nous, vells]
 
 
 def guarda_tancament(schema: str) -> list:
@@ -735,6 +1078,24 @@ def guarda_tancament(schema: str) -> list:
                 if operand not in vores:
                     forats.append('punt «{}» -> opera sobre la vora «{}», que NO EXISTEIX'
                                   .format(l.slug, operand))
+        # 🚨 Els perfils GTI hi entren des del 27/08. Fins llavors la taula era buida i el
+        # guard no els mirava —cosa que no es notava justament perquè no hi havia res.
+        # **Un guard que només cobreix les taules que ja tenien files és un guard que
+        # caduca sol**: la primera fila d'una taula nova és la que no vigila ningú.
+        # 🚨 `.order_by()` BUIT, i no és estil: el `Meta.ordering` del model comença per
+        # `garment_type_item`, o sigui per una FK — i ordenar per una FK fa que Django hi
+        # faci JOIN. A `public` aquella taula NO existeix (`tasks` és tenant-only) i la
+        # consulta peta amb `relation "tasks_garmenttypeitem" does not exist`. Mateixa
+        # trampa que el tren de coda T3 va documentar per a les migracions multi-schema.
+        perfils = ([] if _gtis_del_schema() is None
+                   else GarmentTypeItemEdgeProfile.objects.order_by().all())
+        for perfil in perfils:
+            if perfil.piece_role_slug not in peces:
+                forats.append('perfil GTI {} -> rol de peça «{}» NO EXISTEIX'.format(
+                    perfil.garment_type_item_id, perfil.piece_role_slug))
+            if perfil.edge_role_slug not in vores:
+                forats.append('perfil GTI {} -> rol de vora «{}» NO EXISTEIX'.format(
+                    perfil.garment_type_item_id, perfil.edge_role_slug))
     return forats
 
 
@@ -780,13 +1141,13 @@ class Command(BaseCommand):
                     '  corpus INACCESSIBLE ({}: {}) -- els observed_* quedaran a NULL, '
                     'no a zero.'.format(type(exc).__name__, exc)))
 
-        if opts['llista']:
-            self._llista(cens, meta)
-
         if opts['schema']:
             schemas = [opts['schema']]
         else:
             schemas = list(get_tenant_model().objects.values_list('schema_name', flat=True))
+
+        if opts['llista']:
+            self._llista(cens, meta, schemas)
 
         for sch in schemas:
             r = sembra(sch, cens, meta, dry_run=dry)
@@ -796,6 +1157,8 @@ class Command(BaseCommand):
                     'landmark_roles': LandmarkRole.objects.count(),
                     'seam_pairs': SeamPairTemplate.objects.count(),
                     'gc_map': GCPieceRoleMap.objects.count(),
+                    'gti_profiles': (GarmentTypeItemEdgeProfile.objects.count()
+                                     if _gtis_del_schema() is not None else 0),
                 }
             prefix = '[dry-run] ' if dry else ''
             self.stdout.write('  {}[{}]'.format(prefix, sch))
@@ -830,13 +1193,13 @@ class Command(BaseCommand):
                     len(SEAM_PAIRS), len(GC_MAP))))
 
     # -- la llista del dry-run -------------------------------------------------
-    def _llista(self, cens, meta):
+    def _llista(self, cens, meta, schemas):
         w = self.stdout.write
         w('')
         w('## EdgeRole ({} files)'.format(len(EDGE_ROLES)))
         w('| # | slug | zone | kind | mates | needs_piece_role | nom_en | nom_ca | nom_es | source_ref |')
         w('|---|---|---|---|---|---|---|---|---|---|')
-        for i, (slug, zone, kind, mates, needs, en, ca, es, ref) in enumerate(EDGE_ROLES, 1):
+        for i, (slug, zone, kind, mates, needs, en, ca, es, ref, _n) in enumerate(EDGE_ROLES, 1):
             w('| {} | `{}` | {} | {} | {} | {} | {} | {} | {} | `{} {}` |'.format(
                 i, slug, zone, kind, mates or '--', 'SI' if needs else '', en, ca, es, GC, ref))
 
@@ -894,9 +1257,52 @@ class Command(BaseCommand):
                     kind, a[0], '/' + a[1] if a[1] else '',
                     b[0], '/' + b[1] if b[1] else '', v['seams'], v['pats']))
 
+        # ── E · els perfils GTI pilot ────────────────────────────────────
+        # 🚨 Els GTI es resolen DINS d'un schema de tenant. La llista es dibuixa una sola
+        # vegada, fora del bucle de sembra, i sense això corria al schema per defecte
+        # —`public`, que no té la taula— i deia «NO EXISTEIX» de tots tres.
+        gtis, schema_gti = {}, ''
+        for sch in schemas:
+            with schema_context(sch):
+                trobats = _gtis_del_schema()
+            if trobats:
+                gtis, schema_gti = trobats, sch
+                break
         w('')
-        w('## GarmentTypeItemEdgeProfile')
-        w('TAULA CREADA, SEMBRA BUIDA a posta: els perfils per GTI concret els ha de mapar')
-        w("l'Agus amb la Montse. El vocabulari generic viu a SeamPairTemplate amb")
-        w('`garment_type_item=NULL`.')
+        w('## GarmentTypeItemEdgeProfile — els 3 pilots de la Montse ({} files)'.format(
+            sum(len(f) for _, _, f in GTI_PROFILES)))
+        w('')
+        w('_GTI resolts contra l\'schema `{}`._'.format(schema_gti or 'cap'))
+        w('')
+        w('🚨 **La Montse va respondre per PRENDA i la taula és per PEÇA.** El pont el fa')
+        w("aquesta llista i cada fila diu d'on surt l'assignació: `catàleg` (les plantilles")
+        w('nomes la col·loquen alla), `definicio` (la vora ES d\'aquella peca) o `ofici`')
+        w('(el cataleg diu una altra cosa perque GarmentCode parteix les peces d\'una')
+        w('altra manera). **Les marcades `ofici` son la lectura que cal ratificar.**')
+        w('')
+        w('`presence` surt del seu judici i NO d\'una mesura: `observed_*` van a NULL i')
+        w('els llindars 75/30 de D.01 no s\'hi apliquen (son per a graus MESURATS).')
+        for code, etiqueta, files in GTI_PROFILES:
+            pk = gtis.get(code)
+            w('')
+            w('### {} · `{}` → {}'.format(
+                etiqueta, code, 'pk {}'.format(pk) if pk else 'NO EXISTEIX en aquest schema'))
+            w('')
+            w('| # | peça | cara | vora | presence | assignació de peça |')
+            w('|---|---|---|---|---|---|')
+            for i, (peca, cara, vora, pres, origen) in enumerate(files, 1):
+                marca = '🚩 ' if origen.startswith('ofici') else ''
+                w('| {} | `{}` | {} | `{}` | {} | {}{} |'.format(
+                    i, peca, cara or '—', vora, pres, marca, origen))
+
+        w('')
+        w('## Vocabulari que la Montse troba a FALTAR — proposat, NO creat ({})'.format(
+            len(EXTENSIONS_PENDENTS)))
+        w('')
+        w('Decidir un slug es decidir un contracte. Aquests van al report i esperen l\'Agus.')
+        w('')
+        w('| slug proposat | com en diu ella | d\'on surt |')
+        w('|---|---|---|')
+        for slug, nom, font in EXTENSIONS_PENDENTS:
+            w('| `{}` | {} | {} |'.format(slug, nom, font))
         w('')
