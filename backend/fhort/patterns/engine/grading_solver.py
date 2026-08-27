@@ -162,6 +162,15 @@ class PieceProblem:
     base_points: tuple[tuple[float, float], ...]
     kinds: tuple[str, ...]                       # 'turn' | 'curve' per vertex
     grain: tuple[float, float, float, float] | None = None
+    #: Start index of each closed loop inside `base_points`. `(0,)` is the single-loop case.
+    #:
+    #: 🔑 A piece has TWO contours — the cut line and the sewing line — and since the A0
+    #: amendment the bank carries both. They are concatenated into one point array because
+    #: they share one displacement problem, but they are not one loop: the cyclic wrap of
+    #: each segment, of each `AttachedPoint` edge and of the smoothing stencil has to close
+    #: inside its own contour. Getting that wrong would sew the hem to the neckline with a
+    #: stencil term and nothing would ever say so.
+    loop_starts: tuple[int, ...] = (0,)
 
     def __post_init__(self) -> None:
         if len(self.base_points) != len(self.kinds):
@@ -180,6 +189,22 @@ class PieceProblem:
                 f'{self.name}: no turn points. The unknowns of this solver ARE the turn '
                 f'points; a loop without any has nothing to solve for.'
             )
+        if self.loop_starts[0] != 0 or list(self.loop_starts) != sorted(set(self.loop_starts)):
+            raise SolverError(
+                f'{self.name}: loop_starts must begin at 0 and be strictly increasing, '
+                f'got {self.loop_starts}.'
+            )
+        if self.loop_starts[-1] >= self.n_points:
+            raise SolverError(
+                f'{self.name}: loop_starts {self.loop_starts} runs past the '
+                f'{self.n_points} points.'
+            )
+        for lo, hi in self.loop_ranges:
+            if not any(self.kinds[i] == 'turn' for i in range(lo, hi)):
+                raise SolverError(
+                    f'{self.name}: the loop [{lo}, {hi}) has no turn point, so nothing in '
+                    f'it can move and its curve points have no frame to ride.'
+                )
 
     @property
     def n_points(self) -> int:
@@ -194,18 +219,75 @@ class PieceProblem:
         return 2 * len(self.turn_indices)
 
     @property
+    def loop_ranges(self) -> tuple[tuple[int, int], ...]:
+        bounds = list(self.loop_starts) + [self.n_points]
+        return tuple((bounds[k], bounds[k + 1]) for k in range(len(self.loop_starts)))
+
+    def loop_of(self, index: int) -> tuple[int, int]:
+        for lo, hi in self.loop_ranges:
+            if lo <= index < hi:
+                return lo, hi
+        raise SolverError(f'{self.name}: index {index} is in no loop.')
+
+    def next_index(self, index: int) -> int:
+        """The next vertex, wrapping inside the index's OWN loop."""
+        lo, hi = self.loop_of(index)
+        return lo + (index - lo + 1) % (hi - lo)
+
+    @property
     def segments(self) -> tuple[Segment, ...]:
-        turns = self.turn_indices
-        n = self.n_points
         out = []
-        for k, a in enumerate(turns):
-            b = turns[(k + 1) % len(turns)]
-            interior, i = [], (a + 1) % n
-            while i != b:
-                interior.append(i)
-                i = (i + 1) % n
-            out.append(Segment(a, b, tuple(interior)))
+        for lo, hi in self.loop_ranges:
+            turns = [i for i in range(lo, hi) if self.kinds[i] == 'turn']
+            for k, a in enumerate(turns):
+                b = turns[(k + 1) % len(turns)]
+                interior, i = [], self.next_index(a)
+                while i != b:
+                    interior.append(i)
+                    i = self.next_index(i)
+                out.append(Segment(a, b, tuple(interior)))
         return tuple(out)
+
+    def coupled_turn_pairs(self) -> tuple[tuple[int, int], ...]:
+        """Pairs (slot on loop 0, slot on loop k>0) of turn points that face each other.
+
+        🔑 **Why this exists.** The cut line and the sewing line are an offset pair: they are
+        the same frontier drawn twice, and under grading the offset follows its parent. On
+        the 837 that is not a belief, it is a measurement — the two loops have EXACTLY the
+        same turn count on all five pieces (28/28, 24/24, 10/10, 9/9, 8/8), and in Montse's
+        own field the sewing displacement matches its facing cut displacement to **0,19 mm
+        mean at M and 0,51 mm at XL**, against field magnitudes of 11 and 32 mm.
+
+        Left uncoupled, the solver is worse than wrong, it is misleading: every POM anchor
+        lives on the sewing loop, so the cut loop would collect no constraint at all and
+        drift to whatever the regulariser prefers, while the report showed a vertex error
+        that was an artefact of a model nobody believes.
+
+        Pairing is by nearest base position, not by index: the two loops need not start at
+        the same corner.
+        """
+        base = np.asarray(self.base_points, dtype=float)
+        turns = self.turn_indices
+        per_loop = self.turn_slots_per_loop
+        if len(per_loop) < 2:
+            return ()
+        primary = per_loop[0]
+        pairs = []
+        for group in per_loop[1:]:
+            for slot in group:
+                near = min(primary, key=lambda k: float(
+                    np.linalg.norm(base[turns[k]] - base[turns[slot]])))
+                pairs.append((near, slot))
+        return tuple(pairs)
+
+    @property
+    def turn_slots_per_loop(self) -> tuple[tuple[int, ...], ...]:
+        """Positions in `turn_indices`, grouped by the loop they belong to."""
+        turns = self.turn_indices
+        return tuple(
+            tuple(k for k, i in enumerate(turns) if lo <= i < hi)
+            for lo, hi in self.loop_ranges
+        )
 
     # ── the geometry map ────────────────────────────────────────────────────
     def deform(self, d: np.ndarray) -> np.ndarray:
@@ -246,9 +328,9 @@ class PieceProblem:
 
     def resolve(self, point: AttachedPoint, pts: np.ndarray) -> np.ndarray:
         """Where an attached point ends up, given the deformed loop."""
-        n = self.n_points
         base = np.asarray(self.base_points, dtype=float)
-        i0, i1 = point.edge % n, (point.edge + 1) % n
+        i0 = point.edge % self.n_points
+        i1 = self.next_index(i0)
         delta = (1.0 - point.t) * (pts[i0] - base[i0]) + point.t * (pts[i1] - base[i1])
         return np.asarray(point.base, dtype=float) + delta
 
@@ -644,6 +726,12 @@ class Weights:
     bend: float = 1.0
     stretch: float = 0.0
     ridge: float = 1e-8
+    #: How hard the sewing line is tied to the cut line it offsets. See
+    #: `PieceProblem.coupled_turn_pairs` for why it must not be zero on a two-loop piece.
+    #: A soft penalty and not a hard reduction on purpose: the match is 0,19–0,51 mm, which
+    #: is the same order as the tolerance itself, so forcing equality would inject the
+    #: mismatch as error instead of letting the constraints arbitrate.
+    couple: float = 1.0
 
 
 @dataclass
@@ -803,36 +891,50 @@ def _regulariser(piece: PieceProblem, red: Reduction, w: Weights) -> np.ndarray:
     so a crowded armhole is not stiffer than an open side seam just for being crowded.
     """
     m = len(piece.turn_indices)
-    h_arc = piece.arc_spacing()                  # segment k runs from turn k to turn k+1
-    h_arc = np.where(h_arc > 0, h_arc, 1.0)
+    h_arc = np.where(piece.arc_spacing() > 0, piece.arc_spacing(), 1.0)
 
     want_stretch = w.stretch != 0.0
     rows_b, rows_d = [], []
-    for k in range(m):
-        hp = h_arc[(k - 1) % m]                  # before k
-        hn = h_arc[k % m]                        # after k
-        # non-uniform second difference
-        cm = 2.0 / (hp * (hp + hn))
-        cc = -2.0 / (hp * hn)
-        cp = 2.0 / (hn * (hp + hn))
-        weight = math.sqrt((hp + hn) / 2.0)
-        row = np.zeros(m)
-        row[(k - 1) % m] += cm
-        row[k] += cc
-        row[(k + 1) % m] += cp
-        rows_b.append(row * weight)
-
-        if want_stretch:
+    # 🔑 One cyclic stencil PER LOOP. `segments` are emitted loop by loop and in loop order,
+    # so segment `offset + j` of a loop with `q` turn slots runs from its turn j to j+1.
+    offset = 0
+    for slots in piece.turn_slots_per_loop:
+        q = len(slots)
+        for j in range(q):
+            hp = h_arc[offset + (j - 1) % q]
+            hn = h_arc[offset + j]
             row = np.zeros(m)
-            row[k] -= 1.0 / hn
-            row[(k + 1) % m] += 1.0 / hn
-            rows_d.append(row * math.sqrt(hn))
+            row[slots[(j - 1) % q]] += 2.0 / (hp * (hp + hn))
+            row[slots[j]] += -2.0 / (hp * hn)
+            row[slots[(j + 1) % q]] += 2.0 / (hn * (hp + hn))
+            rows_b.append(row * math.sqrt((hp + hn) / 2.0))
+
+            if want_stretch:
+                row = np.zeros(m)
+                row[slots[j]] -= 1.0 / hn
+                row[slots[(j + 1) % q]] += 1.0 / hn
+                rows_d.append(row * math.sqrt(hn))
+        offset += q
 
     b = np.array(rows_b)
     hm = w.bend * (b.T @ b)
     if want_stretch:
         dmat = np.array(rows_d)
         hm = hm + w.stretch * (dmat.T @ dmat)
+
+    pairs = piece.coupled_turn_pairs() if w.couple else ()
+    if pairs:
+        # Scaled by the typical arc spacing so the term is comparable to a first difference
+        # and the weight stays a dimensionless knob.
+        escala = 1.0 / max(float(np.mean(h_arc)), 1e-9)
+        rows_c = []
+        for i, j in pairs:
+            row = np.zeros(m)
+            row[i] += escala
+            row[j] -= escala
+            rows_c.append(row)
+        c = np.array(rows_c)
+        hm = hm + w.couple * (c.T @ c)
 
     # Both coordinates of a turn point share the stencil; interleave into (2m, 2m).
     full = np.zeros((2 * m, 2 * m))

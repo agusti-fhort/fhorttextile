@@ -421,3 +421,105 @@ class DegenerateSegmentTests(SimpleTestCase):
         out = piece.deform(d)
         # the curve point rides rigidly with the start, it does not get thrown metres away
         self.assertLess(float(np.abs(out[1] - np.array([6.0, 1.0])).max()), 1e-9)
+
+
+class TwoLoopTests(SimpleTestCase):
+    """A0 · a piece has TWO contours (cut + sewing) and neither may wrap into the other.
+
+    They share one displacement problem, so they live in one point array — but each cyclic
+    wrap (segments, attached-point edges, the smoothing stencil) has to close inside its own
+    contour. Wrapped globally, the last vertex of the cut line would be stitched to the first
+    of the sewing line by a stencil term and nothing would ever say so.
+    """
+
+    @staticmethod
+    def two_loops():
+        def ring(side, x0, y0):
+            corners = [(x0, y0), (x0 + side, y0), (x0 + side, y0 + side), (x0, y0 + side)]
+            pts, kinds = [], []
+            for k, c in enumerate(corners):
+                nxt = corners[(k + 1) % 4]
+                pts.append(c)
+                kinds.append('turn')
+                pts.append(((c[0] + nxt[0]) / 2, (c[1] + nxt[1]) / 2))
+                kinds.append('curve')
+            return pts, kinds
+        a_pts, a_kinds = ring(100.0, 0.0, 0.0)          # "cut"
+        b_pts, b_kinds = ring(80.0, 10.0, 10.0)         # "sewing", inset 10 mm
+        return PieceProblem(name='TWO', base_points=tuple(a_pts + b_pts),
+                            kinds=tuple(a_kinds + b_kinds),
+                            loop_starts=(0, len(a_pts)))
+
+    def test_segments_never_cross_loops(self):
+        piece = self.two_loops()
+        self.assertEqual(piece.loop_ranges, ((0, 8), (8, 16)))
+        for seg in piece.segments:
+            lo, hi = piece.loop_of(seg.start)
+            self.assertTrue(lo <= seg.end < hi)
+            for i in seg.interior:
+                self.assertTrue(lo <= i < hi)
+        self.assertEqual(len(piece.segments), 8)
+
+    def test_next_index_wraps_inside_its_own_loop(self):
+        piece = self.two_loops()
+        self.assertEqual(piece.next_index(7), 0)        # end of loop 0 -> start of loop 0
+        self.assertEqual(piece.next_index(15), 8)       # end of loop 1 -> start of loop 1
+
+    def test_moving_one_loop_leaves_the_other_alone(self):
+        piece = self.two_loops()
+        d = np.zeros((len(piece.turn_indices), 2))
+        d[0] = (5.0, 0.0)                                # a corner of the outer ring
+        pts = piece.deform(d)
+        base = np.array(piece.base_points)
+        self.assertTrue(np.allclose(pts[8:], base[8:]))
+        self.assertFalse(np.allclose(pts[:8], base[:8]))
+
+    def test_the_smoothing_stencil_does_not_couple_the_loops(self):
+        """The stencil is per contour. Anything that ties them must be explicit."""
+        from fhort.patterns.engine.grading_solver import NoReduction, _regulariser
+        piece = self.two_loops()
+        h = _regulariser(piece, NoReduction(len(piece.turn_indices)),
+                         Weights(couple=0.0))
+        # turn slots 0-3 are the outer ring, 4-7 the inner one; unknowns interleave x,y
+        self.assertLess(float(np.abs(h[:8, 8:]).max()), 1e-12)
+
+    def test_the_coupling_term_ties_facing_turn_points_only(self):
+        """A0 · the sewing line follows the cut line it offsets, and only its own facing corner."""
+        from fhort.patterns.engine.grading_solver import NoReduction, _regulariser
+        piece = self.two_loops()
+        pairs = piece.coupled_turn_pairs()
+        self.assertEqual(len(pairs), 4)
+        # each inner corner pairs with the outer corner it faces, and each exactly once
+        self.assertEqual(sorted(j for _i, j in pairs), [4, 5, 6, 7])
+        self.assertEqual(sorted(i for i, _j in pairs), [0, 1, 2, 3])
+
+        h = _regulariser(piece, NoReduction(len(piece.turn_indices)), Weights(couple=1.0))
+        cross = h[:8, 8:]
+        self.assertGreater(float(np.abs(cross).max()), 1e-6)
+        # only the paired slots are tied: slot 0 must not reach the inner corner it does
+        # not face (slot 6 is diagonally opposite slot 0)
+        self.assertLess(abs(float(h[0, 12])), 1e-12)     # x of slot 0 vs x of slot 6
+
+    def test_coupling_pulls_the_sewing_loop_after_the_cut_loop(self):
+        piece = self.two_loops()
+        outer = AttachedPoint(base=piece.base_points[0], edge=0, t=0.0)
+        outer_b = AttachedPoint(base=piece.base_points[4], edge=4, t=0.0)
+        cons = [PomDelta('w', 'recta', (outer, outer_b), 110.0),
+                Anchor('o', 0), GrainDirection()]
+        loose = solve(piece, cons, Weights(couple=0.0))
+        tied = solve(piece, cons, Weights(couple=1.0))
+        self.assertTrue(loose.converged and tied.converged)
+        inner = slice(8, 16)
+        # uncoupled, the sewing ring has no reason to move at all
+        self.assertLess(float(np.abs(loose.points[inner]
+                                     - np.array(piece.base_points)[inner]).max()), 1e-6)
+        # coupled, it follows
+        self.assertGreater(float(np.abs(tied.points[inner]
+                                        - np.array(piece.base_points)[inner]).max()), 1.0)
+
+    def test_a_loop_without_turn_points_is_refused(self):
+        with self.assertRaises(SolverError) as ctx:
+            PieceProblem(name='BAD',
+                         base_points=((0.0, 0.0), (1.0, 0.0), (2.0, 0.0), (3.0, 0.0)),
+                         kinds=('turn', 'curve', 'curve', 'curve'), loop_starts=(0, 2))
+        self.assertIn('no turn point', str(ctx.exception))
