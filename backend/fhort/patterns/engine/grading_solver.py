@@ -73,17 +73,36 @@ nothing at this size.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
-from typing import Callable, Iterable, Protocol, Sequence
+from dataclasses import dataclass
+from typing import Iterable, Protocol, Sequence
 
 import numpy as np
 
 from .errors import PatternEngineError
 
-MM_PER_CM = 10.0
+#: Below this a chord has no direction and cannot carry a local frame.
+#:
+#: 🚨 It is a LENGTH and every site compares a length to it. The first version compared it
+#: against `u @ u` — a squared length — which made the effective cut-off √1e-9 = 3,2·10⁻⁵ mm,
+#: sixty times TIGHTER than the DXF's own rounding: a pair of turn points 10⁻³ mm apart took
+#: the similarity branch and threw a curve point 5 metres away instead of falling back.
+#: Measured on the bank, the shortest real turn-to-turn chord across all 25 pieces × 2 layers
+#: is 6,11 mm, so 0,005 mm sits 1 200× below anything the material contains.
+TOL_DEGENERATE_MM = 5e-3
 
-#: Below this an edge has no direction and cannot carry a local frame.
-TOL_DEGENERATE_MM = 1e-9
+#: Relative step for the central-difference Jacobian, as a fraction of the piece's own size.
+#:
+#: 🚨 An ABSOLUTE step is the bug that hides here. The residuals are O(1) in the unknowns and
+#: the coordinates run to 2 500 mm, so a fixed 10⁻⁶ mm step leaves ~10⁻⁷ of cancellation noise
+#: in every Jacobian entry — an order of magnitude ABOVE the threshold `diagnose` uses to
+#: decide whether a row adds rank. The detector then reports a genuine 3 mm contradiction as
+#: well-posed, which is exactly the discrimination the whole diagnosis exists to provide.
+#: The optimum for central differences is ∛ε_mach · |x| ≈ 6·10⁻⁶ · scale; measured against the
+#: analytic derivative of `recta`, this is ~1 600× more accurate than the absolute 10⁻⁶.
+STEP_REL = 1e-5
+
+#: Floor for that step, so a degenerate or tiny piece still gets a usable one.
+STEP_MIN_MM = 1e-3
 
 #: Singular values below `rank_tol * largest` count as zero when measuring rank.
 RANK_TOL = 1e-9
@@ -129,7 +148,15 @@ class AttachedPoint:
 
 @dataclass(frozen=True)
 class PieceProblem:
-    """A piece as the solver sees it: a base loop, its turn points, and its grain."""
+    """A piece as the solver sees it: a base loop and its turn points.
+
+    `grain` is carried as PROVENANCE and is deliberately not read by the solver.
+    `GrainDirection` derives its gauge from the turn-point centroid instead, because a grain
+    line is an annotation inside the piece and not a boundary vertex — there is nothing on
+    the loop to constrain it against. Keeping the line here means the report can quote the
+    angle it was measured at (0,000° at every size of every piece of the 837); pretending the
+    constraint reads it would be worse than carrying it unread.
+    """
 
     name: str
     base_points: tuple[tuple[float, float], ...]
@@ -140,6 +167,13 @@ class PieceProblem:
         if len(self.base_points) != len(self.kinds):
             raise SolverError(
                 f'{self.name}: {len(self.base_points)} points but {len(self.kinds)} kinds.'
+            )
+        unknown = sorted(set(self.kinds) - {'turn', 'curve'})
+        if unknown:
+            raise SolverError(
+                f'{self.name}: unknown vertex kinds {unknown}. Anything that is not «turn» '
+                f'silently becomes a curve point, so a typo in an upstream loader would '
+                f'become a different problem with no complaint.'
             )
         if not self.turn_indices:
             raise SolverError(
@@ -194,7 +228,7 @@ class PieceProblem:
             a1, b1 = pts[seg.start], pts[seg.end]
             u0 = b0 - a0
             l2 = float(u0 @ u0)
-            if l2 <= TOL_DEGENERATE_MM:
+            if math.sqrt(l2) <= TOL_DEGENERATE_MM:
                 # A segment whose endpoints coincide carries no frame. Its interior rides
                 # rigidly with the start; saying so beats dividing by zero.
                 for i in seg.interior:
@@ -217,6 +251,12 @@ class PieceProblem:
         i0, i1 = point.edge % n, (point.edge + 1) % n
         delta = (1.0 - point.t) * (pts[i0] - base[i0]) + point.t * (pts[i1] - base[i1])
         return np.asarray(point.base, dtype=float) + delta
+
+    def scale_mm(self) -> float:
+        """The piece's own size — the bounding-box diagonal. Sets the differencing step."""
+        base = np.asarray(self.base_points, dtype=float)
+        span = base.max(axis=0) - base.min(axis=0)
+        return float(np.hypot(*span)) or 1.0
 
     def arc_spacing(self) -> np.ndarray:
         """Base arc length of each segment, in turn order. The stencil's `h`."""
@@ -314,6 +354,20 @@ class PomDelta:
     def residuals(self, piece: PieceProblem, pts: np.ndarray) -> np.ndarray:
         return np.array([self.measure(piece, pts) - self.target_mm])
 
+    def _auto_axis(self, piece: PieceProblem) -> str:
+        """AUTO resolved once, on the BASE geometry — never on the deformed points.
+
+        🚨 Resolving it on the deformed points makes the residual a piecewise function whose
+        branch can change between the `+eps` and `−eps` probes of the Jacobian. Measured on a
+        POM running at exactly 45°, the difference quotient came back as ±0,5 where the true
+        derivative is ±1 or 0 — the average of two different functions. Gauss-Newton absorbed
+        it there, but a near-diagonal cote would stall or oscillate. Which axis a cote is on
+        is a property of the cote, not of the size being solved.
+        """
+        base = np.asarray(piece.base_points, dtype=float)
+        a, b = (piece.resolve(x, base) for x in self.anchors[:2])
+        return _dominant_axis(a, b)
+
     def measure(self, piece: PieceProblem, pts: np.ndarray) -> float:
         p = [piece.resolve(a, pts) for a in self.anchors]
         if self.method == 'recta':
@@ -321,7 +375,7 @@ class PomDelta:
             return float(np.linalg.norm(p[1] - p[0]))
         if self.method == 'projeccio':
             _expect(self, p, 2)
-            axis = self.axis or _dominant_axis(p[0], p[1])
+            axis = self.axis or self._auto_axis(piece)
             return abs(float(p[1][0] - p[0][0]) if axis == 'H' else float(p[1][1] - p[0][1]))
         if self.method == 'ortogonal':
             _expect(self, p, 3)
@@ -385,7 +439,15 @@ class Anchor:
         return (f'{self.name}.x', f'{self.name}.y')
 
     def residuals(self, piece: PieceProblem, pts: np.ndarray) -> np.ndarray:
-        i = piece.turn_indices[self.turn_slot]
+        turns = piece.turn_indices
+        if not -len(turns) <= self.turn_slot < len(turns):
+            raise SolverError(
+                f'{self.name}: turn slot {self.turn_slot} is out of range; «{piece.name}» has '
+                f'{len(turns)} turn points. (This is a malformed problem, so it raises '
+                f'SolverError and not IndexError — a caller guarding on the module\'s own '
+                f'error type has to be able to catch it.)'
+            )
+        i = turns[self.turn_slot]
         base = np.asarray(piece.base_points[i], dtype=float)
         return pts[i] - base
 
@@ -532,14 +594,15 @@ def _components(constraints: Sequence[Constraint], j: np.ndarray
     """Which constraints are coupled to which (planegcs I3).
 
     Sliced out of the Jacobian that was already built, not recomputed per constraint: a
-    diagnosis that costs one Jacobian per row turns the exam from seconds into minutes for
-    a partition that, on a closed loop, is known in advance.
+    diagnosis that costs one Jacobian per row turns the exam from seconds into minutes.
 
-    ⚠️ On a closed loop the smoothing stencil already links every turn point to its two
-    neighbours all the way round, so **a closed piece is always one component** and this
-    never splits it. It is reported anyway because it is the thing that would change the
-    moment an open boundary or a multi-loop piece arrives, and a partition that silently
-    always returns one bucket is indistinguishable from one that is broken.
+    ⚠️ **This is the coupling of the CONSTRAINTS, not of the solve.** It reads the Jacobian
+    and nothing else, so two POMs on disjoint turn points really do come back as two buckets
+    — and they should, because that is what the caller wants to know. The regulariser then
+    couples everything anyway (its stencil goes all the way round a closed loop), which is
+    why a piece is never actually solved in pieces. On the 837 every constraint set contains
+    `GrainDirection`, which touches every turn point, so the answer there is always one
+    bucket for that reason and not for the loop's.
     """
     touched: list[set[int]] = []
     row = 0
@@ -634,6 +697,7 @@ def solve(piece: PieceProblem, constraints: Sequence[Constraint],
     z = np.zeros(red.n_free)
     converged = False
     iterations = 0
+    kkt_deficient = False
 
     for iterations in range(1, MAX_ITERATIONS + 1):
         j, r = _jacobian(piece, constraints, red, z)
@@ -643,7 +707,8 @@ def solve(piece: PieceProblem, constraints: Sequence[Constraint],
         if float(np.max(np.abs(r))) <= CONVERGENCE_MM:
             converged = True
             break
-        step = _kkt_step(h, j, r, z, w)
+        step, full_rank = _kkt_step(h, j, r, z)
+        kkt_deficient = kkt_deficient or not full_rank
         if step is None:
             return SolveReport(
                 piece.name, success=False, converged=False, iterations=iterations,
@@ -655,7 +720,8 @@ def solve(piece: PieceProblem, constraints: Sequence[Constraint],
 
     d = red.expand(z)
     pts = piece.deform(d)
-    _, r = _jacobian(piece, constraints, red, z)
+    # Residuals only: a Jacobian here would be ~117x the cost and is thrown away.
+    r = _residual_vector(piece, constraints, red, z)
     residuals = _named(constraints, r)
     worst = max((abs(v) for v in residuals.values()), default=0.0)
     converged = converged or worst <= CONVERGENCE_MM
@@ -663,7 +729,13 @@ def solve(piece: PieceProblem, constraints: Sequence[Constraint],
     message = ''
     if not converged:
         message = (f'Gauss-Newton stopped at {MAX_ITERATIONS} iterations with a worst '
-                   f'residual of {worst:.6f} mm.')
+                   f'residual of {worst:.6f} mm. Worst rows: '
+                   + ', '.join(f'{n}={v:+.3f}' for n, v in
+                               sorted(residuals.items(), key=lambda kv: -abs(kv[1]))[:3])
+                   + '.')
+    if kkt_deficient:
+        message = (f'{message} The KKT system was rank-deficient at least once; the step '
+                   f'was taken in least squares (minimum norm).').strip()
     if diagnosis.conflicting:
         message = (f'{message} Constraints in conflict: '
                    f'{", ".join(diagnosis.conflicting)}.').strip()
@@ -705,12 +777,15 @@ def _residual_vector(piece: PieceProblem, constraints: Sequence[Constraint],
 
 def _jacobian(piece: PieceProblem, constraints: Sequence[Constraint],
               red: Reduction, z: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Central differences. With ≤56 unknowns an analytic Jacobian buys speed we do not
-    need and costs a class of silent sign errors we cannot afford."""
+    """Central differences, with the step scaled to the PIECE, not to 1 mm.
+
+    With ≤56 unknowns an analytic Jacobian buys speed we do not need and costs a class of
+    silent sign errors we cannot afford. What it does cost is step size: see `STEP_REL`.
+    """
     r0 = _residual_vector(piece, constraints, red, z)
     if r0.size == 0:
         return np.zeros((0, red.n_free)), r0
-    eps = 1e-6
+    eps = max(STEP_MIN_MM, STEP_REL * piece.scale_mm())
     j = np.zeros((r0.size, red.n_free))
     for k in range(red.n_free):
         zp, zm = z.copy(), z.copy()
@@ -731,6 +806,7 @@ def _regulariser(piece: PieceProblem, red: Reduction, w: Weights) -> np.ndarray:
     h_arc = piece.arc_spacing()                  # segment k runs from turn k to turn k+1
     h_arc = np.where(h_arc > 0, h_arc, 1.0)
 
+    want_stretch = w.stretch != 0.0
     rows_b, rows_d = [], []
     for k in range(m):
         hp = h_arc[(k - 1) % m]                  # before k
@@ -746,14 +822,17 @@ def _regulariser(piece: PieceProblem, red: Reduction, w: Weights) -> np.ndarray:
         row[(k + 1) % m] += cp
         rows_b.append(row * weight)
 
-        row = np.zeros(m)
-        row[k] -= 1.0 / hn
-        row[(k + 1) % m] += 1.0 / hn
-        rows_d.append(row * math.sqrt(hn))
+        if want_stretch:
+            row = np.zeros(m)
+            row[k] -= 1.0 / hn
+            row[(k + 1) % m] += 1.0 / hn
+            rows_d.append(row * math.sqrt(hn))
 
     b = np.array(rows_b)
-    dmat = np.array(rows_d)
-    hm = w.bend * (b.T @ b) + w.stretch * (dmat.T @ dmat)
+    hm = w.bend * (b.T @ b)
+    if want_stretch:
+        dmat = np.array(rows_d)
+        hm = hm + w.stretch * (dmat.T @ dmat)
 
     # Both coordinates of a turn point share the stencil; interleave into (2m, 2m).
     full = np.zeros((2 * m, 2 * m))
@@ -767,9 +846,21 @@ def _regulariser(piece: PieceProblem, red: Reduction, w: Weights) -> np.ndarray:
     return basis @ full @ basis.T
 
 
-def _kkt_step(h: np.ndarray, j: np.ndarray, r: np.ndarray, z: np.ndarray,
-              w: Weights) -> np.ndarray | None:
-    """One KKT solve: minimise ½sᵀHs + (Hz)ᵀs subject to J s = −r."""
+def _kkt_step(h: np.ndarray, j: np.ndarray, r: np.ndarray,
+              z: np.ndarray) -> tuple[np.ndarray | None, bool]:
+    """One KKT solve: minimise ½sᵀHs + (Hz)ᵀs subject to J s = −r.
+
+    🚨 **Always least squares, never `solve` with an exception guard.** `np.linalg.solve`
+    raises only on an EXACT zero pivot; a genuinely rank-deficient KKT usually gets a tiny
+    non-zero pivot and returns garbage without raising. Measured: with `Weights(ridge=0)` and
+    an open gauge, cond(KKT) = 1,6·10²³, no exception, and an 800 mm octagon asked to grow
+    20 mm came back displaced by **1 218 mm** — flagged `success=True, converged=True`. A
+    wrong answer returned confidently is the one failure mode this module claims to not have.
+
+    `lstsq` returns the same answer as `solve` on a well-conditioned system and the
+    minimum-norm one otherwise, at a cost that is nothing at this size. It also hands back the
+    effective rank, which is how the caller learns the KKT was deficient instead of guessing.
+    """
     n = h.shape[0]
     m = j.shape[0]
     kkt = np.zeros((n + m, n + m))
@@ -777,10 +868,7 @@ def _kkt_step(h: np.ndarray, j: np.ndarray, r: np.ndarray, z: np.ndarray,
     kkt[:n, n:] = j.T
     kkt[n:, :n] = j
     rhs = np.concatenate([-(h @ z), -r])
-    try:
-        sol = np.linalg.solve(kkt, rhs)
-    except np.linalg.LinAlgError:
-        sol, *_ = np.linalg.lstsq(kkt, rhs, rcond=None)
+    sol, _res, rank, _sv = np.linalg.lstsq(kkt, rhs, rcond=None)
     if not np.all(np.isfinite(sol)):
-        return None
-    return sol[:n]
+        return None, False
+    return sol[:n], rank == n + m

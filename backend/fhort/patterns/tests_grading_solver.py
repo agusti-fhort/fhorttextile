@@ -8,14 +8,12 @@ open, an answer that is known in closed form.
 These are Python-only: nothing here touches the database, and the engine does not import
 Django.
 """
-import math
-
 import numpy as np
 from django.test import SimpleTestCase
 
 from fhort.patterns.engine.grading_solver import (
-    Anchor, AttachedPoint, Diagnosis, FixedPom, GrainDirection, NoReduction, PieceProblem,
-    PomDelta, SolverError, Weights, diagnose, solve, solve_all,
+    Anchor, AttachedPoint, FixedPom, GrainDirection, NoReduction, PieceProblem, PomDelta,
+    SolverError, Weights, diagnose, solve, solve_all,
 )
 
 
@@ -244,3 +242,182 @@ class ReductionTests(SimpleTestCase):
         self.assertTrue(np.allclose(red.expand(z), z.reshape(4, 2)))
         j = np.ones((3, 8))
         self.assertTrue(np.allclose(red.project(j), j))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Regressions from the F6.1 diff review (27/08). Each of these failed before the fix.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def octagon(r=400.0, cx=1500.0, cy=2000.0, per_edge=3) -> PieceProblem:
+    """Eight turn points, so the bending stencil alone leaves a wide null space."""
+    import math as _m
+    corners = [(cx + r * _m.cos(2 * _m.pi * k / 8), cy + r * _m.sin(2 * _m.pi * k / 8))
+               for k in range(8)]
+    pts, kinds = [], []
+    for k, c0 in enumerate(corners):
+        c1 = corners[(k + 1) % 8]
+        pts.append(c0)
+        kinds.append('turn')
+        for i in range(1, per_edge + 1):
+            f = i / (per_edge + 1)
+            pts.append((c0[0] + f * (c1[0] - c0[0]), c0[1] + f * (c1[1] - c0[1])))
+            kinds.append('curve')
+    return PieceProblem(name='OCTAGON', base_points=tuple(pts), kinds=tuple(kinds))
+
+
+def collinear_piece(origin=(2000.0, 3000.0), angle_deg=37.0, side=1200.0):
+    """A piece at real 837 coordinate scale with three COLLINEAR turn points.
+
+    Collinear on purpose: it makes |AC| = |AB| + |BC| an exact algebraic identity, so three
+    `recta` POMs over (A,B), (B,C), (A,C) have a rank-2 Jacobian. That is the cheapest way to
+    hand `diagnose` a dependent row whose right-hand side can then be made to contradict.
+    """
+    import math as _m
+    c, s_ = _m.cos(_m.radians(angle_deg)), _m.sin(_m.radians(angle_deg))
+    def at(u, v):
+        return (origin[0] + u * c - v * s_, origin[1] + u * s_ + v * c)
+    pts, kinds = [], []
+    corners = [at(0, 0), at(side / 2, 0), at(side, 0), at(side, side), at(0, side)]
+    for k, corner in enumerate(corners):
+        nxt = corners[(k + 1) % len(corners)]
+        pts.append(corner)
+        kinds.append('turn')
+        for i in (1, 2):
+            f = i / 3
+            pts.append((corner[0] + f * (nxt[0] - corner[0]),
+                        corner[1] + f * (nxt[1] - corner[1])))
+            kinds.append('curve')
+    return PieceProblem(name='COLLINEAR', base_points=tuple(pts), kinds=tuple(kinds))
+
+
+class JacobianStepTests(SimpleTestCase):
+    """BUG 1 · the differencing step must scale with the piece, not sit at 1e-6 mm.
+
+    At 837 coordinates (1 000–2 500 mm) an absolute 1e-6 step leaves ~1e-7 of cancellation
+    noise in every Jacobian entry, which is an order of magnitude ABOVE the threshold
+    `diagnose` uses to decide whether a row adds rank. The detector then calls a genuine
+    contradiction well-posed — the exact discrimination the diagnosis exists to provide.
+    """
+
+    def test_dependent_contradictory_row_is_named_at_real_coordinates(self):
+        """The scale is the point: at 2 376 mm an absolute 1e-6 step hides this conflict.
+
+        Measured while writing the test — `conflicting` under the old absolute step, by
+        piece scale: 792 mm → ('AC',) · 1 584 mm → ('AC',) · **2 376 mm → ()** · 3 169 mm →
+        (). The bank's own coordinates run to 2 553 mm, so the bench sits on the wrong side
+        of that line. A version of this test at 400 mm passes either way and proves nothing.
+        """
+        piece = collinear_piece()
+        self.assertGreater(piece.scale_mm(), 2000.0)
+        a, b, c = (on_vertex(piece, i) for i in (0, 3, 6))
+        half = 600.0
+        ab = PomDelta('AB', 'recta', (a, b), half)
+        bc = PomDelta('BC', 'recta', (b, c), half)
+        # AC is algebraically AB + BC, and its target is 3 mm away from that sum.
+        d = diagnose(piece, [ab, bc, PomDelta('AC', 'recta', (a, c), 2 * half + 3.0)])
+        self.assertEqual(d.conflicting, ('AC',))
+        self.assertFalse(d.well_posed)
+
+    def test_dependent_consistent_row_is_redundant_not_conflicting(self):
+        piece = collinear_piece()
+        a, b, c = (on_vertex(piece, i) for i in (0, 3, 6))
+        ok = diagnose(piece, [PomDelta('AB', 'recta', (a, b), 600.0),
+                              PomDelta('BC', 'recta', (b, c), 600.0),
+                              PomDelta('AC', 'recta', (a, c), 1200.0)])
+        self.assertEqual(ok.conflicting, ())
+        self.assertEqual(ok.redundant, ('AC',))
+
+    def test_step_scales_with_the_piece(self):
+        self.assertGreater(collinear_piece().scale_mm(), 10 * square(side=100.0).scale_mm())
+
+
+class KKTRankTests(SimpleTestCase):
+    """BUG 2 · a rank-deficient KKT must not come back as a confident answer.
+
+    `np.linalg.solve` raises only on an exact zero pivot, so a singular system usually
+    returns garbage silently. With no ridge and an open gauge that produced an 800 mm piece
+    displaced by 1 218 mm, reported `success=True, converged=True`.
+    """
+
+    def test_no_ridge_open_gauge_takes_the_minimum_norm_step_and_says_so(self):
+        """cond(KKT) = 3,4e22 and `np.linalg.solve` does NOT raise on it.
+
+        Measured: `solve` returns a step of 22,5 mm where the minimum-norm one is 10,0 mm —
+        a different answer, reached silently, with nothing in the report to say the system
+        was deficient. The two assertions here are exactly those two facts.
+        """
+        piece = octagon()
+        a = AttachedPoint(base=piece.base_points[0], edge=0, t=0.0)
+        b = AttachedPoint(base=piece.base_points[16], edge=16, t=0.0)
+        span = float(np.linalg.norm(np.array(piece.base_points[0])
+                                    - np.array(piece.base_points[16])))
+        cons = [PomDelta('w', 'recta', (a, b), span + 20.0)]
+        report = solve(piece, cons, Weights(bend=1.0, stretch=0.0, ridge=0.0))
+        self.assertTrue(report.success)
+        self.assertLess(report.worst_residual_mm, 1e-6)
+        # the minimum-norm field, not the arbitrary one a plain `solve` would hand back
+        self.assertLess(float(np.abs(report.displacement).max()), 12.0)
+        self.assertIn('rank-deficient', report.message)
+
+    def test_duplicated_rows_still_solve(self):
+        piece = square()
+        a, b = on_vertex(piece, 0), on_vertex(piece, 5)
+        cons = [PomDelta('w', 'recta', (a, b), 110.0),
+                PomDelta('w-again', 'recta', (a, b), 110.0),
+                Anchor('o', 0), GrainDirection()]
+        report = solve(piece, cons)
+        self.assertTrue(report.converged)
+        self.assertLess(report.worst_residual_mm, 1e-9)
+
+
+class VocabularyTests(SimpleTestCase):
+    """BUG 7 · anything that is not «turn» silently became a curve point."""
+
+    def test_unknown_vertex_kind_is_refused(self):
+        with self.assertRaises(SolverError) as ctx:
+            PieceProblem(name='TYPO', base_points=((0.0, 0.0), (1.0, 0.0), (1.0, 1.0)),
+                         kinds=('turn', 'banana', 'curve'))
+        self.assertIn('banana', str(ctx.exception))
+
+    def test_out_of_range_anchor_slot_is_a_solver_error(self):
+        piece = square()
+        with self.assertRaises(SolverError):
+            solve(piece, [Anchor('nope', 99)])
+
+
+class ProjectionAxisTests(SimpleTestCase):
+    """BUG 3 · AUTO axis is a property of the cote, resolved once on the base geometry.
+
+    Resolved on the deformed points instead, the `+eps` and `−eps` probes of the Jacobian can
+    land on different branches and the difference quotient averages two different functions.
+    At exactly 45° the measured derivative came back ±0,5 where the truth is ±1 or 0.
+    """
+
+    def test_auto_axis_does_not_flip_under_deformation(self):
+        piece = square(side=100.0)
+        a, b = on_vertex(piece, 0), on_vertex(piece, 10)      # exactly 45°
+        pom = PomDelta('diag', 'projeccio', (a, b), 100.0)
+        m = len(piece.turn_indices)
+        base_value = pom.measure(piece, piece.deform(np.zeros((m, 2))))
+
+        d = np.zeros((m, 2))
+        d[2] = (0.0, 40.0)                    # push the far corner so V would win on-the-fly
+        moved = pom.measure(piece, piece.deform(d))
+        # H was chosen on the base (tie → H) and must stay chosen: dx is unchanged by d[2]y
+        self.assertAlmostEqual(base_value, 100.0, places=9)
+        self.assertAlmostEqual(moved, 100.0, places=9)
+
+
+class DegenerateSegmentTests(SimpleTestCase):
+    """BUG 4 · the degeneracy guard is a LENGTH and must trip before the frame explodes."""
+
+    def test_near_coincident_turns_fall_back_to_rigid(self):
+        gap = 1e-3
+        pts = ((0.0, 0.0), (5.0, 1.0), (gap, 0.0), (0.0, 50.0), (-50.0, 50.0))
+        kinds = ('turn', 'curve', 'turn', 'turn', 'turn')
+        piece = PieceProblem(name='PINCH', base_points=pts, kinds=kinds)
+        d = np.zeros((4, 2))
+        d[0] = (1.0, 0.0)
+        out = piece.deform(d)
+        # the curve point rides rigidly with the start, it does not get thrown metres away
+        self.assertLess(float(np.abs(out[1] - np.array([6.0, 1.0])).max()), 1e-9)
