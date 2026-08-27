@@ -65,7 +65,20 @@ from rosetta.camp_montse import (                                    # noqa: E40
 #: banc que es busqui sol el model «més recent» canvia de banc sense avisar.
 MODEL_BANC = 1383
 PATTERN_FILE = 20
-GRADING_VERSION = 201          # v9, aprovada 24/08, is_active
+
+#: La GV del banc. Per defecte la **201 (v9)**, que és la que està APROVADA; el que la fa
+#: bona no és que sigui la darrera sinó que està segellada.
+#:
+#: 🚨 F6-CODA (27/08): l'Agus va corregir la fitxa i això va crear la **205 (v10)**, que és
+#: `is_active=True` però `aprovada=False`. Una GV sense segellar no pot ser la referència
+#: d'un banc de paritat —el segell és el gest que diu «aquests números són els bons»— però
+#: tampoc es pot mesurar el que canviaria sense poder-la llegir. Sortida: la versió deixa de
+#: ser una constant i passa a ser un **paràmetre de la correguda**, amb el mateix criteri que
+#: `FTT_TEST_DB` a `settings_test`. El defecte segueix sent la segellada; llegir-ne una altra
+#: és un gest explícit de qui la corre, i l'informe en diu el número i si està aprovada.
+#:
+#:     FTT_ROSETTA_GV=205 python3 ops/rosetta/rosetta_837.py     # previsualització
+GRADING_VERSION = int(os.environ.get('FTT_ROSETTA_GV', '201'))
 
 #: Per sobre d'això un Δ es destaca. És la tolerància que la fase va proposar (≤0,5 mm per
 #: punt i talla) i que l'Agus encara ha de ratificar; viu aquí per poder-la moure en un lloc.
