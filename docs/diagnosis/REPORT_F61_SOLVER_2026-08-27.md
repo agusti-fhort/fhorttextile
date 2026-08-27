@@ -28,15 +28,15 @@
    one that was expected.** Mean error 7,79 mm against a 0,5 mm phase criterion. It is **not**
    mainly missing information: feeding the solver every POM the bank can measure moves it only
    to 6,08 mm (−22 %). It is the regulariser.
-5. 🚨 **And the field says what the regulariser should have been.** Montse's displacement is
-   **sparse in first differences** — 5 of 28 jumps carry 63 % of the total variation on the
-   front — while this solver minimises *second* differences, which in her field are large and
-   dense. The prior is fighting the data. On the sleeve the structure is exact: her field is
-   **piecewise-affine in arc length with 4 blocks, to 0,143 mm**.
-6. 🚨 **But the body pieces are not a boundary problem at all.** Six affine blocks along the
-   loop still leave 4,8 mm (front) and 6,9 mm (back). Their grading is organised by slash lines
-   **across** the piece, and no boundary-only regulariser can express that. This is the design
-   input for F6.2, and it is a bigger finding than the error number.
+5. 🚨 **And it is not the penalty's shape either.** Her field is sparse in first differences,
+   which points straight at a total-variation prior — so it was run, and **it is worse**
+   (sleeve XL: 15,45 mm against 13,21 for the committed bending prior). Meanwhile **her own
+   field satisfies our constraints to 0,35 mm**, so the right answer is admissible and the gap
+   is entirely which member of a **48-dimensional** family the prior picks.
+6. 🔑 **The fix is fewer unknowns, and the data says how few.** A piece's whole grading field is
+   **rank two to ~1 mm** across its four sizes, the dominant component being one shape scaled by
+   a per-size scalar (1 · 2,00 · 2,69). This sprint solves the four sizes independently and
+   thereby discards the strongest structure in the data. That, not the regulariser, is F6.2.
 
 ---
 
@@ -343,24 +343,82 @@ Measured on Montse's field alone, no solver involved, at XL:
 | ESPALDA | 24 | 309,0 | 180,7 | **58 %** | 10/24 | 509,1 | **>6** (k=6 still 6,88 mm) |
 | MANGA | 9 | 119,6 | 105,5 | **88 %** | 2/9 | 172,9 | **k=4 → 0,143 mm** |
 
-Two findings, and they point in different directions:
+Her field is **sparse in first differences and dense in second differences**: five of
+twenty-eight jumps carry 63 % of the front's total variation and half the jumps are under 2 mm —
+the signature of a piece cut along a few lines and spread — while this solver minimises the
+*second* difference, which in her field sums to 539 with a maximum of 52 mm. The prior is
+fighting the data.
 
-🚨 **The field is sparse in FIRST differences and dense in SECOND differences.** Five of
-twenty-eight jumps carry 63 % of the front's total variation, and half the jumps are under 2 mm
-— the signature of a piece cut along a few lines and spread. This solver minimises the *second*
-difference, which in her field sums to 539 with a maximum of 52 mm. **The prior is fighting the
-data**, and that is a fixable mistake: a sparsity-promoting (total-variation / L1) penalty on the
-first difference prefers piecewise-constant displacement, which is what slash-and-spread is.
+The obvious inference from that is «use a total-variation penalty». **It was run, and it is
+wrong.** See §5.4.
 
-🚨 **But sparsity alone will not save the body pieces.** On the sleeve, her field is *exactly*
-piecewise-affine in arc length — **four blocks, 0,143 mm** — so a boundary regulariser can nail
-it. On the front and back, six blocks still leave 4,8 and 6,9 mm. Their grading is not a
-one-dimensional object along the boundary at all: it is organised by slash lines **across** the
-piece, and **no boundary-only regulariser can express that**, whatever its penalty. The body
-prior needs an interior model.
+### 5.4 · Three measurements that decide what F6.2 should change
 
-That is the single most consequential result of this sprint, and it was not in the brief's
-expectations: the vertex criterion is not reachable by tuning, on the pieces that matter.
+Produced by [`ops/rosetta/exam_structure.py`](../../ops/rosetta/exam_structure.py).
+
+**(a) Montse's own field IS admissible under our constraints.** Evaluating our constraint rows
+on the field she drew:
+
+| piece | size | worst row, `contract` set |
+|---|---|---:|
+| DELANTERO | M | SLT = −0,324 mm |
+| DELANTERO | XL | F = −0,349 mm |
+| ESPALDA | M | EK2 = +0,053 mm |
+| ESPALDA | XL | grain = +0,143 mm |
+| MANGA | XL | grain = +2,001 mm |
+
+Her answer satisfies the constraint set to a third of a millimetre on the body pieces. (The
+sleeve's 2,0 mm is the grain gauge, and expected: it has no still point, so her field carries
+0,17° of net rotation and ours is forced to carry none.) **The constraints do not exclude the
+right answer.** The entire 16,5 mm gap on the front is the prior choosing a different member of
+a 48-dimensional admissible family.
+
+**(b) A total-variation prior is WORSE, not better.** IRLS on the first difference, same
+constraints, same bench, run on the sleeve — the piece whose field is exactly piecewise-affine,
+so the best case a sparsity prior will ever get:
+
+| size | bending (committed) mean / max | TV-IRLS mean / max | Montse mean \|d\| |
+|---|---:|---:|---:|
+| M | **4,36** / 7,72 | 5,10 / 7,65 | 5,21 |
+| XL | **13,21** / 23,17 | 15,45 / 22,99 | 15,78 |
+
+The mean gets worse. The reason is plain once measured: the *structure* of her field says what
+the answer looks like; it does not follow that a prior of the matching family **recovers** that
+answer from **one** measurement target. With 1 constraint and 18 unknowns, no penalty can.
+
+🔑 **So the fix is not a better penalty. It is fewer unknowns.** No prior picks the right point
+out of a 48-dimensional family from 8 numbers by preferring some shape of smoothness.
+
+**(c) And the data says exactly how few.** SVD of the four size fields of each piece — worst
+error, in mm, of rebuilding all four from `k` basis fields:
+
+| piece | k=1 | k=2 | k=3 | k=4 | component-1 coefficients (XS, M, L, XL) |
+|---|---:|---:|---:|---:|---|
+| DELANTERO | 6,797 | **0,840** | 0,228 | 0,000 | −0,238 · 1 · 2,004 · 2,687 |
+| ESPALDA | 6,399 | **1,015** | 0,175 | 0,000 | −0,226 · 1 · 1,997 · 2,671 |
+| MANGA | 2,047 | **0,277** | 0,137 | 0,000 | −0,181 · 1 · 2,013 · 3,023 |
+
+🚨 **A piece's whole grading is rank two to ~1 mm and rank three to ~0,23 mm**, and the dominant
+component is one shape scaled by a per-size scalar that steps almost linearly (1 · 2,00 · 2,69).
+
+**This sprint solves the four sizes as four independent problems, and that throws away the
+strongest structure in the data.** Four sizes × 8 rows = 32 constraints are available; they are
+currently spent 8 at a time on four separate 56-unknown problems.
+
+### 5.5 · A warning about the `with_layer_14` rung
+
+Evaluating the enriched constraint set on Montse's own field:
+
+| piece | size | rows that HER field violates |
+|---|---|---|
+| DELANTERO | XL | E = −3,554 · A = −2,420 · E5 = −1,070 mm |
+| ESPALDA | XL | E1 = −2,507 mm |
+
+Those five are exactly the NOT RESOLVABLE POMs of F6-PRE. Their targets come from the fitxa, and
+**the real pattern does not meet them**. Adding them as hard constraints therefore pushes the
+solver *away* from her answer. So §5.1's ladder is not «what it would look like with layer 14»
+in a clean sense — it is «what it looks like when you impose targets the real pattern violates»,
+and the 22 % it bought is an understatement of what a *correct* layer-14 target set would buy.
 
 ---
 
@@ -396,24 +454,29 @@ expectations: the vertex criterion is not reachable by tuning, on the pieces tha
 
 ## 7 · What this opens — brief for F6.2
 
-1. 🚨 **The regulariser is the work, not the solver.** Two changes, in this order:
-   **(a)** total-variation penalty on the first difference along the loop (measured to be the
-   right shape on the sleeve, k=4 → 0,143 mm); **(b)** an **interior** deformation model for the
-   body pieces — slash lines, not boundary smoothing — because §5.3 shows no boundary prior can
-   reach them. (b) is a design question for Agus and Montse before it is code: *what does the
-   837's front actually get slashed along?*
-2. 🚨 **The vertex criterion of ≤ 0,5 mm should be re-scoped before it is ratified.** It is
-   reachable on a sleeve and, on this evidence, not reachable on a front by any boundary-only
-   motor. Either the criterion becomes per-piece-class, or the phase commits to the interior
-   model.
-3. **Layer 14 is still the cheapest single unlock**, but now with a measured price: it is worth
-   22 % of the vertex error, not the whole gap. Ask Montse for the nest with layer 14 anyway —
-   it also converts six POMs from NOT RESOLVABLE to measurable.
-4. **`vora` needs the sewing loop as solver geometry.** Two POMs (S, S2) are unreachable until
+1. 🚨 **Couple the sizes. This is the one change with measured evidence behind it.** A
+   piece's grading field is rank two to ~1 mm (§5.4c), so the four sizes are not four problems:
+   they are one shape plus a per-size scalar. Solving them jointly under a low-rank field model
+   pools 32 constraint rows instead of spending 8 at a time, and it is **not circular** — it
+   assumes low rank, it does not borrow Montse's basis. Do this before touching the penalty.
+2. 🚨 **Do NOT spend the sprint tuning the regulariser.** Total variation — the obvious
+   candidate from the sparsity of her field — was measured and is *worse* (§5.4b). The gap is
+   dimensional, not a matter of the penalty's shape: 8 numbers cannot select a point from a
+   48-dimensional family. The complementary reduction to (1) is an **interior** model for the
+   body pieces — slash lines rather than boundary smoothing — which is a design question for
+   Agus and Montse before it is code: *what does the 837's front actually get slashed along?*
+3. 🚨 **The vertex criterion of ≤ 0,5 mm should be re-scoped before it is ratified.** With the
+   current parametrisation it is out of reach on the body pieces. It becomes plausible only
+   with (1) and (2); ratify it against a parametrisation, not against a motor.
+4. **Layer 14 is still worth asking for**, but §5.5 changes what it buys: the five POMs it
+   would unlock carry targets that **Montse's own pattern violates by up to 3,55 mm**. Before
+   they become hard constraints, find out why — the F6-PRE carrier problem, or fitxa rules that
+   are wrong the way D is wrong.
+5. **`vora` needs the sewing loop as solver geometry.** Two POMs (S, S2) are unreachable until
    the solver carries more than the cut loop.
-5. **Fold reduction** (`Reduction` protocol, `NoReduction` today) needs a piece on the fold to be
+6. **Fold reduction** (`Reduction` protocol, `NoReduction` today) needs a piece on the fold to be
    built against. The 837 has none.
-6. **`SewRelation` as a constraint** is what makes `solve_all`'s block-diagonal assumption false
+7. **`SewRelation` as a constraint** is what makes `solve_all`'s block-diagonal assumption false
    and the component partition real. Until then the partition honestly reports one bucket.
-7. **Ask Agus:** is EK in or out? It moves the front by 4,30 mm at XL and the brief says both.
-8. **Ask Agus:** `scipy` into `requirements` — only if F6.2 needs sparse/QP work. Not yet.
+8. **Ask Agus:** is EK in or out? It moves the front by 4,30 mm at XL and the brief says both.
+9. **Ask Agus:** `scipy` into `requirements` — only if F6.2 needs sparse/QP work. Not yet.
