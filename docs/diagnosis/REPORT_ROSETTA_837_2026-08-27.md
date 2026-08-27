@@ -15,6 +15,40 @@
 
 ---
 
+> ## ⚠️ ESMENA A0 (27/08, mateix dia) — LLEGIR ABANS QUE RES
+>
+> **El banc s'ha regenerat** des de `837 CORS 194 VESTIT M3-4 ESCALAT COSTRURA.DXF`
+> (md5 `857f00057bbd26ff4cfb8cf1b95fda69`), que porta **la capa 14**. Això supera el
+> forat que manava sobre tot el mètode d'aquest informe, i amb ell la meitat de les
+> seves conclusions. El que segueix vigent i el que no:
+>
+> | secció | estat |
+> |---|---|
+> | §1 A · verificacions d'ingesta | **vigent i ampliat** — ara corren sobre els dos bucles; s'hi afegeix A6 (el tall del banc nou és idèntic al vell, 0,000000000 mm: superseeix net) |
+> | §2 B · alineació, la MANGA sense translació | **vigent** — i es reprodueix igual al bucle de cosit |
+> | §3.1 el forat de la capa 14, els tres portadors, la barra d'error | **SUPERAT** — el cosit de la base és idèntic al patró mestre (0,000000000 mm), o sigui que cada àncora té homòloga NATIVA. El bastiment de portadors s'ha **esborrat** del codi |
+> | §3.2 taula de paritat, columna `incert.`, veredicte NO RESOLUBLE | **SUPERAT** — v. la taula nova de sota |
+> | §3.5 cas positiu C2-bis | **vigent i reforçat** — 7 de 8 FIXED donen ara delta **exactament 0,00** |
+> | §4 anomalies (EK 30,5 mm, base ↔ fitxa) | **vigent** |
+> | §4.1 la D | **vigent, i confirmada una tercera vegada** amb àncores natives: 75,00 mm a XL |
+> | §5 dataset | **substituït** — `parity_837.json` porta ara els dos bucles per peça × talla |
+>
+> **El veredicte nou:** **PARITAT 15/21 · DESVIAT 5 · NO MESURABLE 1 · NO RESOLUBLE 0.**
+> Els cinc que aquest informe no podia decidir (A, C, E, E1, E5) entren **tots** en
+> paritat, i dotze POMs reprodueixen el grading de la fitxa a **0,00 mm exactes**.
+> Els que queden desviats: **D** (75,00 mm, pendent Montse) · **S** (2,30) i **S2**
+> (1,80), totes dues `vora` i amb el mateix perfil a davant i esquena · **I** (1,50,
+> un +5 % constant) · **SLT** (0,51, just per sobre del llindar).
+>
+> 🔑 I una confirmació que ve de fora: els cinc orígens de bucle del cosit que l'Agus
+> declara verificats en local —207 · 30 · 251 · 47 · 3— surten **tots cinc** de la
+> regla que aquest informe va derivar mesurant a §3.1 («l'origen del cosit és el punt
+> més proper a l'origen del tall», no el seu argmin de Y propi, que n'erra un).
+>
+> Detall complet a `REPORT_F61_SOLVER_2026-08-27.md` §A0.
+
+---
+
 ## 0 · El veredicte en set línies
 
 1. **El banc és un camp de debò, no un ram de peces.** 25 blocs = 5 peces × 5 talles, amb

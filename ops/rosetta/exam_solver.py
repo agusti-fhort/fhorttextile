@@ -38,55 +38,52 @@ from fhort.patterns.engine.grading_solver import (            # noqa: E402
     Anchor, AttachedPoint, FixedPom, GrainDirection, PieceProblem, PomDelta, SolveReport,
     Weights, solve,
 )
-from rosetta.camp_montse import projecta_sobre_bucle          # noqa: E402
 from rosetta.rosetta_837 import llegeix_bd                    # noqa: E402
 
 DATASET = Path(__file__).resolve().parent / 'parity_837.json'
 
-#: The constraint set of C1: the ten POMs the Rosetta put in parity. Seven are FIXED.
-PARITY_POMS = ('B', 'E7', 'EK', 'EK1', 'EK2', 'F', 'G1', 'J1', 'SLT', 'U')
+#: 🔑 **The C1 constraint set of the A0 amendment: 16 POMs, 7 of them FIXED.**
+#:
+#: The arithmetic, since the brief states the count and the exclusions separately and they
+#: only reconcile one way. Of the 21 POMs on the fitxa, three are out for DOMAIN reasons —
+#: `D` (grading disagreement pending Montse), `J` (no recipe at all), `EK` (recipe under
+#: review) — leaving 18. Two more, `S` and `S2`, are out for a TOOLING reason: they are
+#: `metode=vora` and the solver does not implement arc length along a deformed boundary.
+#: 21 − 3 − 2 = **16**, and the FIXED among them are E5, E7, EK1, EK2, G1, SLT, U = **7**,
+#: which is exactly what the brief declares. The two kinds of exclusion are listed apart
+#: below because they mean different things: one waits on a person, the other on code.
+C1_POMS = ('A', 'B', 'C', 'E', 'E1', 'E5', 'E7', 'EK1', 'EK2', 'F', 'G1', 'I', 'J1',
+           'SF', 'SLT', 'U')
 
-#: 🚩 The brief lists EK both inside «the ten in parity» and among the exclusions («recipe
-#: under review»). It cannot be both, so the exam runs BOTH sets and reports both: the
-#: primary run with all ten, and a sensitivity run without EK.
-POMS_WITHOUT_EK = tuple(c for c in PARITY_POMS if c != 'EK')
+#: Sensitivity: the brief also lists EK inside the parity set elsewhere. Run both.
+C1_POMS_AMB_EK = tuple(sorted(C1_POMS + ('EK',)))
 
-#: Excluded, with the reason that goes in the report. Not silence: a list.
-EXCLUSIONS = {
-    'D': 'grading disagreement pending Montse (+0,50 cm/size on the field vs +3,00 asked '
-         'by the fitxa — F6-PRE §4.1)',
-    'A': 'no sewing line on the bank: carrier spread 2,12 mm > tolerance (NOT RESOLVABLE)',
-    'C': 'no sewing line on the bank: carrier spread 0,93 mm > tolerance (NOT RESOLVABLE)',
-    'E': 'no sewing line on the bank: carrier spread 3,45 mm > tolerance (NOT RESOLVABLE)',
-    'E1': 'no sewing line on the bank: carrier spread 2,32 mm > tolerance (NOT RESOLVABLE)',
-    'E5': 'no sewing line on the bank: carrier spread 1,11 mm > tolerance (NOT RESOLVABLE)',
-    'S2': 'no sewing line on the bank (carrier spread 1,56 mm, NOT RESOLVABLE) AND method '
-          '`vora`, which the solver refuses by name',
-    'J': 'no PatternPOM recipe on the 1383 (anchoring gap, not a data gap)',
-    'I': 'not in the parity set (DEVIATED, 1,53 mm) — kept out of the targets so the exam '
-         'measures the solver, not a known disagreement',
-    'S': 'not in the parity set (DEVIATED, 1,72 mm) and method `vora`, which the solver '
-         'does not implement yet',
-    'SF': 'not in the parity set (DEVIATED, 1,25 mm)',
+#: Excluded because a PERSON has to decide something. Not silence: a list.
+EXCLUSIONS_DOMAIN = {
+    'D': 'grading disagreement pending Montse: +0,50 cm/size on her field against the '
+         '+3,00 the fitxa asks for (75,0 mm at XL). Constraining it would order the solver '
+         'to reproduce a rule the pattern does not follow.',
+    'J': 'no PatternPOM recipe on the 1383. It has a GradedSpec at all five sizes but no '
+         'anchor — an anchoring gap, not a data gap.',
+    'EK': 'recipe under review: 30,5 mm between what the pattern measures (25,05 cm) and '
+          'what the fitxa declares (22,00). Run as a sensitivity set, not as a target.',
 }
 
-#: 🚨 The information ladder. The vertex-level number is not a property of the solver alone:
-#: it is a property of HOW MUCH OF THE GARMENT THE TARGETS DESCRIBE. Three constraint sets of
-#: increasing richness, run on the same solver, separate the two.
-#:
-#: `contract` is what C1 asks for. `with_layer_14` adds the six POMs the Rosetta could not
-#: resolve **only** because the bank has no sewing line — i.e. what the exam would look like
-#: the day Montse sends the nested file with layer 14. `all_measurable` adds the two that are
-#: measurable but known to disagree, to show what a disagreement costs downstream.
-#: ⚠️ S2 and S are absent from every rung and it is not an oversight: both are `metode=vora`,
-#: and the solver models the CUT loop only. The path along the boundary between two
-#: SEWING-LINE anchors does not exist in its geometry, so `vora` is refused by name instead
-#: of being approximated by the straight distance — which would measure something else and
-#: report a number anyway. Lifting this needs the sewing loop as solver geometry (F6.2).
+#: Excluded because CODE is missing. A different kind of debt, and it is ours.
+EXCLUSIONS_TOOLING = {
+    'S': 'metode=vora. Arc length along a deformed boundary is not implemented in the '
+         'solver; refused by name rather than approximated by the straight distance.',
+    'S2': 'metode=vora, same as S.',
+}
+
+#: The two runs of C1: the declared 16, and the same plus EK (whose recipe is under review
+#: and which the brief lists on both sides). Everything else measurable is already in.
+#: ⚠️ S and S2 are absent from every rung: both are `metode=vora`, which the solver does not
+#: implement. The sewing loop IS now in the solver's geometry (A0), so the path exists —
+#: what is missing is the arc-length measurement and its derivative, not the data.
 LADDER = {
-    'contract': PARITY_POMS,
-    'with_layer_14': PARITY_POMS + ('A', 'C', 'E', 'E1', 'E5'),
-    'all_measurable': PARITY_POMS + ('A', 'C', 'E', 'E1', 'E5', 'I', 'SF'),
+    'contract': C1_POMS,
+    'with_EK': C1_POMS_AMB_EK,
 }
 
 #: The hard gate of the sprint.
@@ -109,24 +106,50 @@ def load_bank() -> dict:
     return json.loads(DATASET.read_text())
 
 
+#: Order of the loops inside the concatenated point array. Matches `PatternPoint`'s own
+#: `boundary_index`: 0 is the cut line, 1 is the sewing line.
+LOOP_ORDER = ('1', '14')
+
+
 def build_problem(name: str, piece: dict) -> PieceProblem:
-    base = piece['talles'][BANK_BASE]['contorn_alineat']
-    return PieceProblem(
-        name=name,
-        base_points=tuple((float(x), float(y)) for x, y in base),
-        kinds=tuple(piece['tipus_vertex']),
-        grain=tuple(piece['talles'][BANK_BASE]['fil']),
-    )
+    """Both contours, concatenated, with `loop_starts` marking where the second begins."""
+    pts, kinds, starts = [], [], []
+    for layer in LOOP_ORDER:
+        loop = piece['bucles'][layer]
+        starts.append(len(pts))
+        pts += [(float(x), float(y))
+                for x, y in loop['talles'][BANK_BASE]['contorn_alineat']]
+        kinds += list(loop['tipus_vertex'])
+    return PieceProblem(name=name, base_points=tuple(pts), kinds=tuple(kinds),
+                        grain=tuple(piece['fil'][BANK_BASE]),
+                        loop_starts=tuple(starts))
 
 
-def attach(problem: PieceProblem, xy) -> AttachedPoint:
-    """A POM anchor pinned to the base cut loop, by the same carrier the Rosetta used."""
-    edge, t, _d = projecta_sobre_bucle(xy, problem.base_points)
-    return AttachedPoint(base=(float(xy[0]), float(xy[1])), edge=int(edge), t=float(t))
+def loop_offsets(piece: dict) -> dict[int, int]:
+    """`PatternPoint.boundary_index` → where that loop starts in the concatenated array."""
+    off, out = 0, {}
+    for bi, layer in enumerate(LOOP_ORDER):
+        out[bi] = off
+        off += piece['bucles'][layer]['n_vertexs']
+    return out
+
+
+def attach(problem: PieceProblem, index: int, xy) -> AttachedPoint:
+    """A POM anchor. Since the A0 amendment it IS a vertex — no carrier, no projection.
+
+    🔑 The whole reason `AttachedPoint` exists was that the bank had no sewing line and the
+    anchors had to ride the cut contour. They now have native homologues, so every anchor is
+    `t=0` on its own vertex and the class degenerates to an exact reference. It is kept
+    because a landmark-mode recipe (a point derived at an offset along an edge) will need it
+    again, and because keeping the type means the solver does not have to learn a second way
+    to name a point.
+    """
+    return AttachedPoint(base=(float(xy[0]), float(xy[1])), edge=int(index), t=0.0)
 
 
 def build_constraints(problem: PieceProblem, piece_name: str, size: str, bd: dict,
-                      codes: tuple[str, ...], anchor_index: int | None):
+                      codes: tuple[str, ...], anchor_index: int | None,
+                      offsets: dict[int, int]):
     """POM targets + gauge, for one piece at one size."""
     base_pts = np.array(problem.base_points, dtype=float)
     cons = []
@@ -146,8 +169,8 @@ def build_constraints(problem: PieceProblem, piece_name: str, size: str, bd: dic
         anchors = []
         for key in order:
             pid = definition.get(key)
-            xy = (bd['punts'][pid][4], bd['punts'][pid][5])
-            anchors.append(attach(problem, xy))
+            _peca, bi, ordre, _mena, x, y = bd['punts'][pid]
+            anchors.append(attach(problem, offsets[bi] + ordre, (x, y)))
         anchors = tuple(anchors)
         axis = definition.get('eix', '') or ''
 
@@ -187,7 +210,7 @@ def best_rigid(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     return (a - ca) @ r.T + cb
 
 
-def run(codes: tuple[str, ...] = PARITY_POMS) -> dict:
+def run(codes: tuple[str, ...] = C1_POMS, weights: Weights | None = None) -> dict:
     bank = load_bank()
     bd = llegeix_bd()
     global BANK_BASE
@@ -198,20 +221,26 @@ def run(codes: tuple[str, ...] = PARITY_POMS) -> dict:
     targets: dict[tuple[str, str], list] = {}
     for name, piece in bank['peces'].items():
         problem = build_problem(name, piece)
-        al = piece['alineacio']
+        offsets = loop_offsets(piece)
+        # The gauge anchor is Montse's own still point, taken on the CUT loop: it is the
+        # contour she grades, and A6 shows it is the one that did not move between banks.
+        al = piece['bucles'][LOOP_ORDER[0]]['alineacio']
         anchor_index = al['ancora'] if al['metode'] == 'origen_fix' else None
         if anchor_index is not None and problem.kinds[anchor_index] != 'turn':
             raise SystemExit(f'{name}: anchor {anchor_index} is not a turn point.')
 
         reports, montse = {}, {}
         for size in sizes:
-            cons, used = build_constraints(problem, name, size, bd, codes, anchor_index)
+            cons, used = build_constraints(problem, name, size, bd, codes, anchor_index,
+                                           offsets)
             targets[(name, size)] = used
-            reports[size] = solve(problem, cons)
-            montse[size] = np.array(piece['talles'][size]['contorn_alineat'], dtype=float)
+            reports[size] = solve(problem, cons, weights)
+            montse[size] = np.concatenate([
+                np.array(piece['bucles'][l]['talles'][size]['contorn_alineat'], dtype=float)
+                for l in LOOP_ORDER])
         out[name] = PieceExam(name, problem, anchor_index, reports, montse)
     return {'bank': bank, 'bd': bd, 'sizes': sizes, 'pieces': out, 'targets': targets,
-            'codes': codes}
+            'codes': codes, 'weights': weights}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -289,9 +318,13 @@ def render(res: dict) -> str:
                    f'solved field max |d| = {worst:.3e} mm · Montse field max |d| = '
                    f'{montse_worst:.3e} mm')
 
-    out.append(header('C1 · EXCLUSIONS, WITH REASON'))
-    for code, why in sorted(EXCLUSIONS.items()):
-        out.append(f'  {code:5s} {why}')
+    out.append(header('C1 · EXCLUSIONS — two kinds, and they are not the same debt'))
+    out.append('  waiting on a PERSON:')
+    for code, why in sorted(EXCLUSIONS_DOMAIN.items()):
+        out.append(f'    {code:4s} {why}')
+    out.append('  waiting on CODE (ours):')
+    for code, why in sorted(EXCLUSIONS_TOOLING.items()):
+        out.append(f'    {code:4s} {why}')
 
     out.append(header('SOLVER MESSAGES'))
     for name, ex in pieces.items():
@@ -412,10 +445,12 @@ def field_structure(res: dict) -> str:
     out.append(f'  {"piece":16s} {"turns":>5s} {"Σ|Δd|":>8s} {"top5":>8s} {"top5%":>6s} '
                f'{"|Δd|<2mm":>9s} {"Σ|Δ²d|":>8s}   blocks needed (cyclic, affine in arc)')
     for name, piece in bank['peces'].items():
-        kinds = piece['tipus_vertex']
+        # The shape question is about the contour Montse grades: the CUT line.
+        loop = piece['bucles'][LOOP_ORDER[0]]
+        kinds = loop['tipus_vertex']
         turns = [i for i, k in enumerate(kinds) if k == 'turn']
-        base = np.array(piece['talles'][base_size]['contorn_alineat'])
-        cur = np.array(piece['talles'][size]['contorn_alineat'])
+        base = np.array(loop['talles'][base_size]['contorn_alineat'])
+        cur = np.array(loop['talles'][size]['contorn_alineat'])
         d = (cur - base)[turns]
         if np.abs(d).max() < 1e-9:
             out.append(f'  {name:16s} {len(turns):5d}  (null field — nothing to describe)')
@@ -477,14 +512,34 @@ if __name__ == '__main__':
     print(field_structure(primary))
     print(ladder(by_set))
 
-    print(header('SENSITIVITY · same exam without EK (recipe under review)'))
-    alt = run(POMS_WITHOUT_EK)
+    print(header('A0 · COUPLING THE TWO LOOPS — measured, not assumed'))
+    loose = run(C1_POMS, Weights(couple=0.0))
+    print(f'  {"piece":16s} {"size":4s} {"uncoupled mean/max":>22s} {"coupled mean/max":>22s}')
+    for name, ex_c in primary['pieces'].items():
+        for size in primary['sizes']:
+            a = np.linalg.norm(loose['pieces'][name].reports[size].points
+                               - loose['pieces'][name].montse[size], axis=1)
+            b = np.linalg.norm(ex_c.reports[size].points - ex_c.montse[size], axis=1)
+            if a.max() < 1e-9 and b.max() < 1e-9:
+                continue
+            print(f'  {name.replace("837.",""):16s} {size:4s} '
+                  f'{a.mean():10.2f} /{a.max():10.2f} {b.mean():10.2f} /{b.max():10.2f}')
+    for label, r in (('uncoupled', loose), ('coupled', primary)):
+        vals = [float(v) for e in r['pieces'].values() for sz in r['sizes']
+                for v in np.linalg.norm(e.reports[sz].points - e.montse[sz], axis=1)]
+        worst = max(abs(v) for e in r['pieces'].values() for sz in r['sizes']
+                    for v in e.reports[sz].residuals_mm.values())
+        print(f'  {label:10s} n={len(vals):6d} mean={statistics.mean(vals):7.3f} mm  '
+              f'max={max(vals):7.3f} mm  · worst POM residual {worst:.2e} mm')
+
+    print(header('SENSITIVITY · same exam WITH EK (recipe under review)'))
+    alt = run(C1_POMS_AMB_EK)
     for name, ex in alt['pieces'].items():
         for size in alt['sizes']:
             a = np.linalg.norm(primary['pieces'][name].reports[size].points
                                - ex.reports[size].points, axis=1).max()
             if a > 1e-9:
-                print(f'  {name:16s} {size} field moves {a:.3f} mm when EK is dropped')
+                print(f'  {name:16s} {size} field moves {a:.3f} mm when EK is added')
     worst = max(abs(v) for n, e in alt['pieces'].items() for s in alt['sizes']
                 for v in e.reports[s].residuals_mm.values())
-    print(f'  worst residual without EK: {worst:.3e} mm')
+    print(f'  worst residual with EK: {worst:.3e} mm')

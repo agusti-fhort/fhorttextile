@@ -12,6 +12,118 @@
 
 ---
 
+## A0 · AMENDMENT (Agus, 27/08, same day) — READ THIS FIRST
+
+The bank was **regenerated** from `837 CORS 194 VESTIT M3-4 ESCALAT COSTRURA.DXF`
+(md5 `857f00057bbd26ff4cfb8cf1b95fda69`), which carries **layer 14**. That closes the gap
+§7.3 called "the cheapest single unlock", and it moves more than that section predicted.
+
+### A0.1 · What was verified before anything was built on it
+
+| | result |
+|---|---|
+| **A6 · the new bank supersedes the old cleanly** | the CUT contour is identical to the 26/08 bank across all 25 piece × size combinations, **0,000000000 mm**. Nothing measured before is invalidated, only extended. |
+| **A5 · the sewing base ≡ the 1383's master pattern** | **0,000000000 mm** on all five pieces. 🔑 **This retires the transport**: every POM anchor has a native homologue at every size, by its own index. |
+| **A1–A4 on both loops** | 55 checks, none red. |
+| declared sewing counts (651/475/459/325/47) | ours **+1** — the duplicated closing vertex, which the reader strips. 650/474/458/324/46. |
+| `… PER 3d.DXF` | 🚩 **not on the server.** It is archived reference and does not enter the solver, so this did not block — but the amendment's claim that it is identical to the sewing line **could not be verified here**. |
+
+🔑 **CONVENCIÓ-1 extends to the second loop, and the amendment confirms it from outside.**
+The sewing loop's origin is **not** its own argmin of Y: it is the point nearest the cut
+loop's origin. All five origins Agus verified locally — 207 · 30 · 251 · 47 · 3 — come out of
+that rule; the own-argmin rule gets one wrong (TAPETA, 2 instead of 3). The rule was derived
+by measurement in F6-PRE and now has independent confirmation.
+
+### A0.2 · FASE A now runs on both contours, and passes on both
+
+| loop | curve points | mean | p95 | max |
+|---|---:|---:|---:|---:|
+| cut | 7 060 | 0,0004 | 0,0012 | **0,0020** |
+| **sewing** | 7 492 | 0,0003 | 0,0009 | **0,0016** |
+
+The hypothesis holds **where the measurements are actually taken**, which is where it had to
+hold. The rival models are unchanged and still 1 750× worse.
+
+### A0.3 · The Rosetta, redone with native anchors
+
+**PARITAT 15/21 · DESVIAT 5 · NO MESURABLE 1 · NO RESOLVABLE 0.** The five that could not be
+decided (A, C, E, E1, E5) all enter parity, and **twelve POMs reproduce the fitxa's grading to
+0,00 mm exactly**. The FIXED positive control gives exact zero on 7 of 8.
+
+What is left deviating is a clean picture: **D** (75,00 mm, still pending Montse — now
+confirmed a third time, with native anchors) · **S** (2,30) and **S2** (1,80), both `vora`, with
+the same profile front and back — which is what you would expect if the fitxa's armhole rule is
+what is wrong, not the pattern · **I** (1,50, a constant +5 %) · **SLT** (0,51, marginal).
+
+All the carrier machinery — three carriers, the error bar, the NOT RESOLVABLE verdict —
+was **deleted, not disabled**. It existed for a problem that is gone, and leaving two paths to
+one question is how someone later takes the wrong one. What it measured is in the F6-PRE act.
+
+### A0.4 · The solver had to learn that a piece has two contours
+
+`G1` measures the seam allowance **between** the loops, so the C1 set cannot be expressed on a
+single loop. `PieceProblem.loop_starts` now marks each closed contour, and every cyclic wrap —
+segments, attached-point edges, the smoothing stencil — closes inside its own.
+
+🔑 **And they must be coupled, which is measured, not assumed.** The two loops have exactly the
+same turn count on all five pieces (28/28 · 24/24 · 10/10 · 9/9 · 8/8), and in Montse's field
+the sewing displacement matches its facing cut displacement to **0,19 mm mean at M and 0,51 at
+XL**, against field magnitudes of 11 and 32 mm. Left uncoupled the solver is not merely wrong,
+it is **misleading**: every anchor is on the sewing loop, so the cut loop collects no constraint
+and drifts wherever the regulariser prefers, while the exam reports a vertex error that is an
+artefact of a model nobody believes. Measured both ways:
+
+| piece | size | uncoupled mean / max | coupled mean / max |
+|---|---|---:|---:|
+| DELANTERO | XS | 3,20 / 10,61 | **0,90 / 2,02** |
+| DELANTERO | XL | 26,02 / 61,05 | **13,41 / 42,33** |
+| ESPALDA | XL | 28,76 / 60,38 | **22,75 / 53,57** |
+| MANGA | XL | 14,65 / 23,86 | **13,82 / 20,95** |
+| **global** | | 8,776 / 61,054 | **6,177 / 53,568** |
+
+−30 % on the mean, and **it costs nothing in contract terms**: the worst POM residual is
+6,68 · 10⁻¹⁰ mm either way. A *soft* penalty and not a hard reduction on purpose — the match is
+0,19–0,51 mm, the same order as the tolerance, so forcing equality would inject the mismatch as
+error rather than let the constraints arbitrate.
+
+### A0.5 · The exam, redone
+
+**POM gate: PASS at 6,679 · 10⁻¹⁰ mm over 64 rows** (was 40), all converged, on 16 targets.
+
+| piece | unknowns | rows | DoF | targets |
+|---|---:|---:|---:|---|
+| DELANTERO | 112 | 11 | **101** | B C SLT F E E5 EK1 A |
+| ESPALDA | 96 | 7 | **89** | G1 EK2 E1 SF |
+| MANGA | 36 | 3 | **33** | J1 I |
+| CUELLO | 40 | 4 | 36 | E7 |
+| TAPETA | 32 | 4 | 28 | U |
+
+Vertex level, coupled: DELANTERO **XS 0,90 mm mean / 2,02 max**, XL 13,41 / 42,33 with
+**correlation +0,906** and magnitude 30,97 against Montse's 31,53 — **1,8 % off**. Global mean
+**6,177 mm** over 15 184 points (twice the geometry of §4.3, which covered the cut loop only).
+
+**Exclusion arithmetic**, since the brief states the count and the exclusions separately: 21 − D
+− J − EK = 18, minus **S and S2** (`metode=vora`, not implemented) = **16, of which 7 FIXED** —
+exactly what the brief declares. The two kinds are listed apart in the exam because they mean
+different things: D/J/EK wait on **a person**, S/S2 wait on **our code**.
+
+### A0.6 · What A0 changes in the sections below
+
+| section | status |
+|---|---|
+| §1 (scipy), §2 (FASE A), §3 (the core), §6 (tests) | **current**, and extended by A0.2 and A0.4 |
+| §4 (the exam, 10 targets, one loop) | **superseded by A0.5** |
+| §5.1 information ladder | **superseded** — the `with_layer_14` rung was a simulation of a thing that has now happened |
+| §5.2 growth budget | **current in kind**, new numbers: the back still asks 24 mm where the front asks 338 |
+| §5.3–5.4 (TV refuted, feasibility, rank two) | **current** — and A0 sharpens it: 16 targets against 101 DoF on the front is still 8 numbers' worth of data choosing 101 |
+| §7 recommendations | **current**, with §7.4 (layer 14) now **done** |
+
+🚨 **The headline of §5.4 survives A0 intact and gets stronger.** The bank went from 10 targets
+to 16 and from one loop to two, and the vertex mean went 7,788 → 6,177 mm — a 21 % gain against
+a 0,5 mm criterion. More measurements are not what closes this. **Fewer unknowns is.**
+
+---
+
 ## 0 · Verdict in six lines
 
 1. ✅ **FASE A passes, and not narrowly.** Over 7 060 curve points of the Montse field, the
