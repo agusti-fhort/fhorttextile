@@ -523,3 +523,364 @@ class TwoLoopTests(SimpleTestCase):
                          base_points=((0.0, 0.0), (1.0, 0.0), (2.0, 0.0), (3.0, 0.0)),
                          kinds=('turn', 'curve', 'curve', 'curve'), loop_starts=(0, 2))
         self.assertIn('no turn point', str(ctx.exception))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# F6.2 · Inter-size coupling
+# ─────────────────────────────────────────────────────────────────────────────
+
+def big_square(side: float = 1400.0, x0: float = 900.0, y0: float = 700.0,
+               per_edge: int = 4) -> PieceProblem:
+    """A test piece at BANK SCALE, not at unit scale.
+
+    🚨 «The scale was the bug» is a law here now: two F6.1 regression tests were caught
+    passing on the broken code because their piece was 400 mm and the defect only bites past
+    ~2 000. Anything that exercises the numerics gets built at the 837's own coordinates.
+    """
+    corners = [(x0, y0), (x0 + side, y0), (x0 + side, y0 + side), (x0, y0 + side)]
+    pts, kinds = [], []
+    for k, c in enumerate(corners):
+        nxt = corners[(k + 1) % 4]
+        pts.append(c)
+        kinds.append('turn')
+        for s in range(1, per_edge + 1):
+            f = s / (per_edge + 1)
+            pts.append((c[0] + f * (nxt[0] - c[0]), c[1] + f * (nxt[1] - c[1])))
+            kinds.append('curve')
+    return PieceProblem(name='BIG', base_points=tuple(pts), kinds=tuple(kinds),
+                        grain=(x0, y0 + side / 2, x0 + side, y0 + side / 2))
+
+
+def width_pom(piece: PieceProblem, target: float, name: str = 'w') -> PomDelta:
+    return PomDelta(name, 'recta', (on_vertex(piece, 0), on_vertex(piece, 5)), target)
+
+
+class RuleShapeTests(SimpleTestCase):
+    def test_pack_unpack_round_trips(self):
+        from fhort.patterns.engine.grading_solver import RuleShape
+        shape = RuleShape(rank=2, n_turns=4, n_sizes=3)
+        self.assertEqual(shape.size, 2 * 8 + 2 * 3 + 3 * 8)
+        d = np.arange(16, dtype=float).reshape(2, 8)
+        a = np.arange(6, dtype=float).reshape(2, 3)
+        leak = np.arange(24, dtype=float).reshape(3, 8)
+        d2, a2, l2 = shape.unpack(shape.pack(d, a, leak))
+        self.assertTrue(np.allclose(d2, d) and np.allclose(a2, a) and np.allclose(l2, leak))
+
+    def test_fields_is_the_composition(self):
+        from fhort.patterns.engine.grading_solver import RuleShape
+        shape = RuleShape(rank=1, n_turns=2, n_sizes=2)
+        d = np.array([[1.0, 0.0, 0.0, 2.0]])
+        a = np.array([[3.0, 5.0]])
+        leak = np.zeros((2, 4))
+        f = shape.fields(shape.pack(d, a, leak))
+        self.assertTrue(np.allclose(f[0], 3.0 * d[0]))
+        self.assertTrue(np.allclose(f[1], 5.0 * d[0]))
+
+    def test_normalise_keeps_the_field_and_fixes_the_scale(self):
+        from fhort.patterns.engine.grading_solver import RuleShape
+        shape = RuleShape(rank=1, n_turns=2, n_sizes=2)
+        z = shape.pack(np.array([[3.0, 4.0, 0.0, 0.0]]), np.array([[2.0, 6.0]]),
+                       np.zeros((2, 4)))
+        before = shape.fields(z)
+        z2 = shape.normalise(z)
+        d, a, _ = shape.unpack(z2)
+        self.assertAlmostEqual(float(np.linalg.norm(d[0])), 1.0, places=12)
+        self.assertTrue(np.allclose(shape.fields(z2), before))
+
+
+class SvdStructureTests(SimpleTestCase):
+    def test_a_pure_rule_field_is_exactly_rank_one(self):
+        """The FASE A instrument, on a field built to be a rule."""
+        direction = np.array([1.0, -0.5, 2.0, 0.25, -1.5, 0.75])
+        amps = np.array([-0.5, 1.0, 2.0, 3.0])
+        mat = np.outer(amps, direction)
+        sv = np.linalg.svd(mat, compute_uv=False)
+        self.assertGreater(sv[0], 1.0)
+        self.assertLess(float(sv[1:].max()), 1e-12)
+
+    def test_a_two_rule_field_is_exactly_rank_two(self):
+        d1 = np.array([1.0, 0.0, 1.0, 0.0])
+        d2 = np.array([0.0, 1.0, 0.0, -1.0])
+        mat = np.outer([1.0, 2.0, 3.0, 4.0], d1) + np.outer([0.0, 1.0, 0.0, 2.0], d2)
+        sv = np.linalg.svd(mat, compute_uv=False)
+        self.assertGreater(sv[1], 1e-6)
+        self.assertLess(float(sv[2:].max()), 1e-12)
+
+
+class CoupledSolveTests(SimpleTestCase):
+    @staticmethod
+    def problem(targets, extra=None, piece=None):
+        piece = piece or big_square()
+        base = piece.deform(np.zeros((len(piece.turn_indices), 2)))
+        span = float(np.linalg.norm(np.array(piece.base_points[5])
+                                    - np.array(piece.base_points[0])))
+        per_size = {}
+        for size, grow in targets.items():
+            cons = [width_pom(piece, span + grow), Anchor('o', 0), GrainDirection()]
+            if extra and size in extra:
+                cons.append(extra[size](piece, span))
+            per_size[size] = cons
+        return piece, per_size, span
+
+    def test_proportional_targets_give_a_pure_rule_with_no_leak(self):
+        """Targets in proportion 1:2:3 must come out as one direction scaled 1:2:3.
+
+        This is the whole thesis of F6.2 in one assertion: when the garment really does grade
+        by a rule, the coupled solver finds the rule and needs no leak at all.
+        """
+        from fhort.patterns.engine.grading_solver import solve_coupled
+        piece, per_size, _span = self.problem({'M': 10.0, 'L': 20.0, 'XL': 30.0})
+        rep = solve_coupled(piece, per_size, rank=1)
+        self.assertTrue(rep.success and rep.converged)
+        self.assertLess(rep.worst_residual_mm, 1e-8)
+        # «zero» is a few thousandths of a millimetre: the leak is a soft penalty, so it buys
+        # a little smoothness even where the rule suffices. Three orders of magnitude below
+        # what a rule that does NOT suffice costs (8 mm) is what makes it an instrument.
+        self.assertLess(rep.worst_leak_mm, 0.01)
+        amps = rep.amplitudes[0]
+        # ⚠️ not 2,000000 and 3,000000: a `recta` target is a DISTANCE, which is not linear
+        # in the displacement unless the movement is collinear with the measurement. The
+        # regulariser picks the direction, so a 0,03 % departure from the exact ratio is the
+        # geometry being honest, not the solver being loose.
+        self.assertAlmostEqual(float(amps[1] / amps[0]), 2.0, delta=2e-3)
+        self.assertAlmostEqual(float(amps[2] / amps[0]), 3.0, delta=3e-3)
+        base = np.array(piece.base_points)
+        f_m = rep.points['M'] - base
+        f_xl = rep.points['XL'] - base
+        self.assertLess(float(np.abs(f_xl - 3.0 * f_m).max()), 0.05)
+
+    def test_a_rule_breaking_target_shows_up_as_leak(self):
+        """Targets that refuse one proportion. The leak must appear, and be large.
+
+        The leak is the sprint's measuring device: if it stayed near zero here it would be
+        decoration, and «zero leak = pure rule» would mean nothing. Note what makes the
+        difference — a second POM at ONE size is absorbed by that size's own amplitude and
+        costs 0,01 mm; a second POM at EVERY size with a different progression cannot be, and
+        costs 8 mm. The first version of this test used the one-size fixture and passed for
+        the wrong reason.
+        """
+        from fhort.patterns.engine.grading_solver import solve_coupled
+        piece, per_size, _span = self.problem({'M': 10.0, 'L': 20.0, 'XL': 30.0})
+        clean = solve_coupled(piece, per_size, rank=1)
+
+        piece2 = big_square()
+        span = float(np.linalg.norm(np.array(piece2.base_points[5])
+                                    - np.array(piece2.base_points[0])))
+        height = float(np.linalg.norm(np.array(piece2.base_points[10])
+                                      - np.array(piece2.base_points[15])))
+        per2 = {}
+        for size, (gw, gh) in {'M': (10.0, 0.0), 'L': (20.0, 30.0),
+                               'XL': (30.0, 5.0)}.items():
+            per2[size] = [width_pom(piece2, span + gw),
+                          PomDelta('h', 'recta', (on_vertex(piece2, 10),
+                                                  on_vertex(piece2, 15)), height + gh),
+                          Anchor('o', 0), GrainDirection()]
+        dirty = solve_coupled(piece2, per2, rank=1)
+
+        self.assertTrue(dirty.success)
+        self.assertLess(dirty.worst_residual_mm, 1e-6)      # the contract still holds
+        self.assertLess(clean.worst_leak_mm, 0.01)
+        self.assertGreater(dirty.worst_leak_mm, 1.0)
+
+    def test_one_off_target_is_absorbed_by_its_own_size(self):
+        """The other side of the same coin, so the leak's meaning is pinned from both ends."""
+        from fhort.patterns.engine.grading_solver import solve_coupled
+
+        def second(p, span):
+            height = float(np.linalg.norm(np.array(p.base_points[10])
+                                          - np.array(p.base_points[15])))
+            return PomDelta('h', 'recta', (on_vertex(p, 10), on_vertex(p, 15)),
+                            height + 25.0)
+
+        piece, per_size, _ = self.problem({'M': 10.0, 'L': 20.0, 'XL': 30.0},
+                                          extra={'M': second})
+        rep = solve_coupled(piece, per_size, rank=1)
+        self.assertLess(rep.worst_residual_mm, 1e-6)
+        self.assertLess(rep.worst_leak_mm, 0.1)
+
+    def test_the_contract_guard_backs_the_leak_weight_off(self):
+        """🚨 A leak weight that is too high BREAKS the contract, and the guard must catch it.
+
+        Measured on this fixture: at a weight of 10⁶ the problem turns stiff enough that
+        Gauss-Newton stops reaching feasibility and the POM residual jumps to 6,45 mm — the
+        one thing this solver may never do. `solve_coupled` therefore checks afterwards and
+        re-solves with a tenth of the weight until the contract holds. Without the guard this
+        exact call returns geometry that does not measure what it was told to.
+        """
+        from fhort.patterns.engine.grading_solver import solve_coupled
+        piece = big_square()
+        span = float(np.linalg.norm(np.array(piece.base_points[5])
+                                    - np.array(piece.base_points[0])))
+        height = float(np.linalg.norm(np.array(piece.base_points[10])
+                                      - np.array(piece.base_points[15])))
+        per_size = {}
+        for size, (gw, gh) in {'M': (10.0, 0.0), 'L': (20.0, 30.0),
+                               'XL': (30.0, 5.0)}.items():
+            per_size[size] = [width_pom(piece, span + gw),
+                              PomDelta('h', 'recta', (on_vertex(piece, 10),
+                                                      on_vertex(piece, 15)), height + gh),
+                              Anchor('o', 0), GrainDirection()]
+        rep = solve_coupled(piece, per_size, rank=1, weights=Weights(leak=1e6))
+        self.assertLess(rep.worst_residual_mm, 1e-6)
+        self.assertIn('backed off', rep.message)
+
+    def test_the_contract_is_never_traded_for_structure(self):
+        """Rank one on targets rank one cannot serve: the POMs must STILL be met exactly."""
+        from fhort.patterns.engine.grading_solver import solve_coupled
+        piece = big_square()
+        span = float(np.linalg.norm(np.array(piece.base_points[5])
+                                    - np.array(piece.base_points[0])))
+        height = float(np.linalg.norm(np.array(piece.base_points[10])
+                                      - np.array(piece.base_points[15])))
+        per_size = {}
+        for size, (gw, gh) in {'M': (10.0, 0.0), 'L': (20.0, 30.0),
+                               'XL': (30.0, 5.0)}.items():
+            per_size[size] = [width_pom(piece, span + gw),
+                              PomDelta('h', 'recta', (on_vertex(piece, 10),
+                                                      on_vertex(piece, 15)), height + gh),
+                              Anchor('o', 0), GrainDirection()]
+        rep = solve_coupled(piece, per_size, rank=1)
+        self.assertLess(rep.worst_residual_mm, 1e-6)
+        self.assertGreater(rep.worst_leak_mm, 1.0)
+
+    def test_higher_rank_needs_less_leak(self):
+        from fhort.patterns.engine.grading_solver import solve_coupled
+        piece = big_square()
+        span = float(np.linalg.norm(np.array(piece.base_points[5])
+                                    - np.array(piece.base_points[0])))
+        height = float(np.linalg.norm(np.array(piece.base_points[10])
+                                      - np.array(piece.base_points[15])))
+        per_size = {}
+        for size, (gw, gh) in {'M': (10.0, 0.0), 'L': (20.0, 30.0),
+                               'XL': (30.0, 5.0)}.items():
+            per_size[size] = [width_pom(piece, span + gw),
+                              PomDelta('h', 'recta', (on_vertex(piece, 10),
+                                                      on_vertex(piece, 15)), height + gh),
+                              Anchor('o', 0), GrainDirection()]
+        one = solve_coupled(piece, per_size, rank=1)
+        two = solve_coupled(piece, per_size, rank=2)
+        self.assertLess(two.worst_leak_mm, one.worst_leak_mm)
+
+    def test_coupling_collapses_the_degrees_of_freedom(self):
+        """B4 · the whole thesis of F6.2, as one number.
+
+        Four sizes solved apart are four independent problems and their freedoms add up.
+        Coupled under a shared direction they are one problem, and the constraints of every
+        size bear on the same unknowns.
+        """
+        from fhort.patterns.engine.grading_solver import RuleShape, _diagnose_coupled
+        piece = big_square()
+        span = float(np.linalg.norm(np.array(piece.base_points[5])
+                                    - np.array(piece.base_points[0])))
+        per_size = {t: [FixedPom('fix', 'recta',
+                                 (on_vertex(piece, 0), on_vertex(piece, 5)), span)]
+                    for t in ('M', 'L', 'XL')}
+        apart = sum(diagnose(piece, per_size[t]).dof for t in per_size)
+
+        shape = RuleShape(rank=1, n_turns=len(piece.turn_indices), n_sizes=3)
+        d = np.zeros((1, shape.n_field))
+        d[0, 0] = 1.0
+        z = shape.pack(d, np.array([[1.0, 2.0, 3.0]]), np.zeros((3, shape.n_field)))
+        joint = _diagnose_coupled(piece, per_size, shape, z)
+
+        self.assertEqual(apart, 21)
+        self.assertEqual(joint.dof, 8)
+        self.assertLess(joint.dof, apart / 2)
+
+    def test_coupling_makes_the_GAUGE_rows_redundant_but_not_the_POM_rows(self):
+        """🚨 The brief predicted the redundancy in the wrong place, and the measurement says where.
+
+        B4 expected that one FIXED measurement across four sizes would stop being four
+        independent constraints once the sizes shared a direction. It does not: each size
+        keeps its **own amplitude**, so its POM row touches a column no other row touches.
+
+        What DOES collapse is the gauge. The anchor and the grain are homogeneous rows — they
+        say «this does not move», with a right-hand side of zero — so applied to
+        `amplitude[t] · direction` they say the same thing at every size, and only the first
+        carries information. Measured here: twelve rows over three sizes come back rank 6,
+        with the six gauge rows of L and XL named as redundant and no POM row among them.
+
+        That is a better result than the one predicted: a gauge that has to be repeated per
+        size would be a modelling error, and the diagnosis proves it is not one.
+        """
+        from fhort.patterns.engine.grading_solver import RuleShape, _diagnose_coupled
+        piece = big_square()
+        span = float(np.linalg.norm(np.array(piece.base_points[5])
+                                    - np.array(piece.base_points[0])))
+        per_size = {t: [FixedPom('fix', 'recta',
+                                 (on_vertex(piece, 0), on_vertex(piece, 5)), span),
+                        Anchor('o', 0), GrainDirection()]
+                    for t in ('M', 'L', 'XL')}
+        shape = RuleShape(rank=1, n_turns=len(piece.turn_indices), n_sizes=3)
+        d = np.zeros((1, shape.n_field))
+        d[0, 0] = 1.0
+        z = shape.pack(d, np.array([[1.0, 2.0, 3.0]]), np.zeros((3, shape.n_field)))
+        diag = _diagnose_coupled(piece, per_size, shape, z)
+
+        self.assertEqual(diag.n_unknowns, shape.n_dir + shape.n_amp)   # structural only
+        self.assertEqual(diag.n_rows, 12)
+        self.assertEqual(diag.rank, 6)
+        self.assertEqual(diag.dof, 5)
+        self.assertEqual(set(diag.redundant),
+                         {'L·o.x', 'L·o.y', 'L·grain', 'XL·o.x', 'XL·o.y', 'XL·grain'})
+        self.assertFalse(any(n.endswith('·fix') for n in diag.redundant))
+        self.assertEqual(diag.conflicting, ())
+
+    def test_incompatible_targets_across_sizes_are_NOT_a_conflict(self):
+        """And this is why: the amplitude of a size can always absorb its own target.
+
+        Asking for +10, +20 and +20 mm at M, L and XL is not a contradiction under coupling —
+        it is a statement that XL's amplitude equals L's. Reporting it as a conflict would be
+        a false alarm, and the diagnosis does not.
+        """
+        from fhort.patterns.engine.grading_solver import RuleShape, _diagnose_coupled
+        piece = big_square()
+        span = float(np.linalg.norm(np.array(piece.base_points[5])
+                                    - np.array(piece.base_points[0])))
+        per_size = {'M': [width_pom(piece, span + 10.0, 'w')],
+                    'L': [width_pom(piece, span + 20.0, 'w')],
+                    'XL': [width_pom(piece, span + 20.0, 'w')]}
+        shape = RuleShape(rank=1, n_turns=len(piece.turn_indices), n_sizes=3)
+        d = np.zeros((1, shape.n_field))
+        d[0, 0] = 1.0
+        z = shape.pack(d, np.array([[1.0, 2.0, 3.0]]), np.zeros((3, shape.n_field)))
+        self.assertEqual(_diagnose_coupled(piece, per_size, shape, z).conflicting, ())
+
+    def test_a_within_size_conflict_is_surfaced_by_the_coupled_solve(self):
+        """A contradiction inside ONE size must still be named, and by name.
+
+        🚨 It cannot be found in the joint QR, and that is a property of the problem rather
+        than an omission: the joint system is a linearisation of a BILINEAR map, and the
+        dependency between «AB», «BC» and «AC» on three collinear points is exact at the base
+        state and no longer exact once the seed has moved the piece. Measured on this very
+        fixture — the conflict is named at amplitudes 10⁻⁶ and invisible at amplitudes 1.
+        So the coupled report carries the PER-SIZE diagnoses too, and says so in its message.
+        """
+        from fhort.patterns.engine.grading_solver import solve_coupled
+        piece = collinear_piece()
+        a, b, c = (on_vertex(piece, i) for i in (0, 3, 6))
+        rows = [PomDelta('AB', 'recta', (a, b), 600.0),
+                PomDelta('BC', 'recta', (b, c), 600.0),
+                PomDelta('AC', 'recta', (a, c), 1203.0),
+                Anchor('o', 0), GrainDirection()]
+        rep = solve_coupled(piece, {'M': rows, 'L': list(rows)}, rank=1)
+        self.assertIn('M·AC', rep.message)
+        self.assertIn('AC', rep.per_size_diagnosis['M'].conflicting)
+        self.assertFalse(rep.per_size_diagnosis['M'].well_posed)
+
+    def test_fixed_only_piece_gives_the_zero_field_at_every_size(self):
+        """C3 · collar and placket in miniature: FIXED only, so nothing may move."""
+        from fhort.patterns.engine.grading_solver import solve_coupled
+        piece = big_square()
+        span = float(np.linalg.norm(np.array(piece.base_points[5])
+                                    - np.array(piece.base_points[0])))
+        per_size = {t: [FixedPom('fix', 'recta',
+                                 (on_vertex(piece, 0), on_vertex(piece, 5)), span),
+                        Anchor('o', 0), GrainDirection()]
+                    for t in ('M', 'L', 'XL')}
+        rep = solve_coupled(piece, per_size, rank=1)
+        self.assertTrue(rep.converged)
+        base = np.array(piece.base_points)
+        for t in ('M', 'L', 'XL'):
+            self.assertLess(float(np.abs(rep.points[t] - base).max()), 1e-9)
+        self.assertLess(rep.worst_leak_mm, 1e-9)

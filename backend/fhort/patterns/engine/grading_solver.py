@@ -73,7 +73,7 @@ nothing at this size.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Iterable, Protocol, Sequence
 
 import numpy as np
@@ -109,6 +109,53 @@ RANK_TOL = 1e-9
 
 #: Gauss-Newton stops when the largest hard residual falls below this, in mm.
 CONVERGENCE_MM = 1e-9
+
+#: 🚨 **Feasibility is not optimality, and the coupled solver has to test both.**
+#: The single-size solve starts at zero, so «no residual left» and «nothing left to do» happen
+#: together. The coupled solve starts from a SEED that already satisfies every constraint
+#: (it is the four single-size answers), so a loop that stops on the residual alone stops on
+#: iteration one and returns the seed — it reports the SVD of the F6.1 answer and calls it a
+#: coupled solve. It has to keep stepping until the KKT step itself dies, which is the
+#: stationarity condition. Relative to the piece's own size, so it means the same on any piece.
+STEP_TOL_REL = 1e-12
+
+#: 🚨 And a step that never dies is not the same as a solve that never finishes. The
+#: factorisation keeps a rotational gauge inside the spanned subspace (see
+#: `RuleShape.normalise`), so the solver can wander along it for ever while the field, the
+#: residuals and the leak all sit still. Stationarity is therefore judged on the MERIT not
+#: moving — a statement about the answer — rather than on the step being small, which is a
+#: statement about the parametrisation. Measured: tightening it from 1e-5 to 1e-8 costs every
+#: piece the full iteration budget and moves the leak by 2,5·10⁻³ mm, which is nothing.
+MERIT_REL_TOL = 1e-5
+
+#: 🚨 **The contract is structural, not a matter of tuning.** A leak weight high enough to
+#: drive the leak to nothing can make the problem stiff enough that Gauss-Newton stops
+#: reaching feasibility — measured, at 10⁶ on the test bench: leak 1,2·10⁻⁵ mm and a POM
+#: residual of 6,45 mm. Rather than trust a constant to stay on the safe side of that cliff
+#: on every piece anyone ever solves, `solve_coupled` checks the residual afterwards and
+#: re-solves with a tenth of the weight until the contract holds. A slightly larger leak is
+#: a worse REPORT; a missed POM is a wrong ANSWER.
+CONTRACT_GUARD_MM = 1e-6
+CONTRACT_BACKOFF = 6
+
+#: How many times a coupled step may be halved before it is accepted anyway.
+#:
+#: 🚨 **Gauss-Newton overshoots here and a full step is not safe.** The composition
+#: `amplitude · direction` is BILINEAR, so the linearised step is exact only nearby. Measured
+#: on the first iteration of a 1 400 mm test piece: the KKT step satisfies the LINEARISED
+#: constraints to 1,5·10⁻¹⁴ and has norm 33 — and at the far end the true residual is 19 mm.
+#: The direction is right; the length is not. Backtracking on a merit function of (energy,
+#: worst residual) keeps both honest.
+MAX_BACKTRACK = 30
+
+#: Price of one millimetre of constraint violation inside the merit function.
+MERIT_MU = 1e6
+
+#: The price used DURING backtracking, which is a different job. There the step has not been
+#: restored yet, so its infeasibility is the O(t²) of a tangential move and not a real defect;
+#: pricing it at MERIT_MU would reject every step and freeze the solver at its seed. Modest
+#: here, absolute afterwards — the contract guard is what actually protects the contract.
+MERIT_MU_SEARCH = 1e2
 
 MAX_ITERATIONS = 40
 
@@ -732,6 +779,17 @@ class Weights:
     #: is the same order as the tolerance itself, so forcing equality would inject the
     #: mismatch as error instead of letting the constraints arbitrate.
     couple: float = 1.0
+    #: How hard the per-size leak is pushed to zero. See the F6.2 block: the leak is a
+    #: MEASURING DEVICE — how much structure was not enough — so it must be expensive enough
+    #: that the solver reaches for it only when the rule genuinely cannot comply.
+    #:
+    #: The default is measured, not chosen — and the measurement found a cliff. On a 1 400 mm
+    #: test piece the leak falls as the weight rises (10 → 1,5·10⁻² mm · 10² → 3,5·10⁻³ ·
+    #: 10⁵ → 2,7·10⁻³) but at 10⁶ the problem turns so stiff that Gauss-Newton stops reaching
+    #: feasibility and **the POM residual jumps to 6,45 mm**. That is the one thing this
+    #: solver may never do, so 10⁵ is the default and `solve_coupled` backs the weight off by
+    #: itself if the contract is ever missed — see CONTRACT_GUARD_MM.
+    leak: float = 1e5
 
 
 @dataclass
@@ -795,7 +853,7 @@ def solve(piece: PieceProblem, constraints: Sequence[Constraint],
         if float(np.max(np.abs(r))) <= CONVERGENCE_MM:
             converged = True
             break
-        step, full_rank = _kkt_step(h, j, r, z)
+        step, full_rank = _kkt_step(h, j, r, h @ z)
         kkt_deficient = kkt_deficient or not full_rank
         if step is None:
             return SolveReport(
@@ -949,8 +1007,12 @@ def _regulariser(piece: PieceProblem, red: Reduction, w: Weights) -> np.ndarray:
 
 
 def _kkt_step(h: np.ndarray, j: np.ndarray, r: np.ndarray,
-              z: np.ndarray) -> tuple[np.ndarray | None, bool]:
-    """One KKT solve: minimise ½sᵀHs + (Hz)ᵀs subject to J s = −r.
+              grad: np.ndarray) -> tuple[np.ndarray | None, bool]:
+    """One KKT solve: minimise ½sᵀHs + gradᵀs subject to J s = −r.
+
+    `grad` is passed rather than computed as `H z` because the coupled solver's energy is
+    not ½zᵀHz: its field is a bilinear function of the unknowns, so the gradient is
+    `Bᵀ H d`, not `H z`. The single-size caller passes `H z` and gets the old behaviour.
 
     🚨 **Always least squares, never `solve` with an exception guard.** `np.linalg.solve`
     raises only on an EXACT zero pivot; a genuinely rank-deficient KKT usually gets a tiny
@@ -969,8 +1031,495 @@ def _kkt_step(h: np.ndarray, j: np.ndarray, r: np.ndarray,
     kkt[:n, :n] = h
     kkt[:n, n:] = j.T
     kkt[n:, :n] = j
-    rhs = np.concatenate([-(h @ z), -r])
+    rhs = np.concatenate([-grad, -r])
     sol, _res, rank, _sv = np.linalg.lstsq(kkt, rhs, rcond=None)
     if not np.all(np.isfinite(sol)):
         return None, False
     return sol[:n], rank == n + m
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# F6.2 · Inter-size coupling — solving the four sizes as ONE grading rule
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# F6.1 solved each size on its own and measured why that is wasteful: a piece's grading
+# field is nearly low-rank across its sizes, so four independent problems throw away the
+# strongest structure in the data. Here the four sizes become one system with the shape of a
+# rule — **directions** that say WHERE the piece grows, **amplitudes** that say HOW MUCH at
+# each size — plus a penalised **leak** for whatever that structure cannot reach.
+#
+# ── WHY THE RANK IS A PARAMETER AND NOT ONE ──────────────────────────────────────
+# The brief asked for one direction and one amplitude per size, which is rank one. Measured
+# on the bank (`ops/rosetta/exam_rank.py`), rank one is refuted twice and neither refutation
+# is arguable:
+#
+#   · **geometrically** — one component leaves 6,80 mm on the front, thirteen times the
+#     phase criterion. Two leave 1,02 mm, three leave 0,23 mm.
+#   · **by the fitxa's own targets** — a rank-one field grows every measurement on a piece in
+#     the SAME proportion, and the fitxa does not ask for that. On the front alone its LINEAR
+#     POMs demand three different XS/M ratios: A, B, C want −0,667; D wants −0,500; E, F, S
+#     want 0,000. No amplitude vector satisfies those at once, at any direction, at any rank
+#     one. That is a fact about the targets, not the geometry.
+#
+# So `rank` is an input, the default is 2, and the exam reports 1, 2 and 3. Rank one remains
+# worth printing because it is the interpretable one: it IS the rule, and how far it misses
+# is how far the garment is from being gradeable by a single rule.
+#
+# ── THE LEAK IS A MEASURING DEVICE, NOT A SAFETY NET ─────────────────────────────
+# `leak[t]` is a free displacement per size, penalised hard. It exists so the contract can
+# always be met — the POM gate does not negotiate — and so that the report can say **how much
+# structure was not enough, and where**. Zero leak means the rule sufficed. It is reported per
+# size and per piece for exactly that reason.
+#
+# ── WHY THIS IS FAST ENOUGH ──────────────────────────────────────────────────────
+# The unknown vector is large (the front: 224 direction + 8 amplitude + 448 leak = 680), and
+# a finite-difference Jacobian over it would need 1 360 residual evaluations per iteration.
+# It is never built. The residuals depend on the unknowns ONLY through the composed field of
+# each size, so the chain rule does the work with exact factors:
+#
+#     ∂r_t/∂direction[k] = J_t · amplitude[k, t]      ∂r_t/∂amplitude[k, t] = J_t · direction[k]
+#     ∂r_t/∂leak[t]      = J_t
+#
+# where `J_t` is the per-size field Jacobian — the same object F6.1 already computes, at the
+# same cost. Four of those per iteration and some matrix products, instead of 1 360 deforms.
+
+
+@dataclass(frozen=True)
+class RuleShape:
+    """How the unknown vector is laid out. All the index arithmetic lives here, once."""
+
+    rank: int
+    n_turns: int
+    n_sizes: int
+
+    @property
+    def n_field(self) -> int:
+        return 2 * self.n_turns
+
+    @property
+    def n_dir(self) -> int:
+        return self.rank * self.n_field
+
+    @property
+    def n_amp(self) -> int:
+        return self.rank * self.n_sizes
+
+    @property
+    def n_leak(self) -> int:
+        return self.n_sizes * self.n_field
+
+    @property
+    def size(self) -> int:
+        return self.n_dir + self.n_amp + self.n_leak
+
+    def unpack(self, z: np.ndarray):
+        d = z[:self.n_dir].reshape(self.rank, self.n_field)
+        a = z[self.n_dir:self.n_dir + self.n_amp].reshape(self.rank, self.n_sizes)
+        leak = z[self.n_dir + self.n_amp:].reshape(self.n_sizes, self.n_field)
+        return d, a, leak
+
+    def pack(self, d: np.ndarray, a: np.ndarray, leak: np.ndarray) -> np.ndarray:
+        return np.concatenate([d.ravel(), a.ravel(), leak.ravel()])
+
+    def fields(self, z: np.ndarray) -> np.ndarray:
+        """(n_sizes, n_field) — the displacement each size ends up with."""
+        d, a, leak = self.unpack(z)
+        return a.T @ d + leak
+
+    def normalise(self, z: np.ndarray) -> np.ndarray:
+        """Unit-norm each direction, absorbing the scale into its amplitude.
+
+        **The gauge, and why it is a projection and not a constraint.** The factorisation
+        `amplitude · direction` is invariant under `(v/c, a·c)`, so the scale is free. Fixing
+        it with an equation would add a row to a system whose answer does not depend on it;
+        renormalising after each step fixes it by construction and costs nothing.
+
+        ⚠️ For rank ≥ 2 a rotation inside the spanned subspace survives this, and that is
+        left alone on purpose: the FIELD is unique, only its factorisation is not. The
+        diagnosis reports those degrees of freedom rather than pretending they are gone.
+        """
+        d, a, leak = self.unpack(z)
+        d, a = d.copy(), a.copy()
+        for k in range(self.rank):
+            s = float(np.linalg.norm(d[k]))
+            if s > 1e-12:
+                d[k] /= s
+                a[k] *= s
+        return self.pack(d, a, leak)
+
+
+@dataclass
+class CoupledReport:
+    """Same vocabulary as `SolveReport`, one level up. planegcs I6 still applies."""
+
+    piece: str
+    rank: int
+    success: bool
+    converged: bool
+    iterations: int
+    #: The JOINT diagnosis: how much freedom the coupling leaves, at the seed.
+    diagnosis: Diagnosis
+    #: 🔑 And the per-size ones, which answer a different question and must not be dropped.
+    #:
+    #: A contradiction between two POMs of the SAME size is a fact about that size's
+    #: constraint set and is visible in its own QR — F6.1 already finds it. In the joint
+    #: system it can hide, because the diagnosis is a linearisation of a BILINEAR problem and
+    #: a dependency that is exact at the base state stops being exact once the seed has moved
+    #: the piece (measured: the same injected conflict is named at amplitudes 10⁻⁶ and
+    #: invisible at amplitudes 1). Carrying both diagnoses is the honest answer: the joint one
+    #: says how coupled the problem is, the per-size ones say whether each size is well posed.
+    per_size_diagnosis: dict[str, Diagnosis]
+    #: size → {constraint name → residual in mm}
+    residuals_mm: dict[str, dict[str, float]]
+    #: size → (n, 2) solved loop
+    points: dict[str, np.ndarray]
+    #: (rank, 2·n_turns) unit directions and (rank, n_sizes) amplitudes
+    directions: np.ndarray
+    amplitudes: np.ndarray
+    #: size → RMS and max of the leak that size needed, in mm
+    leak_mm: dict[str, tuple[float, float]]
+    message: str = ''
+
+    @property
+    def worst_residual_mm(self) -> float:
+        return max((abs(v) for rows in self.residuals_mm.values() for v in rows.values()),
+                   default=0.0)
+
+    @property
+    def worst_leak_mm(self) -> float:
+        return max((mx for _rms, mx in self.leak_mm.values()), default=0.0)
+
+
+def field_jacobian(piece: PieceProblem, constraints: Sequence[Constraint],
+                   field: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """(∂residuals/∂field, residuals) at one size. The building block of the coupled solve."""
+    return _jacobian(piece, constraints, NoReduction(len(piece.turn_indices)), field)
+
+
+def _composition_matrix(shape: RuleShape, z: np.ndarray) -> np.ndarray:
+    """B = ∂(all size fields)/∂z, at the current z. Exact, and cheap to write down."""
+    d, a, _leak = shape.unpack(z)
+    nf, ns, rk = shape.n_field, shape.n_sizes, shape.rank
+    b = np.zeros((ns * nf, shape.size))
+    eye = np.eye(nf)
+    for t in range(ns):
+        rows = slice(t * nf, (t + 1) * nf)
+        for k in range(rk):
+            b[rows, k * nf:(k + 1) * nf] = a[k, t] * eye
+            b[rows, shape.n_dir + k * ns + t] = d[k]
+        base = shape.n_dir + shape.n_amp + t * nf
+        b[rows, base:base + nf] = eye
+    return b
+
+
+def solve_coupled(piece: PieceProblem,
+                  per_size: dict,
+                  rank: int = 2,
+                  weights: Weights | None = None,
+                  seed: dict | None = None) -> CoupledReport:
+    """See `_solve_coupled_once`. This wrapper only protects the contract.
+
+    The leak weight trades a smaller leak against numerical stiffness, and past a point the
+    stiffness wins and the POM residual blows up. The contract does not negotiate, so if the
+    solve comes back having missed it, the weight is cut tenfold and it runs again. What that
+    costs is a slightly larger leak in the report; what it buys is that no caller ever
+    receives geometry that does not measure what it was told to measure.
+    """
+    w = weights or Weights()
+    report = None
+    for attempt in range(CONTRACT_BACKOFF):
+        report = _solve_coupled_once(piece, per_size, rank,
+                                     replace(w, leak=w.leak / (10.0 ** attempt)), seed)
+        if report.worst_residual_mm <= CONTRACT_GUARD_MM:
+            if attempt:
+                report.message = (
+                    f'{report.message} Leak weight backed off {attempt}× (to '
+                    f'{w.leak / (10.0 ** attempt):.0e}) to keep the contract.').strip()
+            return report
+    report.message = (f'{report.message} The contract was still missed after '
+                      f'{CONTRACT_BACKOFF} back-offs of the leak weight.').strip()
+    return report
+
+
+def _solve_coupled_once(piece: PieceProblem,
+                        per_size: dict,
+                        rank: int = 2,
+                        weights: Weights | None = None,
+                        seed: dict | None = None) -> CoupledReport:
+    """The four sizes as one grading rule: shared directions, per-size amplitudes.
+
+    **The initial guess is our own answer, never Montse's.** Each size is first solved on its
+    own — exactly the F6.1 path — and the four fields are then factorised by SVD to seed the
+    directions and amplitudes. That keeps the structure honest: nothing about the bank's
+    graded field enters the solve, only the targets do. Starting from zero directions would be
+    worse than slow, it would be degenerate: with `direction = 0` the derivative with respect
+    to every amplitude is zero and Gauss-Newton has nowhere to step.
+    """
+    w = weights or Weights()
+    sizes = tuple(per_size)
+    m = len(piece.turn_indices)
+    shape = RuleShape(rank=rank, n_turns=m, n_sizes=len(sizes))
+
+    seed = seed or {t: solve(piece, per_size[t], w) for t in sizes}
+    per_size_diag = {t: seed[t].diagnosis for t in sizes}
+    seeded = np.array([seed[t].displacement.ravel() for t in sizes])
+    u, sv, vt = np.linalg.svd(seeded, full_matrices=False)
+    k = min(rank, len(sv))
+    directions = np.zeros((rank, shape.n_field))
+    amplitudes = np.zeros((rank, len(sizes)))
+    directions[:k] = vt[:k]
+    amplitudes[:k] = (u[:, :k] * sv[:k]).T
+    z = shape.normalise(shape.pack(directions, amplitudes,
+                                   seeded - amplitudes.T @ directions))
+
+    # 🔑 The bending energy of a real piece is of order 10⁻⁸ (its stencil is 1/length²),
+    # while the leak is measured in millimetres. Normalising H by its own mean diagonal makes
+    # every weight in `Weights` a dimensionless knob that means the same on any piece — and
+    # it changes nothing: an equality-constrained QP has the same solution when H and the
+    # gradient are scaled together.
+    h_field = _regulariser(piece, NoReduction(m), w)
+    escala_h = float(np.mean(np.diag(h_field))) or 1.0
+    h_field = h_field / escala_h
+    h_block = np.kron(np.eye(len(sizes)), h_field)
+    leak_slice = slice(shape.n_dir + shape.n_amp, shape.size)
+
+    diagnosis = _diagnose_coupled(piece, per_size, shape, z)
+    converged, iterations, kkt_deficient, stalled = False, 0, False, False
+    step_tol = STEP_TOL_REL * piece.scale_mm()
+
+    for iterations in range(1, MAX_ITERATIONS + 1):
+        fields = shape.fields(z)
+        blocks, rs = [], []
+        for t_i, t in enumerate(sizes):
+            j_t, r_t = field_jacobian(piece, per_size[t], fields[t_i])
+            blocks.append(j_t)
+            rs.append(r_t)
+        r = np.concatenate(rs) if rs else np.zeros(0)
+        feasible = r.size == 0 or float(np.max(np.abs(r))) <= CONVERGENCE_MM
+        if feasible and stalled:
+            converged = True
+            break
+
+        b = _composition_matrix(shape, z)
+        j_full = np.zeros((int(sum(x.shape[0] for x in blocks)), shape.size))
+        row = 0
+        for t_i, j_t in enumerate(blocks):
+            if j_t.size:
+                j_full[row:row + j_t.shape[0]] = j_t @ b[t_i * shape.n_field:
+                                                         (t_i + 1) * shape.n_field]
+            row += j_t.shape[0]
+
+        h_z = b.T @ h_block @ b
+        grad = b.T @ (h_block @ fields.ravel())
+        h_z[leak_slice, leak_slice] += w.leak * np.eye(shape.n_leak)
+        grad[leak_slice] += w.leak * z[leak_slice]
+        h_z += w.ridge * np.eye(shape.size)
+        grad += w.ridge * z
+
+        step, full_rank = _kkt_step(h_z, j_full, r, grad)
+        kkt_deficient = kkt_deficient or not full_rank
+        if step is None:
+            return _coupled_report(piece, shape, sizes, z, diagnosis, per_size_diag,
+                                   per_size, False, False, iterations, kkt_deficient,
+                                   'the KKT system could not be solved even in least squares')
+
+        # 🚨 The line search must NOT restore inside itself. Restoration costs four field
+        # Jacobians per round, so backtracking through it is 30 × 4 × 4 of them per
+        # iteration — measured, that is minutes per piece and the exam never finishes. The
+        # search runs on residuals alone (cheap) with a MODEST price on infeasibility, and
+        # the accepted point is pulled back onto the manifold exactly once. Correctness does
+        # not rest on the search's tolerance: the contract guard checks the answer afterwards.
+        merit0 = _coupled_merit(piece, per_size, shape, z, h_block, w, MERIT_MU_SEARCH)
+        t = 1.0
+        for _ in range(MAX_BACKTRACK):
+            cand = shape.normalise(z + t * step)
+            if _coupled_merit(piece, per_size, shape, cand, h_block, w,
+                              MERIT_MU_SEARCH) <= merit0:
+                break
+            t *= 0.5
+        trial = _restore(piece, per_size, shape, shape.normalise(z + t * step))
+        merit_new = _coupled_merit(piece, per_size, shape, trial, h_block, w,
+                                   MERIT_MU_SEARCH)
+        stalled = (float(np.max(np.abs(trial - z))) <= step_tol
+                   or merit0 - merit_new <= MERIT_REL_TOL * max(1.0, abs(merit0)))
+        z = trial
+
+    return _coupled_report(piece, shape, sizes, z, diagnosis, per_size_diag, per_size,
+                           True, converged, iterations, kkt_deficient, '')
+
+
+def _restore(piece: PieceProblem, per_size, shape: RuleShape, z: np.ndarray,
+             rounds: int = 4) -> np.ndarray:
+    """Pull a trial point back onto the constraint manifold, by the shortest way.
+
+    🚨 **Without this the line search can never accept anything.** The KKT step is tangential:
+    it satisfies the LINEARISED constraints, and the composition is bilinear, so leaving the
+    manifold costs O(t²) — measured on the test piece, a step of t=0,03 already put the merit
+    at 30 000 against a starting 800, and every halving still failed. The solver would sit at
+    its seed for forty iterations and report it as an answer.
+
+    The correction is the minimum-norm Newton step on the residual alone, `δ = J⁺(−r)`,
+    applied a few times. It moves the point as little as possible, so the tangential progress
+    the KKT step just made is kept while feasibility comes back.
+
+    The Jacobian is built ONCE and reused for the later rounds — a chord method. Rebuilding
+    it each round costs four field Jacobians a time and buys a convergence rate nobody needs
+    here: the correction is already tiny by construction.
+    """
+    jac = None
+    for _ in range(rounds):
+        fields = shape.fields(z)
+        rs, need = [], jac is None
+        b = _composition_matrix(shape, z) if need else None
+        rows = []
+        for t_i, t in enumerate(per_size):
+            if need:
+                j_t, r_t = field_jacobian(piece, per_size[t], fields[t_i])
+                if j_t.size:
+                    rows.append(j_t @ b[t_i * shape.n_field:(t_i + 1) * shape.n_field])
+                    rs.append(r_t)
+            else:
+                r_t = _residual_vector(piece, per_size[t], NoReduction(shape.n_turns),
+                                       fields[t_i])
+                if r_t.size:
+                    rs.append(r_t)
+        if not rs:
+            return z
+        if need:
+            jac = np.vstack(rows)
+        r = np.concatenate(rs)
+        if float(np.max(np.abs(r))) <= CONVERGENCE_MM:
+            return z
+        delta, *_ = np.linalg.lstsq(jac, -r, rcond=None)
+        z = shape.normalise(z + delta)
+    return z
+
+
+def _coupled_energy(shape: RuleShape, z: np.ndarray, h_block: np.ndarray,
+                    w: Weights) -> float:
+    """½ dᵀHd over all sizes + the leak penalty + the ridge. What the solve minimises."""
+    fields = shape.fields(z).ravel()
+    leak = z[shape.n_dir + shape.n_amp:]
+    return float(0.5 * fields @ (h_block @ fields)
+                 + 0.5 * w.leak * (leak @ leak)
+                 + 0.5 * w.ridge * (z @ z))
+
+
+def _coupled_merit(piece: PieceProblem, per_size, shape: RuleShape, z: np.ndarray,
+                   h_block: np.ndarray, w: Weights, mu: float = None) -> float:
+    """Energy plus a hard price on infeasibility.
+
+    The price is not a taste: the contract gate is 0,1 mm and the energy of a real piece is
+    of order 10⁻⁸, so anything less than an enormous multiplier would let the solver buy
+    smoothness with millimetres of POM error. `MERIT_MU` is set so one millimetre of
+    violation costs more than any reachable amount of bending.
+    """
+    fields = shape.fields(z)
+    worst = 0.0
+    for t_i, t in enumerate(per_size):
+        r = _residual_vector(piece, per_size[t], NoReduction(shape.n_turns), fields[t_i])
+        if r.size:
+            worst = max(worst, float(np.max(np.abs(r))))
+    return _coupled_energy(shape, z, h_block, w) + (MERIT_MU if mu is None else mu) * worst
+
+
+def _coupled_report(piece, shape, sizes, z, diagnosis, per_size_diag, per_size, success,
+                    converged, iterations, kkt_deficient, message) -> CoupledReport:
+    d, a, leak = shape.unpack(z)
+    fields = shape.fields(z)
+    residuals, points, leak_mm = {}, {}, {}
+    worst = 0.0
+    for t_i, t in enumerate(sizes):
+        r = _residual_vector(piece, per_size[t], NoReduction(shape.n_turns), fields[t_i])
+        residuals[t] = _named(per_size[t], r)
+        worst = max(worst, max((abs(v) for v in residuals[t].values()), default=0.0))
+        points[t] = piece.deform(fields[t_i].reshape(shape.n_turns, 2))
+        per_point = np.linalg.norm(leak[t_i].reshape(shape.n_turns, 2), axis=1)
+        leak_mm[t] = (float(np.sqrt(np.mean(per_point ** 2))), float(per_point.max()))
+
+    if not converged and not message:
+        if worst <= CONTRACT_GUARD_MM:
+            message = (f'Feasible ({worst:.2e} mm worst residual) but not stationary after '
+                       f'{MAX_ITERATIONS} iterations: the energy was still improving, so the '
+                       f'field satisfies every target but may not be the smoothest one that '
+                       f'does.')
+        else:
+            message = (f'Gauss-Newton stopped at {MAX_ITERATIONS} iterations with a worst '
+                       f'residual of {worst:.6f} mm.')
+    if kkt_deficient:
+        message = (f'{message} The KKT system was rank-deficient at least once; the step '
+                   f'was taken in least squares (minimum norm).').strip()
+    conflicts = sorted({f'{t}·{n}' for t, dg in per_size_diag.items()
+                        for n in dg.conflicting})
+    if conflicts:
+        message = (f'{message} Contradictory constraints inside a size: '
+                   f'{", ".join(conflicts)}.').strip()
+    return CoupledReport(piece=piece.name, rank=shape.rank, success=success,
+                         converged=converged, iterations=iterations, diagnosis=diagnosis,
+                         per_size_diagnosis=per_size_diag,
+                         residuals_mm=residuals, points=points, directions=d,
+                         amplitudes=a, leak_mm=leak_mm, message=message)
+
+
+def _diagnose_coupled(piece: PieceProblem, per_size, shape: RuleShape,
+                      z: np.ndarray) -> Diagnosis:
+    """B4 · QR of the JOINT system, which is not the four single-size ones stacked.
+
+    🔑 **Coupling creates redundancy that did not exist before, and the diagnosis has to name
+    it.** A FIXED measurement is one row per size when the sizes are independent — four rows,
+    all of full rank. Under a shared direction those four rows say nearly the same thing:
+    «this measurement does not move», applied to `amplitude[t] · direction`, differs between
+    sizes only by the scalar `amplitude[t]`, so the later ones add nothing. Reported as
+    redundant, by name and by size, rather than left to look like a well-posed system
+    carrying four times the information it has.
+    """
+    b = _composition_matrix(shape, z)
+    fields = shape.fields(z)
+    rows, names, rhs = [], [], []
+    for t_i, t in enumerate(per_size):
+        j_t, r_t = field_jacobian(piece, per_size[t], fields[t_i])
+        if not j_t.size:
+            continue
+        rows.append(j_t @ b[t_i * shape.n_field:(t_i + 1) * shape.n_field])
+        rhs.append(-r_t)
+        names += [f'{t}·{n}' for c in per_size[t] for n in c.row_names()]
+    if not rows:
+        return Diagnosis(shape.size, 0, 0, shape.size, (), (), ())
+    # 🚨 The STRUCTURAL columns only — directions and amplitudes, never the leak.
+    #
+    # The leak gives every size its own private unknowns, so with it in the picture every
+    # per-size row is independent again and the diagnosis would report a well-posed system
+    # with no redundancy at all. That is true of the solve and useless as a diagnosis: the
+    # question B4 asks is whether the RULE is over-determined or contradictory, and the leak
+    # exists precisely to absorb the answer. Measured: a FIXED POM across three sizes comes
+    # out rank 3 with the leak columns in, and rank 1 — two redundant rows, named — without.
+    j = np.vstack(rows)[:, :shape.n_dir + shape.n_amp]
+    b_vec = np.concatenate(rhs)
+
+    scale = np.linalg.norm(j, axis=1)
+    scale[scale == 0.0] = 1.0
+    a = j / scale[:, None]
+    b_vec = b_vec / scale
+    singular = np.linalg.svd(a, compute_uv=False)
+    rank = int(np.sum(singular > (singular[0] * RANK_TOL))) if singular.size else 0
+
+    basis, basis_rhs = [], []
+    redundant, conflicting = [], []
+    tol = max(RANK_TOL, 1e-12) * max(1.0, float(singular[0])) * 10
+    for i, name in enumerate(names):
+        v, rv = a[i].copy(), float(b_vec[i])
+        for q, qr in zip(basis, basis_rhs):
+            proj = float(v @ q)
+            v -= proj * q
+            rv -= proj * qr
+        norm = float(np.linalg.norm(v))
+        if norm <= tol:
+            (conflicting if abs(rv) > 1e-7 else redundant).append(name)
+            continue
+        basis.append(v / norm)
+        basis_rhs.append(rv / norm)
+
+    return Diagnosis(n_unknowns=shape.n_dir + shape.n_amp, n_rows=len(names), rank=rank,
+                     dof=shape.n_dir + shape.n_amp - rank, redundant=tuple(redundant),
+                     conflicting=tuple(conflicting),
+                     components=_components([c for t in per_size for c in per_size[t]], j))
