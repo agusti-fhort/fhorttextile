@@ -1323,29 +1323,60 @@ def _solve_coupled_once(piece: PieceProblem,
                                    per_size, False, False, iterations, kkt_deficient,
                                    'the KKT system could not be solved even in least squares')
 
-        # 🚨 The line search must NOT restore inside itself. Restoration costs four field
-        # Jacobians per round, so backtracking through it is 30 × 4 × 4 of them per
-        # iteration — measured, that is minutes per piece and the exam never finishes. The
-        # search runs on residuals alone (cheap) with a MODEST price on infeasibility, and
-        # the accepted point is pulled back onto the manifold exactly once. Correctness does
-        # not rest on the search's tolerance: the contract guard checks the answer afterwards.
-        merit0 = _coupled_merit(piece, per_size, shape, z, h_block, w, MERIT_MU_SEARCH)
-        t = 1.0
+        # 🚨 **Restore with the Jacobian this iteration ALREADY built.** Two wrong versions
+        # came before this one and each was measured:
+        #
+        #  · restoring from scratch inside the search costs 30 × 4 × 4 field Jacobians per
+        #    iteration — minutes per piece, and the exam produced no output in 300 s on the
+        #    SMALLEST piece;
+        #  · dropping the restoration and softening the merit instead made the search cheap
+        #    and the solver WORSE: on targets a pure rule can serve with zero leak, it came
+        #    back with 5,8 mm of leak. Speed bought by losing the answer is not speed.
+        #
+        # `j_full` is already in hand and is a perfectly good chord Jacobian for a step that
+        # is, by construction, small. So each backtrack costs one residual evaluation and one
+        # solve against a factorisation computed once — and the merit can go back to pricing
+        # infeasibility at its true, absolute rate.
+        pinv = np.linalg.pinv(j_full) if j_full.size else None
+        merit0 = _coupled_merit(piece, per_size, shape, z, h_block, w)
+        t, trial = 1.0, z
         for _ in range(MAX_BACKTRACK):
-            cand = shape.normalise(z + t * step)
-            if _coupled_merit(piece, per_size, shape, cand, h_block, w,
-                              MERIT_MU_SEARCH) <= merit0:
+            trial = _restore_with(piece, per_size, shape,
+                                  shape.normalise(z + t * step), pinv)
+            if _coupled_merit(piece, per_size, shape, trial, h_block, w) <= merit0:
                 break
             t *= 0.5
-        trial = _restore(piece, per_size, shape, shape.normalise(z + t * step))
-        merit_new = _coupled_merit(piece, per_size, shape, trial, h_block, w,
-                                   MERIT_MU_SEARCH)
+        merit_new = _coupled_merit(piece, per_size, shape, trial, h_block, w)
         stalled = (float(np.max(np.abs(trial - z))) <= step_tol
                    or merit0 - merit_new <= MERIT_REL_TOL * max(1.0, abs(merit0)))
         z = trial
 
     return _coupled_report(piece, shape, sizes, z, diagnosis, per_size_diag, per_size,
                            True, converged, iterations, kkt_deficient, '')
+
+
+def _restore_with(piece: PieceProblem, per_size, shape: RuleShape, z: np.ndarray,
+                  pinv: np.ndarray | None, rounds: int = 3) -> np.ndarray:
+    """Pull a trial point back onto the constraint manifold with a GIVEN pseudo-inverse.
+
+    The caller already built the coupled Jacobian for this iteration, so restoration costs a
+    residual evaluation and a matrix-vector product per round. See the note at the call site
+    for the two slower and less correct versions this replaced.
+    """
+    if pinv is None:
+        return z
+    for _ in range(rounds):
+        fields = shape.fields(z)
+        rs = [_residual_vector(piece, per_size[t], NoReduction(shape.n_turns), fields[t_i])
+              for t_i, t in enumerate(per_size)]
+        rs = [r for r in rs if r.size]
+        if not rs:
+            return z
+        r = np.concatenate(rs)
+        if float(np.max(np.abs(r))) <= CONVERGENCE_MM:
+            return z
+        z = shape.normalise(z + pinv @ (-r))
+    return z
 
 
 def _restore(piece: PieceProblem, per_size, shape: RuleShape, z: np.ndarray,

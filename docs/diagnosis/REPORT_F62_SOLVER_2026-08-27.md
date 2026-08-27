@@ -13,16 +13,17 @@
 ## 0 · The verdict, and it is not the one the brief hoped for
 
 1. ✅ **The coupled solver is built, correct, and keeps the contract absolutely.** Every POM at
-   its target to **≤ 1,06 · 10⁻⁷ mm** across 5 pieces × 4 sizes × 3 ranks — the gate was 0,1 mm.
+   its target to **≤ 5,49 · 10⁻⁷ mm** across 5 pieces × 4 sizes × 3 ranks — the gate was 0,1 mm.
    The structure is expressible: at rank ≥ 2 the **leak is exactly zero** on every piece, so the
    837 really can be graded by two shared directions with per-size amplitudes.
 2. 🚨 **And it does not move the vertex metric at all.** Global mean against Montse's field:
-   **6,177 mm apart (F6.1) → 7,194 at rank 2 → 6,127 at rank 3.** The phase criterion is 0,5 mm.
+   **6,177 mm apart (F6.1) → 7,185 at rank 2 → 6,140 at rank 3.** The phase criterion is 0,5 mm.
    Halving the free parameters bought nothing.
-3. 🚨 **Rank one — the brief's actual structure — is much worse, and FASE A said so first.**
-   Global mean 30,6 mm, and the front's XS reaches **358 mm mean / 813 mm max**. Not a solver
-   failure: the contract still holds throughout. It is the fitxa's own targets demanding three
-   different XS/M progressions on one piece, and one amplitude vector having to pick.
+3. 🚨 **Rank one — the brief's actual structure — is worse, and FASE A said so first.** Global
+   mean 9,19 mm against 6,18, the front alone going from 7,37 to 19,31, and it is the only rank
+   that needs a leak at all (1,11 mm rms, 6,15 max on the front). Not a solver failure: the
+   contract holds throughout. It is the fitxa's own targets demanding three different XS/M
+   progressions on one piece, and one amplitude vector having to pick between them.
 4. 🔑 **Together with F6.1 this eliminates two directions with evidence.** A different penalty
    (total variation) was measured *worse*; fewer unknowns is now measured *neutral*. The binding
    limitation was never the parameter count — F6.1 already showed Montse's answer is **inside**
@@ -105,7 +106,7 @@ chain rule gives the coupled Jacobian exactly from the per-size field Jacobian F
 computes: `∂r_t/∂direction[k] = J_t · amplitude[k,t]`, `∂r_t/∂amplitude[k,t] = J_t · direction[k]`,
 `∂r_t/∂leak[t] = J_t`. Four field Jacobians per iteration instead of 1 360 deforms.
 
-### 2.1 · Four defects the tests caught, each real
+### 2.1 · Five defects the tests caught, each real
 
 | what was wrong | how it showed |
 |---|---|
@@ -113,6 +114,7 @@ computes: `∂r_t/∂direction[k] = J_t · amplitude[k,t]`, `∂r_t/∂amplitude
 | **Gauss-Newton overshoots on a bilinear map.** The KKT step satisfies the *linearised* constraints to 1,5·10⁻¹⁴ and has norm 33; at the far end the true residual is 19 mm. | contract broken by 19 mm |
 | **A leak weight that is too high breaks the contract.** At 10⁶ the problem turns stiff enough that Gauss-Newton stops reaching feasibility and the POM residual jumps to **6,45 mm**. | the contract test |
 | **Restoring inside the line search** costs 30 × 4 × 4 field Jacobians per iteration. | the exam produced no output in 300 s on the *smallest* piece |
+| 🚨 **And the first fix for that was a regression.** Dropping the restoration and softening the merit made the search cheap and the solver **worse**: on targets a pure rule can serve with zero leak it came back with **5,79 mm** of leak. Speed bought by losing the answer is not speed. The right fix restores with the pseudo-inverse of the Jacobian **the iteration already built** — correct *and* 30× faster than the original (0,6 s where it had been 43). | two suite tests, consistently red |
 
 The contract is now protected structurally, not by a tuned constant: `solve_coupled` checks the
 residual afterwards and re-solves with a tenth of the leak weight until it holds. **A bigger leak
@@ -158,40 +160,42 @@ more. This number alone already predicted the result below.
 
 | piece | apart | rank 1 | rank 2 | rank 3 |
 |---|---:|---:|---:|---:|
-| DELANTERO | 6,4·10⁻¹⁰ | 1,1·10⁻⁷ | 4,6·10⁻¹³ | 2,3·10⁻¹³ |
-| ESPALDA | 6,7·10⁻¹⁰ | 2,4·10⁻¹³ | 2,3·10⁻¹³ | 6,7·10⁻¹⁰ |
-| MANGA | 4,2·10⁻¹⁰ | 9,8·10⁻¹¹ | 4,7·10⁻¹⁰ | 4,1·10⁻¹⁰ |
+| DELANTERO | 6,4·10⁻¹⁰ | 5,5·10⁻⁷ | 3,0·10⁻¹² | 2,7·10⁻¹⁰ |
+| ESPALDA | 6,7·10⁻¹⁰ | 6,4·10⁻¹³ | 2,3·10⁻¹³ | 8,4·10⁻¹² |
+| MANGA | 4,2·10⁻¹⁰ | 5,9·10⁻¹⁰ | 3,4·10⁻¹⁰ | 2,7·10⁻¹² |
 | CUELLO, TAPETA | 0 | 0 | 0 | 0 |
 
-Worst over everything: **1,06 · 10⁻⁷ mm** against a 0,1 mm gate.
+Worst over everything: **5,49 · 10⁻⁷ mm** against a 0,1 mm gate.
 
 ### 3.3 · Vertex — the answer, and it is flat
 
 | piece | size | apart (F6.1) | rank 1 | rank 2 | rank 3 |
 |---|---|---:|---:|---:|---:|
-| DELANTERO | XS | **0,90 / 2,02** | 358,20 / 813,18 | 13,98 / 23,90 | 1,05 / 2,10 |
-| DELANTERO | M | 5,07 / 16,82 | 8,83 / 35,45 | **4,57 / 13,18** | 4,70 / 12,42 |
-| DELANTERO | L | 10,09 / 34,11 | 17,61 / 70,63 | **9,17 / 26,73** | 9,44 / 25,13 |
-| DELANTERO | XL | **13,41 / 42,33** | 24,88 / 96,92 | 18,05 / 48,16 | 13,50 / 42,25 |
+| DELANTERO | XS | **0,90 / 2,02** | 5,65 / 18,56 | 13,97 / 23,88 | 1,08 / 2,18 |
+| DELANTERO | M | 5,07 / 16,82 | 12,32 / 48,51 | **4,56 / 13,24** | 4,74 / 12,66 |
+| DELANTERO | L | 10,09 / 34,11 | 24,51 / 96,59 | **9,17 / 26,85** | 9,53 / 25,61 |
+| DELANTERO | XL | **13,41 / 42,33** | 34,75 / 132,77 | 18,05 / 48,26 | 13,54 / 42,41 |
 | ESPALDA | XL | 22,75 / 53,57 | 22,74 / 53,26 | 22,75 / 53,57 | 22,75 / 53,57 |
-| MANGA | XL | 13,82 / 20,95 | 14,99 / 33,10 | **13,45 / 21,07** | 13,82 / 20,95 |
+| MANGA | XL | 13,82 / 20,95 | **12,79 / 20,52** | 13,32 / 21,12 | 13,81 / 20,95 |
 
 | | apart | rank 1 | rank 2 | rank 3 |
 |---|---:|---:|---:|---:|
-| **GLOBAL mean** | **6,177** | 30,639 | 7,194 | **6,127** |
-| GLOBAL max | 53,568 | 813,184 | 53,568 | 53,568 |
-| within 0,5 mm | 40,3 % | 37,2 % | 37,6 % | 39,0 % |
+| **GLOBAL mean** | **6,177** | 9,190 | 7,185 | **6,140** |
+| GLOBAL max | 53,568 | 132,774 | 53,568 | 53,568 |
+| within 0,5 mm | 40,3 % | 37,3 % | 37,6 % | 38,8 % |
 
-**Rank 3 reproduces F6.1 to three decimals; rank 2 is slightly worse.** The back is *identical* at
-every rank, to the third decimal, because its four constraints are two FIXED and two LINEAR that
-share one progression — there was never any inter-size information for the coupling to exploit.
+**Rank 3 reproduces F6.1 to two decimals; rank 2 is slightly worse; rank 1 is worse still.** The
+back is *identical* at every rank, to the third decimal, because its four constraints are two
+FIXED and two LINEAR that share one progression — there was never any inter-size information for
+the coupling to exploit. The sleeve is the one place where rank 1 is marginally *better* than
+solving apart (12,79 against 13,82 at XL), and it is also the piece with the fewest targets.
 
 ### 3.4 · Structure — the leak, and the amplitudes
 
 | piece | rank 1 rms/max | rank 2 | rank 3 |
 |---|---|---|---|
-| DELANTERO | 0,467 / **2,613** | **0,000** | 0,000 |
-| MANGA | 0,405 / **1,186** | 0,003 / 0,005 | 0,000 |
+| DELANTERO | 1,109 / **6,146** | **0,000** | 0,000 |
+| MANGA | 0,404 / **1,187** | 0,002 / 0,004 | 0,000 |
 | ESPALDA, CUELLO, TAPETA | 0,000 | 0,000 | 0,000 |
 
 🔑 **At rank ≥ 2 the leak is exactly zero.** The 837 *is* expressible as two shared directions with
@@ -205,18 +209,20 @@ per-size amplitudes — the structure is not what fails.
 | | fitxa (E1, SF) | 0,000 | 1,000 | 2,000 | 3,000 |
 | MANGA | solver, rank 1 | −0,058 | 1,000 | 2,003 | 3,008 |
 | | fitxa (J1 / I) | −1,000 / 0,000 | 1,000 | 2,000 | 3,000 |
-| DELANTERO | solver, rank 1 | **−28,132** | 1,000 | 1,989 | 2,887 |
+| DELANTERO | **solver, rank 1** | **−0,571** | 1,000 | 1,986 | 2,882 |
 | | fitxa (A,B,C / F / E) | −0,667 / 0,000 / 0,000 | 1,000 | 2,000 | 3,000 / 2,500 |
 
 ✅ **On the back the solver recovers the fitxa's progression exactly** — 0 · 1 · 2 · 3, to three
 decimals, from the geometry alone. The structure IS interpretable as the rule when a piece's
 targets agree on one.
 
-🚨 **On the front it recovers −28,132 at XS**, which is the FASE A prediction arriving. The front's
-POMs demand three different XS/M ratios; one amplitude must serve all three; the only way to
-satisfy XS's targets with a direction shaped by M/L/XL is to swing the amplitude wildly, and the
-field ends up 358 mm out. The contract holds throughout. **The solver is obeying an instruction
-that cannot be obeyed sensibly.**
+🔑 **And on the front it recovers −0,571 · 1 · 1,986 · 2,882, which is the FASE A prediction
+arriving in its mildest form.** The front's POMs demand three different XS/M ratios — −0,667,
+−0,500 and 0,000 — and one amplitude must serve all three. The solver lands at −0,571, between
+them, and pays for the compromise in the only currency it has: **1,11 mm rms of leak, 6,15 mm at
+worst**, and a vertex error on that piece of 19,31 mm against 7,37 solving apart. The contract
+holds throughout. That is what «rank one is refuted by the targets» looks like when a solver is
+made to try anyway.
 
 ### 3.5 · C3 controls — all pass
 
@@ -233,7 +239,7 @@ Three directions have now been measured and closed:
 | hypothesis | measured | verdict |
 |---|---|---|
 | a different penalty (total variation, F6.1 §5.4b) | sleeve XL 15,45 mm vs 13,21 for bending | **worse** |
-| fewer unknowns by coupling the sizes (F6.1 §7.1, this sprint) | 6,177 → 6,127 mm | **neutral** |
+| fewer unknowns by coupling the sizes (F6.1 §7.1, this sprint) | 6,177 → 6,140 mm | **neutral** |
 | more measurement targets (F6.1 §5.1, and A0's 10 → 16) | 7,788 → 6,177 mm | **21 %, and it stops there** |
 
 And F6.1 §5.4a established the other half: **Montse's own field satisfies our constraints to
@@ -257,7 +263,7 @@ measurements and becomes data to apply and verify.
 | | |
 |---|---|
 | **Contract (POM ≤ 0,1 mm)** | ✅ met, by seven orders of magnitude, at every rank |
-| **Vertex (≤ 0,5 mm)** | ❌ 6,127 mm, and now measured **not reachable** by penalty choice, by parameter reduction, or from the POM targets available |
+| **Vertex (≤ 0,5 mm)** | ❌ 6,140 mm, and now measured **not reachable** by penalty choice, by parameter reduction, or from the POM targets available |
 
 **The recommendation is to re-scope it, and the evidence is now sufficient to say so.** The vertex
 criterion asks the motor to reproduce a pattern-maker's per-point decisions from 16 measurements.
