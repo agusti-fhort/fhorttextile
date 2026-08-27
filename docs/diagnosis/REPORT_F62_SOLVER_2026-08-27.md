@@ -8,6 +8,13 @@
 > is on no request path. No writer, `GradingVersion` or `GradedSpec` touched. Tests on the new
 > and changed files only. Branch `f61-grading-solver`, no push.
 
+> **Continued by [`REPORT_F63_RUL_2026-08-27.md`](REPORT_F63_RUL_2026-08-27.md) (same day).** §6.1
+> of this report asked for the RUL of the 837; it arrived, and it answers §4's question. Nothing
+> measured here is superseded — F6.3 re-runs the `apart` and rank-2 paths and reproduces 6,177
+> and 7,185 exactly — but two of the *readings* are: the near-rank-2 structure is not emergent,
+> it is X and Y grading on different schedules, and the front's three XS/M ratios are a fact
+> about the garment rather than a doubt about the fitxa.
+
 ---
 
 ## 0 · The verdict, and it is not the one the brief hoped for
