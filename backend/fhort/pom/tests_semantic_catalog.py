@@ -256,11 +256,31 @@ class DerivacioDeLandmarksTest(_Base):
         with self.assertRaises(LandmarkNoResolt):
             resol_landmark(self._regla('hps'), graf_sense_espatlla)
 
-    def test_els_vuit_son_derivables_i_cap_no_es_manual(self):
-        """Si un d'ells caigués a `manual`, F4 el buscaria a la BD i no hi seria mai."""
-        self.assertEqual(LandmarkRole.objects.filter(derivable=True).count(), 8)
-        self.assertEqual(
-            LandmarkRole.objects.filter(derivation_op=LandmarkRole.OP_MANUAL).count(), 0)
+    def test_derivable_i_operacio_no_es_poden_contradir(self):
+        """🚨 La invariant, i no el recompte.
+
+        La versió d'F3 assertava «vuit derivables i cap manual», i la sessió Montse (27/08)
+        la va tombar amb raó: els nou punts nous inclouen sis de CORPORALS, que es marquen
+        sobre el cos i del patró no surten mai. `derivation_op='manual'` no és un defecte:
+        és el registre honest d'això.
+
+        El que sí que ha de ser cert per sempre és que **els dos camps no es contradiguin**.
+        Un punt `derivable=True` amb operació `manual` seria una promesa que ningú no pot
+        complir —F4 el buscaria i no el trobaria—, i un `derivable=False` amb una operació
+        de debò seria una regla escrita que ningú no crida. Un recompte caduca cada vegada
+        que el catàleg creix; això no.
+        """
+        for r in LandmarkRole.objects.all():
+            if r.derivable:
+                self.assertNotEqual(r.derivation_op, LandmarkRole.OP_MANUAL, msg=r.slug)
+                self.assertTrue(r.derivation_input, msg=r.slug)
+            else:
+                self.assertEqual(r.derivation_op, LandmarkRole.OP_MANUAL, msg=r.slug)
+                self.assertEqual(r.derivation_input, {}, msg=r.slug)
+        # I que n'hi hagi dels dos: un catàleg amb tot derivable o tot manual voldria dir
+        # que algú ha col·lapsat la distinció.
+        self.assertGreater(LandmarkRole.objects.filter(derivable=True).count(), 0)
+        self.assertGreater(LandmarkRole.objects.filter(derivable=False).count(), 0)
 
     def test_nomes_dues_regles_porten_evidencia_i_es_la_mateixa(self):
         """No manllevar el 2.371 del veí és la meitat de l'honestedat d'aquesta taula."""

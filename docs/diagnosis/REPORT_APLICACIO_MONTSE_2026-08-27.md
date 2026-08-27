@@ -204,6 +204,25 @@ trampa que el tren de coda T3 va documentar per a les migracions multi-schema.
 
 ---
 
+## 7-bis · 🚩 I un test d'F3 que la sembra va caducar
+
+`test_els_vuit_son_derivables_i_cap_no_es_manual` assertava exactament això: **vuit**
+derivables i **cap** manual. Amb els nou punts nous va donar `9 != 8`, i tenia raó de
+petar: sis dels nous són CORPORALS i `derivation_op='manual'` és el registre honest que
+del patró no surten mai.
+
+Reescrit com a **invariant** i no com a recompte: un punt `derivable=True` no pot tenir
+operació `manual` (seria una promesa que ningú no pot complir — F4 el buscaria i no el
+trobaria) i un `derivable=False` no pot portar una regla escrita que ningú no crida.
+
+> 🔑 **Un test que compta files caduca cada vegada que el catàleg creix; un que asserta
+> una contradicció impossible, no.** Val la pena mirar-s'ho quan un vermell surt d'una
+> sembra que ha fet exactament el que havia de fer.
+
+`Ran 23 tests · OK`.
+
+---
+
 ## 8 · Fronteres
 
 | frontera | com s'ha comprovat |
