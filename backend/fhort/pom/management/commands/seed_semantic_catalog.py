@@ -1078,6 +1078,24 @@ def guarda_tancament(schema: str) -> list:
                 if operand not in vores:
                     forats.append('punt «{}» -> opera sobre la vora «{}», que NO EXISTEIX'
                                   .format(l.slug, operand))
+        # 🚨 Els perfils GTI hi entren des del 27/08. Fins llavors la taula era buida i el
+        # guard no els mirava —cosa que no es notava justament perquè no hi havia res.
+        # **Un guard que només cobreix les taules que ja tenien files és un guard que
+        # caduca sol**: la primera fila d'una taula nova és la que no vigila ningú.
+        # 🚨 `.order_by()` BUIT, i no és estil: el `Meta.ordering` del model comença per
+        # `garment_type_item`, o sigui per una FK — i ordenar per una FK fa que Django hi
+        # faci JOIN. A `public` aquella taula NO existeix (`tasks` és tenant-only) i la
+        # consulta peta amb `relation "tasks_garmenttypeitem" does not exist`. Mateixa
+        # trampa que el tren de coda T3 va documentar per a les migracions multi-schema.
+        perfils = ([] if _gtis_del_schema() is None
+                   else GarmentTypeItemEdgeProfile.objects.order_by().all())
+        for perfil in perfils:
+            if perfil.piece_role_slug not in peces:
+                forats.append('perfil GTI {} -> rol de peça «{}» NO EXISTEIX'.format(
+                    perfil.garment_type_item_id, perfil.piece_role_slug))
+            if perfil.edge_role_slug not in vores:
+                forats.append('perfil GTI {} -> rol de vora «{}» NO EXISTEIX'.format(
+                    perfil.garment_type_item_id, perfil.edge_role_slug))
     return forats
 
 
