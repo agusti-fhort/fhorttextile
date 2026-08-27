@@ -25,12 +25,33 @@ Els 25 blocs `_TALLA` de la niada crearien 25 «peces» si passessin per
 `services.save_pattern_file`. És **material de banc**: viu a `docs/ordres/` i es llegeix
 des d'aquí, mai s'importa.
 
-## Els dos mòduls
+## Els mòduls
 
 - **`camp_montse.py`** (A + B) — ingesta i alineació. Python pur: reutilitza
   `engine/aama_reader.py` (que no importa Django) i no en depèn de res més.
 - **`rosetta_837.py`** (C + D) — mesura i comparació. Necessita Django només per llegir
   les receptes `PatternPOM` i els `GradedSpec`.
+- **`rul_837.py`** (F6.3, A + B) — el **RUL** i el mapa regla→punt. Reutilitza
+  `engine/rul_reader.py`; no en duplica la gramàtica. Python pur.
+- **`exam_rul.py`** (F6.3, C + D) — reconstrueix les talles des del RUL i les compara amb la
+  niada, i passa el solver amb l'horari declarat.
+- **`exam_solver.py` · `exam_rank.py` · `exam_coupled.py` · `exam_structure.py` ·
+  `exam_curves.py`** — els exàmens d'F6.1 i F6.2.
+
+## ⚠️ El RUL arriba i canvia el punt 2 de la llista de sota
+
+`837 CORS 194 VESTIT M3-4.RUL` (27/08, md5 `8379813b7f9767b6c38234f8ffadf77f`) porta les 90
+regles amb deltes vius. Amb ell, **la graduació deixa de ser una cosa a inferir de 16 mesures i
+passa a ser DADA**: base + RUL + mapa reprodueixen la niada de la Montse a **0,0073 mm** al
+contorn de tall sencer (7 376 punts), que és l'arrodoniment del fitxer.
+
+🚨 **Les dues numeracions no coincideixen.** El DXF invoca l'1 i 65–98 · 171–198 · 226–238; el
+RUL en declara 90. Un `# 65` **no** és la `RULE: DELTA 65`. `rul_837.construeix_mapa` deriva la
+correspondència dels blocs i no escriu cap número a mà; desplaçar-la un sol lloc porta la
+reconstrucció de 0,0018 mm a 3,74 mm de mitjana i 51,53 de màxim.
+
+🚨 **El RUL gradua el contorn de TALL i prou.** Cap desplaçament constant casa els números de la
+línia de cosit (el millor deixa 11,8–18,3 mm): el CAD la deriva del tall.
 
 ## Les verificacions es poden veure VERMELLES
 
@@ -47,8 +68,10 @@ la que toqui ha de dir `FAIL`.
    (`projeccio`, `vertex`, `fraccio`) perquè la dispersió entre ells sigui la barra d'error
    de cada fila i no una nota al peu. Un POM amb la barra travessant la tolerància queda
    **NO RESOLUBLE**, que no és el mateix que desviat.
-2. **No porta números de regla.** El camp és extensional (coordenades per talla). Les
-   regles viuen al germà `…_AGUS.DXF`.
+2. ~~**No porta números de regla.**~~ **RESOLT (F6.3, 27/08).** El camp segueix sent
+   extensional, però els números viuen al germà `…_AGUS.DXF` i **la taula que indexen ja la
+   tenim**: `837 CORS 194 VESTIT M3-4.RUL`. v. la secció del RUL més amunt i
+   `docs/diagnosis/REPORT_F63_RUL_2026-08-27.md`.
 3. **És un sol model.** El 837 és el banc sencer de graduació que tenim
    (v. D-INV-7: el corpus GarmentCodeData no val per a grading).
 
