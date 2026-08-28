@@ -270,6 +270,20 @@ export default function EditableTable({
   }
 
   const handleCellChange = (rowId, col, value) => {
+    // ── DECISIÓ 7 · LA PORTA ÚNICA, i és aquí perquè sigui UNA i no una per mode ────────
+    //
+    // La nomenclatura és bateig de la fila, com els dos noms llargs que l'acompanyen a la
+    // mateixa cel·la: va per `base-measurements/<id>/noms/`, que és on viu la comprovació
+    // d'unicitat. Fins avui queia al buffer local (Mesures) o a `baseMeasurements.update`
+    // (presa), i totes dues escrivien pel PATCH genèric del viewset — sense passar per cap
+    // comprovació i obrint de passada tota la fila.
+    //
+    // Una fila encara no desada (`tmp-…`) no té `BaseMeasurement` a què penjar el bateig:
+    // es queda al buffer, com el nom, fins que existeix.
+    if (col === 'nom_fitxa' && rowId != null && !String(rowId).startsWith('tmp-')) {
+      handleBateig(rowId, { nom_fitxa: value })
+      return
+    }
     // A la PRESA cada camp té la seva porta i s'hi desa sol: el número va a la línia del check
     // i la nomenclatura a la mesura. Enmig d'una presa no hi ha cap moment natural per prémer
     // «desar», i el buffer local només serviria per perdre feina si algú tanca la pestanya.
@@ -369,10 +383,26 @@ export default function EditableTable({
   // barrejar-ho voldria dir que canviar un nom deixés la taula «bruta» i arrossegués les
   // mesures a un desat que ningú ha demanat. `localRows` s'actualitza a mà perquè el que es
   // veu sigui el que s'acaba de desar sense haver de recarregar la taula sencera.
-  const handleBateig = (bmId, camps) =>
-    marcaDesat(baseMeasurements.setNoms(bmId, camps)
+  // DECISIÓ 7 — el refús d'unicitat de nomenclatura, per fila. `null` = cap refús viu.
+  // Es guarda per `bmId` perquè el missatge ha de sortir SOTA la cel·la que l'ha provocat i
+  // no en un toast global: qui edita ha de veure amb què xoca sense perdre de vista el camp.
+  const [refusNomen, setRefusNomen] = useState(null)
+
+  const handleBateig = (bmId, camps) => {
+    setRefusNomen(prev => (prev && prev.bmId === bmId ? null : prev))
+    return marcaDesat(baseMeasurements.setNoms(bmId, camps)
       .then(() => setLocalRows(prev => prev.map(r => (r.id === bmId ? { ...r, ...camps } : r)))))
-      .catch(e => { console.error('No s\'ha pogut desar el nom', e) })
+      .catch(e => {
+        // 409 = NOMENCLATURA_DUPLICADA. NO és un error de xarxa i no es pot empassar amb un
+        // `console.error`: és una resposta que la persona ha de llegir, i l'editor s'ha de
+        // quedar OBERT amb el valor que ha escrit perquè el pugui corregir allà mateix.
+        if (e?.response?.status === 409) {
+          setRefusNomen({ bmId, missatge: e.response.data?.error || t('editable_table.nomenclatura_duplicada') })
+          return
+        }
+        console.error('No s\'ha pogut desar el nom', e)
+      })
+  }
 
   const handleDeleteRow = (rowId) => {
     if (esPresa) {
@@ -1001,6 +1031,7 @@ export default function EditableTable({
                     onCellChange={handleCellChange}
                     onDelete={handleDeleteRow}
                     onBateig={handleBateig}
+                    refus={refusNomen && refusNomen.bmId === row.id ? refusNomen.missatge : null}
                     widths={{ capa: W_CAPA, codi: W_CODI, nom: W_NOM }}
                     registerVal={registerVal}
                     onNav={navVal}
@@ -1165,7 +1196,7 @@ export default function EditableTable({
   )
 }
 
-function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, onDelete,
+function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, onDelete, refus,
                        onBateig, widths, registerVal, onNav, esPresa, traduccioDe,
                        dicc, dims, dimState, onParteix, onDesfa, onMesInstancia, onGermanaCapa,
                        capesLliures, onCapa, mostraGrading = false, sizeRun = [] }) {
@@ -1272,6 +1303,15 @@ function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, o
         <NomenInput value={row.nom_fitxa} placeholder={row.client_code || row.pom_code || ''}
           readOnly={readOnly || !editantIdentitat}
           onCommit={v => onCellChange(row.id, 'nom_fitxa', v)} />
+        {/* DECISIÓ 7 — el refús d'unicitat, SOTA la cel·la i sense tancar l'editor. Diu amb
+            què xoca i què es pot fer (la frase la redacta `nomenclatura.py`, una per a totes
+            les portes); `role="alert"` perquè un lector de pantalla el canti en aparèixer. */}
+        {refus && (
+          <div role="alert" style={{
+            fontSize: 10, lineHeight: 1.3, marginTop: 3, color: 'var(--danger)',
+            maxWidth: 190, whiteSpace: 'normal',
+          }}>{refus}</div>
+        )}
         {row.is_key && (
           <i className="ti ti-star" title="KEY"
             style={{ fontSize: 9, marginLeft: 5, color: 'var(--gold)', verticalAlign: 'middle' }} />

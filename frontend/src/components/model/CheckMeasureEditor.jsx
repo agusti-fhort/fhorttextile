@@ -336,8 +336,9 @@ const checkSource = {
     return (lineId, value) => sizeCheckLines.update(lineId, { valor_real: value })
   },
 
+  // DECISIÓ 7 — per la porta auditada `noms/`, que és on es comprova la unicitat.
   onNomSave(bmId, value) {
-    return baseMeasurements.update(bmId, { nom_fitxa: value || null })
+    return baseMeasurements.setNoms(bmId, { nom_fitxa: value || '' })
   },
 
   // Sprint NOMS-POM — el BATEIG (nom canònic + traducció). Només la font CHECK el declara: la
@@ -647,14 +648,29 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
     onValor: (row, valor) => (row.lineId == null
       ? Promise.reject(new Error('sense línia'))
       : sizeCheckLines.update(row.lineId, { valor_real: valor })),
-    onIdentitat: (row, camps) => baseMeasurements.update(row.id, camps).then(() => load()),
+    // DECISIÓ 7 — la NOMENCLATURA va per la porta auditada (`noms/`), on es comprova la
+    // unicitat; la resta de la identitat (`capa`, `instancia`) segueix pel PATCH genèric,
+    // que és on viu. Un sol gest pot portar totes dues coses, i per això es reparteix aquí
+    // en comptes de demanar al cridador que sàpiga quin camp va per on.
+    onIdentitat: (row, camps) => {
+      const { nom_fitxa, ...resta } = camps
+      const passos = []
+      if (nom_fitxa !== undefined) passos.push(baseMeasurements.setNoms(row.id, { nom_fitxa }))
+      if (Object.keys(resta).length) passos.push(baseMeasurements.update(row.id, resta))
+      return Promise.all(passos).then(() => load())
+    },
     // PARTIR un POM des de la presa: la mesura ja existeix i té preses penjades, o sigui que la
     // MARE es reescriu (no es destrueix, com fa l'autoria sobre files encara no desades) i la
     // germana neix al seu costat amb el valor heretat i el MATEIX origen que la mare — mai
     // 'MANUAL', que diria que algú l'ha mesurada a mà.
     onParteix: (row, filles) => {
       const [a, b] = filles
-      return baseMeasurements.update(row.id, { instancia: a.instancia, nom_fitxa: a.nom_fitxa })
+      // DECISIÓ 7 — la MARE ja existeix, o sigui que el seu bateig va per la porta auditada;
+      // l'eix segueix pel PATCH genèric. La GERMANA, en canvi, NEIX aquí sota amb el seu
+      // `nom_fitxa` al create, que és l'únic camí possible: amb `instancia` i sense
+      // nomenclatura, la comporta `instancia_exigeix_nom` la rebutjaria.
+      return baseMeasurements.update(row.id, { instancia: a.instancia })
+        .then(() => baseMeasurements.setNoms(row.id, { nom_fitxa: a.nom_fitxa }))
         .then(() => (b ? baseMeasurements.create({
           model: model.id, pom: row.pom_id, capa: row.capa || 'exterior',
           instancia: b.instancia, nom_fitxa: b.nom_fitxa,
