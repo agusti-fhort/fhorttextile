@@ -4083,20 +4083,43 @@ def base_measurements_reorder_view(request, model_id):
     return Response({'ok': True, 'n': len(bms)})
 
 
-# Sprint NOMS-POM (2026-07-30) — límit dur dels dos textos, el mateix que declara el model
-# (`BaseMeasurement.nom_canonic_model` / `nom_traduit_model`, CharField(160)). Es valida aquí
-# perquè un text massa llarg ha de tornar un 400 explicat, no una excepció de BD.
+# Sprint NOMS-POM (2026-07-30) — límit dur dels textos, el mateix que declara el model. Es
+# valida aquí perquè un text massa llarg ha de tornar un 400 explicat, no una excepció de BD.
+#
+# DECISIÓ 7 (2026-08-28) — i ara `nom_fitxa` hi entra, que és el motiu del canvi. Els tres
+# camps són EL BATEIG DE LA FILA: els dos noms llargs i la nomenclatura curta. Fins avui la
+# nomenclatura s'escrivia pel PATCH genèric del viewset —el que obre tota la fila (valor base,
+# `origen`, `is_active`, toleràncies…)— i és exactament el risc que el docstring d'aquesta
+# vista ja argumentava per als noms. Una porta, auditada, per a les tres coses.
+#
+# ⚠️ EL LÍMIT NO ÉS UN, SÓN DOS, i per això això és un diccionari i no una tupla amb un màxim
+# al costat: `nom_canonic_model`/`nom_traduit_model` són `CharField(160)` i `nom_fitxa` és
+# `CharField(20)` (`models_app/models.py:748`). Amb un sol màxim de 160, un `nom_fitxa` de 30
+# caràcters hauria passat la validació i hauria petat a la BD amb un 500 mut — que és
+# precisament el que aquesta constant existeix per evitar.
 NOMS_POM_MAX = 160
-NOMS_POM_CAMPS = ('nom_canonic_model', 'nom_traduit_model')
+NOMS_POM_LIMITS = {
+    'nom_canonic_model': 160,
+    'nom_traduit_model': 160,
+    'nom_fitxa': 20,
+}
+NOMS_POM_CAMPS = tuple(NOMS_POM_LIMITS)
 
 
 @api_view(['PATCH'])
 @permission_classes([_ExecuteTasksCap])
 def base_measurement_noms_view(request, bm_id):
-    """PATCH /api/v1/base-measurements/<bm_id>/noms/  Body: {nom_canonic_model?, nom_traduit_model?}
+    """PATCH …/base-measurements/<bm_id>/noms/  Body: {nom_canonic_model?, nom_traduit_model?, nom_fitxa?}
 
-    EL BATEIG DEL MODEL: els dos textos amb què aquest model anomena la mesura (nom canònic EN
-    + traducció del client). Buit ('') NO és un valor: és tornar la fila al catàleg.
+    EL BATEIG DEL MODEL: els TRES textos amb què aquest model anomena la mesura — el nom
+    canònic EN, la traducció del client i la NOMENCLATURA CURTA del croquis. Buit ('') NO és un
+    valor a cap dels tres: és tornar la fila al catàleg.
+
+    DECISIÓ 7 (2026-08-28) — `nom_fitxa` hi entra i SURT del PATCH genèric del viewset (allà
+    queda `read_only`). Fins avui la nomenclatura s'escrivia per la porta ampla, que és el que
+    el paràgraf de sota desaconsella per als noms; no hi havia cap raó perquè el codi curt
+    tingués una llei diferent de la dels dos noms que l'acompanyen a la mateixa cel·la.
+    És també l'única porta on es comprova la UNICITAT dins de l'àmbit de la fila (F2).
 
     Endpoint PROPI i petit, no el serializer genèric de `BaseMeasurementViewSet`: aquell obre
     tota la fila (valor base, origen, is_active, toleràncies…) i aquí només s'hi ha de poder
@@ -4130,14 +4153,45 @@ def base_measurement_noms_view(request, bm_id):
         valor = request.data.get(camp)
         # `null` i `''` volen dir el mateix: treure el bateig i tornar al catàleg.
         valor = '' if valor is None else str(valor).strip()
-        if len(valor) > NOMS_POM_MAX:
+        limit = NOMS_POM_LIMITS[camp]
+        if len(valor) > limit:
             return Response(
-                {'error': f'«{camp}» no pot passar de {NOMS_POM_MAX} caràcters.'}, status=400)
+                {'error': f'«{camp}» no pot passar de {limit} caràcters.'}, status=400)
         canvis[camp] = valor
 
     if not canvis:
         return Response(
             {'error': 'Cal com a mínim un de: ' + ', '.join(NOMS_POM_CAMPS) + '.'}, status=400)
+
+    # DECISIÓ 7 · F2 — LA UNICITAT DINS DE L'ÀMBIT DE LA FILA (model + garment + capa).
+    #
+    # Es comprova AQUÍ, a la porta, i no amb un `unique_together`: la constraint hauria de
+    # cobrir també les files que hi ha, i el cens del 28/08 les ha de trobar netes abans que
+    # ningú la pugui posar (v. l'acta). Mentrestant aquesta és la porta per on passa tota
+    # edició humana de nomenclatura, que és on la col·lisió es pot explicar en comptes de
+    # petar.
+    #
+    # La consulta i la frase viuen a `pom/nomenclatura.py` i no aquí, pel mateix argument que
+    # `frase_de_colisio`: el refús ha de sonar igual vingui d'on vingui.
+    #
+    # ⚠️ NOMÉS si el valor CANVIA. Re-desar una fila amb la nomenclatura que ja tenia no és
+    # cap col·lisió —és el mateix argument que `excloent_pom_id` a `colisio_de_codi`— i sense
+    # aquesta condició el cens del 28/08 es tornaria una trampa: hi ha 4 parelles vives a
+    # `fhort` (bm 3389/3390 'SR', 2288/2289 i 2230/2231 'J1', 3386/3387 'B') que són el MATEIX
+    # POM en dues INSTÀNCIES compartint codi. Són anteriors a aquesta llei i precisament el que
+    # ve a evitar; fins que es netegin, qui obri el llapis en una d'elles i deixi el codi tal
+    # com estava ha de poder desar el NOM sense que se li refusi res.
+    if 'nom_fitxa' in canvis and canvis['nom_fitxa'] != bm.nom_fitxa:
+        from fhort.pom.nomenclatura import (
+            colisio_de_nomenclatura, frase_de_colisio_nomenclatura,
+        )
+        germana, _etiqueta, context = colisio_de_nomenclatura(bm, canvis['nom_fitxa'])
+        if germana is not None:
+            return Response({
+                'error': frase_de_colisio_nomenclatura(canvis['nom_fitxa'], context),
+                'codi': 'NOMENCLATURA_DUPLICADA',
+                'conflicte': context,
+            }, status=409)
 
     for camp, valor in canvis.items():
         setattr(bm, camp, valor)
@@ -4148,6 +4202,7 @@ def base_measurement_noms_view(request, bm_id):
         'id': bm.id,
         'nom_canonic_model': bm.nom_canonic_model,
         'nom_traduit_model': bm.nom_traduit_model,
+        'nom_fitxa': bm.nom_fitxa,
         'updated_at': bm.updated_at.isoformat(),
     })
 
