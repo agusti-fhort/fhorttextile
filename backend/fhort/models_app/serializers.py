@@ -513,7 +513,32 @@ class BaseMeasurementSerializer(serializers.ModelSerializer):
             'nom_fitxa', 'origen',
             'updated_at',
         )
+        # DECISIÓ 7 (2026-08-28) — `nom_fitxa` es queda a `fields` però passa a NOMÉS LECTURA.
+        #
+        # Es queda perquè mig producte el pinta des d'aquest payload (la graella, el croquis,
+        # l'escalat): treure'l de `fields` no tancaria una porta, en trencaria vuit.
+        # I passa a read-only perquè escriure'l ha de costar el mateix que escriure els dos
+        # noms que l'acompanyen a la mateixa cel·la: la porta auditada
+        # `base_measurement_noms_view`, que és on viu la comprovació d'unicitat (F2). Per
+        # aquesta d'aquí s'hi escrivia sense passar per cap comprovació i obrint de passada
+        # tota la fila.
+        #
         read_only_fields = ('updated_at',)
+
+    # 🚨 …I ÉS UNA PORTA D'UN SOL SENTIT, NO UNA PARET. `read_only_fields` sencer trencava el
+    # camí de PARTIR un POM: la germana neix amb `instancia`, i la comporta
+    # `instancia_exigeix_nom` (migració 0074) exigeix que una fila amb instància porti
+    # `nom_fitxa` — o sigui que si el CREATE no el pot escriure, la partició peta amb un
+    # IntegrityError. La llei correcta és la mateixa que F3 li aplica a l'import, i per la
+    # mateixa raó: **al néixer s'escriu, un cop existeix no es toca.**
+    #
+    # ⚠️ LLEI S27 al revés: un camp que ES a `fields` i no s'hauria de poder canviar NO el
+    # denuncia cap `check`. Els dos costats s'exerceixen a `test_d7_nomenclatura.py`
+    # (`test_f1_la_porta_ampla_ja_no_el_pot_CANVIAR` i
+    # `test_f1_la_porta_ampla_encara_el_pot_escriure_en_NEIXER`), no per introspecció de `Meta`.
+    def update(self, instance, validated_data):
+        validated_data.pop('nom_fitxa', None)
+        return super().update(instance, validated_data)
 
     def validate(self, attrs):
         """La CLAU ÚNICA `(model, pom, capa, instancia, garment)` i la invariant del nom, a temps.

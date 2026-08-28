@@ -3479,7 +3479,8 @@
     "finder_seccio_client": "catálogo del cliente",
     "finder_seccio_casa": "catálogo de la casa",
     "ja_gravat": "Las medidas están guardadas",
-    "res_per_desar": "No hay cambios que guardar"
+    "res_per_desar": "No hay cambios que guardar",
+    "nomenclatura_duplicada": "Esta nomenclatura ya es de otra fila de este ámbito."
   },
   "dashboard": {
     "tab_home": "Inicio",

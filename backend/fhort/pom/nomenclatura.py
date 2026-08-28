@@ -443,3 +443,92 @@ def separa_del_global(pom, *, quan=None):
 #: són a posta: desactivar un POM del catàleg o anotar-hi una nota és administrar-lo, no
 #: redefinir-lo, i separar-lo per això obligaria a triar entre arxivar-lo i mantenir-lo lligat.
 CAMPS_QUE_SEPAREN = ('codi_client', 'nom_client', 'categoria') + COM_ES_MESURA
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LA COL·LISIÓ DE NOMENCLATURA DINS D'UN MODEL (Decisió 7, 2026-08-28)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# `colisio_de_codi` (a dalt) vigila el catàleg del CLIENT: que dos POMs d'un mateix client no
+# es diguin igual. Això és un nivell amunt i NO serveix aquí. El que la Decisió 7 demana és el
+# nivell de sota: que dues FILES DEL MATEIX MODEL no comparteixin `nom_fitxa`.
+#
+# 🚨 I NO ÉS UNA PRECAUCIÓ TEÒRICA: la fitxa tècnica JA HO ASSUMEIX. El lligam fletxa↔fila del
+# `TechSheetEditor` es resol pel TEXT de la nomenclatura i ho diu al seu comentari —«és exacte
+# per al cas real (els nom_fitxa són curts i únics dins un model)»—. Fins avui el valor el
+# sembrava l'import, i un document de client rarament repeteix codi; a partir d'ara el sembra
+# una persona. El supòsit passa de «cert per costum» a «cert perquè es comprova».
+#
+# ── L'ÀMBIT ÉS model + garment + capa, i no és la clau de fila sencera ───────────
+# La clau de fila és `(model, pom, capa, instancia, garment)`. L'àmbit d'unicitat en deixa
+# fora DOS eixos, i cadascun per un motiu diferent:
+#   · `pom` — òbviament: si hi entrés, la comprovació no compararia res (una fila només xoca
+#     amb ella mateixa). El sentit de la llei és justament que DOS POMs diferents no es puguin
+#     dir igual dins de la mateixa peça.
+#   · `instancia` — a posta: dues instàncies del mateix POM a la mateixa peça i capa (la sisa
+#     dreta i l'esquerra) SÓN el cas que ha de tenir nomenclatures diferents. Deixar-la fora
+#     de l'àmbit és el que fa que 'AH' i 'AH' a dues instàncies germanes es refusi, que és el
+#     que la comporta `instancia_exigeix_nom` (migració 0074) ja intentava assegurar demanant
+#     que en tinguessin una.
+#
+# Viu aquí i no a la vista pel mateix argument que `frase_de_colisio`: el refús ha de sonar
+# igual vingui d'on vingui, i el dia que millori ha de millorar a totes les portes alhora.
+
+def colisio_de_nomenclatura(bm, codi):
+    """`(fila, etiqueta, context)` si `codi` ja el porta una ALTRA fila del mateix àmbit.
+
+    `(None, None, None)` si és lliure, si el codi és buit (treure el bateig no xoca mai amb
+    ningú) o si la fila que el porta és la mateixa que s'està editant.
+
+    `bm` és la `BaseMeasurement` que s'edita: d'ella surt l'àmbit (model + garment + capa) i
+    l'exclusió d'ella mateixa. No es fa cap consulta si el codi ve buit.
+    """
+    codi = _net(codi)
+    if not codi or bm is None:
+        return None, None, None
+    from fhort.models_app.models import BaseMeasurement
+
+    germana = (BaseMeasurement.objects
+               .filter(model_id=bm.model_id, garment=bm.garment or '', capa=bm.capa or '',
+                       nom_fitxa__iexact=codi)
+               .exclude(pk=bm.pk)
+               .select_related('pom', 'pom__pom_global')
+               .order_by('ordre', 'pk')
+               .first())
+    if germana is None:
+        return None, None, None
+
+    noms = noms_de(germana.pom)
+    nom = (germana.nom_canonic_model or germana.nom_traduit_model
+           or noms['nom_en'] or noms['nom_ca'] or '').strip()
+    context = {
+        'nom_fitxa': germana.nom_fitxa,
+        'fila_id': germana.pk,
+        'pom_nom': nom,
+        'pom_codi': codi_de(germana.pom),
+        'instancia': germana.instancia or '',
+        'garment': germana.garment or '',
+    }
+    return germana, nom, context
+
+
+def frase_de_colisio_nomenclatura(codi, context):
+    """LA FRASE DEL REFÚS d'unicitat dins del model, una i la mateixa a totes les portes.
+
+    ««AH» ja és la nomenclatura de Armhole girth (AH) en aquesta peça. Dona-li una
+    nomenclatura diferent, o canvia la d'aquella fila.»
+
+    ⚠️ Mateixa doctrina que `frase_de_colisio`: **diu amb què xoca i què pot fer**. No proposa
+    cap codi — la sortida no és inventar-ne un, és ensenyar el que ja hi és perquè qui edita
+    decideixi quin dels dos ha de canviar.
+    """
+    if not context:
+        return f'«{codi}» ja és la nomenclatura d\'una altra fila d\'aquest model.'
+    qui = context['pom_nom'] or context['pom_codi'] or ''
+    if context['pom_codi'] and context['pom_codi'] != context['nom_fitxa'] and qui:
+        qui = f'{qui} ({context["pom_codi"]})'
+    if context['instancia']:
+        qui = f'{qui} · {context["instancia"]}' if qui else context['instancia']
+    on = 'en aquesta peça' if context['garment'] else 'en aquest model'
+    return (f'«{context["nom_fitxa"]}» ja és la nomenclatura de {qui} {on}. '
+            f'Dona-li una nomenclatura diferent, o canvia la d\'aquella fila.')

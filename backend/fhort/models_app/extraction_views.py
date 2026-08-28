@@ -3414,6 +3414,27 @@ def import_session_confirmar_view(request, token):
             # del catàleg és el nom que la fitxa hauria portat si el document l'hagués dit.
             if _instancia and not _defaults['nom_fitxa']:
                 _defaults['nom_fitxa'] = (pm.codi_client or '')[:20]
+            # ── DECISIÓ 7 · F3 — L'IMPORT DEIXA DE REBATEJAR ────────────────────────────
+            #
+            # 🚨 EL DEFECTE, mesurat el 28/08: `nom_fitxa` anava als `defaults` d'aquest
+            # `update_or_create` i la clau NO el conté, o sigui que un RE-IMPORT del mateix
+            # document substituïa la nomenclatura que el tècnic hagués posat, en silenci i
+            # sense entrada al `MeasurementChangeLog` (que només registra `base_value_cm`).
+            #
+            # LA LLEI (Agus, 28/08): sobre fila VERGE mana el DOCUMENT; sobre fila EXISTENT
+            # mana la Montse. Els dos casos ja els distingeix la clau, i per això això no
+            # necessita cap flag: `create_defaults` s'aplica només quan la fila neix, i
+            # `defaults` només quan ja hi era. El valor, l'origen i la resta segueixen
+            # actualitzant-se igual — l'import segueix portant les MESURES; el que deixa de
+            # portar és el BATEIG.
+            #
+            # ⚠️ `nom_fitxa` ha de quedar als DOS diccionaris i no només a `create_defaults`:
+            # Django aplica `defaults` a la creació quan no hi ha `create_defaults`, però si
+            # se'n dona un, la creació passa a fer servir NOMÉS aquest. Deixar-lo fora de
+            # `create_defaults` faria que una fila nova amb instància nasqués sense
+            # nomenclatura → IntegrityError contra `instancia_exigeix_nom`.
+            _create_defaults = dict(_defaults)
+            _defaults.pop('nom_fitxa', None)
             BaseMeasurement.objects.update_or_create(
                 model=model, pom=pm,
                 # SET-2/T5 — el garment es declara igual que els altres dos eixos i entra a la
@@ -3426,7 +3447,7 @@ def import_session_confirmar_view(request, token):
                 # faldilla i el short de la Brumà surten del mateix document i aterren a dos
                 # contenidors, cadascuna amb la seva.
                 capa=_capa, instancia=_instancia, garment=_garment_de(p, garment),
-                defaults=_defaults)
+                defaults=_defaults, create_defaults=_create_defaults)
             n_bm += 1
             if base_val is not None:
                 n_bm_valors += 1

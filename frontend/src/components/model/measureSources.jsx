@@ -115,8 +115,12 @@ export const fittingSource = {
   },
 
   // Nomenclatura per model (nom_fitxa de BaseMeasurement). Amb lockRules el component el passa undefined.
+  //
+  // DECISIÓ 7 — per la porta auditada `noms/` i no pel PATCH genèric: és on es comprova la
+  // unicitat dins de l'àmbit de la fila, i és la mateixa porta per on van els dos noms
+  // llargs. `null` i `''` volen dir el mateix a l'endpoint (treure el bateig).
   onNomSave(bmId, value) {
-    return baseMeasurements.update(bmId, { nom_fitxa: value || null })
+    return baseMeasurements.setNoms(bmId, { nom_fitxa: value || '' })
   },
 
   // ── S45/G5 · LA COLUMNA RÈGIM NO ENTRA A LA GRAELLA DE FITTING ─────────────────────
