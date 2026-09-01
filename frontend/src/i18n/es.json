@@ -2852,8 +2852,8 @@
     "sortir_amb_canvis_cos": "Si sales ahora, los cambios de estos contenedores se perderán. Cierra este aviso y guárdalos en el contenedor donde los has hecho.",
     "sortir_sense_desar": "Salir sin guardar",
     "quedar_me": "Quedarme",
-    "colisio_title": "Nomenclatura ocupada ({{count}})",
-    "colisio_pendent": "pendiente de revisión"
+    "avis_nomenclatura_titol": "Grabado, con nombres repetidos ({{count}})",
+    "avis_nomenclatura_cos": "Estos nombres se repiten dentro de una misma pieza sobre POMs distintos: {{noms}}. Las medidas se han grabado. Puedes dejarlo así o renombrar las filas marcadas."
   },
   "model_fabric": {
     "err_close_table": "No se ha podido cerrar la tabla.",
@@ -3480,7 +3480,9 @@
     "finder_seccio_casa": "catálogo de la casa",
     "ja_gravat": "Las medidas están guardadas",
     "res_per_desar": "No hay cambios que guardar",
-    "nomenclatura_duplicada": "Esta nomenclatura ya es de otra fila de este ámbito."
+    "nomenclatura_duplicada": "Esta nomenclatura ya es de otra fila de este ámbito.",
+    "avis_homonimia": "Nombre repetido en este ámbito",
+    "avis_homonimia_detall": "Otra fila de esta pieza, capa e instancia también se llama «{{nom}}» pero mide un POM distinto. Se ha grabado igualmente: en la ficha impresa las dos líneas se leerán igual."
   },
   "dashboard": {
     "tab_home": "Inicio",

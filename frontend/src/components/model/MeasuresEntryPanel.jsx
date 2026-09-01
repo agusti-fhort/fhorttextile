@@ -3,10 +3,11 @@ import { useTranslation } from 'react-i18next'
 import EditableTable from '../EditableTable/EditableTable'
 import PecesDelModel from './PecesDelModel'
 import { filesDeLaPeca } from '../../utils/identitatMesura'
+import { nomsAmbAvis } from '../../utils/avisosNomenclatura'
 import Modal from '../ui/Modal'
 import ImportWizard from '../ImportWizard/ImportWizard'
 import ModelPicker from './ModelPicker'
-import { IconBulb, IconX } from '@tabler/icons-react'
+import { IconAlertTriangle, IconBulb, IconX } from '@tabler/icons-react'
 import { botoPorta } from '../ui/buttons'
 import { models } from '../../api/endpoints'
 
@@ -72,10 +73,17 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
   // de cap sembra (primer cop que veiem files de taula-mesures). `confirmRef` desa la promesa que
   // savePom torna a EditableTable: resol en confirmar+desar, rebutja en cancel·lar (no marca "desat").
   const [pomConfirmOpen, setPomConfirmOpen] = useState(false)
-  // F3 · LES COL·LISIONS DE NOMENCLATURA, DINS DEL MODAL. Abans el refús es aplanava amb
-  // `' · '` a la banda vermella de dalt i el modal es TANCAVA: qui el rebia perdia el context
-  // del gest i l'única acció que li quedava era tornar-hi (tres reintents en viu, 26/08).
-  const [colisions, setColisions] = useState(null)
+  // 🚨 AQUÍ HI HAVIA `colisions`, I EL QUE L'ALIMENTAVA JA NO EXISTEIX (M1194 · Decisió 8).
+  //
+  // Era el 400 `NOMENCLATURA_OCUPADA` de `gravar-pom`, d'abast CUSTOMER. F3 el va fer accionable
+  // dins del modal —una millora real sobre el text aplanat que hi havia—, però la pregunta no
+  // pertocava a aquesta porta: desar mesures no escriu cap àlies de client. La porta ja no la
+  // fa, i el camí bloquejant se'n va sencer amb ella.
+  //
+  // El que la substitueix NO és un refús amb un altre color: és el que el 200 diu del que JA
+  // S'HA DESAT. Per això viu fora del modal —el modal ja s'ha tancat quan arriba— i es queda
+  // encès sobre la taula fins que el tècnic el resol o desa una altra vegada.
+  const [avisosNomen, setAvisosNomen] = useState([])
   const [pomReseed, setPomReseed] = useState(false)
   const pendingPayloadRef = useRef(null)
   const confirmRef = useRef(null)
@@ -252,16 +260,20 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
     setPomReseed(!!hadBaseRef.current)
     confirmRef.current = { resolve, reject }
     setError('')
-    setColisions(null)
+    // L'avís és del DESAT, no de la taula: un desat nou el torna a decidir de zero.
+    setAvisosNomen([])
     setPomConfirmOpen(true)
   })
 
   const confirmGravarPom = async () => {
     setSavingPom(true)
     setError('')
-    setColisions(null)
     try {
-      await models.gravarPom(id, pendingPayloadRef.current)
+      const r = await models.gravarPom(id, pendingPayloadRef.current)
+      // ⚠️ EL DESAT JA HA PASSAT QUAN ES LLEGEIX AIXÒ. `avisos_nomenclatura` no decideix res
+      // del gest —no el pot cancel·lar ni reobrir—: descriu una ambigüitat que ja és a la BD.
+      // Per això es desa a l'estat DESPRÉS de tancar i resoldre, i no abans.
+      setAvisosNomen(r?.data?.avisos_nomenclatura || [])
       setPomConfirmOpen(false)
       confirmRef.current?.resolve()
       confirmRef.current = null
@@ -269,14 +281,6 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
       onPomSaved?.()
     } catch (err) {
       const cos = err?.response?.data || {}
-      // 🔑 UN REFÚS DE NOMENCLATURA NO TANCA EL MODAL. És un conflicte amb una dada que ja hi
-      // és, no una fallada del desat: la persona ha de poder llegir amb què xoca I seguir
-      // tenint al davant el gest que estava fent. La resta d'errors es comporten com sempre.
-      if (cos.codi === 'NOMENCLATURA_OCUPADA' && Array.isArray(cos.colisions)) {
-        setColisions(cos.colisions)
-        setSavingPom(false)
-        return                                  // ni resolem ni rebutgem: el gest segueix obert
-      }
       const msg = cos.error || cos.errors?.join?.(' · ')
         || t('model_measurements.save_pom_err')
       setError(msg)
@@ -285,17 +289,12 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
       confirmRef.current = null
       pendingPayloadRef.current = null
     } finally {
-      // ⚠️ El `confirmRef`/`pendingPayloadRef` es netegen a CADA SORTIDA menys una: la
-      // col·lisió de nomenclatura, que deixa el gest obert a posta perquè es pugui reintentar
-      // amb el mateix payload sense tornar a muntar-lo. Netejar-los aquí (com abans) buidaria
-      // el que el reintent necessita.
       setSavingPom(false)
     }
   }
 
   const cancelGravarPom = () => {
     setPomConfirmOpen(false)
-    setColisions(null)
     confirmRef.current?.reject(new Error('cancelled'))
     confirmRef.current = null
     pendingPayloadRef.current = null
@@ -310,6 +309,40 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
       {notice && (
         <div style={{ margin: '0 0 1rem', background: 'var(--warn-bg)', border: '1px solid var(--warn)', borderRadius: 8,
                       padding: '0.75rem 1rem', fontSize: 'var(--fs-body)', color: 'var(--warn)' }}>{notice}</div>
+      )}
+
+      {/* M1194 · Decisió 8 — LA BANDA DE L'AVÍS, I ÉS UNA BANDA I NO UN MODAL A POSTA.
+          Un modal demana un gest per marxar, i aquí no hi ha cap gest a demanar: el desat ja
+          ha passat i tot és a la BD. La banda diu QUANTS àmbits i QUINS noms —perquè es pugui
+          decidir si val la pena tocar-hi sense recórrer la taula— i les files concretes ja van
+          marcades una per una a la seva cel·la. Es tanca amb la ✕, com la de `baseSetAbsent`,
+          i mor sola al desat següent.
+          Taronja de marca de dada (`--warn-state`), MAI el vermell d'error: no hi ha res
+          trencat, hi ha una ambigüitat que algú ha de mirar. */}
+      {avisosNomen.length > 0 && (
+        <div style={{ margin: '0 0 1rem', background: 'var(--warn-state-bg)',
+                      border: '1px solid var(--warn-state)', borderRadius: 8,
+                      padding: '0.75rem 1rem', fontSize: 'var(--fs-body)',
+                      display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+          <IconAlertTriangle size={18} stroke={1.5}
+            style={{ color: 'var(--warn-ink)', flexShrink: 0, marginTop: 2 }} />
+          <div style={{ flex: 1, color: 'var(--warn-ink)' }}>
+            <div style={{ fontWeight: 600 }}>
+              {t('model_measurements.avis_nomenclatura_titol', { count: avisosNomen.length })}
+            </div>
+            <div style={{ marginTop: 4 }}>
+              {t('model_measurements.avis_nomenclatura_cos', {
+                noms: nomsAmbAvis(avisosNomen).join(' · '),
+              })}
+            </div>
+          </div>
+          <button type="button" onClick={() => setAvisosNomen([])}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2,
+                     color: 'var(--warn-ink)', display: 'inline-flex' }}
+            title={t('common.close')}>
+            <IconX size={16} stroke={1.5} />
+          </button>
+        </div>
       )}
 
       {baseSetAbsent && (
@@ -408,36 +441,11 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
             {pomReseed && <i className="ti ti-alert-triangle" style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }} />}
             {pomReseed ? t('model_measurements.gravar_confirm_reseed') : t('model_measurements.gravar_confirm_simple')}
           </p>
-          {/* F3 · EL REFÚS, DINS DEL MODAL I SENCER. Una fila per col·lisió: què xoca, amb
-              quin POM (codi + nom RESOLT), d'on ve l'àlies i si està pendent de revisió — i la
-              frase amb la sortida, que és la mateixa que serveix el 409 de l'alta de POM.
-              Res d'aplanar amb `' · '`: aquí cada col·lisió és una fila que es pot llegir. */}
-          {colisions?.length > 0 && (
-            <div style={{ marginTop: 14, background: 'var(--err-bg)', border: '1px solid var(--err)',
-                          borderRadius: 8, padding: '10px 12px' }}>
-              <div style={{ fontSize: 'var(--fs-label)', fontWeight: 600, textTransform: 'uppercase',
-                            letterSpacing: '0.04em', color: 'var(--err)', marginBottom: 6 }}>
-                {t('model_measurements.colisio_title', { count: colisions.length })}
-              </div>
-              {colisions.map((c, i) => (
-                <div key={`${c.pom_id}-${i}`}
-                     style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)',
-                              paddingTop: i ? 8 : 0, marginTop: i ? 8 : 0,
-                              borderTop: i ? '1px solid var(--err)' : 'none' }}>
-                  <div><b>{c.client_code}</b>{' → '}{c.pom_nom || c.pom_codi}
-                    {c.pom_codi && c.pom_codi !== c.client_code && (
-                      <span style={{ color: 'var(--text-muted)' }}> ({c.pom_codi})</span>
-                    )}
-                  </div>
-                  <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 2 }}>
-                    {c.origen_llegible}
-                    {c.pendent_revisio && ` · ${t('model_measurements.colisio_pendent')}`}
-                  </div>
-                  <div style={{ marginTop: 4 }}>{c.message}</div>
-                </div>
-              ))}
-            </div>
-          )}
+          {/* 🚨 AQUÍ HI HAVIA EL BLOC VERMELL «NOMENCLATURA OCUPADA» (F3), i se'n va sencer
+              amb el 400 que l'alimentava: era abast CUSTOMER a una porta que no escriu cap
+              àlies (M1194 · Decisió 8). El confirm de Gravar torna a ser el que sempre havia
+              de ser —una pregunta simple, o l'advertència de resembra— i el que hi ha a dir
+              sobre la nomenclatura es diu DESPRÉS de desar, sobre la taula, sense barrar. */}
         </Modal>
       )}
 
@@ -561,6 +569,13 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
                `keep_mesures`: sense l'eix, la poda del backend deixa les files de la peça
                fora del conjunt a conservar i les desactiva en silenci. */
             garment={peca?.codi ?? ''}
+            /* M1194 — ELS AVISOS VAN A TOTS ELS CONTENIDORS I ELS FILTRA L'ÀMBIT. La resposta
+               és del model sencer (el desat d'una peça pot avisar de files d'una altra només
+               si comparteixen `garment`, que per definició no passa), i qui decideix si un
+               avís parla d'una fila és `avisDeLaFila`, no el contenidor: repartir-los aquí
+               per `peca.codi` seria una segona regla d'àmbit que podria divergir de la del
+               backend. */
+            avisosNomenclatura={avisosNomen}
           />
         </>)
         }}</PecesDelModel>

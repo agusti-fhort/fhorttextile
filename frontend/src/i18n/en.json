@@ -2852,8 +2852,8 @@
     "sortir_amb_canvis_cos": "If you leave now, the changes in these containers will be lost. Close this warning and save them in the container where you made them.",
     "sortir_sense_desar": "Leave without saving",
     "quedar_me": "Stay here",
-    "colisio_title": "Name already taken ({{count}})",
-    "colisio_pendent": "pending review"
+    "avis_nomenclatura_titol": "Saved, with repeated names ({{count}})",
+    "avis_nomenclatura_cos": "These names repeat within the same piece on different POMs: {{noms}}. The measurements have been saved. You can leave it as is or rename the flagged rows."
   },
   "model_fabric": {
     "err_close_table": "Could not close the table.",
@@ -3480,7 +3480,9 @@
     "finder_seccio_casa": "house catalogue",
     "ja_gravat": "Measurements are saved",
     "res_per_desar": "No changes to save",
-    "nomenclatura_duplicada": "That nomenclature already belongs to another row in this scope."
+    "nomenclatura_duplicada": "That nomenclature already belongs to another row in this scope.",
+    "avis_homonimia": "Name repeated in this scope",
+    "avis_homonimia_detall": "Another row in this piece, layer and instance is also called “{{nom}}” but measures a different POM. It has been saved anyway: on the printed spec the two lines will read the same."
   },
   "dashboard": {
     "tab_home": "Home",

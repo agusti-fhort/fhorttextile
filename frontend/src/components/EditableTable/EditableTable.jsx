@@ -18,6 +18,7 @@ import {
   codiProposat, codiBase,
   clauExclusio, subeixDe, xoquen,
 } from '../../utils/diccionariMesures'
+import { avisDeLaFila } from '../../utils/avisosNomenclatura.js'
 import { triaAlModal } from '../instancia/instanciaTria.js'
 import { useEstatDiccionari } from '../../utils/diccionariMesuresFont'
 import { useTraduccioPoms } from '../../utils/traduccioPomFont'
@@ -178,6 +179,13 @@ export default function EditableTable({
   // sense ell, la poda del backend deixa les files de la peça fora del conjunt a
   // conservar i les desactiva en silenci (v. `utils/payloadMesures`).
   garment = '',
+  // M1194 · Decisió 8 — ELS AVISOS D'HOMONÍMIA DEL DARRER DESAT, tal com el 200 els serveix.
+  //
+  // ⚠️ NO ÉS UN REFÚS I NO SE'N COMPORTA COM UN: quan arriben, les files JA són a la BD. No
+  // desactiva el botó, no marca la taula com a bruta i no impedeix tornar a desar. Només diu
+  // que dues files d'aquest àmbit es diuen igual apuntant a POMs diferents, que a la fitxa
+  // impresa són dues línies indistingibles.
+  avisosNomenclatura = [],
   // `null` = mode autoria_base. Amb objecte = mode presa, i porta les portes per fila:
   //   {baseLabel, onValor(row,val), onIdentitat(row,camps), onParteix(row,filles),
   //    onNova(pom,eixos), onTreu(row), onReordena(ids)}
@@ -1032,6 +1040,7 @@ export default function EditableTable({
                     onDelete={handleDeleteRow}
                     onBateig={handleBateig}
                     refus={refusNomen && refusNomen.bmId === row.id ? refusNomen.missatge : null}
+                    avis={avisDeLaFila(avisosNomenclatura, row)}
                     widths={{ capa: W_CAPA, codi: W_CODI, nom: W_NOM }}
                     registerVal={registerVal}
                     onNav={navVal}
@@ -1197,7 +1206,7 @@ export default function EditableTable({
 }
 
 function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, onDelete, refus,
-                       onBateig, widths, registerVal, onNav, esPresa, traduccioDe,
+                       avis, onBateig, widths, registerVal, onNav, esPresa, traduccioDe,
                        dicc, dims, dimState, onParteix, onDesfa, onMesInstancia, onGermanaCapa,
                        capesLliures, onCapa, mostraGrading = false, sizeRun = [] }) {
   const { t, i18n } = useTranslation()
@@ -1311,6 +1320,30 @@ function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, o
             fontSize: 10, lineHeight: 1.3, marginTop: 3, color: 'var(--danger)',
             maxWidth: 190, whiteSpace: 'normal',
           }}>{refus}</div>
+        )}
+        {/* M1194 · L'AVÍS D'HOMONÍMIA — SEGONA RANURA, I ÉS DELIBERAT QUE NO SIGUI LA MATEIXA.
+            El refús de dalt BARRA (409, la fila no s'ha desat); això d'aquí DESCRIU una fila
+            que ja és a la BD. Pintar-los igual —o al mateix lloc— faria que dues lleis
+            diferents es llegissin com una de sola, que és exactament el mode de fallada que
+            aquest projecte ja ha pagat. Per això: taronja de marca de dada (`--warn-state`,
+            mesurat AA sobre el seu fons) i no vermell, i `role="status"` i no `alert` —un
+            lector de pantalla no ha d'interrompre per una cosa que no demana res—.
+            El text el resol l'i18n; la regla de retrobament, `avisDeLaFila`. */}
+        {avis && (
+          <div role="status"
+               title={t('editable_table.avis_homonimia_detall', { nom: avis.nom_fitxa })}
+               style={{
+                 fontSize: 10, lineHeight: 1.3, marginTop: 3, maxWidth: 190,
+                 whiteSpace: 'normal', color: 'var(--warn-ink)',
+                 background: 'var(--warn-state-bg)', border: '1px solid var(--warn-state)',
+                 borderRadius: 4, padding: '2px 5px',
+                 display: 'inline-flex', alignItems: 'flex-start', gap: 4,
+               }}>
+            {/* Webfont `ti`, que és l'idioma d'icona d'aquest fitxer (els components de
+                `@tabler/icons-react` no hi entren enlloc). Outline, com mana la norma. */}
+            <i className="ti ti-alert-triangle" style={{ fontSize: 11, flexShrink: 0, marginTop: 1 }} />
+            <span>{t('editable_table.avis_homonimia')}</span>
+          </div>
         )}
         {row.is_key && (
           <i className="ti ti-star" title="KEY"
