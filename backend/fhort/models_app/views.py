@@ -2432,7 +2432,7 @@ def gravar_pom_view(request, model_id):
         run = [s.strip() for s in model.size_run_model.replace(';', '·').split('·') if s.strip()]
         return run.index(label) if label in run else None
 
-    from fhort.pom.nomenclatura import avisos_de_nomenclatura
+    from fhort.pom.nomenclatura import avisos_de_nomenclatura, germanes_homonimes
 
     errors = []
     # DECISIÓ 8 · L'HOMONÍMIA ES DIU, NO ES BARRA. Les files que arriben es recullen amb el seu
@@ -2532,6 +2532,12 @@ def gravar_pom_view(request, model_id):
     # torna cap resposta**: es guarda per acompanyar el 200. Les files que hi surten ja són a
     # `prepared` i s'escriuran com qualsevol altra.
     avisos_nomenclatura = avisos_de_nomenclatura(nomenclatures)
+    # LA SEGONA FAMÍLIA, SOBRE LA MATEIXA TAULA I EN UN CAMP A PART (01/09). Germanes de la
+    # mateixa peça i capa amb instàncies diferents que es diuen igual: la vigilància que la D7
+    # feia amb el 409 i que la D8 havia deixat muda. Els dos jutges miren EXACTAMENT la mateixa
+    # llista i responen coses diferents; no es fonen mai, perquè una fila pot ser d'una família,
+    # de l'altra o de totes dues i el que la persona ha de fer no és el mateix.
+    avisos_germanes = germanes_homonimes(nomenclatures)
 
     if not prepared:
         errors.append('Cal introduir almenys una mida base abans de gravar POM')
@@ -2742,6 +2748,10 @@ def gravar_pom_view(request, model_id):
         #: argument que `camps_de`: el consumidor no ha de distingir entre «no n'hi ha» i
         #: «aquest backend encara no ho serveix». Tot el que hi surt JA ESTÀ DESAT.
         'avisos_nomenclatura': avisos_nomenclatura,
+        #: L'ALTRA FAMÍLIA, i va en un camp propi a posta: germanes de la mateixa peça i capa
+        #: amb instàncies diferents que comparteixen nom. Mateixes regles de contracte que el
+        #: camp de sobre —sempre present, buit quan no n'hi ha, tot ja desat—.
+        'avisos_germanes': avisos_germanes,
     }, status=200)
 
 
@@ -4186,10 +4196,14 @@ def base_measurement_noms_view(request, bm_id):
     # dues INSTÀNCIES) es queixessin cada cop que algú els toca el nom llarg. Amb l'àmbit de
     # quatre camps aquelles quatre ja no són homònimes de res, però la condició es queda: el
     # que no ha canviat no s'ha de tornar a jutjar.
-    avisos = []
+    avisos, germanes = [], []
     if 'nom_fitxa' in canvis and canvis['nom_fitxa'] != bm.nom_fitxa:
-        from fhort.pom.nomenclatura import avisos_de_rebateig
+        from fhort.pom.nomenclatura import avisos_de_rebateig, germanes_de_rebateig
         avisos = avisos_de_rebateig(bm, canvis['nom_fitxa'])
+        # LA SEGONA FAMÍLIA (01/09), amb la seva pròpia consulta: aquesta travessa la instància
+        # —àmbit de TRES camps— en comptes de respectar-la, que és justament la diferència entre
+        # les dues preguntes. Cap de les dues barra.
+        germanes = germanes_de_rebateig(bm, canvis['nom_fitxa'])
 
     for camp, valor in canvis.items():
         setattr(bm, camp, valor)
@@ -4206,6 +4220,9 @@ def base_measurement_noms_view(request, bm_id):
         #: perquè la pantalla els consumeixi amb el mateix codi. **Sempre present**, buit quan
         #: no n'hi ha. Tot el que hi surt JA ESTÀ DESAT.
         'avisos_nomenclatura': avisos,
+        #: L'ALTRA FAMÍLIA (germanes de la mateixa peça i capa amb el mateix nom), en un camp
+        #: propi i amb les mateixes regles de contracte.
+        'avisos_germanes': germanes,
     })
 
 

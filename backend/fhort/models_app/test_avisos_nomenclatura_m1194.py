@@ -29,7 +29,7 @@ from django.test import SimpleTestCase
 from django_tenants.test.cases import TenantTestCase
 from rest_framework.test import APIClient
 
-from fhort.pom.nomenclatura import avisos_de_nomenclatura
+from fhort.pom.nomenclatura import avisos_de_nomenclatura, germanes_homonimes
 
 
 # ═══ PART 1 · LA REGLA D'AGRUPACIÓ (pura) ════════════════════════════════════════════════
@@ -220,3 +220,90 @@ class GravarPomAvisaINoBarraTest(TenantTestCase):
         r = self._grava([{'pom_id': self.pom_mut.id, 'base_value_cm': 22224.7,
                           'nom_fitxa': 'BT'}])
         self.assertEqual(r.status_code, 422)
+
+
+# ═══ PART 3 · LES GERMANES HOMÒNIMES (01/09) ═════════════════════════════════════════════
+#
+# 🚨 EL QUE AQUEST BANC PROTEGEIX ÉS QUE LES DUES FAMÍLIES NO ES TORNIN A CONFONDRE. Tenen la
+# mateixa forma de pregunta —«dues files es diuen igual»— i responen coses diferents:
+#
+#     files                                        germanes   homonímia
+#     ─────────────────────────────────────────────────────────────────
+#     mateix POM · left/right · «AH»                   1           0
+#     POM diferent · left/right · «AH»                 1           0
+#     POM diferent · mateixa instància · «AH»          0           1
+#
+# La fila del mig és la que costa: **la instància difereix, o sigui que NO és homonímia real**
+# encara que els POMs siguin dos. Si algun dia les dues columnes es mouen alhora, és que algú
+# ha fusionat els jutges i el tram del 01/09 s'ha desfet.
+
+class GermanesHomonimesTest(SimpleTestCase):
+
+    def test_dues_instancies_amb_el_mateix_nom_avisen(self):
+        a = germanes_homonimes([_f(0, 904, 'AH', instancia='left'),
+                                _f(1, 904, 'AH', instancia='right')])
+        self.assertEqual(len(a), 1)
+        self.assertEqual(a[0]['nom_fitxa'], 'AH')
+        self.assertEqual(a[0]['instancies'], ['left', 'right'])
+        self.assertEqual(a[0]['files'], [0, 1])
+        # La forma NO porta `instancia` en singular: el grup travessa l'eix, no hi viu dins.
+        self.assertNotIn('instancia', a[0])
+
+    def test_el_POM_es_INDIFERENT(self):
+        """El cas central és el mateix POM, però dos POMs també es llegeixen igual al paper."""
+        for pom_b in (904, 907):
+            with self.subTest(pom_b=pom_b):
+                a = germanes_homonimes([_f(0, 904, 'AH', instancia='left'),
+                                        _f(1, pom_b, 'AH', instancia='right')])
+                self.assertEqual(len(a), 1)
+
+    def test_la_instancia_BUIDA_compta_com_una_mes(self):
+        """🚨 El cas més fàcil de fabricar: afegir una germana a una fila que no en tenia."""
+        a = germanes_homonimes([_f(0, 904, 'AH'), _f(1, 904, 'AH', instancia='left')])
+        self.assertEqual(len(a), 1)
+        self.assertEqual(a[0]['instancies'], ['', 'left'])
+
+    def test_la_MATEIXA_instancia_no_es_germana(self):
+        """Això és l'altra família: mateix àmbit sencer amb POMs diferents."""
+        files = [_f(0, 904, 'AH'), _f(1, 907, 'AH')]
+        self.assertEqual(germanes_homonimes(files), [])
+        self.assertEqual(len(avisos_de_nomenclatura(files)), 1)      # ← i aquella sí que salta
+
+    def test_LES_DUES_FAMILIES_SON_ORTOGONALS(self):
+        """El cas que les separa: POMs diferents PERÒ instàncies diferents → només germanes."""
+        files = [_f(0, 904, 'AH', instancia='left'), _f(1, 907, 'AH', instancia='right')]
+        self.assertEqual(len(germanes_homonimes(files)), 1)
+        self.assertEqual(avisos_de_nomenclatura(files), [])
+
+    def test_poden_encendre_s_ALHORA_sobre_files_diferents(self):
+        """No són excloents: el desat pot dur les dues coses i cadascuna va al seu camp."""
+        files = [_f(0, 904, 'AH'),
+                 _f(1, 904, 'AH', instancia='left'),
+                 _f(2, 907, 'AH', instancia='left')]
+        self.assertEqual(len(germanes_homonimes(files)), 1)          # '' vs 'left'
+        hom = avisos_de_nomenclatura(files)
+        self.assertEqual(len(hom), 1)                                # 904 vs 907 a 'left'
+        self.assertEqual(hom[0]['instancia'], 'left')
+
+    def test_la_peca_i_la_capa_separen(self):
+        for eix, valor in (('garment', '02'), ('capa', 'folre')):
+            with self.subTest(eix=eix):
+                a = germanes_homonimes([
+                    _f(0, 904, 'AH', instancia='left'),
+                    {**_f(1, 904, 'AH', instancia='right'), eix: valor}])
+                self.assertEqual(a, [], f'l\'eix «{eix}» no separa')
+
+    def test_noms_diferents_no_son_germanes(self):
+        self.assertEqual(germanes_homonimes([_f(0, 904, 'AH', instancia='left'),
+                                             _f(1, 904, 'AH-R', instancia='right')]), [])
+
+    def test_la_caixa_no_separa(self):
+        a = germanes_homonimes([_f(0, 904, 'ah', instancia='left'),
+                                _f(1, 904, 'AH', instancia='right')])
+        self.assertEqual(len(a), 1)
+        self.assertEqual(a[0]['nom_fitxa'], 'ah')       # el literal de la PRIMERA fila
+
+    def test_sense_nom_i_amb_brossa_no_peta(self):
+        self.assertEqual(germanes_homonimes([]), [])
+        self.assertEqual(germanes_homonimes(None), [])
+        self.assertEqual(germanes_homonimes([_f(0, 904, ''), _f(1, 904, None)]), [])
