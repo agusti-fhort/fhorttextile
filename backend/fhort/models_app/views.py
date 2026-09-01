@@ -2432,21 +2432,22 @@ def gravar_pom_view(request, model_id):
         run = [s.strip() for s in model.size_run_model.replace(';', '·').split('·') if s.strip()]
         return run.index(label) if label in run else None
 
-    from fhort.pom.nomenclatura import colisio_de_codi, frase_de_colisio, nom_client
+    from fhort.pom.nomenclatura import avisos_de_nomenclatura
 
     errors = []
-    # F3 · LES COL·LISIONS DE NOMENCLATURA, A PART DELS ALTRES ERRORS. Un codi ocupat no és una
-    # petició mal escrita: és un conflicte amb una dada que ja hi és, i la persona necessita
-    # saber AMB QUÈ xoca per poder-hi fer res. Van en una llista pròpia perquè la resposta les
-    # pugui servir ESTRUCTURADES (v. el `return` de sota) i no aplanades dins d'`errors`.
-    colisions = []
-    # El nom del client es demana UN COP i no per fila: la frase del refús el porta i el bucle
-    # de sota pot passar per aquí tantes vegades com mesures dugui la petició.
-    _client = nom_client(model.customer_id) if model.customer_id else ''
+    # DECISIÓ 8 · L'HOMONÍMIA ES DIU, NO ES BARRA. Les files que arriben es recullen amb el seu
+    # àmbit ja normalitzat i, quan tot el payload s'ha llegit, `avisos_de_nomenclatura` en treu
+    # els grups ambigus. La llista és d'AVISOS i no d'errors a posta: no talla el bucle, no
+    # canvia el codi de resposta i no decideix res — viatja al 200 al costat del que s'ha desat.
+    nomenclatures = []
     fora_rang = []
     prepared = []
     identitats = set()
-    for m in measurements:
+    # L'ÍNDEX DEL PAYLOAD, no el de `prepared`: la referència que viatja a l'avís ha d'apuntar a
+    # la fila TAL COM EL CLIENT LA VA ENVIAR, i `prepared` en descarta (rang, duplicats). Que en
+    # un 200 les dues llistes coincideixin —qualsevol descart torna 400 o 422 abans d'arribar-hi—
+    # és una casualitat d'avui, no un contracte.
+    for _ref, m in enumerate(measurements):
         pom_id = m.get('pom_id')
         value = _to_float(m.get('base_value_cm'), 'base_value_cm', errors)
         if not pom_id or value is None:
@@ -2484,37 +2485,39 @@ def gravar_pom_view(request, model_id):
             continue
         identitats.add(ident)
 
-        # LA NOMENCLATURA PASSA LA MATEIXA VALIDACIÓ QUE CREAR UN POM PROPI (Agus, 06/08).
+        # 🚨 AQUÍ HI HAVIA UN GUARDA D'ABAST **CUSTOMER**, I ERA LA PREGUNTA EQUIVOCADA.
         #
-        # El NOM del model és lliure —sobirania: el client li diu com vol— però la NOMENCLATURA
-        # és un codi, i un codi que ja significa una altra cosa al catàleg d'aquest client no és
-        # una tria d'estil, és una col·lisió. Mateix resolutor i mateix missatge que
-        # `create_model_pom_view`: la persona ha de llegir el mateix vingui d'on vingui.
+        # Cridava `colisio_de_codi(model.customer_id, nomen)` i refusava la petició sencera amb
+        # un 400 si el nom de fitxa ja era un `CustomerPOMAlias` d'un ALTRE POM del client. Però
+        # desar la taula de mesures d'un model **no escriu cap àlies de client**: la unicitat que
+        # aquell guarda protegeix —`UNIQUE (customer, client_code)`— no la pot trencar aquesta
+        # porta. Qui la pot trencar és `create_model_pom_view` (l'alta de POM propi), i allà el
+        # guarda es queda tal com era.
         #
-        # `excloent_pom_id` és el que fa que rebatejar una fila amb un codi que ja és el SEU
-        # propi àlies no rebori: no xoca amb ningú, xoca amb ella mateixa.
+        # El dany era real i mesurat (M1194): un model VERGE de BRW no es podia gravar perquè
+        # «B» i «SF» ja eren al diccionari del client per uns altres POMs. Un nom de fitxa és
+        # BATEIG DEL MODEL —sobirania: entre models, lliure—, i la pantalla no oferia cap manera
+        # de reanomenar la fila, o sigui que el refús no tenia sortida.
+        #
+        # ⚖️ LA LLEI QUE HI QUEDA (Agus, Decisió 8) ÉS **PER MODEL I ADVISORY**: dues files
+        # del mateix àmbit amb POMs diferents que es diguin igual es DESEN i es diuen. La
+        # recollida és aquí perquè els eixos ja estan resolts (v. `_identitat_de_mesura`, unes
+        # línies amunt) i han de ser EXACTAMENT els mateixos amb què s'escriurà: agrupar per una
+        # normalització i escriure per una altra és fabricar avisos que no es corresponen amb cap
+        # fila. El veredicte es demana un cop llegit tot el payload, no per fila.
         nomen = (m.get('nom_fitxa') or '').strip()
-        if nomen and model.customer_id:
-            _xoc, _etiqueta, _context = colisio_de_codi(model.customer_id, nomen,
-                                                        excloent_pom_id=int(pom_id))
-            if _xoc is not None:
-                # 🚨 EL REFÚS PASSA A SER ACCIONABLE (F3). Deia «la nomenclatura «BT» ja és BT
-                # al catàleg d'aquest client» —tautològic per als POMs sense nom— i sobretot no
-                # deia CAP sortida: a la formació del 26/08 se'n van veure TRES reintents
-                # seguits, perquè tornar-hi era l'única acció que la pantalla oferia.
-                #
-                # Tot el que ara viatja ja el sabia el backend i el llençava en un `return`
-                # (`pom_del_codi` es quedava només amb `alias.pom`). La frase és la MATEIXA que
-                # serveix el 409 de `create_model_pom_view`: una sola redacció per a les dues
-                # portes.
-                colisions.append({
-                    'ordre': m.get('ordre'),
-                    'pom_id': int(pom_id),
-                    'nomenclatura': nomen,
-                    **_context,
-                    'message': frase_de_colisio(nomen, _context, _client),
-                })
-                continue
+        if nomen:
+            nomenclatures.append({
+                # La REFERÈNCIA DE FILA és la posició dins de `measurements`, i no `ordre`: el
+                # client no l'envia (l'ordre el fabrica el servidor amb l'`enumerate` de
+                # l'escriptura) i un `None` no identifica cap fila a la pantalla.
+                'ref': _ref,
+                'pom_id': int(pom_id),
+                'garment': garment,
+                'capa': capa,
+                'instancia': instancia,
+                'nom_fitxa': nomen,
+            })
         # SET-2/#12c — l'eix viatja fins a l'escriptura. Fins aquí el `garment` es llegia
         # (v. el guard de duplicats, unes línies més amunt) i es llençava: la tupla el
         # deixava fora i l'upsert de sota resolia sense ell.
@@ -2525,16 +2528,10 @@ def gravar_pom_view(request, model_id):
     if fora_rang:
         return Response({'errors': fora_rang, 'codi': CODI_MESURA_FORA_RANG}, status=422)
 
-    # Les col·lisions manen sobre «no hi ha cap mida»: si la petició s'ha aturat per un codi
-    # ocupat, dir-li a la persona que no ha introduït mesures seria mentir-li sobre la causa.
-    if colisions:
-        return Response({
-            'codi': 'NOMENCLATURA_OCUPADA',
-            'colisions': colisions,
-            # `errors` hi va igualment perquè el client antic —i qualsevol lector que només
-            # sàpiga aplanar -- segueixi veient un text. La frase és la mateixa.
-            'errors': [c['message'] for c in colisions],
-        }, status=400)
+    # DECISIÓ 8 — el veredicte d'homonímia es demana AQUÍ, amb tot el payload llegit, i **no
+    # torna cap resposta**: es guarda per acompanyar el 200. Les files que hi surten ja són a
+    # `prepared` i s'escriuran com qualsevol altra.
+    avisos_nomenclatura = avisos_de_nomenclatura(nomenclatures)
 
     if not prepared:
         errors.append('Cal introduir almenys una mida base abans de gravar POM')
@@ -2740,6 +2737,11 @@ def gravar_pom_view(request, model_id):
         'pom_task': pom_task,
         #: La taula de talles generada en el mateix acte (o el motiu pel qual no s'ha pogut).
         'taula_talles': taula,
+        #: DECISIÓ 8 — els grups de files que comparteixen àmbit i nom de fitxa amb POMs
+        #: diferents. **Sempre present** (llista buida quan no n'hi ha cap), pel mateix
+        #: argument que `camps_de`: el consumidor no ha de distingir entre «no n'hi ha» i
+        #: «aquest backend encara no ho serveix». Tot el que hi surt JA ESTÀ DESAT.
+        'avisos_nomenclatura': avisos_nomenclatura,
     }, status=200)
 
 

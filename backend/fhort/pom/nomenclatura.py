@@ -532,3 +532,78 @@ def frase_de_colisio_nomenclatura(codi, context):
     on = 'en aquesta peça' if context['garment'] else 'en aquest model'
     return (f'«{context["nom_fitxa"]}» ja és la nomenclatura de {qui} {on}. '
             f'Dona-li una nomenclatura diferent, o canvia la d\'aquella fila.')
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# L'HOMONÍMIA DINS D'UN MATEIX DESAT — AVÍS, NO REFÚS (Agus, Decisió 8)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# 🚨 PER QUÈ AQUESTA FUNCIÓ NO ÉS UNA GERMANA DE `colisio_de_codi`, I LA DIFERÈNCIA ÉS LA LLEI.
+#
+# `colisio_de_codi` pregunta «aquest codi ja és d'un altre POM al catàleg DEL CLIENT?» — abast
+# CUSTOMER, i és la pregunta que protegeix la `UNIQUE (customer, client_code)` de la BD quan
+# algú dona d'alta un POM propi. Aquella pregunta segueix viva a `create_model_pom_view`, que
+# és on realment neix una fila d'aquella taula.
+#
+# Aplicada a `gravar_pom_view` era una pregunta ALIENA: desar la taula de mesures d'un model no
+# escriu cap `CustomerPOMAlias`, i tanmateix el refús barrava el pas per una col·lisió amb un
+# ALTRE MODEL del mateix client. Efecte mesurat (M1194): un model verge de BRW no es podia
+# gravar perquè algú, en un altre model, ja havia anomenat «B» i «SF» — i com que la pantalla
+# no oferia cap manera de reanomenar, l'única acció disponible era tornar-hi.
+#
+# La llei diu: **entre models, lliure. Dins del model, avís.** Un mateix nom de fitxa a dues
+# files de la MATEIXA peça, capa i instància, apuntant a POMs DIFERENTS, és ambigu a la fitxa
+# impresa —dues línies que es diuen igual i mesuren coses diferents— però no és cap dada
+# impossible: es desa, i qui la llegeix decideix. Un avís que bloqueja és un refús amb bones
+# maneres, i el que la formació del 26/08 va ensenyar és que un refús sense sortida no és una
+# barana: és un mur.
+#
+# ⚠️ L'ÀMBIT ES MIRA CRU I SENCER. La clau és `(garment, capa, instancia, nom_fitxa)` — els
+# QUATRE—, i ve de la mateixa normalització que farà servir l'escriptura (`_identitat_de_mesura`
+# al costat del cridador). Comparar per menys camps —o barrejar files normalitzades amb files
+# crues— és la família de defectes que aquest sprint ha anat tancant per l'altra banda: el que
+# no comparteix àmbit no és homònim, i el que el comparteix ha de caure al mateix cistell.
+#
+# La comparació del nom va en `casefold` pel mateix motiu que `alies_del_codi` fa `iexact`: qui
+# llegeix la fitxa no distingeix «AH» de «ah», i dues línies que es llegeixen igual són el cas
+# que l'avís existeix per ensenyar.
+
+def avisos_de_nomenclatura(files):
+    """Els avisos d'homonímia d'un desat, sense refusar-ne cap ni tocar la BD.
+
+    `files` és un iterable de dicts amb `ref` (com anomenar la fila a la resposta: la posició
+    dins del payload), `pom_id` i els quatre camps de l'àmbit ja normalitzats — `garment`,
+    `capa`, `instancia`, `nom_fitxa`.
+
+    Torna una llista d'avisos, un per àmbit que en tingui: mateix `(garment, capa, instancia,
+    nom_fitxa)` amb **dos `pom_id` o més**. Repetir el mateix POM no és homonímia (i el guard de
+    duplicats de la porta ja el refusa per un altre motiu: dues escriptures a la mateixa fila).
+
+    Sense nom de fitxa no hi ha res a comparar: les files sense bateig no entren mai.
+
+    L'ordre de sortida és el de la PRIMERA fila de cada grup, i els `poms`/`files` van en l'ordre
+    en què han arribat: la resposta ha de poder-se llegir al costat de la taula que s'ha desat.
+    """
+    grups = {}
+    for f in files or []:
+        nom = _net(f.get('nom_fitxa'))
+        if not nom:
+            continue
+        clau = (f.get('garment') or '', f.get('capa') or '', f.get('instancia') or '',
+                nom.casefold())
+        g = grups.get(clau)
+        if g is None:
+            g = grups[clau] = {
+                'garment': f.get('garment') or '',
+                'capa': f.get('capa') or '',
+                'instancia': f.get('instancia') or '',
+                # El literal de la PRIMERA fila: és el que la persona ha escrit i el que veurà.
+                'nom_fitxa': nom,
+                'poms': [],
+                'files': [],
+            }
+        pom_id = f.get('pom_id')
+        if pom_id is not None and pom_id not in g['poms']:
+            g['poms'].append(pom_id)
+        g['files'].append(f.get('ref'))
+    return [g for g in grups.values() if len(g['poms']) > 1]

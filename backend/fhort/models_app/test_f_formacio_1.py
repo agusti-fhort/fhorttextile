@@ -12,6 +12,10 @@ per això tots els bancs d'aquí neixen amb el camp BUIT, que és la població m
 
 La meitat pura (el resolutor i la frase) va sense BD a posta: es pot dir la llei sencera amb
 objectes de mentida, i el dia que algú torni a llegir el camp cru canta aquí.
+
+⚠️ **F3 ES VA MOURE DE PORTA el 01/09** (Decisió 8): el refús d'abast CUSTOMER es queda a
+`create_model_pom_view`, i `gravar-pom` passa a avisar sense barrar. La PART 1 —la frase— no
+es toca: la serveix la porta que sobreviu. V. la nota al cos de la PART 2.
 """
 from django.contrib.auth import get_user_model
 from django.test import SimpleTestCase
@@ -151,36 +155,24 @@ class NomsResoltsIRefusTest(TenantTestCase):
                                'nom_fitxa': nom_fitxa}]},
             format='json')
 
-    def test_f3_el_refus_es_400_ESTRUCTURAT(self):
-        r = self._grava('BT')
-        self.assertEqual(r.status_code, 400)
-        self.assertEqual(r.data['codi'], 'NOMENCLATURA_OCUPADA')
-        self.assertEqual(len(r.data['colisions']), 1)
-
-    def test_f3_el_refus_diu_tot_el_que_el_backend_sap(self):
-        c = self._grava('BT').data['colisions'][0]
-        self.assertEqual(c['client_code'], 'BT')
-        self.assertEqual(c['pom_id'], self.pom.pk)
-        self.assertEqual(c['pom_nom'], 'Leg opening girth')   # ← RESOLT, no `nom_client`
-        self.assertEqual(c['origen'], 'DICCIONARI')
-        self.assertTrue(c['pendent_revisio'])                 # ← el cas de PROD
-        self.assertIn('cercador', c['message'])
-
-    def test_f3_el_cas_ALIES_PENDENT_ofereix_revisar(self):
-        c = self._grava('BT').data['colisions'][0]
-        self.assertIn('pendent de revisió', c['message'])
-        self.assertIn('revisa', c['message'].lower())
-
-    def test_f3_MAI_MES_una_tautologia(self):
-        # 🚨 EL VERMELL QUE ES VA VEURE A LA FORMACIÓ: «BT» ja és BT. Amb `nom_client` buit i
-        # sense fallback, l'etiqueta queia al propi codi i el missatge no deia res.
-        c = self._grava('BT').data['colisions'][0]
-        self.assertNotEqual(c['pom_nom'], c['client_code'])
-
-    def test_f3_conserva_errors_per_al_client_antic(self):
-        # Qui només sàpiga aplanar `errors[]` ha de seguir llegint la MATEIXA frase.
-        r = self._grava('BT')
-        self.assertEqual(r.data['errors'], [r.data['colisions'][0]['message']])
+    # 🚨 AQUÍ HI HAVIA CINC TESTS DEL 400 DE `gravar-pom`, I LA LLEI QUE PROVAVEN JA NO
+    # ÉS D'AQUESTA PORTA (Agus, Decisió 8 · 01/09).
+    #
+    # Provaven que desar la taula de mesures d'un model refusés un `nom_fitxa` que ja fos
+    # `CustomerPOMAlias` d'un altre POM del client. F3 va fer aquell refús ACCIONABLE —deia amb
+    # què xoca i què fer—, i era una millora real sobre la tautologia que hi havia. El que F3 no
+    # va poder mirar és si la pregunta pertocava a aquesta porta: **no hi pertocava**. Desar
+    # mesures no escriu cap àlies, i el refús barrava un model VERGE per una col·lisió amb un
+    # ALTRE model (M1194).
+    #
+    # La llei d'abast CUSTOMER **segueix viva i segueix sent aquesta**, a la porta que sí que pot
+    # trencar la `UNIQUE (customer, client_code)`: `create_model_pom_view` (l'alta de POM propi),
+    # que serveix el 409 amb la MATEIXA `frase_de_colisio` que la PART 1 d'aquest fitxer prova
+    # sencera —i per això la PART 1 es queda tal com era, sense tocar-hi una línia.
+    #
+    # El que `gravar-pom` fa ara —desar i AVISAR de l'homonímia dins del model— es prova a
+    # `test_avisos_nomenclatura_m1194.py`, inclòs el banc d'aquest mateix fitxer tombat en
+    # vermell abans del canvi.
 
     def test_f3_l_altre_400_de_la_vista_segueix_sent_el_de_sempre(self):
         # El segon dels dos únics 400 d'aquesta vista: cos buit. No s'ha tocat.
