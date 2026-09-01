@@ -4165,35 +4165,31 @@ def base_measurement_noms_view(request, bm_id):
         return Response(
             {'error': 'Cal com a mínim un de: ' + ', '.join(NOMS_POM_CAMPS) + '.'}, status=400)
 
-    # DECISIÓ 7 · F2 — LA UNICITAT DINS DE L'ÀMBIT DE LA FILA (model + garment + capa).
+    # 🚨 AQUÍ HI HAVIA EL `409 NOMENCLATURA_DUPLICADA` (Decisió 7 · F2), I ARA ÉS UN AVÍS.
     #
-    # Es comprova AQUÍ, a la porta, i no amb un `unique_together`: la constraint hauria de
-    # cobrir també les files que hi ha, i el cens del 28/08 les ha de trobar netes abans que
-    # ningú la pugui posar (v. l'acta). Mentrestant aquesta és la porta per on passa tota
-    # edició humana de nomenclatura, que és on la col·lisió es pot explicar en comptes de
-    # petar.
+    # La D7 comprovava la unicitat a la porta i **no desava** si xocava. La Decisió 8 diu que
+    # la unicitat dins del model és PER MODEL i **ADVISORY**: es desa i es diu. Aquesta porta
+    # era l'última que encara barrava —el camí de gravació ja es va alinear el 01/09— i, com que
+    # `EditableTable.handleCellChange` hi desvia TOTA edició de `nom_fitxa` d'una fila ja
+    # desada, era el carreró de l'M1194 mogut a la porta del costat: el tècnic podia gravar dues
+    # files homònimes (200 + avís, com toca) i després no podia reanomenar-ne cap.
     #
-    # La consulta i la frase viuen a `pom/nomenclatura.py` i no aquí, pel mateix argument que
-    # `frase_de_colisio`: el refús ha de sonar igual vingui d'on vingui.
+    # ⚠️ EL JUTGE ÉS EL MATEIX QUE EL DE `gravar_pom_view`, i és el punt d'aquest canvi. Aquí
+    # només hi ha la consulta que converteix la fila desada i el codi nou en la llista que
+    # `avisos_de_nomenclatura` sap llegir (v. `avisos_de_rebateig`); el criteri —àmbit de
+    # quatre camps, `casefold`, ≥2 POMs— viu en UN sol lloc. Dues portes que diuen la mateixa
+    # llei amb dos criteris és el que aquest sprint ha vingut a desfer.
     #
-    # ⚠️ NOMÉS si el valor CANVIA. Re-desar una fila amb la nomenclatura que ja tenia no és
-    # cap col·lisió —és el mateix argument que `excloent_pom_id` a `colisio_de_codi`— i sense
-    # aquesta condició el cens del 28/08 es tornaria una trampa: hi ha 4 parelles vives a
-    # `fhort` (bm 3389/3390 'SR', 2288/2289 i 2230/2231 'J1', 3386/3387 'B') que són el MATEIX
-    # POM en dues INSTÀNCIES compartint codi. Són anteriors a aquesta llei i precisament el que
-    # ve a evitar; fins que es netegin, qui obri el llapis en una d'elles i deixi el codi tal
-    # com estava ha de poder desar el NOM sense que se li refusi res.
+    # ⚠️ NOMÉS es pregunta si el valor CANVIA, com abans. Re-desar el codi que la fila ja tenia
+    # no és cap homonímia nova, i preguntar-ho igualment faria que les 4 parelles vives de
+    # `fhort` (bm 3389/3390 'SR', 2288/2289 i 2230/2231 'J1', 3386/3387 'B' — el MATEIX POM en
+    # dues INSTÀNCIES) es queixessin cada cop que algú els toca el nom llarg. Amb l'àmbit de
+    # quatre camps aquelles quatre ja no són homònimes de res, però la condició es queda: el
+    # que no ha canviat no s'ha de tornar a jutjar.
+    avisos = []
     if 'nom_fitxa' in canvis and canvis['nom_fitxa'] != bm.nom_fitxa:
-        from fhort.pom.nomenclatura import (
-            colisio_de_nomenclatura, frase_de_colisio_nomenclatura,
-        )
-        germana, _etiqueta, context = colisio_de_nomenclatura(bm, canvis['nom_fitxa'])
-        if germana is not None:
-            return Response({
-                'error': frase_de_colisio_nomenclatura(canvis['nom_fitxa'], context),
-                'codi': 'NOMENCLATURA_DUPLICADA',
-                'conflicte': context,
-            }, status=409)
+        from fhort.pom.nomenclatura import avisos_de_rebateig
+        avisos = avisos_de_rebateig(bm, canvis['nom_fitxa'])
 
     for camp, valor in canvis.items():
         setattr(bm, camp, valor)
@@ -4206,6 +4202,10 @@ def base_measurement_noms_view(request, bm_id):
         'nom_traduit_model': bm.nom_traduit_model,
         'nom_fitxa': bm.nom_fitxa,
         'updated_at': bm.updated_at.isoformat(),
+        #: Decisió 8 — MATEIX NOM DE CAMP I MATEIXA FORMA que la resposta de `gravar-pom`,
+        #: perquè la pantalla els consumeixi amb el mateix codi. **Sempre present**, buit quan
+        #: no n'hi ha. Tot el que hi surt JA ESTÀ DESAT.
+        'avisos_nomenclatura': avisos,
     })
 
 
