@@ -2853,7 +2853,11 @@
     "sortir_sense_desar": "Leave without saving",
     "quedar_me": "Stay here",
     "avis_nomenclatura_titol": "Saved, with repeated names ({{count}})",
-    "avis_nomenclatura_cos": "These names repeat within the same piece on different POMs: {{noms}}. The measurements have been saved. You can leave it as is or rename the flagged rows."
+    "avis_nomenclatura_cos": "These names repeat within the same piece on different POMs: {{noms}}. The measurements have been saved. You can leave it as is or rename the flagged rows.",
+    "llei_bateig_titol": "Naming a row is free.",
+    "llei_bateig_cos": "The short nomenclature belongs to this model: you may reuse the same one as another model. If two rows within the same piece share a name over different POMs, it is saved and flagged.",
+    "llei_pom_propi_titol": "Creating a new client POM is not.",
+    "llei_pom_propi_cos": "That is done from the search box at the foot of the table, and that code must be unique in the client's catalogue: if it already exists, you will be shown which one so you can use it."
   },
   "model_fabric": {
     "err_close_table": "Could not close the table.",

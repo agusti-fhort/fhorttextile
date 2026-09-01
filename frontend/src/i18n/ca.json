@@ -2853,7 +2853,11 @@
     "sortir_sense_desar": "Sortir sense desar",
     "quedar_me": "Quedar-m’hi",
     "avis_nomenclatura_titol": "Desat, amb noms repetits ({{count}})",
-    "avis_nomenclatura_cos": "Aquests noms es repeteixen dins d'una mateixa peça sobre POMs diferents: {{noms}}. Les mesures s'han desat. Pots deixar-ho així o reanomenar les files marcades."
+    "avis_nomenclatura_cos": "Aquests noms es repeteixen dins d'una mateixa peça sobre POMs diferents: {{noms}}. Les mesures s'han desat. Pots deixar-ho així o reanomenar les files marcades.",
+    "llei_bateig_titol": "Anomenar una fila és lliure.",
+    "llei_bateig_cos": "La nomenclatura curta és d'aquest model: pots fer servir la mateixa que un altre model. Si dins d'una mateixa peça dues files es diuen igual sobre POMs diferents, es grava i s'avisa.",
+    "llei_pom_propi_titol": "Crear un POM nou del client, no.",
+    "llei_pom_propi_cos": "Es fa des del cercador del peu de taula, i aquell codi sí que ha de ser únic al catàleg del client: si ja hi és, se t'ensenyarà quin és perquè el facis servir."
   },
   "model_fabric": {
     "err_close_table": "No s'ha pogut tancar la taula.",

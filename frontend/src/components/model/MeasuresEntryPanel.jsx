@@ -528,6 +528,40 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
           </div>
         </div>
 
+        {/* ── LES DUES LLEIS DE NOMENCLATURA, DITES A LA PANTALLA (M1194 · Decisió 8) ──────
+            🚨 EXISTEIX PERQUÈ CONFONDRE-LES ÉS EL QUE VA FER MAL. A la formació del 26/08 el
+            refús deia «aquesta nomenclatura ja és al catàleg d'aquest client» mentre el tècnic
+            només estava batejant una fila del SEU model — i sense saber que són dos actes
+            diferents, l'única lectura possible era «el nom està pres» i l'única acció, tornar-hi.
+            Ara el bateig no barra; el que faltava era dir per què el que hi ha AL COSTAT sí.
+
+            Va aquí i no a un tooltip de la cel·la perquè la segona llei no viu a la cel·la:
+            viu al cercador del peu de taula. La frase ha de poder-se llegir veient totes dues
+            portes alhora. Neutra i permanent: no és un avís (no hi ha res que vagi malament),
+            és el mapa. */}
+        <div style={{ marginBottom: 14, background: 'var(--bg-main)',
+                      border: '0.5px solid var(--border)', borderRadius: 8,
+                      padding: '10px 14px', fontSize: 'var(--fs-label)',
+                      color: 'var(--text-soft)', display: 'flex',
+                      alignItems: 'flex-start', gap: 10 }}>
+          <i className="ti ti-info-circle" aria-hidden="true"
+             style={{ fontSize: 15, color: 'var(--gold)', flexShrink: 0, marginTop: 1 }} />
+          <div style={{ flex: 1, lineHeight: 1.5 }}>
+            <div>
+              <strong style={{ color: 'var(--text-main)' }}>
+                {t('model_measurements.llei_bateig_titol')}
+              </strong>{' '}
+              {t('model_measurements.llei_bateig_cos')}
+            </div>
+            <div style={{ marginTop: 3 }}>
+              <strong style={{ color: 'var(--text-main)' }}>
+                {t('model_measurements.llei_pom_propi_titol')}
+              </strong>{' '}
+              {t('model_measurements.llei_pom_propi_cos')}
+            </div>
+          </div>
+        </div>
+
         {/* SET-2/T7-B9 — UN CONTENIDOR PER PRENDA amb la GRAELLA REAL. El text d'espera se'n
             va: des del #12c l'upsert de `gravar-pom` resol per la identitat sencera i les files
             noves neixen amb el seu `garment`, o sigui que gravar des del contenidor de la 02 ja

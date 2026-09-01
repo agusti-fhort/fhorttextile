@@ -2853,7 +2853,11 @@
     "sortir_sense_desar": "Salir sin guardar",
     "quedar_me": "Quedarme",
     "avis_nomenclatura_titol": "Grabado, con nombres repetidos ({{count}})",
-    "avis_nomenclatura_cos": "Estos nombres se repiten dentro de una misma pieza sobre POMs distintos: {{noms}}. Las medidas se han grabado. Puedes dejarlo así o renombrar las filas marcadas."
+    "avis_nomenclatura_cos": "Estos nombres se repiten dentro de una misma pieza sobre POMs distintos: {{noms}}. Las medidas se han grabado. Puedes dejarlo así o renombrar las filas marcadas.",
+    "llei_bateig_titol": "Nombrar una fila es libre.",
+    "llei_bateig_cos": "La nomenclatura corta es de este modelo: puedes usar la misma que otro modelo. Si dentro de una misma pieza dos filas se llaman igual sobre POMs distintos, se graba y se avisa.",
+    "llei_pom_propi_titol": "Crear un POM nuevo del cliente, no.",
+    "llei_pom_propi_cos": "Se hace desde el buscador del pie de tabla, y ese código sí debe ser único en el catálogo del cliente: si ya existe, se te mostrará cuál para que lo uses."
   },
   "model_fabric": {
     "err_close_table": "No se ha podido cerrar la tabla.",
