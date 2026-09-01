@@ -68,3 +68,36 @@ export function nomsAmbAvis(avisos) {
   }
   return out
 }
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LA SEGONA FAMÍLIA — GERMANES HOMÒNIMES (01/09)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// 🚨 NO ÉS EL MATEIX AVÍS AMB UN ALTRE NOM, i per això té funció pròpia en comptes d'un
+// paràmetre a `avisDeLaFila`. L'homonímia real diu «dues mesures DIFERENTS es diuen igual dins
+// del mateix àmbit»; això diu «la mateixa mesura en dues instàncies es diu igual a totes dues».
+// La primera obliga a decidir quin nom canvia; la segona, a decidir si la instància val la pena.
+// Un flag que triés família dins d'una sola funció seria exactament el lloc on tornarien a
+// confondre's, que és el que el backend evita amb dos jutges separats.
+//
+// ⚠️ EL RETROBAMENT NO MIRA EL POM. Al backend el POM és indiferent per a aquesta família, i
+// mirar-lo aquí faria que l'avís no trobés la fila que l'ha provocat quan les dues germanes són
+// del mateix POM — que és justament el cas central.
+
+/**
+ * L'avís de germanes que parla d'AQUESTA fila, o `null`.
+ *
+ * Hi entra si comparteix peça i capa amb el grup, es diu igual (sense distingir caixa) i la
+ * seva instància és una de les que el grup enumera. La instància buida hi compta com una més,
+ * igual que al backend.
+ */
+export function germanaDeLaFila(germanes, fila) {
+  if (!Array.isArray(germanes) || !germanes.length || !fila) return null
+  return germanes.find(g => (
+    eix(g.garment) === eix(fila.garment)
+    && capa(g.capa) === capa(fila.capa)
+    && nom(g.nom_fitxa) === nom(fila.nom_fitxa)
+    && (g.instancies || []).some(i => eix(i) === eix(fila.instancia))
+  )) || null
+}

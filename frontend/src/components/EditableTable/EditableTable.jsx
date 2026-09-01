@@ -18,7 +18,7 @@ import {
   codiProposat, codiBase,
   clauExclusio, subeixDe, xoquen,
 } from '../../utils/diccionariMesures'
-import { avisDeLaFila } from '../../utils/avisosNomenclatura.js'
+import { avisDeLaFila, germanaDeLaFila } from '../../utils/avisosNomenclatura.js'
 import { triaAlModal } from '../instancia/instanciaTria.js'
 import { useEstatDiccionari } from '../../utils/diccionariMesuresFont'
 import { useTraduccioPoms } from '../../utils/traduccioPomFont'
@@ -186,6 +186,10 @@ export default function EditableTable({
   // que dues files d'aquest àmbit es diuen igual apuntant a POMs diferents, que a la fitxa
   // impresa són dues línies indistingibles.
   avisosNomenclatura = [],
+  // L'ALTRA FAMÍLIA (01/09): germanes de la mateixa peça i capa amb la instància diferent que
+  // comparteixen nom. Va per prop SEPARAT i no fos amb l'anterior a posta — són dues preguntes
+  // amb dues sortides diferents (allà, quin nom canvia; aquí, si la instància val la pena).
+  avisosGermanes = [],
   // `null` = mode autoria_base. Amb objecte = mode presa, i porta les portes per fila:
   //   {baseLabel, onValor(row,val), onIdentitat(row,camps), onParteix(row,filles),
   //    onNova(pom,eixos), onTreu(row), onReordena(ids)}
@@ -406,6 +410,10 @@ export default function EditableTable({
   // creixés, un avís resolt no marxaria mai i la taula acabaria plena de marques mortes.
   // El valor és l'avís o `null` — el `null` és el que esborra la marca.
   const [avisosPerFila, setAvisosPerFila] = useState({})
+  // El mateix registre per a l'altra família. Dos estats bessons i no un de sol amb una clau
+  // de família: fer-lo genèric demanaria un paràmetre que decidís de quina família parla cada
+  // entrada, i aquell paràmetre és justament el lloc on les dues es tornarien a confondre.
+  const [germanesPerFila, setGermanesPerFila] = useState({})
 
   const handleBateig = (bmId, camps) => {
     return marcaDesat(baseMeasurements.setNoms(bmId, camps)
@@ -416,6 +424,8 @@ export default function EditableTable({
         // `gravar-pom`, i per això el pinta la MATEIXA ranura (v. `avisDeLaFila`).
         const avis = r?.data?.avisos_nomenclatura?.[0] || null
         setAvisosPerFila(prev => (prev[bmId] === avis ? prev : { ...prev, [bmId]: avis }))
+        const germana = r?.data?.avisos_germanes?.[0] || null
+        setGermanesPerFila(prev => (prev[bmId] === germana ? prev : { ...prev, [bmId]: germana }))
       }))
       .catch(e => console.error('No s\'ha pogut desar el nom', e))
   }
@@ -807,6 +817,8 @@ export default function EditableTable({
   // `avisDeLaFila`, no l'origen.
   const avisosVius = [...(avisosNomenclatura || []),
                       ...Object.values(avisosPerFila).filter(Boolean)]
+  const germanesVives = [...(avisosGermanes || []),
+                         ...Object.values(germanesPerFila).filter(Boolean)]
 
 
   // La GUARDA DE PLAUSIBILITAT del Δ (FIX-4) se'n va amb el bloc de regla: sense camp Δ en
@@ -1055,6 +1067,7 @@ export default function EditableTable({
                     onDelete={handleDeleteRow}
                     onBateig={handleBateig}
                     avis={avisDeLaFila(avisosVius, row)}
+                    germana={germanaDeLaFila(germanesVives, row)}
                     widths={{ capa: W_CAPA, codi: W_CODI, nom: W_NOM }}
                     registerVal={registerVal}
                     onNav={navVal}
@@ -1220,7 +1233,7 @@ export default function EditableTable({
 }
 
 function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, onDelete,
-                       avis, onBateig, widths, registerVal, onNav, esPresa, traduccioDe,
+                       avis, germana, onBateig, widths, registerVal, onNav, esPresa, traduccioDe,
                        dicc, dims, dimState, onParteix, onDesfa, onMesInstancia, onGermanaCapa,
                        capesLliures, onCapa, mostraGrading = false, sizeRun = [] }) {
   const { t, i18n } = useTranslation()
@@ -1349,6 +1362,33 @@ function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, o
                 `@tabler/icons-react` no hi entren enlloc). Outline, com mana la norma. */}
             <i className="ti ti-alert-triangle" style={{ fontSize: 11, flexShrink: 0, marginTop: 1 }} />
             <span>{t('editable_table.avis_homonimia')}</span>
+          </div>
+        )}
+        {/* LA SEGONA FAMÍLIA — GERMANES HOMÒNIMES, I NO ES POT PINTAR COM L'ALTRA.
+            L'avís de dalt diu «dues mesures DIFERENTS es diuen igual» i el que cal decidir és
+            quin nom canvia. Aquest diu «la MATEIXA mesura en dues instàncies es diu igual a
+            totes dues», i el que cal decidir és si la instància val la pena. Són dues
+            converses, i pintar-les amb la mateixa marca les tornaria una de sola.
+            Per això va sense fons de color —no és una marca de dada, és una observació— i amb
+            la fletxa de doble sentit, que és el que la distingeix d'un cop d'ull. `role="status"`
+            i mai `alert`: descriu una fila que ja és a la BD i no demana res. */}
+        {germana && (
+          <div role="status"
+               title={t('editable_table.avis_germanes_detall', {
+                 nom: germana.nom_fitxa,
+                 instancies: (germana.instancies || [])
+                   .map(i => etiquetaInstancia(i, dicc) || t('editable_table.instancia_unica'))
+                   .join(' · '),
+               })}
+               style={{
+                 fontSize: 10, lineHeight: 1.3, marginTop: 3, maxWidth: 190,
+                 whiteSpace: 'normal', color: 'var(--text-soft)',
+                 border: '0.5px solid var(--border)', borderRadius: 4, padding: '2px 5px',
+                 display: 'inline-flex', alignItems: 'flex-start', gap: 4,
+               }}>
+            <i className="ti ti-arrows-left-right"
+               style={{ fontSize: 11, flexShrink: 0, marginTop: 1 }} />
+            <span>{t('editable_table.avis_germanes')}</span>
           </div>
         )}
         {row.is_key && (

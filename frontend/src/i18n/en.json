@@ -3485,7 +3485,10 @@
     "ja_gravat": "Measurements are saved",
     "res_per_desar": "No changes to save",
     "avis_homonimia": "Name repeated in this scope",
-    "avis_homonimia_detall": "Another row in this piece, layer and instance is also called “{{nom}}” but measures a different POM. It has been saved anyway: on the printed spec the two lines will read the same."
+    "avis_homonimia_detall": "Another row in this piece, layer and instance is also called “{{nom}}” but measures a different POM. It has been saved anyway: on the printed spec the two lines will read the same.",
+    "avis_germanes": "Siblings sharing a name",
+    "avis_germanes_detall": "This measurement is called “{{nom}}” in more than one instance ({{instancies}}) of the same piece and layer. It has been saved: on the printed spec the lines will read the same and there will be no telling them apart.",
+    "instancia_unica": "single"
   },
   "dashboard": {
     "tab_home": "Home",

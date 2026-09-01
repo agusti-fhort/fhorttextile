@@ -3485,7 +3485,10 @@
     "ja_gravat": "Les mesures estan gravades",
     "res_per_desar": "No hi ha canvis per desar",
     "avis_homonimia": "Nom repetit en aquest àmbit",
-    "avis_homonimia_detall": "Una altra fila d'aquesta peça, capa i instància també es diu «{{nom}}» però mesura un POM diferent. S'ha desat igualment: a la fitxa impresa les dues línies es llegiran igual."
+    "avis_homonimia_detall": "Una altra fila d'aquesta peça, capa i instància també es diu «{{nom}}» però mesura un POM diferent. S'ha desat igualment: a la fitxa impresa les dues línies es llegiran igual.",
+    "avis_germanes": "Germanes amb el mateix nom",
+    "avis_germanes_detall": "Aquesta mesura es diu «{{nom}}» a més d'una instància ({{instancies}}) de la mateixa peça i capa. S'ha desat: a la fitxa impresa les línies es llegiran igual i no se sabrà quina és quina.",
+    "instancia_unica": "única"
   },
   "dashboard": {
     "tab_home": "Inici",

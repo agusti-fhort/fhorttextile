@@ -8,7 +8,7 @@
 // canta ningú — un avís mut és pitjor que cap avís, perquè fa creure que s'ha mirat.
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { avisDeLaFila, nomsAmbAvis } from './avisosNomenclatura.js'
+import { avisDeLaFila, germanaDeLaFila, nomsAmbAvis } from './avisosNomenclatura.js'
 
 const AVIS = { garment: '', capa: 'exterior', instancia: '', nom_fitxa: 'B',
                poms: [904, 907], files: [0, 1] }
@@ -60,4 +60,51 @@ test('els noms per a la capçalera van sense repetir i en ordre', () => {
                    ['B', 'X1'])
   assert.deepEqual(nomsAmbAvis([]), [])
   assert.deepEqual(nomsAmbAvis(null), [])
+})
+
+// ─── LA SEGONA FAMÍLIA · GERMANES HOMÒNIMES ──────────────────────────────────────────────
+// El que aquest bloc protegeix: que la funció de germanes **no miri el POM**. Al backend és
+// indiferent, i mirar-lo aquí deixaria sense marca el cas CENTRAL (dues instàncies del mateix
+// POM) — l'avís existiria a la resposta i cap fila s'encendria.
+const GERM = { garment: '', capa: 'exterior', nom_fitxa: 'AH',
+               instancies: ['left', 'right'], files: [10, 11] }
+const g = (o) => ({ pom_id: 904, capa: 'exterior', instancia: 'left', garment: '',
+                    nom_fitxa: 'AH', ...o })
+
+test('les dues germanes que el grup enumera el troben', () => {
+  assert.equal(germanaDeLaFila([GERM], g()), GERM)
+  assert.equal(germanaDeLaFila([GERM], g({ instancia: 'right' })), GERM)
+})
+
+test('🚨 el POM NO hi entra: el cas central és el MATEIX POM a les dues germanes', () => {
+  assert.equal(germanaDeLaFila([GERM], g({ pom_id: 907 })), GERM)
+  assert.equal(germanaDeLaFila([GERM], g({ pom_id: undefined })), GERM)
+})
+
+test('una instància que el grup no enumera no el troba', () => {
+  assert.equal(germanaDeLaFila([GERM], g({ instancia: 'top' })), null)
+  assert.equal(germanaDeLaFila([GERM], g({ instancia: '' })), null)
+})
+
+test('la instància BUIDA hi compta quan el grup la porta', () => {
+  const amb = { ...GERM, instancies: ['', 'left'] }
+  assert.equal(germanaDeLaFila([amb], g({ instancia: '' })), amb)
+  assert.equal(germanaDeLaFila([amb], g({ instancia: undefined })), amb)
+})
+
+test('peça i capa separen; la caixa del nom no', () => {
+  assert.equal(germanaDeLaFila([GERM], g({ garment: '02' })), null)
+  assert.equal(germanaDeLaFila([GERM], g({ capa: 'folre' })), null)
+  assert.equal(germanaDeLaFila([GERM], g({ nom_fitxa: 'ah' })), GERM)
+})
+
+test('la capa buida de la fila és la «exterior» del grup, com a l\'altra família', () => {
+  assert.equal(germanaDeLaFila([GERM], g({ capa: '' })), GERM)
+})
+
+test('sense grups, sense fila o amb brossa torna null', () => {
+  assert.equal(germanaDeLaFila([], g()), null)
+  assert.equal(germanaDeLaFila(null, g()), null)
+  assert.equal(germanaDeLaFila([GERM], null), null)
+  assert.equal(germanaDeLaFila([{ ...GERM, instancies: undefined }], g()), null)
 })

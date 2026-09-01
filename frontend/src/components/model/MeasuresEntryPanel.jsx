@@ -84,6 +84,10 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
   // S'HA DESAT. Per això viu fora del modal —el modal ja s'ha tancat quan arriba— i es queda
   // encès sobre la taula fins que el tècnic el resol o desa una altra vegada.
   const [avisosNomen, setAvisosNomen] = useState([])
+  // L'ALTRA FAMÍLIA (01/09). El panell només la transporta: la banda de resum de dalt és de
+  // l'homonímia, i les germanes es diuen a la FILA —que és on es veuen les dues alhora i on la
+  // pregunta («val la pena aquesta instància?») té sentit—.
+  const [germanesNomen, setGermanesNomen] = useState([])
   const [pomReseed, setPomReseed] = useState(false)
   const pendingPayloadRef = useRef(null)
   const confirmRef = useRef(null)
@@ -262,6 +266,7 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
     setError('')
     // L'avís és del DESAT, no de la taula: un desat nou el torna a decidir de zero.
     setAvisosNomen([])
+    setGermanesNomen([])
     setPomConfirmOpen(true)
   })
 
@@ -274,6 +279,7 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
       // del gest —no el pot cancel·lar ni reobrir—: descriu una ambigüitat que ja és a la BD.
       // Per això es desa a l'estat DESPRÉS de tancar i resoldre, i no abans.
       setAvisosNomen(r?.data?.avisos_nomenclatura || [])
+      setGermanesNomen(r?.data?.avisos_germanes || [])
       setPomConfirmOpen(false)
       confirmRef.current?.resolve()
       confirmRef.current = null
@@ -610,6 +616,7 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
                per `peca.codi` seria una segona regla d'àmbit que podria divergir de la del
                backend. */
             avisosNomenclatura={avisosNomen}
+            avisosGermanes={germanesNomen}
           />
         </>)
         }}</PecesDelModel>

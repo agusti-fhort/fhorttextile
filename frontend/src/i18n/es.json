@@ -3485,7 +3485,10 @@
     "ja_gravat": "Las medidas están guardadas",
     "res_per_desar": "No hay cambios que guardar",
     "avis_homonimia": "Nombre repetido en este ámbito",
-    "avis_homonimia_detall": "Otra fila de esta pieza, capa e instancia también se llama «{{nom}}» pero mide un POM distinto. Se ha grabado igualmente: en la ficha impresa las dos líneas se leerán igual."
+    "avis_homonimia_detall": "Otra fila de esta pieza, capa e instancia también se llama «{{nom}}» pero mide un POM distinto. Se ha grabado igualmente: en la ficha impresa las dos líneas se leerán igual.",
+    "avis_germanes": "Hermanas con el mismo nombre",
+    "avis_germanes_detall": "Esta medida se llama «{{nom}}» en más de una instancia ({{instancies}}) de la misma pieza y capa. Se ha grabado: en la ficha impresa las líneas se leerán igual y no se sabrá cuál es cuál.",
+    "instancia_unica": "única"
   },
   "dashboard": {
     "tab_home": "Inicio",
