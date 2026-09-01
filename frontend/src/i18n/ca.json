@@ -2852,8 +2852,12 @@
     "sortir_amb_canvis_cos": "Si surts ara, els canvis d’aquests contenidors es perdran. Tanca aquest avís i grava’ls al contenidor on els has fet.",
     "sortir_sense_desar": "Sortir sense desar",
     "quedar_me": "Quedar-m’hi",
-    "colisio_title": "Nomenclatura ocupada ({{count}})",
-    "colisio_pendent": "pendent de revisió"
+    "avis_nomenclatura_titol": "Desat, amb noms repetits ({{count}})",
+    "avis_nomenclatura_cos": "Aquests noms es repeteixen dins d'una mateixa peça sobre POMs diferents: {{noms}}. Les mesures s'han desat. Pots deixar-ho així o reanomenar les files marcades.",
+    "llei_bateig_titol": "Anomenar una fila és lliure.",
+    "llei_bateig_cos": "La nomenclatura curta és d'aquest model: pots fer servir la mateixa que un altre model. Si dins d'una mateixa peça dues files es diuen igual sobre POMs diferents, es grava i s'avisa.",
+    "llei_pom_propi_titol": "Crear un POM nou del client, no.",
+    "llei_pom_propi_cos": "Es fa des del cercador del peu de taula, i aquell codi sí que ha de ser únic al catàleg del client: si ja hi és, se t'ensenyarà quin és perquè el facis servir."
   },
   "model_fabric": {
     "err_close_table": "No s'ha pogut tancar la taula.",
@@ -3480,7 +3484,11 @@
     "finder_seccio_casa": "catàleg de la casa",
     "ja_gravat": "Les mesures estan gravades",
     "res_per_desar": "No hi ha canvis per desar",
-    "nomenclatura_duplicada": "Aquesta nomenclatura ja és d'una altra fila d'aquest àmbit."
+    "avis_homonimia": "Nom repetit en aquest àmbit",
+    "avis_homonimia_detall": "Una altra fila d'aquesta peça, capa i instància també es diu «{{nom}}» però mesura un POM diferent. S'ha desat igualment: a la fitxa impresa les dues línies es llegiran igual.",
+    "avis_germanes": "Germanes amb el mateix nom",
+    "avis_germanes_detall": "Aquesta mesura es diu «{{nom}}» a més d'una instància ({{instancies}}) de la mateixa peça i capa. S'ha desat: a la fitxa impresa les línies es llegiran igual i no se sabrà quina és quina.",
+    "instancia_unica": "única"
   },
   "dashboard": {
     "tab_home": "Inici",

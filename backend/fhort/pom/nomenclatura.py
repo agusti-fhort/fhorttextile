@@ -446,89 +446,267 @@ CAMPS_QUE_SEPAREN = ('codi_client', 'nom_client', 'categoria') + COM_ES_MESURA
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# LA COL·LISIÓ DE NOMENCLATURA DINS D'UN MODEL (Decisió 7, 2026-08-28)
+# L'HOMONÍMIA DINS D'UN MATEIX DESAT — AVÍS, NO REFÚS (Agus, Decisió 8)
 # ─────────────────────────────────────────────────────────────────────────────
 #
-# `colisio_de_codi` (a dalt) vigila el catàleg del CLIENT: que dos POMs d'un mateix client no
-# es diguin igual. Això és un nivell amunt i NO serveix aquí. El que la Decisió 7 demana és el
-# nivell de sota: que dues FILES DEL MATEIX MODEL no comparteixin `nom_fitxa`.
+# 🚨 PER QUÈ AQUESTA FUNCIÓ NO ÉS UNA GERMANA DE `colisio_de_codi`, I LA DIFERÈNCIA ÉS LA LLEI.
 #
-# 🚨 I NO ÉS UNA PRECAUCIÓ TEÒRICA: la fitxa tècnica JA HO ASSUMEIX. El lligam fletxa↔fila del
-# `TechSheetEditor` es resol pel TEXT de la nomenclatura i ho diu al seu comentari —«és exacte
-# per al cas real (els nom_fitxa són curts i únics dins un model)»—. Fins avui el valor el
-# sembrava l'import, i un document de client rarament repeteix codi; a partir d'ara el sembra
-# una persona. El supòsit passa de «cert per costum» a «cert perquè es comprova».
+# `colisio_de_codi` pregunta «aquest codi ja és d'un altre POM al catàleg DEL CLIENT?» — abast
+# CUSTOMER, i és la pregunta que protegeix la `UNIQUE (customer, client_code)` de la BD quan
+# algú dona d'alta un POM propi. Aquella pregunta segueix viva a `create_model_pom_view`, que
+# és on realment neix una fila d'aquella taula.
 #
-# ── L'ÀMBIT ÉS model + garment + capa, i no és la clau de fila sencera ───────────
-# La clau de fila és `(model, pom, capa, instancia, garment)`. L'àmbit d'unicitat en deixa
-# fora DOS eixos, i cadascun per un motiu diferent:
-#   · `pom` — òbviament: si hi entrés, la comprovació no compararia res (una fila només xoca
-#     amb ella mateixa). El sentit de la llei és justament que DOS POMs diferents no es puguin
-#     dir igual dins de la mateixa peça.
-#   · `instancia` — a posta: dues instàncies del mateix POM a la mateixa peça i capa (la sisa
-#     dreta i l'esquerra) SÓN el cas que ha de tenir nomenclatures diferents. Deixar-la fora
-#     de l'àmbit és el que fa que 'AH' i 'AH' a dues instàncies germanes es refusi, que és el
-#     que la comporta `instancia_exigeix_nom` (migració 0074) ja intentava assegurar demanant
-#     que en tinguessin una.
+# Aplicada a `gravar_pom_view` era una pregunta ALIENA: desar la taula de mesures d'un model no
+# escriu cap `CustomerPOMAlias`, i tanmateix el refús barrava el pas per una col·lisió amb un
+# ALTRE MODEL del mateix client. Efecte mesurat (M1194): un model verge de BRW no es podia
+# gravar perquè algú, en un altre model, ja havia anomenat «B» i «SF» — i com que la pantalla
+# no oferia cap manera de reanomenar, l'única acció disponible era tornar-hi.
 #
-# Viu aquí i no a la vista pel mateix argument que `frase_de_colisio`: el refús ha de sonar
-# igual vingui d'on vingui, i el dia que millori ha de millorar a totes les portes alhora.
+# La llei diu: **entre models, lliure. Dins del model, avís.** Un mateix nom de fitxa a dues
+# files de la MATEIXA peça, capa i instància, apuntant a POMs DIFERENTS, és ambigu a la fitxa
+# impresa —dues línies que es diuen igual i mesuren coses diferents— però no és cap dada
+# impossible: es desa, i qui la llegeix decideix. Un avís que bloqueja és un refús amb bones
+# maneres, i el que la formació del 26/08 va ensenyar és que un refús sense sortida no és una
+# barana: és un mur.
+#
+# ⚠️ L'ÀMBIT ES MIRA CRU I SENCER. La clau és `(garment, capa, instancia, nom_fitxa)` — els
+# QUATRE—, i ve de la mateixa normalització que farà servir l'escriptura (`_identitat_de_mesura`
+# al costat del cridador). Comparar per menys camps —o barrejar files normalitzades amb files
+# crues— és la família de defectes que aquest sprint ha anat tancant per l'altra banda: el que
+# no comparteix àmbit no és homònim, i el que el comparteix ha de caure al mateix cistell.
+#
+# La comparació del nom va en `casefold` pel mateix motiu que `alies_del_codi` fa `iexact`: qui
+# llegeix la fitxa no distingeix «AH» de «ah», i dues línies que es llegeixen igual són el cas
+# que l'avís existeix per ensenyar.
 
-def colisio_de_nomenclatura(bm, codi):
-    """`(fila, etiqueta, context)` si `codi` ja el porta una ALTRA fila del mateix àmbit.
+def avisos_de_nomenclatura(files):
+    """Els avisos d'homonímia d'un desat, sense refusar-ne cap ni tocar la BD.
 
-    `(None, None, None)` si és lliure, si el codi és buit (treure el bateig no xoca mai amb
-    ningú) o si la fila que el porta és la mateixa que s'està editant.
+    `files` és un iterable de dicts amb `ref` (com anomenar la fila a la resposta: la posició
+    dins del payload), `pom_id` i els quatre camps de l'àmbit ja normalitzats — `garment`,
+    `capa`, `instancia`, `nom_fitxa`.
 
-    `bm` és la `BaseMeasurement` que s'edita: d'ella surt l'àmbit (model + garment + capa) i
-    l'exclusió d'ella mateixa. No es fa cap consulta si el codi ve buit.
+    Torna una llista d'avisos, un per àmbit que en tingui: mateix `(garment, capa, instancia,
+    nom_fitxa)` amb **dos `pom_id` o més**. Repetir el mateix POM no és homonímia (i el guard de
+    duplicats de la porta ja el refusa per un altre motiu: dues escriptures a la mateixa fila).
+
+    Sense nom de fitxa no hi ha res a comparar: les files sense bateig no entren mai.
+
+    L'ordre de sortida és el de la PRIMERA fila de cada grup, i els `poms`/`files` van en l'ordre
+    en què han arribat: la resposta ha de poder-se llegir al costat de la taula que s'ha desat.
+    """
+    grups = {}
+    for f in files or []:
+        nom = _net(f.get('nom_fitxa'))
+        if not nom:
+            continue
+        clau = (f.get('garment') or '', f.get('capa') or '', f.get('instancia') or '',
+                nom.casefold())
+        g = grups.get(clau)
+        if g is None:
+            g = grups[clau] = {
+                'garment': f.get('garment') or '',
+                'capa': f.get('capa') or '',
+                'instancia': f.get('instancia') or '',
+                # El literal de la PRIMERA fila: és el que la persona ha escrit i el que veurà.
+                'nom_fitxa': nom,
+                'poms': [],
+                'files': [],
+            }
+        pom_id = f.get('pom_id')
+        if pom_id is not None and pom_id not in g['poms']:
+            g['poms'].append(pom_id)
+        g['files'].append(f.get('ref'))
+    return [g for g in grups.values() if len(g['poms']) > 1]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# EL REBATEIG D'UNA FILA JA DESADA — AVÍS, NO REFÚS (Decisió 8, 2026-09-01)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# 🚨 AQUÍ HI HAVIA `colisio_de_nomenclatura` I `frase_de_colisio_nomenclatura` (Decisió 7), I
+# LA LLEI QUE SERVIEN HA CANVIAT DE VEREDICTE.
+#
+# Aquelles dues resolien el `409 NOMENCLATURA_DUPLICADA` de `base_measurement_noms_view`: si el
+# codi nou ja el portava una germana, la porta refusava i **no desava res**. La Decisió 8 diu
+# que la unicitat dins del model és ADVISORY —desar i avisar, mai barrar—, i amb això el refús
+# es queda sense llei que el sostingui. Les dues funcions no tenien cap altre cridador (censat
+# l'01/09: només `views.py:4188-4193`), o sigui que se'n van senceres en comptes de quedar-se
+# com una porta morta que el pròxim que passi pugui tornar a endollar.
+#
+# El que les substitueix NO és una versió amable d'elles: és **la mateixa funció que ja jutja el
+# camí de gravació** (`avisos_de_nomenclatura`, just aquí sobre). Dues portes que diuen la
+# mateixa llei no poden tenir dos criteris —és el mateix argument amb què `frase_de_colisio`
+# viu aquí i no a la vista—, i la manera de garantir-ho no és copiar la regla sinó no tenir-ne
+# dues còpies. Això d'aquí baix és **només** la consulta que converteix una fila desada i el
+# seu codi nou en la llista de files que aquella funció sap llegir.
+#
+# ── ELS TRES CANVIS RESPECTE DE LA D7, I QUÈ EN DEIXA DE VEURE ──────────────────────────
+#
+#  1. **ADVISORY**: 200 amb avisos, mai 409. L'escriptura del nom procedeix sempre.
+#  2. **L'ÀMBIT PASSA DE 3 CAMPS A 4**: hi entra `instancia`.
+#  3. **NOMÉS XOCA SI EL POM DIFEREIX**: `avisos_de_nomenclatura` demana ≥2 `pom_id`.
+#
+# ⚠️ EL 2 I EL 3 SÓN, CADASCUN PEL SEU COMPTE, LA MARXA ENRERE D'UN ARGUMENT EXPLÍCIT DE LA D7,
+# I VAL MÉS QUE CONSTI QUE NO ÉS UN OBLIT. La D7 deixava `instancia` fora de l'àmbit **a
+# posta**, i el comentari que hi havia aquí ho deia amb totes les lletres: dues instàncies del
+# mateix POM a la mateixa peça i capa (la sisa dreta i l'esquerra) són justament el cas que ha
+# de tenir nomenclatures diferents, i deixar l'eix fora era el que feia que 'AH' i 'AH' a dues
+# germanes es refusés.
+#
+# Amb la D8, aquell cas queda **MUT PER PARTIDA DOBLE** —l'àmbit el separa I el POM no
+# difereix—, i `instancia_exigeix_nom` (migració 0074) no el cobreix: aquella comporta demana
+# que una fila amb instància tingui *un* nom, no que en tingui un de DIFERENT
+# (`CHECK (NOT (instancia > '' AND nom_fitxa = ''))`, verificat viu a la BD l'01/09). Qui algun
+# dia vulgui recuperar aquella vigilància, que la faci com el que la D8 permet —**un avís
+# propi**, d'una altra família—, no tornant a tancar aquesta porta.
+
+def avisos_de_rebateig(bm, codi):
+    """Els avisos que deixaria rebatejar `bm` amb `codi`. Consulta i prou: no escriu res.
+
+    Torna la MATEIXA forma que `avisos_de_nomenclatura` —una llista de grups
+    `{garment, capa, instancia, nom_fitxa, poms, files}`— perquè el client la pugui consumir
+    amb el mateix codi amb què consumeix la de `gravar-pom`. Llista buida si el codi és buit
+    (treure el bateig no és mai homonímia) o si no hi ha cap germana.
+
+    `bm` és la `BaseMeasurement` que s'edita: d'ella surten els QUATRE camps de l'àmbit i
+    l'exclusió d'ella mateixa.
+
+    ⚠️ EL CODI QUE ES JUTJA ÉS EL NOU, NO EL QUE LA FILA TÉ DESAT. La fila entra a la llista
+    amb `codi` i no amb `bm.nom_fitxa`: la pregunta és «com quedarà això quan s'hagi desat», i
+    fer-la amb el valor vell donaria el veredicte del passat.
+
+    ⚠️ `ref` ÉS LA PK i no una posició. A `gravar-pom` les files encara no existeixen i la
+    referència només pot ser l'índex del payload; aquí ja existeixen totes i la PK és el que la
+    pantalla sap fer servir. Les dues respostes són la mateixa forma amb el mateix significat
+    de `ref` —«com anomena el cridador aquesta fila»—, i el retrobament del client no en depèn:
+    va per àmbit + nom + POM (v. `utils/avisosNomenclatura.js`).
     """
     codi = _net(codi)
-    if not codi or bm is None:
-        return None, None, None
+    if bm is None or not codi:
+        return []
     from fhort.models_app.models import BaseMeasurement
 
-    germana = (BaseMeasurement.objects
-               .filter(model_id=bm.model_id, garment=bm.garment or '', capa=bm.capa or '',
-                       nom_fitxa__iexact=codi)
-               .exclude(pk=bm.pk)
-               .select_related('pom', 'pom__pom_global')
-               .order_by('ordre', 'pk')
-               .first())
-    if germana is None:
-        return None, None, None
-
-    noms = noms_de(germana.pom)
-    nom = (germana.nom_canonic_model or germana.nom_traduit_model
-           or noms['nom_en'] or noms['nom_ca'] or '').strip()
-    context = {
-        'nom_fitxa': germana.nom_fitxa,
-        'fila_id': germana.pk,
-        'pom_nom': nom,
-        'pom_codi': codi_de(germana.pom),
-        'instancia': germana.instancia or '',
-        'garment': germana.garment or '',
+    ambit = {
+        'garment': bm.garment or '',
+        'capa': bm.capa or '',
+        'instancia': bm.instancia or '',
     }
-    return germana, nom, context
+    # L'ÀMBIT DE QUATRE CAMPS, i `iexact` pel mateix motiu que `alies_del_codi`: qui llegeix la
+    # fitxa no distingeix «AH» de «ah». La comparació fina la torna a fer el jutge amb
+    # `casefold`; això només és la xarxa que porta les candidates.
+    germanes = (BaseMeasurement.objects
+                .filter(model_id=bm.model_id, nom_fitxa__iexact=codi, **ambit)
+                .exclude(pk=bm.pk)
+                .order_by('ordre', 'pk'))
+
+    files = [{'ref': bm.pk, 'pom_id': bm.pom_id, 'nom_fitxa': codi, **ambit}]
+    files += [{'ref': g.pk, 'pom_id': g.pom_id, 'nom_fitxa': g.nom_fitxa, **ambit}
+              for g in germanes]
+    return avisos_de_nomenclatura(files)
 
 
-def frase_de_colisio_nomenclatura(codi, context):
-    """LA FRASE DEL REFÚS d'unicitat dins del model, una i la mateixa a totes les portes.
+# ─────────────────────────────────────────────────────────────────────────────
+# LES GERMANES HOMÒNIMES — LA VIGILÀNCIA DE LA D7, RECUPERADA COM A AVÍS (01/09)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# 🚨 AIXÒ NO ÉS UNA VARIANT DE L'HOMONÍMIA: ÉS UNA ALTRA FAMÍLIA, I BARREJAR-LES SERIA DESFER
+# EL TRAM D'AVUI. Les dues preguntes tenen la mateixa forma —«dues files es diuen igual»— i
+# responen coses diferents:
+#
+#   · **Homonímia real** (`avisos_de_nomenclatura`): mateix nom al MATEIX àmbit de quatre
+#     camps, amb POMs DIFERENTS. Dues mesures distintes que es diuen igual: la fitxa impresa
+#     no les pot separar.
+#   · **Germanes homònimes** (aquí): mateix nom a la mateixa peça i capa, amb la INSTÀNCIA
+#     DIFERENT. El POM és indiferent. La sisa dreta i l'esquerra totes dues «AH»: el bateig no
+#     fa la feina per la qual la instància existeix.
+#
+# Són ORTOGONALS i poden encendre's alhora sobre files diferents del mateix desat; per això van
+# en camps de resposta separats i no es fonen mai en una llista. Dues funcions llegibles i no
+# una amb un flag que decideixi família: el flag seria exactament el lloc on tornarien a
+# confondre's.
+#
+# ── D'ON VE, I PER QUÈ TORNA D'AQUESTA MANERA ───────────────────────────────────────────
+# La Decisió 7 vigilava aquest cas SENSE nomenar-lo: deixava `instancia` fora de l'àmbit
+# d'unicitat a posta, i així dues germanes amb el mateix codi es refusaven amb un 409. La
+# Decisió 8 va posar l'eix dins de l'àmbit (i el refús va passar a avís), i amb això el cas va
+# quedar mut per partida doble — l'àmbit el separa I el POM no difereix. `instancia_exigeix_nom`
+# (migració 0074) tampoc no el cobreix: demana que una fila amb instància tingui *un* nom, no
+# que en tingui un de DIFERENT.
+#
+# Torna, doncs, per on la D8 permet: **un avís propi**, mai un bloqueig, mai una porta tancada.
+# El `TechSheetEditor` lliga fletxa↔fila pel TEXT de la nomenclatura i el seu comentari declara
+# el supòsit «curts i únics dins un model»; això és el que torna a fer-lo visible.
+#
+# ⚠️ LA INSTÀNCIA BUIDA COMPTA COM UNA MÉS. Una fila sense instància i una de `left` que es
+# diguin totes dues «AH» són dues línies indistingibles al paper exactament igual que `left` i
+# `right`. Tractar `''` com «no és una instància» deixaria fora el cas més fàcil de fabricar
+# (afegir una germana a una fila que no en tenia).
+#
+# ⚠️ NO FILTRA `is_active`, deliberadament i **igual que l'altra família**. És deute conegut i
+# anotat: una fila podada pot encendre un avís que la pantalla no sap on posar. Es deixa idèntic
+# a posta perquè les dues famílies es comportin igual i s'arreglin d'una sola vegada.
 
-    ««AH» ja és la nomenclatura de Armhole girth (AH) en aquesta peça. Dona-li una
-    nomenclatura diferent, o canvia la d'aquella fila.»
+def germanes_homonimes(files):
+    """Els grups de germanes que comparteixen nom de fitxa. Ni BD ni escriptura.
 
-    ⚠️ Mateixa doctrina que `frase_de_colisio`: **diu amb què xoca i què pot fer**. No proposa
-    cap codi — la sortida no és inventar-ne un, és ensenyar el que ja hi és perquè qui edita
-    decideixi quin dels dos ha de canviar.
+    `files` és el MATEIX iterable que menja `avisos_de_nomenclatura` —`ref`, `pom_id`,
+    `garment`, `capa`, `instancia`, `nom_fitxa`—, i a posta: els dos jutges han de poder mirar
+    exactament la mateixa taula i respondre coses diferents.
+
+    Torna un grup per `(garment, capa, nom_fitxa)` que tingui **dues instàncies o més**. El
+    `pom_id` no hi entra: dues germanes del mateix POM són el cas central, i dues de POMs
+    diferents també es llegeixen igual al paper.
+
+    La forma és germana de l'altra família però **no idèntica**, i la diferència és honesta:
+    aquí no hi ha una `instancia` sinó `instancies`, perquè el grup travessa l'eix en comptes
+    de viure-hi dins.
     """
-    if not context:
-        return f'«{codi}» ja és la nomenclatura d\'una altra fila d\'aquest model.'
-    qui = context['pom_nom'] or context['pom_codi'] or ''
-    if context['pom_codi'] and context['pom_codi'] != context['nom_fitxa'] and qui:
-        qui = f'{qui} ({context["pom_codi"]})'
-    if context['instancia']:
-        qui = f'{qui} · {context["instancia"]}' if qui else context['instancia']
-    on = 'en aquesta peça' if context['garment'] else 'en aquest model'
-    return (f'«{context["nom_fitxa"]}» ja és la nomenclatura de {qui} {on}. '
-            f'Dona-li una nomenclatura diferent, o canvia la d\'aquella fila.')
+    grups = {}
+    for f in files or []:
+        nom = _net(f.get('nom_fitxa'))
+        if not nom:
+            continue
+        clau = (f.get('garment') or '', f.get('capa') or '', nom.casefold())
+        g = grups.get(clau)
+        if g is None:
+            g = grups[clau] = {
+                'garment': f.get('garment') or '',
+                'capa': f.get('capa') or '',
+                'nom_fitxa': nom,
+                'instancies': [],
+                'files': [],
+            }
+        inst = f.get('instancia') or ''
+        if inst not in g['instancies']:
+            g['instancies'].append(inst)
+        g['files'].append(f.get('ref'))
+    return [g for g in grups.values() if len(g['instancies']) > 1]
+
+
+def germanes_de_rebateig(bm, codi):
+    """Les germanes homònimes que deixaria rebatejar `bm` amb `codi`. Consulta i prou.
+
+    Bessona d'`avisos_de_rebateig` i amb les mateixes dues cauteles (es jutja el codi NOU, i
+    `ref` és la PK), però **l'àmbit de la consulta és de TRES camps** —model + garment + capa—
+    perquè la pregunta d'aquesta família travessa la instància en comptes de respectar-la. És
+    l'àmbit que la D7 feia servir per refusar; el que ha canviat és què se'n fa.
+    """
+    codi = _net(codi)
+    if bm is None or not codi:
+        return []
+    from fhort.models_app.models import BaseMeasurement
+
+    garment, capa = bm.garment or '', bm.capa or ''
+    germanes = (BaseMeasurement.objects
+                .filter(model_id=bm.model_id, garment=garment, capa=capa,
+                        nom_fitxa__iexact=codi)
+                .exclude(pk=bm.pk)
+                .order_by('ordre', 'pk'))
+
+    files = [{'ref': bm.pk, 'pom_id': bm.pom_id, 'nom_fitxa': codi,
+              'garment': garment, 'capa': capa, 'instancia': bm.instancia or ''}]
+    files += [{'ref': g.pk, 'pom_id': g.pom_id, 'nom_fitxa': g.nom_fitxa,
+               'garment': garment, 'capa': capa, 'instancia': g.instancia or ''}
+              for g in germanes]
+    return germanes_homonimes(files)

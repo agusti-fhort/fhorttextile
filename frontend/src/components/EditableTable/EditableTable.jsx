@@ -18,6 +18,7 @@ import {
   codiProposat, codiBase,
   clauExclusio, subeixDe, xoquen,
 } from '../../utils/diccionariMesures'
+import { avisDeLaFila, germanaDeLaFila } from '../../utils/avisosNomenclatura.js'
 import { triaAlModal } from '../instancia/instanciaTria.js'
 import { useEstatDiccionari } from '../../utils/diccionariMesuresFont'
 import { useTraduccioPoms } from '../../utils/traduccioPomFont'
@@ -178,6 +179,17 @@ export default function EditableTable({
   // sense ell, la poda del backend deixa les files de la peça fora del conjunt a
   // conservar i les desactiva en silenci (v. `utils/payloadMesures`).
   garment = '',
+  // M1194 · Decisió 8 — ELS AVISOS D'HOMONÍMIA DEL DARRER DESAT, tal com el 200 els serveix.
+  //
+  // ⚠️ NO ÉS UN REFÚS I NO SE'N COMPORTA COM UN: quan arriben, les files JA són a la BD. No
+  // desactiva el botó, no marca la taula com a bruta i no impedeix tornar a desar. Només diu
+  // que dues files d'aquest àmbit es diuen igual apuntant a POMs diferents, que a la fitxa
+  // impresa són dues línies indistingibles.
+  avisosNomenclatura = [],
+  // L'ALTRA FAMÍLIA (01/09): germanes de la mateixa peça i capa amb la instància diferent que
+  // comparteixen nom. Va per prop SEPARAT i no fos amb l'anterior a posta — són dues preguntes
+  // amb dues sortides diferents (allà, quin nom canvia; aquí, si la instància val la pena).
+  avisosGermanes = [],
   // `null` = mode autoria_base. Amb objecte = mode presa, i porta les portes per fila:
   //   {baseLabel, onValor(row,val), onIdentitat(row,camps), onParteix(row,filles),
   //    onNova(pom,eixos), onTreu(row), onReordena(ids)}
@@ -386,22 +398,36 @@ export default function EditableTable({
   // DECISIÓ 7 — el refús d'unicitat de nomenclatura, per fila. `null` = cap refús viu.
   // Es guarda per `bmId` perquè el missatge ha de sortir SOTA la cel·la que l'ha provocat i
   // no en un toast global: qui edita ha de veure amb què xoca sense perdre de vista el camp.
-  const [refusNomen, setRefusNomen] = useState(null)
+  // 🚨 AQUÍ HI HAVIA `refusNomen`, I EL 409 QUE L'ALIMENTAVA JA NO EXISTEIX (Decisió 8, 01/09).
+  //
+  // `base-measurements/<id>/noms/` refusava amb `409 NOMENCLATURA_DUPLICADA` i **no desava**;
+  // ara desa i torna `avisos_nomenclatura` amb la mateixa forma que `gravar-pom`. L'edició es
+  // CONFIRMA sempre i l'avís només descriu, o sigui que no hi ha res que revertir ni cap
+  // editor que calgui deixar obert.
+  //
+  // ⚠️ ES GUARDA PER `bmId` I NO COM UNA LLISTA PLANA. Un rebateig posterior de la mateixa
+  // fila ha de SUBSTITUIR el que aquella fila havia dit abans; amb una llista que només
+  // creixés, un avís resolt no marxaria mai i la taula acabaria plena de marques mortes.
+  // El valor és l'avís o `null` — el `null` és el que esborra la marca.
+  const [avisosPerFila, setAvisosPerFila] = useState({})
+  // El mateix registre per a l'altra família. Dos estats bessons i no un de sol amb una clau
+  // de família: fer-lo genèric demanaria un paràmetre que decidís de quina família parla cada
+  // entrada, i aquell paràmetre és justament el lloc on les dues es tornarien a confondre.
+  const [germanesPerFila, setGermanesPerFila] = useState({})
 
   const handleBateig = (bmId, camps) => {
-    setRefusNomen(prev => (prev && prev.bmId === bmId ? null : prev))
     return marcaDesat(baseMeasurements.setNoms(bmId, camps)
-      .then(() => setLocalRows(prev => prev.map(r => (r.id === bmId ? { ...r, ...camps } : r)))))
-      .catch(e => {
-        // 409 = NOMENCLATURA_DUPLICADA. NO és un error de xarxa i no es pot empassar amb un
-        // `console.error`: és una resposta que la persona ha de llegir, i l'editor s'ha de
-        // quedar OBERT amb el valor que ha escrit perquè el pugui corregir allà mateix.
-        if (e?.response?.status === 409) {
-          setRefusNomen({ bmId, missatge: e.response.data?.error || t('editable_table.nomenclatura_duplicada') })
-          return
-        }
-        console.error('No s\'ha pogut desar el nom', e)
-      })
+      .then(r => {
+        setLocalRows(prev => prev.map(x => (x.id === bmId ? { ...x, ...camps } : x)))
+        // El bateig JA ÉS a la BD quan s'arriba aquí: l'avís no decideix res del gest, només
+        // diu que la fila ha quedat homònima d'una germana. Mateixa forma i mateix camp que
+        // `gravar-pom`, i per això el pinta la MATEIXA ranura (v. `avisDeLaFila`).
+        const avis = r?.data?.avisos_nomenclatura?.[0] || null
+        setAvisosPerFila(prev => (prev[bmId] === avis ? prev : { ...prev, [bmId]: avis }))
+        const germana = r?.data?.avisos_germanes?.[0] || null
+        setGermanesPerFila(prev => (prev[bmId] === germana ? prev : { ...prev, [bmId]: germana }))
+      }))
+      .catch(e => console.error('No s\'ha pogut desar el nom', e))
   }
 
   const handleDeleteRow = (rowId) => {
@@ -785,6 +811,15 @@ export default function EditableTable({
   // silenci les files de les prendes que no són la mare.
   const buildPayload = () => construeixPayload(localRows, garment)
 
+  // LES DUES FONTS D'AVÍS, UNA DE SOLA PER PINTAR. La del desat en bloc arriba per prop (el
+  // panell la reparteix a tots els contenidors) i la del rebateig fila a fila neix aquí. Són
+  // el mateix fet dit per dues portes: qui decideix si un avís parla d'una fila és sempre
+  // `avisDeLaFila`, no l'origen.
+  const avisosVius = [...(avisosNomenclatura || []),
+                      ...Object.values(avisosPerFila).filter(Boolean)]
+  const germanesVives = [...(avisosGermanes || []),
+                         ...Object.values(germanesPerFila).filter(Boolean)]
+
 
   // La GUARDA DE PLAUSIBILITAT del Δ (FIX-4) se'n va amb el bloc de regla: sense camp Δ en
   // aquesta taula no hi pot haver cap delta sospitós que confondre amb una mesura. La guarda
@@ -1031,7 +1066,8 @@ export default function EditableTable({
                     onCellChange={handleCellChange}
                     onDelete={handleDeleteRow}
                     onBateig={handleBateig}
-                    refus={refusNomen && refusNomen.bmId === row.id ? refusNomen.missatge : null}
+                    avis={avisDeLaFila(avisosVius, row)}
+                    germana={germanaDeLaFila(germanesVives, row)}
                     widths={{ capa: W_CAPA, codi: W_CODI, nom: W_NOM }}
                     registerVal={registerVal}
                     onNav={navVal}
@@ -1196,8 +1232,8 @@ export default function EditableTable({
   )
 }
 
-function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, onDelete, refus,
-                       onBateig, widths, registerVal, onNav, esPresa, traduccioDe,
+function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, onDelete,
+                       avis, germana, onBateig, widths, registerVal, onNav, esPresa, traduccioDe,
                        dicc, dims, dimState, onParteix, onDesfa, onMesInstancia, onGermanaCapa,
                        capesLliures, onCapa, mostraGrading = false, sizeRun = [] }) {
   const { t, i18n } = useTranslation()
@@ -1303,14 +1339,57 @@ function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, o
         <NomenInput value={row.nom_fitxa} placeholder={row.client_code || row.pom_code || ''}
           readOnly={readOnly || !editantIdentitat}
           onCommit={v => onCellChange(row.id, 'nom_fitxa', v)} />
-        {/* DECISIÓ 7 — el refús d'unicitat, SOTA la cel·la i sense tancar l'editor. Diu amb
-            què xoca i què es pot fer (la frase la redacta `nomenclatura.py`, una per a totes
-            les portes); `role="alert"` perquè un lector de pantalla el canti en aparèixer. */}
-        {refus && (
-          <div role="alert" style={{
-            fontSize: 10, lineHeight: 1.3, marginTop: 3, color: 'var(--danger)',
-            maxWidth: 190, whiteSpace: 'normal',
-          }}>{refus}</div>
+        {/* L'AVÍS D'HOMONÍMIA (M1194). 🚨 AQUÍ SOBRE HI HAVIA LA RANURA VERMELLA DEL REFÚS DE
+            LA DECISIÓ 7, i se'n va amb el 409 que l'alimentava (Decisió 8, 01/09): les DUES
+            portes que escriuen nomenclatura —el desat en bloc i el rebateig fila a fila— ara
+            desen sempre i avisen, o sigui que ja no hi ha dues lleis que calgui distingir amb
+            dos colors. En queda una, i la seva gramàtica és la de DESCRIURE: taronja de marca
+            de dada (`--warn-state`, mesurat AA sobre el seu fons) i no vermell d'error, i
+            `role="status"` i no `alert` —un lector de pantalla no ha d'interrompre per una
+            cosa que ja s'ha desat i no demana res—.
+            El text el resol l'i18n; la regla de retrobament, `avisDeLaFila`. */}
+        {avis && (
+          <div role="status"
+               title={t('editable_table.avis_homonimia_detall', { nom: avis.nom_fitxa })}
+               style={{
+                 fontSize: 10, lineHeight: 1.3, marginTop: 3, maxWidth: 190,
+                 whiteSpace: 'normal', color: 'var(--warn-ink)',
+                 background: 'var(--warn-state-bg)', border: '1px solid var(--warn-state)',
+                 borderRadius: 4, padding: '2px 5px',
+                 display: 'inline-flex', alignItems: 'flex-start', gap: 4,
+               }}>
+            {/* Webfont `ti`, que és l'idioma d'icona d'aquest fitxer (els components de
+                `@tabler/icons-react` no hi entren enlloc). Outline, com mana la norma. */}
+            <i className="ti ti-alert-triangle" style={{ fontSize: 11, flexShrink: 0, marginTop: 1 }} />
+            <span>{t('editable_table.avis_homonimia')}</span>
+          </div>
+        )}
+        {/* LA SEGONA FAMÍLIA — GERMANES HOMÒNIMES, I NO ES POT PINTAR COM L'ALTRA.
+            L'avís de dalt diu «dues mesures DIFERENTS es diuen igual» i el que cal decidir és
+            quin nom canvia. Aquest diu «la MATEIXA mesura en dues instàncies es diu igual a
+            totes dues», i el que cal decidir és si la instància val la pena. Són dues
+            converses, i pintar-les amb la mateixa marca les tornaria una de sola.
+            Per això va sense fons de color —no és una marca de dada, és una observació— i amb
+            la fletxa de doble sentit, que és el que la distingeix d'un cop d'ull. `role="status"`
+            i mai `alert`: descriu una fila que ja és a la BD i no demana res. */}
+        {germana && (
+          <div role="status"
+               title={t('editable_table.avis_germanes_detall', {
+                 nom: germana.nom_fitxa,
+                 instancies: (germana.instancies || [])
+                   .map(i => etiquetaInstancia(i, dicc) || t('editable_table.instancia_unica'))
+                   .join(' · '),
+               })}
+               style={{
+                 fontSize: 10, lineHeight: 1.3, marginTop: 3, maxWidth: 190,
+                 whiteSpace: 'normal', color: 'var(--text-soft)',
+                 border: '0.5px solid var(--border)', borderRadius: 4, padding: '2px 5px',
+                 display: 'inline-flex', alignItems: 'flex-start', gap: 4,
+               }}>
+            <i className="ti ti-arrows-left-right"
+               style={{ fontSize: 11, flexShrink: 0, marginTop: 1 }} />
+            <span>{t('editable_table.avis_germanes')}</span>
+          </div>
         )}
         {row.is_key && (
           <i className="ti ti-star" title="KEY"
