@@ -6,11 +6,17 @@
 // `{garment, capa, instancia, nom_fitxa, poms[], files[]}` amb dos POMs o més que comparteixen
 // nom dins de la mateixa peça, capa i instància.
 //
-// 🚨 UN AVÍS NO ÉS UN REFÚS I NO S'HA DE PINTAR COM UN. La cel·la de nomenclatura ja té una
-// ranura vermella (`refus`, Decisió 7) per al 409 d'unicitat, que sí que barra. Pintar-hi
-// l'avís faria que dues lleis diferents es llegissin igual, que és la família d'errors que
-// aquest projecte ja ha pagat una vegada (el comptador pintat amb la gramàtica d'un Δ). Són
-// dues ranures i dos colors a posta.
+// 🚨 UN AVÍS NO ÉS UN REFÚS I NO S'HA DE PINTAR COM UN. Quan això es va escriure (01/09,
+// commit 2) la cel·la de nomenclatura tenia TAMBÉ una ranura vermella (`refus`, Decisió 7) per
+// al `409` de `base-measurements/<id>/noms/`, i eren dues ranures i dos colors a posta: pintar
+// dues lleis diferents amb la mateixa gramàtica és la família d'errors que aquest projecte ja
+// ha pagat una vegada (el comptador pintat amb la gramàtica d'un Δ).
+//
+// El commit 4 del mateix dia va alinear aquella porta amb la Decisió 8 i el 409 va desaparèixer,
+// o sigui que la ranura vermella ja no hi és i **ara les dues fonts d'avís entren per aquí**:
+// el desat en bloc de `gravar-pom` i el rebateig fila a fila del llapis. La distinció es manté
+// escrita perquè el dia que algú torni a voler una porta que BARRI sàpiga que la seva marca no
+// pot ser aquesta.
 //
 // ── PER QUÈ LA CAPA S'HA DE NORMALITZAR AQUÍ ─────────────────────────────────────────────
 // ⚠️ L'avís torna la capa **ja normalitzada pel backend** (`_identitat_de_mesura` hi posa

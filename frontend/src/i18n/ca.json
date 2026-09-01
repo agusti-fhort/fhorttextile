@@ -3484,7 +3484,6 @@
     "finder_seccio_casa": "catàleg de la casa",
     "ja_gravat": "Les mesures estan gravades",
     "res_per_desar": "No hi ha canvis per desar",
-    "nomenclatura_duplicada": "Aquesta nomenclatura ja és d'una altra fila d'aquest àmbit.",
     "avis_homonimia": "Nom repetit en aquest àmbit",
     "avis_homonimia_detall": "Una altra fila d'aquesta peça, capa i instància també es diu «{{nom}}» però mesura un POM diferent. S'ha desat igualment: a la fitxa impresa les dues línies es llegiran igual."
   },

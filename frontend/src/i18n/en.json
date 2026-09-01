@@ -3484,7 +3484,6 @@
     "finder_seccio_casa": "house catalogue",
     "ja_gravat": "Measurements are saved",
     "res_per_desar": "No changes to save",
-    "nomenclatura_duplicada": "That nomenclature already belongs to another row in this scope.",
     "avis_homonimia": "Name repeated in this scope",
     "avis_homonimia_detall": "Another row in this piece, layer and instance is also called “{{nom}}” but measures a different POM. It has been saved anyway: on the printed spec the two lines will read the same."
   },

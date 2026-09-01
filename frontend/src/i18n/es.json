@@ -3484,7 +3484,6 @@
     "finder_seccio_casa": "catálogo de la casa",
     "ja_gravat": "Las medidas están guardadas",
     "res_per_desar": "No hay cambios que guardar",
-    "nomenclatura_duplicada": "Esta nomenclatura ya es de otra fila de este ámbito.",
     "avis_homonimia": "Nombre repetido en este ámbito",
     "avis_homonimia_detall": "Otra fila de esta pieza, capa e instancia también se llama «{{nom}}» pero mide un POM distinto. Se ha grabado igualmente: en la ficha impresa las dos líneas se leerán igual."
   },
