@@ -96,6 +96,40 @@ PES_NOMS = 0.15
 #: pot HABILITAR cap proposta que els piquets i les longituds no sostinguin.
 PES_PREFERENCIA = 0.10
 
+#: ── F4.3 · ELS DOS SENYALS NOUS, I PER QUÈ AVUI PESEN ZERO ──────────────────────────────
+#:
+#: 🚨 **Entren com a INFORMATIUS, i és la llei de F4.1 aplicada, no una mandra.** El brief
+#: deia: «res de pesos que ningú pugui mesurar; si un senyal no es pot pesar honestament amb
+#: el banc d'avui, entra com a informatiu al xip i prou».
+#:
+#: El banc d'avui, mesurat i no suposat (FASE 0):
+#:   · `SewRelation` confirmades = **8**, totes d'UN sol model (el 837).
+#:   · `PatternSegment.edge_role` confirmats per un humà = **1**.
+#:
+#: 🚨 **I el zero no és «no s'ha pogut mesurar»: ÉS EL QUE S'HA MESURAT.** El calibratge
+#: sobre el banc (`ops/recognition/lab_seams.py` i l'annex del report) diu això:
+#:
+#:   · Les 4 parelles CERTES que la geometria recupera porten `cataleg=core`… i les **8
+#:     FALSES** de més confiança TAMBÉ, amb confiances idèntiques (0,600 · 0,600 · 0,550 ·
+#:     0,550 · 0,465 · 0,463). El motiu és estructural i no s'arregla amb un número: el
+#:     catàleg parla de la parella de ROLS, i l'espatlla dreta i l'esquerra tenen els
+#:     mateixos rols. **El catàleg no sap distingir esquerra de dreta.**
+#:   · Les 3 certes que la geometria NO recupera tenen `_te_evidencia_geometrica` a fals:
+#:     zero piquets casats i zero longitud. Un pes no les salvaria —hauria de saltar-se la
+#:     PORTA geomètrica—, i aquesta porta hi és justament perquè el costum no habiliti mai
+#:     una proposta (v. el comentari d'`avaluar`).
+#:
+#: Un pes, doncs, sumaria la MATEIXA constant a certes i a falses i no canviaria ni una sola
+#: decisió. Posar-n'hi un seria fabricar precisió.
+#:
+#: El valor del catàleg és real i és un ALTRE: l'evidència al xip (que ajuda la persona a
+#: jutjar), el CHECKLIST d'absents, i el **VETO de la llei D.02**, que és una regla dura i
+#: no un pes. Els dos senyals **es calculen, s'expliquen i es publiquen al desglòs**, i no
+#: mouen la confiança. El dia que el banc separi certes de falses, aquests dos números es
+#: mesuren i es posen — i el codi no s'haurà de tocar enlloc més.
+PES_CATALEG = 0.0
+PES_PRECEDENT = 0.0
+
 #: Una correcció explícita pesa el DOBLE que una confirmació, i en negatiu. Confirmar és dir
 #: «sí, i prou»; corregir és dir «això que em proposes ja me l'has proposat i ja te l'he
 #: esmenat». Tornar-ho a oferir amb el mateix pes que qualsevol altra cosa és no haver escoltat
@@ -255,6 +289,13 @@ class Candidat:
     #: `''` (res), `'confirmat'` o `'tallat'`. Viatja al candidat —i no es consulta des del
     #: motor— perquè el motor no sap què és una BD: qui ho resol és el pont (`preferences`).
     preferencia: str = ''
+    #: F4.3 · el vocabulari del catàleg per a aquest tram: què és la PEÇA i què és la VORA,
+    #: tots dos CONFIRMATS per una persona. Viatgen resolts, com la `preferencia` i pel
+    #: mateix motiu. Buits vol dir que ningú no ho ha dit encara, i aleshores els senyals de
+    #: catàleg i de precedent callen: no és el mateix «no ho sabem» que «no hi és».
+    piece_role: str = ''
+    face: str = ''
+    edge_role: str = ''
 
     @property
     def longitud_cm(self) -> float:
@@ -651,13 +692,70 @@ def senyal_preferencia(a: Candidat, b: Candidat) -> Senyal:
     )
 
 
-def avaluar(a: Candidat, b: Candidat) -> Proposta | None:
+def senyal_cataleg(a: Candidat, b: Candidat, expectatives) -> tuple:
+    """Què en diu el CATÀLEG (F4.3). → `(Senyal, veto)`.
+
+    `veto` és el cas D.02: una parella que el corpus ha mesurat **zero** vegades sobre un
+    denominador de desenes de milers no és una parella desconeguda, és el MIRALL d'una que
+    només va en un sentit. Una copa de màniga entra a una sisa d'una manera. Això no baixa
+    la confiança: **tomba la proposta**, perquè baixar-la deixaria que una geometria perfecta
+    la tornés a pujar.
+    """
+    if expectatives is None:
+        return Senyal(mena='cataleg', punts=0.0, detall='', dades={}), False
+    ea = expectatives.costat_de(a)
+    eb = expectatives.costat_de(b)
+    exp = expectatives.per_parella(ea, eb) if (ea and eb) else None
+    if exp is None:
+        return Senyal(mena='cataleg', punts=0.0, detall='', dades={}), False
+    if not exp.proposable:
+        return Senyal(
+            mena='cataleg', punts=0.0, detall=exp.frase(),
+            dades={'grau': exp.grau, 'observed_seams': exp.observed_seams,
+                   'observed_den': exp.observed_den, 'veto': True}), True
+    return Senyal(
+        mena='cataleg', punts=PES_CATALEG, detall=exp.frase(),
+        dades={'grau': exp.grau, 'ratio': exp.ratio, 'seam_kind': exp.seam_kind,
+               'observed_seams': exp.observed_seams, 'observed_den': exp.observed_den,
+               'co_generated': exp.co_generated, 'informatiu': PES_CATALEG == 0.0}), False
+
+
+def senyal_precedent(a: Candidat, b: Candidat, precedents) -> Senyal:
+    """Què ha cosit ja aquest TALLER amb aquests dos rols de vora (F4.3).
+
+    No baixa mai res: l'absència de precedent no és evidència en contra, només és un banc
+    petit. Un banc de vuit costures que digués «no» seria un banc opinant sobre el que no ha
+    vist.
+    """
+    if precedents is None:
+        return Senyal(mena='precedent', punts=0.0, detall='', dades={})
+    pa = precedents.costat_de(a)
+    pb = precedents.costat_de(b)
+    pre = precedents.per_parella(pa, pb) if (pa and pb) else None
+    if pre is None:
+        return Senyal(mena='precedent', punts=0.0, detall='', dades={})
+    return Senyal(
+        mena='precedent', punts=PES_PRECEDENT, detall=pre.frase(),
+        dades={'model': pre.model_id, 'model_nom': pre.model_nom,
+               'vegades': pre.vegades, 'seam_kind': pre.seam_kind,
+               'informatiu': PES_PRECEDENT == 0.0})
+
+
+def avaluar(a: Candidat, b: Candidat, expectatives=None, precedents=None) -> Proposta | None:
     """Els senyals sobre una parella. `None` si no arriba a proposta."""
     s_piquets, invertit = senyal_piquets(a, b)
     s_longitud, tipus, diferencial = senyal_longitud(a, b)
     s_noms = senyal_noms(a, b)
     s_pref = senyal_preferencia(a, b)
+    s_cat, veto = senyal_cataleg(a, b, expectatives)
+    s_pre = senyal_precedent(a, b, precedents)
     senyals = {'piquets': s_piquets, 'longitud': s_longitud, 'noms': s_noms}
+
+    # 🚨 EL VETO DEL CATÀLEG VA PRIMER, i abans fins i tot de la porta geomètrica: una
+    # parella que el corpus ha mesurat zero vegades no s'ha d'avaluar, no s'ha de puntuar
+    # baixa. La diferència importa el dia que la geometria sigui perfecta (LLEI D.02).
+    if veto:
+        return None
 
     # La porta és NOMÉS geomètrica: el costum del taller no hi entra, igual que el nom. Si
     # una preferència pogués habilitar una proposta, el motor acabaria proposant pel que la
@@ -671,7 +769,15 @@ def avaluar(a: Candidat, b: Candidat) -> Proposta | None:
     # una fila més a la UI que no ajuda a decidir res.
     if s_pref.punts:
         senyals['preferencia'] = s_pref
-    confianca = s_piquets.punts + s_longitud.punts + s_noms.punts + s_pref.punts
+    # El catàleg i el precedent surten al desglòs sempre que tinguin FRASE, encara que avui
+    # pesin zero: informar és la seva feina d'entrada (v. `PES_CATALEG`). Un senyal que
+    # explica i no puntua segueix sent el que fa que el patronista pugui decidir.
+    if s_cat.detall:
+        senyals['cataleg'] = s_cat
+    if s_pre.detall:
+        senyals['precedent'] = s_pre
+    confianca = (s_piquets.punts + s_longitud.punts + s_noms.punts + s_pref.punts
+                 + s_cat.punts + s_pre.punts)
     confianca = max(0.0, min(1.0, confianca))
     if confianca < LLINDAR_PROPOSTA:
         return None
@@ -693,6 +799,8 @@ def proposar(
     candidats: list[Candidat],
     exclosos: frozenset[tuple[int, int]] = frozenset(),
     descartats: Descartats | None = None,
+    expectatives=None,
+    precedents=None,
 ) -> tuple[list[Proposta], Descartats]:
     """Totes les parelles possibles, ordenades per confiança i repartides sense conflictes.
 
@@ -719,7 +827,7 @@ def proposar(
             if clau_parella(a.segment_id, b.segment_id) in exclosos:
                 desc = _mes(desc, rebutjades=1)
                 continue
-            proposta = avaluar(a, b)
+            proposta = avaluar(a, b, expectatives, precedents)
             if proposta is None:
                 desc = _mes(desc, sota_llindar=1)
                 continue

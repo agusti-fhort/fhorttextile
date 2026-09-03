@@ -12,6 +12,8 @@ ser una proposta.
 from __future__ import annotations
 
 from .adapters import DjangoGeometryStore
+from .recognition import seam_expectations as expectations
+from .recognition import seam_precedent as precedent
 from .engine.seam_matching import (
     Candidat, Descartats, LLARG_MIN_CM, MM_PER_CM, clau_parella, piquets_de_la_vora,
     piquets_del_tram, proposar,
@@ -44,7 +46,8 @@ def _pinces_de_vora(model_id: int) -> set[int]:
     }
 
 
-def _trams_ja_declarats(model_id: int) -> dict[tuple[int, int], list[tuple[float, float]]]:
+def _trams_ja_declarats(model_id: int, exclou_sew_ids=frozenset()
+                        ) -> dict[tuple[int, int], list[tuple[float, float]]]:
     """(peça, vora) → els rangs `t` que les costures i les pinces JA declarades ocupen.
 
     Tot el que una persona ja ha declarat surt de la subhasta. La proposta és per al que
@@ -53,6 +56,7 @@ def _trams_ja_declarats(model_id: int) -> dict[tuple[int, int], list[tuple[float
     """
     ocupats: dict[tuple[int, int], list[tuple[float, float]]] = {}
     relacions = (SewRelation.objects.filter(model_id=model_id)
+                 .exclude(pk__in=exclou_sew_ids)
                  .prefetch_related('segments_a', 'segments_b'))
     for rel in relacions:
         for seg in list(rel.segments_a.all()) + list(rel.segments_b.all()):
@@ -76,7 +80,9 @@ def _ja_cosit(
     return (reclamat / propi) > SOLAPAMENT_MAX_REL
 
 
-def candidats_del_patro(fp: PatternFile) -> tuple[list[Candidat], Descartats, dict]:
+def candidats_del_patro(fp: PatternFile, rols_en_memoria: dict | None = None,
+                        exclou_sew_ids=frozenset()
+                        ) -> tuple[list[Candidat], Descartats, dict]:
     """Els trams que es podrien cosir, amb els seus piquets. I què s'ha deixat pel camí.
 
     Els candidats són els trams DERIVATS (gir→gir): la hipòtesi de lectura del CAD. Un tram
@@ -88,10 +94,17 @@ def candidats_del_patro(fp: PatternFile) -> tuple[list[Candidat], Descartats, di
     """
     store = DjangoGeometryStore()
     doc = store.load_from(fp)
-    ocupats = _trams_ja_declarats(fp.model_id)
+    # `exclou_sew_ids` NOMÉS el fa servir l'examen leave-one-out: amaga una costura
+    # confirmada en LECTURA per veure si el motor la sabria tornar a trobar. No esborra res
+    # i no és accessible des de cap porta HTTP.
+    ocupats = _trams_ja_declarats(fp.model_id, exclou_sew_ids)
     # El costum del taller per als rols d'aquest patró: una consulta per a tot, no una per
     # candidat. És un senyal de desempat i no pot costar una volta a la BD per tram.
     apresos = rangs_apresos({rol_de_peca(p) for p in fp.pieces.all()})
+    # F4.3 · el vocabulari del catàleg per tram. `rols_en_memoria` és per a l'EXAMEN: hi pot
+    # passar rols de vora que cap humà ha confirmat encara, i així el mecanisme es mesura
+    # sense escriure ni una fila. En producció va buit i mana el que diu la BD.
+    rols_en_memoria = rols_en_memoria or {}
 
     candidats: list[Candidat] = []
     desc = Descartats()
@@ -102,9 +115,17 @@ def candidats_del_patro(fp: PatternFile) -> tuple[list[Candidat], Descartats, di
         if piece is None:
             continue
 
-        segments = list(piece_row.segments.filter(origen=PatternSegment.ORIGEN_NATURAL))
+        segments = list(
+            piece_row.segments.filter(origen=PatternSegment.ORIGEN_NATURAL)
+            .select_related('edge_role'))
         if not segments:
             continue
+
+        # La identitat de la PEÇA només compta si l'ha signat una persona: `rol_origen` és
+        # el que separa el que algú ha dit del que va proposar la màquina, i construir el
+        # senyal de catàleg sobre una proposta seria fer-lo aprendre del seu propi encert.
+        from .recognition.edge_service import confirmed_role_of
+        rol_peca = confirmed_role_of(piece_row) or ''
 
         # Tots els trams derivats d'una peça viuen sobre la MATEIXA vora base (la de cosit si
         # n'hi ha, la de tall si no: `engine.segments.segmentar_peca`). Es llegeix de les files,
@@ -143,9 +164,90 @@ def candidats_del_patro(fp: PatternFile) -> tuple[list[Candidat], Descartats, di
                 piquets=piquets_del_tram(piquets_vora, seg.t_inici, seg.t_fi),
                 preferencia=preferencia_del_tram(
                     seg.t_inici, seg.t_fi, confirmats, tallats),
+                piece_role=rol_peca,
+                face=piece_row.face or '',
+                edge_role=(seg.edge_role.slug if seg.edge_role_id
+                           else rols_en_memoria.get(seg.id, '')),
             ))
 
     return candidats, desc, {'files': files}
+
+
+def _absents(fp: PatternFile, candidats, expectatives, rols_en_memoria=None) -> list[dict]:
+    """A2b · Les expectatives de NUCLI que aquest model no té cosides. El checklist.
+
+    🚨 **Informació, MAI un error.** Un vestit pot no portar una costura que el corpus
+    considera de nucli, i dir-li «falta» amb to de defecte ensenyaria el patronista a no
+    llegir la llista —el mateix mal que un llindar de proposta massa baix. La frase és
+    «el catàleg n'esperaria una», no «te'n falta una».
+
+    Només compta les parelles els DOS costats de les quals existeixen a aquest patró: dir a
+    algú que al seu vestit li falta un `crotch_seam` seria soroll disfressat de checklist.
+    """
+    costats = []
+    for c in candidats:
+        costat = expectatives.costat_de(c)
+        if costat is not None:
+            costats.append(costat)
+    # També els trams que JA estan cosits: una expectativa coberta no és absent, i els seus
+    # trams no són candidats justament perquè ja tenen costura.
+    ja = _costats_cosits(fp, rols_en_memoria)
+    costats.extend(ja)
+    if not costats:
+        return []
+
+    cobertes = {frozenset((a.clau(), b.clau()))
+                for a, b in _parelles_cosides(fp, rols_en_memoria)}
+    fora = []
+    for e in expectatives.esperades(costats):
+        if frozenset((e.a.clau(), e.b.clau())) in cobertes:
+            continue
+        fora.append({
+            'a': {'piece_role': e.a.piece_role, 'edge_role': e.a.edge_role},
+            'b': {'piece_role': e.b.piece_role, 'edge_role': e.b.edge_role},
+            'seam_kind': e.seam_kind, 'grau': e.grau, 'ratio': e.ratio,
+            'observed_seams': e.observed_seams, 'observed_den': e.observed_den,
+            'detall': e.frase(),
+        })
+    return fora
+
+
+def _costats_cosits(fp: PatternFile, rols_en_memoria=None) -> list:
+    """Els costats de catàleg dels trams que JA tenen costura confirmada en aquest model."""
+    return [c for parella in _parelles_cosides(fp, rols_en_memoria) for c in parella]
+
+
+def _parelles_cosides(fp: PatternFile, rols_en_memoria=None) -> list[tuple]:
+    """Les costures CONFIRMADES d'aquest model, en vocabulari de catàleg."""
+    from .recognition.seam_precedent import _costat_de
+
+    relacions = list(SewRelation.objects.filter(model_id=fp.model_id)
+                     .prefetch_related('segments_a__piece__piece_role',
+                                       'segments_b__piece__piece_role'))
+    if not relacions:
+        return []
+    peces = {d.piece_id for r in relacions
+             for d in list(r.segments_a.all()) + list(r.segments_b.all())}
+    naturals: dict[int, list] = {}
+    for seg in PatternSegment.objects.filter(
+            piece_id__in=peces, origen=PatternSegment.ORIGEN_NATURAL).select_related('edge_role'):
+        naturals.setdefault(seg.piece_id, []).append(seg)
+
+    out = []
+    for r in relacions:
+        da = list(r.segments_a.all())
+        db = list(r.segments_b.all())
+        if not da or not db:
+            continue
+        # 🚨 Els MATEIXOS rols que ha vist el proposador. Amb un diccionari buit aquí, cap
+        # costura confirmada resolia el seu vocabulari i el checklist declarava ABSENT tot
+        # el que el model ja porta cosit — mesurat: deia que hi faltava la costura lateral
+        # d'un vestit que en té dues.
+        a = _costat_de(da[0], naturals, rols_en_memoria or {})
+        b = _costat_de(db[0], naturals, rols_en_memoria or {})
+        if a.edge_role and b.edge_role:
+            out.append((a, b))
+    return out
 
 
 def rebuigs_del_model(model_id: int) -> frozenset[tuple[int, int]]:
@@ -157,7 +259,8 @@ def rebuigs_del_model(model_id: int) -> frozenset[tuple[int, int]]:
     )
 
 
-def propostes_del_model(fp: PatternFile) -> dict:
+def propostes_del_model(fp: PatternFile, rols_en_memoria: dict | None = None,
+                        exclou_sew_ids=frozenset()) -> dict:
     """Les propostes vives d'un patró, amb el seu desglòs i el seu veredicte.
 
     El **veredicte** és el que `sew.validar` diria si la proposta es confirmés ARA: amb les
@@ -166,14 +269,33 @@ def propostes_del_model(fp: PatternFile) -> dict:
     de veritat—, i és el que converteix la llista en una cosa que es pot revisar en comptes
     d'acceptar a cegues.
     """
-    candidats, desc, ctx = candidats_del_patro(fp)
+    candidats, desc, ctx = candidats_del_patro(fp, rols_en_memoria, exclou_sew_ids)
+
+    # F4.3 · els dos senyals nous. Es carreguen un cop per patró i viatgen com a DADA PLANA
+    # al motor pur: `seam_matching` ha de continuar sense saber què és una BD.
+    gti = getattr(getattr(fp, 'model', None), 'garment_type_item_id', None)
+    expectatives = expectations.carrega(gti)
+    # El model queda FORA del seu propi banc de precedents. Sense això, córrer el proposador
+    # sobre el 837 hi trobaria les costures del 837 mateix i informaria de confiança perfecta
+    # sobre res — el mateix error que `recognition.service.exclude_self` evita a F4.1.
+    precedents = precedent.carrega(exclou_model_id=fp.model_id,
+                                   rols_en_memoria=rols_en_memoria)
+
     propostes, desc = proposar(
-        candidats, exclosos=rebuigs_del_model(fp.model_id), descartats=desc)
+        candidats, exclosos=rebuigs_del_model(fp.model_id), descartats=desc,
+        expectatives=expectatives, precedents=precedents)
 
     return {
         'model': fp.model_id,
         'pattern_file': fp.id,
         'candidats': len(candidats),
+        # El CHECKLIST del patronista (A2b): expectatives de nucli que aquest model podria
+        # tenir i no té cosides. Informació, MAI un error: un vestit pot no portar-les.
+        'absents': _absents(fp, candidats, expectatives, rols_en_memoria),
+        'senyals_nous': {
+            'expectatives_catalog': len(expectatives),
+            'precedents_tenant': len(precedents),
+        },
         'propostes': [_serialitzar(p, fp.model_id, ctx['files']) for p in propostes],
         # Els descartats no són decoració: diuen si una costura que falta és que el motor no l'ha
         # vista o és que ni tan sols l'ha mirada.
