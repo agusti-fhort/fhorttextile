@@ -229,6 +229,11 @@ function FilaTram({ p, t, idioma, vocabulari, confirmat, value, onCanvia, sel, o
         // La fila que el llenç assenyala. `--tram-sel` és el mateix token que el
         // `KONVA_COL.tramSel` del canvas reflecteix: el mateix tram, el mateix èmfasi,
         // als dos costats de la pantalla.
+        // El padding esquerre hi és SEMPRE, i no només quan la fila està seleccionada:
+        // afegir-lo amb la selecció faria saltar la fila 3 px cada cop que el cursor hi
+        // passa. La barra de `inset` s'hi dibuixa a dins, i el número del tram queda
+        // llegible al costat en comptes de sota (mesurat a la captura del fum).
+        paddingLeft: 6,
         ...(sel ? {
           background: 'var(--bg-muted)',
           boxShadow: 'inset 3px 0 0 var(--tram-sel)',

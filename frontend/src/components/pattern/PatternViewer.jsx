@@ -805,16 +805,47 @@ export default function PatternViewer({
                     onTap={() => onClicVora && onClicVora(vr)}
                     perfectDrawEnabled={false}
                   />
-                  {marcat && mig && (
-                    <Text
-                      x={mig.x} y={-mig.y - 18 / zoom}
-                      text={vr.longitud_cm != null
-                        ? formatLen(vr.longitud_cm, unit) : ''}
-                      fontSize={14 / zoom}
-                      fill={KONVA_COL.tramSel}
-                      listening={false} perfectDrawEnabled={false}
-                    />
-                  )}
+                  {marcat && mig && (() => {
+                    // 🚨 LA MIDA S'HA DE PODER LLEGIR, que és tot el que aquesta pantalla
+                    // ve a fer possible. Escrita al mig del tram i prou, al coll del 837 va
+                    // caure damunt de la cota d'un POM i les dues xifres es van fer un
+                    // garbuix — mesurat a la captura del fum, no suposat. Dues correccions,
+                    // i totes dues calen:
+                    //  · s'aparta cap AFORA seguint la direcció que va del centre de la
+                    //    peça al tram, com fa una cota de CAD;
+                    //  · va sobre una caixa opaca, perquè «afora» no és garantia de buit
+                    //    en una niada.
+                    const bb = piece.bbox
+                    const cx = bb ? (bb.min_x + bb.max_x) / 2 : mig.x
+                    const cy = bb ? (bb.min_y + bb.max_y) / 2 : mig.y
+                    const dx = mig.x - cx
+                    const dy = mig.y - cy
+                    const d = Math.hypot(dx, dy) || 1
+                    const fora = 26 / zoom
+                    const tx = mig.x + (dx / d) * fora
+                    const ty = -(mig.y + (dy / d) * fora)
+                    const txt = vr.longitud_cm != null ? formatLen(vr.longitud_cm, unit) : ''
+                    if (!txt) return null
+                    const w = (txt.length * 8 + 10) / zoom
+                    const h = 19 / zoom
+                    return (
+                      <>
+                        <Rect
+                          x={tx - w / 2} y={ty - h / 2} width={w} height={h}
+                          fill={KONVA_COL.bg} stroke={KONVA_COL.tramSel}
+                          strokeWidth={1 / zoom} cornerRadius={3 / zoom}
+                          listening={false} perfectDrawEnabled={false}
+                        />
+                        <Text
+                          x={tx - w / 2} y={ty - h / 2} width={w} height={h}
+                          text={txt} align="center" verticalAlign="middle"
+                          fontSize={13 / zoom} fontStyle="bold"
+                          fill={KONVA_COL.tramSel}
+                          listening={false} perfectDrawEnabled={false}
+                        />
+                      </>
+                    )
+                  })()}
                 </Group>
               )
             })}
