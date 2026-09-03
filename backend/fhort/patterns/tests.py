@@ -6250,7 +6250,17 @@ class CatalegDeRolsAPITest(PatternsAPITestBase):
         self.assertEqual(resp.status_code, 200)
         # SENSE paginar: el picker els vol tots de cop per agrupar-los per classe.
         self.assertIsInstance(resp.data, list)
-        self.assertEqual(len(resp.data), 30)
+        # 🚨 SENCER es MESURA, no s'escriu a mà. Aquesta línia deia `30` i va caducar sola
+        # el dia que el catàleg va créixer a 33 (catàleg-v2 de l'Agus, 27/08: 686e3163 ·
+        # b0b3ddcd · 849c752f) — diagnosticat a la CODA §C7 de
+        # `REPORT_F63_RUL_2026-08-27.md`, que el va mesurar VERMELL a `8bafb829`, abans
+        # de cap canvi d'aquell sprint, i el va deixar escrit sense tocar-lo per no ser-ne
+        # l'amo. És la llei que ja ens ha mossegat més d'un cop: **un test que COMPTA
+        # FILES caduca sol quan el catàleg creix** (`ftt-f3-cataleg-semantic`). El que la
+        # prova vol dir és «no en falta cap i no n'hi ha de repetits», i això es pregunta
+        # a la font.
+        self.assertEqual(len(resp.data), PatternPieceRole.objects.count())
+        self.assertEqual(len({r['slug'] for r in resp.data}), len(resp.data))
         ordres = [r['display_order'] for r in resp.data]
         self.assertEqual(ordres, sorted(ordres))
         primer = resp.data[0]
