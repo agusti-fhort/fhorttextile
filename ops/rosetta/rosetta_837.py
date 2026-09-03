@@ -78,7 +78,45 @@ PATTERN_FILE = 20
 #: és un gest explícit de qui la corre, i l'informe en diu el número i si està aprovada.
 #:
 #:     FTT_ROSETTA_GV=205 python3 ops/rosetta/rosetta_837.py     # previsualització
-GRADING_VERSION = int(os.environ.get('FTT_ROSETTA_GV', '201'))
+#:
+#: ── R1 (F4.2, 03/09) · EL DEFECTE ES LLEGEIX DE LA BD ───────────────────────────
+#: El defecte ja no és la constant `201` sinó **la GV APROVADA vigent del model**, que és
+#: el que la frase «la segellada» sempre havia volgut dir. Una pk escrita a mà diu la
+#: veritat el dia que s'escriu; el dia que l'Agus segelli una versió nova, el banc de
+#: paritat seguiria mesurant contra la vella i ningú no ho veuria. L'env segueix manant per
+#: sobre —és el gest explícit de qui corre l'examen— i l'informe en diu el número i si està
+#: aprovada, com abans.
+#:
+#: 🚨 **La premissa del brief que va demanar això NO es compleix, i es diu en comptes de
+#: passar-la per alt.** Deia «ara sobre la v10 adoptada». Mesurat a la BD el 03/09: la v10
+#: (id 205) **NO està aprovada** (`aprovada=f`), i des d'aquell dia hi ha una **v11
+#: (id 206) que és `is_active=True` i tampoc no està aprovada**. L'única aprovada del model
+#: 1383 segueix sent la **v9 (id 201)**. O sigui que aquest canvi és correcte i, avui,
+#: resol exactament al mateix número que la constant que substitueix. Aprovada i activa són
+#: ortogonals i aquesta és la tercera vegada que la casa hi ensopega.
+GRADING_VERSION_ENV = os.environ.get('FTT_ROSETTA_GV')
+
+
+def _gv_del_banc() -> int:
+    """La GV que l'examen ha de llegir: l'env si n'hi ha, si no la APROVADA vigent.
+
+    Es crida amb Django ja arrencat (des de `llegeix_bd`), perquè abans no hi ha BD a qui
+    preguntar. Si el model no en té cap d'aprovada, PETA amb el motiu: un banc de paritat
+    que caigui en una versió sense segell mesuraria contra números que ningú no ha donat
+    per bons, i és millor no donar cap xifra que donar-ne una d'aquestes.
+    """
+    if GRADING_VERSION_ENV:
+        return int(GRADING_VERSION_ENV)
+    from fhort.fitting.models import GradingVersion
+
+    gv = (GradingVersion.objects
+          .filter(size_fitting__model_id=MODEL_BANC, aprovada=True)
+          .order_by('-version_number', '-id').first())
+    if gv is None:
+        raise AssertionError(
+            'el model {} no té cap GradingVersion APROVADA: no hi ha referència segellada '
+            'contra la qual mesurar la paritat'.format(MODEL_BANC))
+    return gv.pk
 
 #: Per sobre d'això un Δ es destaca. És la tolerància que la fase va proposar (≤0,5 mm per
 #: punt i talla) i que l'Agus encara ha de ratificar; viu aquí per poder-la moure en un lloc.
@@ -156,7 +194,7 @@ def llegeix_bd() -> dict:
             from fhort.fitting.models import GradedSpec, GradingVersion
             from fhort.patterns.models import PatternFile, PatternPoint
 
-            gv = GradingVersion.objects.get(pk=GRADING_VERSION)
+            gv = GradingVersion.objects.get(pk=_gv_del_banc())
             pf = PatternFile.objects.get(pk=PATTERN_FILE)
             if pf.model_id != MODEL_BANC:
                 raise AssertionError(
@@ -303,7 +341,7 @@ def _fila(pom, bd, camp, geometria, resoldre, MeasureError) -> FilaPOM:
                        pom['valor_mesurat_cm'], {}, fitxa, bucles, motiu)
 
     if spec is None:
-        return exclos(f'sense GradedSpec actiu a la GV{GRADING_VERSION}')
+        return exclos('sense GradedSpec actiu a la GV del banc')
 
     pc = camp.peces[peca]
     ancores = [v for k, v in pom['definicio'].items()
