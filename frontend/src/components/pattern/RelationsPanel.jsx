@@ -31,6 +31,9 @@ import Modal from '../ui/Modal'
  */
 export default function RelationsPanel({
   sews, pinces, segments, tramsPerId, unit = 'CM',
+  // F4.2-TER · clicar un tram declarat l'ENQUADRA al llenç. Opcional: sense això la
+  // llista es comporta exactament com sempre.
+  onEnquadraTram = null,
   propostes = [], descartatsProp = null,
   cercades = false, buscant = false, onBuscaPropostes, onNetejaPropostes,
   rebuigs = [], onDesfaRebuig,
@@ -214,6 +217,7 @@ export default function RelationsPanel({
             key={s.id} t={t} tram={s} unit={unit}
             marcat={selTram.sel.has(s.id)}
             onMarca={() => selTram.alterna(s.id)}
+            onEnquadra={onEnquadraTram}
             onReanomena={onReanomenaTram} onReobre={onReobreTram} onEsborra={onEsborraTram}
           />
         ))}
@@ -717,7 +721,8 @@ function Pinca({ t, pinca, unit, marcat, onMarca, onReanomena, onEsborra, onAcce
   )
 }
 
-function Tram({ t, tram, unit, marcat, onMarca, onReanomena, onReobre, onEsborra }) {
+function Tram({ t, tram, unit, marcat, onMarca, onEnquadra,
+                onReanomena, onReobre, onEsborra }) {
   const [editant, setEditant] = useState(false)
   const [nom, setNom] = useState(tram.nom || '')
   const [rebuig, setRebuig] = useState(null)   // per què no s'ha pogut esborrar
@@ -740,11 +745,18 @@ function Tram({ t, tram, unit, marcat, onMarca, onReanomena, onReobre, onEsborra
   }
 
   return (
-    <div style={{
-      border: '1px solid var(--line)', borderRadius: 4,
-      padding: '0.3rem 0.5rem', background: 'var(--panel)',
-      display: 'flex', flexDirection: 'column', gap: 3,
-    }}>
+    <div
+      // Clicar la fila ENQUADRA el tram al llenç (F4.2-TER). Va al contenidor i es deixa
+      // bombollejar: els botons de dins fan la seva feina I porten la vista al tram que
+      // s'està tocant, que és on qui reanomena o recol·loca vol mirar de totes maneres.
+      // No canvia cap dada: és una ordre de CÀMERA.
+      onClick={() => onEnquadra && onEnquadra(tram.id)}
+      style={{
+        border: '1px solid var(--line)', borderRadius: 4,
+        padding: '0.3rem 0.5rem', background: 'var(--panel)',
+        display: 'flex', flexDirection: 'column', gap: 3,
+        cursor: onEnquadra ? 'pointer' : undefined,
+      }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
         <Casella
           marcat={marcat} onChange={onMarca}

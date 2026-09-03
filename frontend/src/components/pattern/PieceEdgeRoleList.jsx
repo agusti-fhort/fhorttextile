@@ -27,6 +27,11 @@ export default function PieceEdgeRoleList({
   files, vocabularis, onConfirma, onTria, pecaSel, desant, error,
   // ── F4.2-BIS · el cablatge amb el llenç. Al tab Patró no s'hi passen i la llista es
   // comporta com sempre; al Taller lliguen fila i tram en tots dos sentits.
+  //
+  // 🚨 `onVoraSel(id, enquadrar)` — el segon argument distingeix el GEST de la passada del
+  // cursor, i la distinció és la peça de disseny de F4.2-TER: passar-hi per sobre
+  // il·lumina, CLICAR enquadra. Sense separar-los, la càmera saltaria a cada fila que el
+  // ratolí travessa i la llista es tornaria intransitable.
   voraSel = null, onVoraSel = null,
   // Amb quines peces es treballa: al Taller, NOMÉS la que hi ha seleccionada al llenç.
   // Filtrar aquí i no al pare és el que fa que la llista sigui la MATEIXA en tots dos
@@ -184,7 +189,7 @@ function TargetaPeca({
           vocabulari={vocabulari} confirmat={f.confirmed?.[p.segment_id] || ''}
           value={valor(p)} onCanvia={slug => posa(p.segment_id, slug)}
           sel={voraSel === p.segment_id}
-          onSel={onVoraSel ? () => onVoraSel(p.segment_id) : null}
+          onSel={onVoraSel ? (enq) => onVoraSel(p.segment_id, enq) : null}
         />
       ))}
 
@@ -223,7 +228,7 @@ function FilaTram({ p, t, idioma, vocabulari, confirmat, value, onCanvia, sel, o
   return (
     <div
       ref={fila}
-      onMouseEnter={onSel || undefined}
+      onMouseEnter={onSel ? () => onSel(false) : undefined}
       style={{
         display: 'flex', alignItems: 'center', gap: '0.4rem',
         // La fila que el llenç assenyala. `--tram-sel` és el mateix token que el
@@ -240,7 +245,7 @@ function FilaTram({ p, t, idioma, vocabulari, confirmat, value, onCanvia, sel, o
           borderRadius: 'var(--r-ctrl)',
         } : null),
       }}
-      onClick={e => { e.stopPropagation(); if (onSel) onSel() }}>
+      onClick={e => { e.stopPropagation(); if (onSel) onSel(true) }}>
       <span style={{
         fontFamily: 'var(--mono)', fontSize: 'var(--fs-caption)',
         color: 'var(--text-soft)', minWidth: '2.2rem',

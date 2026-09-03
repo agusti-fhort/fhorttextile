@@ -135,6 +135,13 @@ export default function TallerPatro() {
   const [vores, setVores] = useState(null)
   const [vocabularis, setVocabularis] = useState({})
   const [voraSel, setVoraSel] = useState(null)      // segment_id assenyalat, als dos costats
+  // L'ordre d'ENQUADRAR (F4.2-TER). Comptador i no id: ha de disparar-se una vegada per
+  // GEST —i tornar a clicar la mateixa fila hi ha de tornar—, mai per passada del cursor
+  // ni per re-render.
+  const [enquadra, setEnquadra] = useState(null)   // { id, n }
+  const enquadraTram = useCallback((id) => {
+    setEnquadra(e => ({ id, n: (e?.n || 0) + 1 }))
+  }, [])
   const [desantVores, setDesantVores] = useState(false)
   const [errorVores, setErrorVores] = useState('')
   const [errTasca, setErrTasca] = useState(null)
@@ -1394,7 +1401,13 @@ export default function TallerPatro() {
                 nomesPeca={pecaSel}
                 pecaSel={pecaSel}
                 voraSel={voraSel}
-                onVoraSel={id => setVoraSel(v => (v === id ? null : id))}
+                onVoraSel={(id, enq) => {
+                  // Passar-hi per sobre només assenyala; el clic assenyala I enquadra.
+                  if (!enq) { setVoraSel(id); return }
+                  const tanca = voraSel === id && !!enquadra
+                  setVoraSel(tanca ? null : id)
+                  if (!tanca) enquadraTram(id)
+                }}
                 onConfirma={confirmarVores}
                 desant={desantVores}
                 error={errorVores}
@@ -1426,6 +1439,7 @@ export default function TallerPatro() {
             <RelationsPanel
               sews={costures} pinces={pinces} segments={trams}
               tramsPerId={tramsPerId} unit={unit}
+              onEnquadraTram={enquadraTram}
               propostes={propostes} descartatsProp={descartatsProp}
               cercades={cercades} buscant={buscant}
               onBuscaPropostes={buscarPropostes} onNetejaPropostes={netejarPropostes}
@@ -1598,7 +1612,10 @@ export default function TallerPatro() {
               onClicTram={triarTram}
               voresRolades={voresAlCanvas}
               voraRessaltada={voraSel}
+              // Del llenç a la fila NO s'enquadra: qui clica un tram al patró ja el té
+              // davant, i moure-li la càmera sota el dit seria prendre-li el lloc on és.
               onClicVora={vr => setVoraSel(v => (v === vr.id ? null : vr.id))}
+              enquadra={enquadra}
               pinces={pinces}
               propostaRessaltada={propostaAlCanvas}
               pincesProposades={pincesAlCanvas}
