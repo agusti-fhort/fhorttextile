@@ -4728,7 +4728,8 @@
     "edges_confirmed_t": "Dit per una persona.",
     "edges_silent_t": "Sense proposta: el motor ha mirat aquest tram i no n'ha sabut dir res.",
     "edges_landmarks": "Punts derivats: {{punts}}",
-    "edges_err": "No s'han pogut gravar els rols de vora."
+    "edges_err": "No s'han pogut gravar els rols de vora.",
+    "edges_pick_piece": "Tria una peça per batejar-ne les vores. El rol de la peça és el que decideix quines paraules hi caben."
   },
   "filedrop": {
     "hint": "Arrossega'l aquí o fes clic",

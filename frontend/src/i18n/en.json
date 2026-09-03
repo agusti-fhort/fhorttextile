@@ -4728,7 +4728,8 @@
     "edges_confirmed_t": "Named by a person.",
     "edges_silent_t": "No proposal: the engine looked at this edge and had nothing to say.",
     "edges_landmarks": "Derived points: {{punts}}",
-    "edges_err": "The edge roles could not be saved."
+    "edges_err": "The edge roles could not be saved.",
+    "edges_pick_piece": "Pick a piece to name its edges. The piece's role is what decides which words fit."
   },
   "filedrop": {
     "hint": "Drag it here or click",
