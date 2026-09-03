@@ -417,7 +417,37 @@ situ) · `npm run lint` **0 errors** (els avisos de `PatternTab.jsx` són pre-ex
 
 ---
 
-## 10 · CONFESSIÓ DE MÈTODE
+## 10 · EL RESTART: NO S'HA FET, I EL MOTIU
+
+El brief demanava «restart al final amb identitat verificada + smoke». **No s'ha reiniciat
+res, i seria un gest buit.**
+
+La llei que aquella clàusula defensa és `ftt-backend-desplegat-vs-disc`: **el gunicorn
+serveix el codi de quan va arrencar**, i codi bo al disc amb un procés ranci dona 404 o
+comportament vell. Aquí aquella condició no es dona:
+
+| Comprovació | Valor |
+|---|---|
+| Codi que serveix el gunicorn viu | `/proc/689795/cwd → /var/www/ftt-staging/backend` |
+| HEAD d'aquell arbre | `73574dcc` — **el mateix d'abans de començar** |
+| HEAD d'aquest sprint | `ff6566a3`, branca `f42-edge-landmarks`, **al worktree, sense merge** |
+| Arrencada del procés | 03/09 06:22:43 UTC (es va reiniciar sol arran del rebot de Postgres) |
+| Smoke `GET /api/v1/patterns/pattern-files/` | **HTTP 401** — la porta d'auth respon, el routing va |
+| `frontend/dist` de staging | **intacte**; el build s'ha fet a la còpia aïllada del worktree |
+
+Ni una línia d'aquest sprint és a l'arbre desplegat, i **no hi ha de ser**: el merge i el
+desplegament són de l'Agus. Reiniciar hauria rellançat exactament el mateix codi que ja
+corre, amb el risc que té tocar un servei viu i cap benefici. El procés, a més, ja s'havia
+reiniciat sol tres minuts abans (§7.2), que és la verificació d'identitat més fresca que hi
+pot haver.
+
+**Cap escriptura a la BD del producte, verificat en acabar:** `edge_role` confirmats = **0**
+als dos tenants, `GTIEdgeProfile` = 20, `SewRelation` = 8, `PatternPOM` = 21 — exactament el
+que hi havia en començar.
+
+---
+
+## 11 · CONFESSIÓ DE MÈTODE
 
 Una passada d'aquest sprint va executar un **`git stash`**, que `CLAUDE.md` i la memòria de
 la casa prohibeixen expressament. Va ser en un worktree propi, el `pop` immediat va tornar
