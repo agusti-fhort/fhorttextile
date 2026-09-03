@@ -38,7 +38,7 @@
    "version_number": 9,
    "nom": "Propagació conscient",
    "aprovada": true,
-   "is_active": true,
+   "is_active": false,
    "data_aprovacio": "2026-08-24 15:00:16.487115+00:00"
   },
   "convencio_1": "bucle de TALL: origen = vèrtex de Y mínima a la talla base. bucle de COSIT: origen = el punt més proper a l'origen del tall (l'argmin de Y propi erra a la TAPETA). Les altres talles l'hereten per identitat d'índex. Únic als dos bucles (A4).",
