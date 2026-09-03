@@ -1010,6 +1010,26 @@ export const patterns = {
   reconeixer: id =>
     client.post(`/api/v1/patterns/pattern-files/${id}/recognize/`),
 
+  // ── F4.2 · ELS ROLS DE VORA ────────────────────────────────────────────────
+  // Els trams de cada peça identificada, la PROPOSTA del catàleg i els landmarks que
+  // se'n deriven. Una sola crida per a la pantalla sencera: el vocabulari permès és
+  // per peça, i demanar-lo peça a peça seria N crides per a una taula que ja hi és.
+  edgeRoles: (id) =>
+    client.get(`/api/v1/patterns/pattern-files/${id}/edge-roles/`),
+
+  // El gest HUMÀ. En bloc per peça, com `identificar`: acceptar un contorn sencer és un
+  // sol gest. El servidor valida cada slug contra el vocabulari del rol de la peça abans
+  // d'escriure res, o sigui que el desplegable manual passa pel mateix guard que la
+  // proposta acceptada.
+  confirmarVores: (id, data) =>
+    client.post(`/api/v1/patterns/pattern-files/${id}/confirm-edge-roles/`, data),
+
+  // El vocabulari de vora d'un rol de peça, amb els noms als tres idiomes. Serveix el
+  // desplegable manual: només mostra rols que aquesta peça pot portar de debò.
+  edgeVocabulary: (id, pieceRole, face) =>
+    client.get(`/api/v1/patterns/pattern-files/${id}/edge-vocabulary/`,
+      { params: { piece_role: pieceRole, face: face || '' } }),
+
   // L'última acta del fitxer. D'aquí surt el verd de la pantalla — del servidor i no del
   // navegador: un estat que viu a localStorage diu que algú va confirmar en AQUELL
   // ordinador, que no és el que la pregunta vol saber.
