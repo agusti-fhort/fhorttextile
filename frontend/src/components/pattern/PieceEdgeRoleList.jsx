@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { etiquetaPeca } from './pieceText'
@@ -25,14 +25,24 @@ import { etiquetaPeca } from './pieceText'
  */
 export default function PieceEdgeRoleList({
   files, vocabularis, onConfirma, onTria, pecaSel, desant, error,
+  // ── F4.2-BIS · el cablatge amb el llenç. Al tab Patró no s'hi passen i la llista es
+  // comporta com sempre; al Taller lliguen fila i tram en tots dos sentits.
+  voraSel = null, onVoraSel = null,
+  // Amb quines peces es treballa: al Taller, NOMÉS la que hi ha seleccionada al llenç.
+  // Filtrar aquí i no al pare és el que fa que la llista sigui la MATEIXA en tots dos
+  // llocs en comptes de dos components bessons que divergirien al primer canvi.
+  nomesPeca = '',
 }) {
   const { t, i18n } = useTranslation()
   const [esborrany, setEsborrany] = useState({})   // segment_id → slug | ''
 
   // Només les peces on la pregunta té sentit. Una peça sense rol confirmat no s'ofereix
   // aquí perquè no s'hi pot respondre: el vocabulari de vores el decideix el rol.
-  const ambRol = useMemo(() => (files || []).filter(f => f.piece_role), [files])
-  const senseRol = (files || []).length - ambRol.length
+  const visibles = useMemo(
+    () => (files || []).filter(f => !nomesPeca || f.nom_block === nomesPeca),
+    [files, nomesPeca])
+  const ambRol = useMemo(() => visibles.filter(f => f.piece_role), [visibles])
+  const senseRol = visibles.length - ambRol.length
 
   if (!files) return null
 
@@ -86,6 +96,7 @@ export default function PieceEdgeRoleList({
           sel={f.nom_block === pecaSel} onTria={onTria}
           valor={p => valor(f, p)} posa={posa}
           brut={brut(f)} desant={desant}
+          voraSel={voraSel} onVoraSel={onVoraSel}
           onAccepta={() => acceptaTot(f)} onDesa={() => desa(f)}
         />
       ))}
@@ -110,6 +121,7 @@ export default function PieceEdgeRoleList({
 
 function TargetaPeca({
   f, t, idioma, vocabulari, sel, onTria, valor, posa, brut, desant, onAccepta, onDesa,
+  voraSel, onVoraSel,
 }) {
   const proposats = f.proposals.filter(p => p.edge_role && !f.confirmed?.[p.segment_id])
   const muts = f.proposals.filter(p => !p.edge_role)
@@ -171,6 +183,8 @@ function TargetaPeca({
           key={p.segment_id ?? p.index} p={p} t={t} idioma={idioma}
           vocabulari={vocabulari} confirmat={f.confirmed?.[p.segment_id] || ''}
           value={valor(p)} onCanvia={slug => posa(p.segment_id, slug)}
+          sel={voraSel === p.segment_id}
+          onSel={onVoraSel ? () => onVoraSel(p.segment_id) : null}
         />
       ))}
 
@@ -189,15 +203,39 @@ function TargetaPeca({
 
 
 /** Una vora: el xip d'estat, el selector filtrat, i l'evidència al `title`. */
-function FilaTram({ p, t, idioma, vocabulari, confirmat, value, onCanvia }) {
+function FilaTram({ p, t, idioma, vocabulari, confirmat, value, onCanvia, sel, onSel }) {
   const proposat = p.edge_role && !confirmat
   const brut = value !== confirmat
   const ev = p.evidence || {}
   const g = ev.geometry || {}
+  const fila = useRef(null)
+
+  // 🚨 El desplaçament el mana la SELECCIÓ, vingui d'on vingui. Clicar un tram al llenç ha
+  // de portar la seva fila a la vista, i un contorn de setze trams no cap a la columna:
+  // sense això, la meitat dels clics del patronista il·luminarien una fila que no veu.
+  // `nearest` i no `center` perquè una fila que ja es veu no s'ha de moure sota el cursor.
+  useEffect(() => {
+    if (sel && fila.current) {
+      fila.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    }
+  }, [sel])
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
-         onClick={e => e.stopPropagation()}>
+    <div
+      ref={fila}
+      onMouseEnter={onSel || undefined}
+      style={{
+        display: 'flex', alignItems: 'center', gap: '0.4rem',
+        // La fila que el llenç assenyala. `--tram-sel` és el mateix token que el
+        // `KONVA_COL.tramSel` del canvas reflecteix: el mateix tram, el mateix èmfasi,
+        // als dos costats de la pantalla.
+        ...(sel ? {
+          background: 'var(--bg-muted)',
+          boxShadow: 'inset 3px 0 0 var(--tram-sel)',
+          borderRadius: 'var(--r-ctrl)',
+        } : null),
+      }}
+      onClick={e => { e.stopPropagation(); if (onSel) onSel() }}>
       <span style={{
         fontFamily: 'var(--mono)', fontSize: 'var(--fs-caption)',
         color: 'var(--text-soft)', minWidth: '2.2rem',

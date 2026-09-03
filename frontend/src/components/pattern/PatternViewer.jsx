@@ -56,6 +56,12 @@ export const KONVA_COL = {
   // rol de vora canviï el punt es mourà tot sol. Per això té color propi i no el del POM,
   // que sí que és una decisió que algú ha pres.
   landmark: '#7c3aed',
+  // F4.2-BIS · els ROLS DE VORA. Dos colors perquè són dos ESTATS de dada, no dos
+  // èmfasis: `vora` és un rol que una persona ha gravat, `voraProposta` un que el catàleg
+  // suggereix i encara no ha desat ningú. L'èmfasi de «la fila que assenyales» segueix
+  // sent `tramSel`, que és el que aquesta paleta ja fa servir per a èmfasi i no identitat.
+  vora: '#0d9488',
+  voraProposta: '#b45309',
 }
 
 // El rang de zoom no és una preferència estètica: és el que decideix si un vèrtex es pot
@@ -145,6 +151,12 @@ export default function PatternViewer({
   // glif és petit i buit a posta: una pinça proposada no és una pinça, i si es pintés com la
   // declarada ningú sabria quines ha marcat ell.
   pincesProposades = [], pincaProposadaRessaltada = null,
+  // ── F4.2-BIS. Els trams amb rol de vora de la peça que s'està declarant, per pintar-los
+  // sobre la geometria: `{id, piece_id, vora, t_inici, t_fi, edge_role, confirmat,
+  // longitud_cm}`. `voraRessaltada` és l'id del que la llista assenyala —i és l'ÚNIC que
+  // porta la mida escrita al costat: l'ordre de l'Agus és «no puc comprovar la mida si no
+  // puc navegar», i una xifra a cada tram tornaria a fer il·legible el que ve a resoldre.
+  voresRolades = [], voraRessaltada = null, onClicVora = null,
   // ── F4.2. Els punts DERIVATS dels rols de vora, ja resolts pel servidor: `{landmark,
   // side, x, y, nom_block}`. **Es LLEGEIXEN, no es calculen**: la regla que diu on és un
   // HPS viu al catàleg i es resol al backend en el marc de la PEÇA, i una segona
@@ -758,6 +770,55 @@ export default function PatternViewer({
             )}
             {/* Els landmarks derivats. Amb nom al costat: un punt sense nom en un patró
                 és soroll, i el que aquest punt aporta és justament que se sap com es diu. */}
+            {/* F4.2-BIS · ELS ROLS DE VORA sobre la geometria. Es pinten com els trams
+                declarats i pel mateix camí (`puntsDelSegment` resol el rang `t` sobre els
+                punts que el servidor ja ha enviat): el front no calcula geometria, la
+                RESOL, que és per a això que un tram es desa com a fracció de vora i no com
+                a llista de punts.
+
+                El que assenyala la llista va amb `tramSel` i més gruix —èmfasi, no
+                identitat— i porta la MIDA al costat, que és el que aquesta pantalla ve a
+                fer possible. */}
+            {voresRolades.map(vr => {
+              const piece = pieces.find(p => p.id === vr.piece_id)
+              if (!piece) return null
+              const pts = puntsDelSegment(piece, vr)
+              if (pts.length < 2) return null
+              const marcat = voraRessaltada === vr.id
+              const color = marcat ? KONVA_COL.tramSel
+                : vr.confirmat ? KONVA_COL.vora : KONVA_COL.voraProposta
+              const mig = pts[Math.floor(pts.length / 2)]
+              return (
+                <Group key={`vora-${vr.id}`}>
+                  <Line
+                    points={pts.flatMap(p => [p.x, -p.y])}
+                    stroke={color}
+                    strokeWidth={(marcat ? 6 : 3) / zoom}
+                    // Ratllat mentre és una PROPOSTA: la mateixa gramàtica que les
+                    // costures proposades d'A2 —ratlles = encara no és del patró— i que
+                    // el groc de la llista. Un rol gravat va sencer.
+                    dash={vr.confirmat || marcat ? undefined : [10 / zoom, 6 / zoom]}
+                    lineCap="round"
+                    listening={!!onClicVora}
+                    hitStrokeWidth={Math.max(16 / zoom, 6)}
+                    onClick={() => onClicVora && onClicVora(vr)}
+                    onTap={() => onClicVora && onClicVora(vr)}
+                    perfectDrawEnabled={false}
+                  />
+                  {marcat && mig && (
+                    <Text
+                      x={mig.x} y={-mig.y - 18 / zoom}
+                      text={vr.longitud_cm != null
+                        ? formatLen(vr.longitud_cm, unit) : ''}
+                      fontSize={14 / zoom}
+                      fill={KONVA_COL.tramSel}
+                      listening={false} perfectDrawEnabled={false}
+                    />
+                  )}
+                </Group>
+              )
+            })}
+
             {landmarks.map((lm, i) => (
               <Group key={`lm-${lm.nom_block}-${lm.landmark}-${lm.side}-${i}`}
                      x={lm.x} y={-lm.y} listening={false}>

@@ -7,6 +7,7 @@ import {
   arcDirigit, longitudTram, puntsDelSegment, puntsEntreIndexs, situaPunt,
 } from '../components/pattern/patternGeometry'
 import PieceList from '../components/pattern/PieceList'
+import PieceEdgeRoleList from '../components/pattern/PieceEdgeRoleList'
 import { etiquetaPeca } from '../components/pattern/pieceText'
 import ModelPomList from '../components/pattern/ModelPomList'
 import RelationsPanel from '../components/pattern/RelationsPanel'
@@ -126,6 +127,16 @@ export default function TallerPatro() {
   // trepitja la vora, saber-ho d'aquí a tres clics és saber-ho tard.
   const [veredicte, setVeredicte] = useState(null)
   const [tascaId, setTascaId] = useState(null)      // per al render: hi ha rellotge?
+
+  // ── ROLS DE VORA (F4.2-BIS) ───────────────────────────────────────────────
+  // Declarar-los és FEINA, i per això viuen aquí i no a la porta: el Taller és on el
+  // rellotge corre i on hi ha zoom i pan per comprovar cada mida abans de dir-la
+  // (ordre de l'Agus, 03/09: «no puc comprovar la mida si no puc navegar»).
+  const [vores, setVores] = useState(null)
+  const [vocabularis, setVocabularis] = useState({})
+  const [voraSel, setVoraSel] = useState(null)      // segment_id assenyalat, als dos costats
+  const [desantVores, setDesantVores] = useState(false)
+  const [errorVores, setErrorVores] = useState('')
   const [errTasca, setErrTasca] = useState(null)
   const unit = useUnit()                            // CM | INCH — la llei d'unitat del tenant
   // L'error d'una EINA (no s'ha pogut ancorar, no s'ha pogut cosir) no és l'error de
@@ -187,6 +198,79 @@ export default function TallerPatro() {
   }, [modelId, fileParam, t])
 
   useEffect(() => { carregar() }, [carregar])
+
+  // ── ROLS DE VORA · lectura i gest ─────────────────────────────────────────
+  /** Els trams amb la proposta, i el vocabulari per rol de peça. Una crida per pantalla. */
+  const carregarVores = useCallback(async (fpId) => {
+    if (!fpId) { setVores(null); return }
+    try {
+      const { data } = await patterns.edgeRoles(fpId)
+      setVores(data.results || [])
+      // Un cop per ROL DE PEÇA i no per peça: dues peces del mateix rol tenen el mateix
+      // vocabulari, i demanar-lo cinc vegades seria cinc voltes per la mateixa resposta.
+      const rols = [...new Set((data.results || []).map(f => f.piece_role).filter(Boolean))]
+      const parells = await Promise.all(rols.map(async r => {
+        try {
+          const { data: v } = await patterns.edgeVocabulary(fpId, r)
+          return [r, v || []]
+        } catch { return [r, []] }
+      }))
+      setVocabularis(Object.fromEntries(parells))
+    } catch {
+      setVores([])
+    }
+  }, [])
+
+  useEffect(() => { carregarVores(actual?.id) }, [actual, carregarVores])
+
+  /** El gest humà. Refresca, perquè els landmarks derivats en depenen. */
+  const confirmarVores = useCallback(async (pieceId, trams) => {
+    setErrorVores('')
+    setDesantVores(true)
+    try {
+      await patterns.confirmarVores(actual.id, { piece_id: pieceId, trams })
+      await carregarVores(actual.id)
+    } catch (e) {
+      setErrorVores(e?.response?.data?.error || t('pattern.edges_err'))
+    } finally {
+      setDesantVores(false)
+    }
+  }, [actual, carregarVores, t])
+
+  /**
+   * Els trams amb rol per PINTAR, resolts sobre la geometria que ja tenim.
+   *
+   * 🚨 El front no CALCULA geometria: la RESOL. Un `PatternSegment` es desa com a fracció
+   * de vora precisament perquè es pugui ancorar sense clavar-lo a un índex de vèrtex, i
+   * `puntsDelSegment` és la mateixa funció amb què el Taller pinta els trams declarats des
+   * de S6. Demanar al servidor una polilínia que aquí es dedueix del que ja ha enviat seria
+   * una segona font per a la mateixa veritat.
+   */
+  const voresAlCanvas = useMemo(() => {
+    if (!vores || !geometria) return []
+    const segsPerId = new Map()
+    for (const p of geometria.pieces || []) {
+      for (const sg of p.segments || []) segsPerId.set(sg.id, { ...sg, piece_id: p.id })
+    }
+    return vores.flatMap(f => {
+      // NOMÉS la peça que s'està mirant. Pintar els setze trams de cada peça alhora
+      // tornaria el patró sencer un garbuix de colors, que és el contrari del que aquesta
+      // pantalla ve a fer.
+      if (!pecaSel || f.nom_block !== pecaSel || !f.piece_role) return []
+      return f.proposals.flatMap(pr => {
+        const sg = segsPerId.get(pr.segment_id)
+        if (!sg) return []
+        const g = pr.evidence?.geometry || {}
+        return [{
+          ...sg,
+          id: pr.segment_id,
+          edge_role: f.confirmed?.[pr.segment_id] || pr.edge_role,
+          confirmat: !!f.confirmed?.[pr.segment_id],
+          longitud_cm: g.length_mm != null ? g.length_mm / 10 : null,
+        }]
+      })
+    })
+  }, [vores, geometria, pecaSel])
 
   /**
    * Els «no» vius d'aquest model. És una consulta a una taula, no el motor: es pot llegir sol.
@@ -1290,6 +1374,34 @@ export default function TallerPatro() {
             )}
           </Contenidor>
 
+          {/* ROLS DE VORA (F4.2-BIS). Sota la llista de peces perquè és la seva
+              continuació: es bategen les vores DE la peça que hi ha seleccionada, i la
+              selecció que mana és la mateixa. El panell es plega quan no hi ha peça
+              triada — sense peça no hi ha pregunta a fer. */}
+          <Contenidor
+            titol={t('pattern.edges_title')} icona="ti-vector-bezier-2" pes={1.5}
+          >
+            {!pecaSel ? (
+              <p style={{
+                margin: 0, fontSize: 'var(--fs-caption)', color: 'var(--text-soft)',
+              }}>
+                {t('pattern.edges_pick_piece')}
+              </p>
+            ) : (
+              <PieceEdgeRoleList
+                files={vores}
+                vocabularis={vocabularis}
+                nomesPeca={pecaSel}
+                pecaSel={pecaSel}
+                voraSel={voraSel}
+                onVoraSel={id => setVoraSel(v => (v === id ? null : id))}
+                onConfirma={confirmarVores}
+                desant={desantVores}
+                error={errorVores}
+              />
+            )}
+          </Contenidor>
+
           <Contenidor
             titol={t('pattern.taller.model_poms', {
               ancorats: feina?.ancorats || 0, total: feina?.total || 0,
@@ -1484,6 +1596,9 @@ export default function TallerPatro() {
               tramsDeclarats={trams}
               tramRessaltat={tramRessaltat}
               onClicTram={triarTram}
+              voresRolades={voresAlCanvas}
+              voraRessaltada={voraSel}
+              onClicVora={vr => setVoraSel(v => (v === vr.id ? null : vr.id))}
               pinces={pinces}
               propostaRessaltada={propostaAlCanvas}
               pincesProposades={pincesAlCanvas}

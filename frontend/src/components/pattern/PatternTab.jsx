@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next'
 import { patterns } from '../../api/endpoints'
 import Modal from '../ui/Modal'
 import PatternViewer from './PatternViewer'
-import PieceEdgeRoleList from './PieceEdgeRoleList'
 import PieceIdentityList from './PieceIdentityList'
 import ExportModal from './ExportModal'
 
@@ -58,15 +57,15 @@ export default function PatternTab({ modelId }) {
   const [reconeixent, setReconeixent] = useState(false)
   const [errorIdentitat, setErrorIdentitat] = useState('')
 
-  // ── ROLS DE VORA (F4.2) ───────────────────────────────────────────────────
-  // Els trams de cada peça amb la proposta i els landmarks derivats, i el vocabulari
-  // permès per rol de peça. Es demanen quan hi ha fitxer i es refresquen en confirmar:
-  // batejar una vora canvia els landmarks que se'n deriven, i ensenyar-los vells seria
-  // ensenyar el resultat d'una lectura anterior.
+  // ── ELS LANDMARKS DERIVATS (F4.2) ─────────────────────────────────────────
+  // 🚨 **La porta LLEGEIX, no declara** (F4.2-BIS). Batejar les vores és feina i viu al
+  // Taller, on el rellotge corre i on hi ha zoom i pan per comprovar cada mida abans de
+  // dir-la. Aquí només hi queden els punts que se'n deriven, que són lectura: mirar un
+  // patró no ha d'obrir cap tasca.
+  //
+  // La crida és la mateixa d'allà perquè els landmarks hi viatgen; el que NO hi ha és cap
+  // manera d'escriure des d'aquesta pantalla.
   const [vores, setVores] = useState(null)
-  const [vocabularis, setVocabularis] = useState({})
-  const [desantVores, setDesantVores] = useState(false)
-  const [errorVores, setErrorVores] = useState('')
 
   // Els fitxers triats: estat CONTROLAT (les FileDropCard són controlades). Abans eren dos
   // refs a <input type="file">, i el DOM era l'única font de veritat de què havia triat
@@ -174,18 +173,9 @@ export default function PatternTab({ modelId }) {
     try {
       const { data } = await patterns.edgeRoles(fp.id)
       setVores(data.results || [])
-      // El vocabulari es demana un cop per ROL DE PEÇA i no per peça: dues peces amb el
-      // mateix rol tenen el mateix vocabulari, i cinc crides idèntiques per a un davanter
-      // i una esquena serien cinc voltes per la mateixa resposta.
-      const rolsVistos = [...new Set((data.results || [])
-        .map(f => f.piece_role).filter(Boolean))]
-      const parells = await Promise.all(rolsVistos.map(async r => {
-        try {
-          const { data: v } = await patterns.edgeVocabulary(fp.id, r)
-          return [r, v || []]
-        } catch { return [r, []] }
-      }))
-      setVocabularis(Object.fromEntries(parells))
+      // El vocabulari NO es demana aquí: només el vol el desplegable de declarar, i
+      // declarar ja no es fa des d'aquesta pantalla. Eren N crides per a una resposta que
+      // ningú no llegeix.
     } catch {
       setVores([])
     }
@@ -198,19 +188,6 @@ export default function PatternTab({ modelId }) {
     return () => { viu = false }
   }, [actual, carregaVores])
 
-  /** El gest humà: bategem els trams d'una peça. Refresca, perquè els punts en depenen. */
-  const confirmaVores = useCallback(async (pieceId, trams) => {
-    setErrorVores('')
-    setDesantVores(true)
-    try {
-      await patterns.confirmarVores(actual.id, { piece_id: pieceId, trams })
-      await carregaVores(actual)
-    } catch (e) {
-      setErrorVores(e?.response?.data?.error || t('pattern.edges_err'))
-    } finally {
-      setDesantVores(false)
-    }
-  }, [actual, carregaVores, t])
 
   // Els landmarks que el visor ha de pintar, plans i amb el nom de la seva peça. Es
   // LLEGEIXEN del servei, mai es calculen aquí: la regla que diu on és un HPS viu al
@@ -341,19 +318,6 @@ export default function PatternTab({ modelId }) {
                 reconeixent={reconeixent}
                 desant={desantIdentitat}
                 error={errorIdentitat}
-              />
-
-              <h3 style={{ fontSize: 'var(--fs-h3)', margin: 0 }}>
-                {t('pattern.edges_title')}
-              </h3>
-              <PieceEdgeRoleList
-                files={vores}
-                vocabularis={vocabularis}
-                pecaSel={pecaSel}
-                onTria={setPecaSel}
-                onConfirma={confirmaVores}
-                desant={desantVores}
-                error={errorVores}
               />
             </div>
 

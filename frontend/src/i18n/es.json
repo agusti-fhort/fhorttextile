@@ -4728,7 +4728,8 @@
     "edges_confirmed_t": "Dicho por una persona.",
     "edges_silent_t": "Sin propuesta: el motor ha mirado este tramo y no ha sabido decir nada.",
     "edges_landmarks": "Puntos derivados: {{punts}}",
-    "edges_err": "No se han podido grabar los roles de borde."
+    "edges_err": "No se han podido grabar los roles de borde.",
+    "edges_pick_piece": "Elige una pieza para bautizar sus bordes. El rol de la pieza es lo que decide qué palabras caben."
   },
   "filedrop": {
     "hint": "Arrástralo aquí o haz clic",
