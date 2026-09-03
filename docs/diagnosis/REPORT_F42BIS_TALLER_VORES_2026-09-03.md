@@ -233,14 +233,35 @@ va documentat al fum amb captures, tal com el brief preveia.
 
 ---
 
-## 8 · EL RESTART
+## 8 · EL RESTART, I UNA COSA QUE HA CANVIAT SOTA ELS PEUS
 
-Igual que a F4.2, i pel mateix motiu verificat: **no s'ha reiniciat staging**. El gunicorn
-viu serveix `/var/www/ftt-staging/backend`, que segueix a `73574dcc` i **no conté ni una
-línia d'aquest tram**; aquesta feina viu a `f42-edge-landmarks`, al worktree i sense merge.
-Reiniciar rellançaria exactament el mateix codi que ja corre.
+**No s'ha reiniciat staging**, i el motiu segueix sent el mateix: aquest tram viu a
+`f42-edge-landmarks`, sense merge, i reiniciar rellançaria un codi que no el conté. El que
+un restart pretén provar s'ha fet millor: **el codi d'aquesta branca s'ha arrencat de debò**
+(Django propi al 8137 + vite al 5199), s'ha navegat amb un navegador real, i les captures de
+§4.3 en són l'acta.
 
-El que sí que s'ha fet és el que un restart pretén provar, i millor: **el codi d'aquesta
-branca s'ha arrencat de debò** (Django propi al 8137 + vite al 5199), s'ha navegat amb un
-navegador real i les captures de §4.3 en són l'acta. El merge i el desplegament són de
-l'Agus.
+### 🚨 8.1 · L'AGUS HA DESPLEGAT F4.2 ENMIG D'AQUEST TRAM, I HI HA UN BUG MEU EN VIU
+
+Mesurat en tancar, no suposat:
+
+| Fet | Valor |
+|---|---|
+| Merge de F4.2 a `dev` | `2e794486`, **03/09 06:54:25**, Agusti Fhort |
+| Restart del gunicorn | **06:54:29** — quatre segons després. Desplegat bé, no ranci |
+| `frontend/dist` | reconstruït a les 06:54 |
+
+O sigui que l'afirmació del §10 de l'informe de F4.2 —«res meu és desplegat»— **era certa
+quan es va escriure (06:22) i ha deixat de ser-ho**. F4.2 és VIU.
+
+**I amb ell hi ha anat el bug de pintura del §3.** Verificat al `dist` desplegat: hi ha
+`scaleY:-1` al bloc de landmarks i **no** hi ha `voraProposta`, o sigui que és el build de
+F4.2 anterior a la correcció.
+
+> **Efecte visible ara mateix a staging:** al tab Patró, els punts derivats (HPS i companyia)
+> es pinten **a l'altra banda de l'eix i amb el text del revés**. Només afecta el DIBUIX:
+> el servei que els calcula és correcte —el gate D2 dona 0,0000 mm— i cap dada n'és tocada.
+>
+> **La correcció ja està feta i espera al merge**: commit `01002fc0` d'aquesta branca. No
+> l'he desplegada jo: els pushes i els desplegaments són de l'Agus (CLAUDE.md), i el que
+> calia era dir-ho, no saltar-me-la.
