@@ -760,7 +760,7 @@ export default function PatternViewer({
                 és soroll, i el que aquest punt aporta és justament que se sap com es diu. */}
             {landmarks.map((lm, i) => (
               <Group key={`lm-${lm.nom_block}-${lm.landmark}-${lm.side}-${i}`}
-                     x={lm.x} y={lm.y} listening={false}>
+                     x={lm.x} y={-lm.y} listening={false}>
                 <Circle radius={4 / zoom} stroke={KONVA_COL.landmark}
                         strokeWidth={1.6 / zoom} fill={KONVA_COL.bg} />
                 <Circle radius={1.2 / zoom} fill={KONVA_COL.landmark} />
@@ -768,7 +768,6 @@ export default function PatternViewer({
                   text={lm.side ? `${lm.landmark}·${lm.side}` : lm.landmark}
                   x={6 / zoom} y={-11 / zoom}
                   fontSize={10 / zoom} fill={KONVA_COL.landmark}
-                  scaleY={-1}
                 />
               </Group>
             ))}
