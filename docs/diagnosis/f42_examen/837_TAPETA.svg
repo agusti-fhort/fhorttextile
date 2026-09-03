@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 249 135" width="249" height="135">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="8" y="20" font-family="sans-serif" font-size="16">837.TAPETA</text>
+<polyline points="43.75,95.06 208.96,95.06" fill="none" stroke="#9ca3af" stroke-width="2" stroke-dasharray="8 6"/>
+<text x="215.0" y="91.1" font-family="monospace" font-size="13" fill="#9ca3af">0 silent</text>
+<polyline points="208.96,95.06 208.91,94.94 208.85,94.83 208.80,94.72 208.74,94.61 206.56,90.10 204.61,86.02 202.95,82.37 201.60,79.19 200.97,77.60 200.45,76.19 200.02,74.98 199.67,74.01 199.44,73.38 199.23,72.73 198.98,71.86 198.67,70.58 198.45,69.63 198.25,68.71 198.09,68.00 198.03,67.71 198.09,67.41 198.25,66.66 198.46,65.67 198.67,64.69 198.97,63.40 199.21,62.54 199.43,61.90 199.67,61.26 200.05,60.23 200.52,58.97 201.06,57.57 201.65,56.14 202.82,53.62 204.30,50.63 206.26,46.51 208.90,40.59 208.99,40.38 209.07,40.19 209.13,40.05 209.15,40.00" fill="none" stroke="#9ca3af" stroke-width="2" stroke-dasharray="8 6"/>
+<text x="204.0" y="63.7" font-family="monospace" font-size="13" fill="#9ca3af">1 silent</text>
+<polyline points="209.15,40.00 43.75,40.00" fill="none" stroke="#9ca3af" stroke-width="2" stroke-dasharray="8 6"/>
+<text x="49.7" y="36.0" font-family="monospace" font-size="13" fill="#9ca3af">2 silent</text>
+<polyline points="43.75,40.00 41.48,57.15 40.00,67.63 41.49,78.22 43.75,95.06" fill="none" stroke="#9ca3af" stroke-width="2" stroke-dasharray="8 6"/>
+<text x="46.0" y="63.6" font-family="monospace" font-size="13" fill="#9ca3af">3 silent</text>
+</svg>
