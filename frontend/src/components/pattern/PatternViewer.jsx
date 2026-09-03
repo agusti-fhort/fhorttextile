@@ -52,6 +52,10 @@ export const KONVA_COL = {
   tram: '#0969da',     // = var(--tram) · identitat del tram, declarant-lo i declarat
   tramSel: '#fb8500',  // = var(--tram-sel) · el tram que s'assenyala: èmfasi, no identitat
   pinca: '#1b7c83',    // una PINÇA declarada: els seus dos costats i el seu vèrtex
+  // F4.2 · un LANDMARK derivat. No és una anotació: ningú l'ha marcat, i el dia que un
+  // rol de vora canviï el punt es mourà tot sol. Per això té color propi i no el del POM,
+  // que sí que és una decisió que algú ha pres.
+  landmark: '#7c3aed',
 }
 
 // El rang de zoom no és una preferència estètica: és el que decideix si un vèrtex es pot
@@ -141,6 +145,11 @@ export default function PatternViewer({
   // glif és petit i buit a posta: una pinça proposada no és una pinça, i si es pintés com la
   // declarada ningú sabria quines ha marcat ell.
   pincesProposades = [], pincaProposadaRessaltada = null,
+  // ── F4.2. Els punts DERIVATS dels rols de vora, ja resolts pel servidor: `{landmark,
+  // side, x, y, nom_block}`. **Es LLEGEIXEN, no es calculen**: la regla que diu on és un
+  // HPS viu al catàleg i es resol al backend en el marc de la PEÇA, i una segona
+  // implementació aquí seria una segona veritat que ningú compararia amb la primera.
+  landmarks = [],
   // La unitat del tenant (CM|INCH): el canvas també és taller, i hi val la mateixa llei.
   unit = 'CM',
   // ── W2. Al Taller el canvas no té una alçada de maqueta: ocupa el que li deixa el
@@ -747,6 +756,22 @@ export default function PatternViewer({
                 />
               </Group>
             )}
+            {/* Els landmarks derivats. Amb nom al costat: un punt sense nom en un patró
+                és soroll, i el que aquest punt aporta és justament que se sap com es diu. */}
+            {landmarks.map((lm, i) => (
+              <Group key={`lm-${lm.nom_block}-${lm.landmark}-${lm.side}-${i}`}
+                     x={lm.x} y={lm.y} listening={false}>
+                <Circle radius={4 / zoom} stroke={KONVA_COL.landmark}
+                        strokeWidth={1.6 / zoom} fill={KONVA_COL.bg} />
+                <Circle radius={1.2 / zoom} fill={KONVA_COL.landmark} />
+                <Text
+                  text={lm.side ? `${lm.landmark}·${lm.side}` : lm.landmark}
+                  x={6 / zoom} y={-11 / zoom}
+                  fontSize={10 / zoom} fill={KONVA_COL.landmark}
+                  scaleY={-1}
+                />
+              </Group>
+            ))}
           </Layer>
         </Stage>
       </div>
