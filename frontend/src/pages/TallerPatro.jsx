@@ -57,6 +57,9 @@ export default function TallerPatro() {
   // canvia i amb ella el que encara es pot proposar.
   const [propostes, setPropostes] = useState([])
   const [descartatsProp, setDescartatsProp] = useState(null)
+  // F4.3 · el checklist del catàleg i el gest d'acceptar les fortes en bloc.
+  const [absents, setAbsents] = useState([])
+  const [confirmantBloc, setConfirmantBloc] = useState(false)
   // Si algú ja ha buscat. Distingeix «encara no ho he demanat» de «ho he demanat i no n'hi ha
   // cap»: són dues coses diferents i la pantalla no les pot dir igual.
   const [cercades, setCercades] = useState(false)
@@ -713,11 +716,34 @@ export default function TallerPatro() {
       const { data } = await patterns.sew.propostes(modelId, actual.id)
       setPropostes(data.propostes || [])
       setDescartatsProp(data.descartats || null)
+      setAbsents(data.absents || [])
       setCercades(true)
     } catch {
       setErrEina(t('pattern.taller.err_proposals_search'))
     } finally {
       setBuscant(false)
+    }
+  }
+
+  /**
+   * F4.3 · «Proposa el cosit sencer»: acceptar les propostes fortes una darrere l'altra.
+   *
+   * 🚨 **En SÈRIE i pel MATEIX camí que una a una**, no per una porta de bloc nova. Cada
+   * costura ha de passar pel seu propi veredicte i pel seu propi repartiment de trams —
+   * confirmar-ne una canvia el que les altres poden reclamar—, i una porta que n'escrivís
+   * vuit de cop se saltaria justament la validació que fa que la llista valgui alguna cosa.
+   * El preu és que triga; el guany és que no hi ha dos camins d'escriptura per mantenir.
+   *
+   * Si una peta, s'atura: les que ja han entrat hi són i el patronista veu on s'ha quedat.
+   */
+  const confirmarBlocPropostes = async (llista) => {
+    setConfirmantBloc(true)
+    try {
+      for (const p of llista) {
+        await confirmarProposta(p)
+      }
+    } finally {
+      setConfirmantBloc(false)
     }
   }
 
@@ -902,6 +928,7 @@ export default function TallerPatro() {
   const netejarPropostes = () => {
     setPropostaRessaltada(null)
     setPropostes([])
+    setAbsents([])
     setCercades(false)
   }
 
@@ -1441,6 +1468,9 @@ export default function TallerPatro() {
               tramsPerId={tramsPerId} unit={unit}
               onEnquadraTram={enquadraTram}
               propostes={propostes} descartatsProp={descartatsProp}
+              absents={absents}
+              onConfirmaBlocProposta={confirmarBlocPropostes}
+              confirmantBloc={confirmantBloc}
               cercades={cercades} buscant={buscant}
               onBuscaPropostes={buscarPropostes} onNetejaPropostes={netejarPropostes}
               rebuigs={rebuigs} onDesfaRebuig={desferRebuig}

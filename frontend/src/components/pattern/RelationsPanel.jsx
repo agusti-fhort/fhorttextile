@@ -35,6 +35,8 @@ export default function RelationsPanel({
   // llista es comporta exactament com sempre.
   onEnquadraTram = null,
   propostes = [], descartatsProp = null,
+  // F4.3 · el checklist d'expectatives de catàleg i el gest d'acceptar en bloc.
+  absents = [], onConfirmaBlocProposta = null, confirmantBloc = false,
   cercades = false, buscant = false, onBuscaPropostes, onNetejaPropostes,
   rebuigs = [], onDesfaRebuig,
   onConfirmaProposta, onRebutjaProposta, onRessaltaProposta,
@@ -121,7 +123,13 @@ export default function RelationsPanel({
         <Rebuigs t={t} rebuigs={rebuigs} unit={unit} onDesfa={onDesfaRebuig} />
 
         {propostes.length === 0 ? (
-          <BuscaPropostes t={t} cercades={cercades} buscant={buscant} onBusca={onBuscaPropostes} />
+          <>
+            <BuscaPropostes
+              t={t} cercades={cercades} buscant={buscant} onBusca={onBuscaPropostes} />
+            {/* El checklist val TAMBÉ —i sobretot— quan no hi ha cap proposta: en un patró
+                que ningú no ha cosit encara, és l'única cosa que hi ha per llegir. */}
+            <ProposalsPanel propostes={[]} absents={absents} unit={unit} />
+          </>
         ) : (
           <ProposalsPanel
             propostes={propostes} descartats={descartatsProp} unit={unit}
@@ -129,6 +137,9 @@ export default function RelationsPanel({
             onConfirma={onConfirmaProposta}
             onRebutja={onRebutjaProposta}
             onRessalta={onRessaltaProposta}
+            absents={absents}
+            onConfirmaBloc={onConfirmaBlocProposta}
+            confirmantBloc={confirmantBloc}
           />
         )}
       </Seccio>
