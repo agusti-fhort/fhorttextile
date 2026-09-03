@@ -3,7 +3,7 @@
 **Data:** 2026-08-22 · **Entorn:** staging `/var/www/ftt-staging`, branca `dev`
 **Estat:** ✅ **ELS QUATRE TRAMS TANCATS** · 10 commits locals · **CAP PUSH**
 **Gate:** banc de paritat 1383 ✅ (abans i després, 3 blocs) · `check` ✅ · `build` ✅ ·
-i18n ca/en/es ✅ · QA de pantalla 15/15 ✅ · banc de sobirania 21/21 ✅
+i18n ca/en/es ✅ · QA de pantalla 20/20 ✅ · banc de sobirania 21/21 ✅
 
 ---
 
@@ -226,6 +226,12 @@ viure: `CustomerPOMAlias`.
   se'ls escrigui a mà. *Un endpoint propi a `pom/` va arribar a estar escrit i es va retirar:
   hauria estat la mateixa falta amb un altre nom.*
 
+**I els BOTONS segueixen el gating del servidor.** Amb el CONFIGURE al ViewSet, un tècnic
+hauria vist els quatre botons d'escriptura i cada clic li hauria donat un 403: **una porta que
+es veu oberta i no ho és és pitjor que una porta que no hi és.** Mateix patró que la resta de
+pantalles gated de la casa. La LECTURA no es toca — el tècnic segueix veient la llista, la
+fitxa sencera, l'ús observat i els àlies.
+
 🚨 **I `estatCamp` canvia d'ordre.** Mirava `pom_global == null` PRIMER. Amb el tram 3, un POM
 propi acabat d'omplir hauria seguit dient **«no lligat al catàleg global» amb el valor escrit al
 davant i invisible**. Ara mana el VALOR: si n'hi ha, es diu.
@@ -243,7 +249,7 @@ davant i invisible**. Ara mana el VALOR: si n'hi ha, es diu.
 | i18n ca/en/es | ✅ paritat verificada (71 claus a `poms.cat` a les tres) |
 | `npx eslint` (fitxers tocats) | ✅ 0 errors |
 | `qa_sobirania_pom.py` (banc, BD viva) | ✅ 21 verds, **cap residu** |
-| `qa_sobirania_cataleg_pantalla.py` (bundle real) | ✅ 15 verds |
+| `qa_sobirania_cataleg_pantalla.py` (bundle real) | ✅ **20 verds** (dues passades: admin i tècnic) |
 | Columnes de la `0078` a la BD | ✅ `public` · `fhort` · `los` |
 | Suite `fhort.pom` + `fhort.models_app` | *(v. §7)* |
 

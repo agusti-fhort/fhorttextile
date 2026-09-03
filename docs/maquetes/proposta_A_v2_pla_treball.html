@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Proposta UI — Rondes · FTT (v2)</title>
+<style>
+  /* ══ Tokens: mapatge 1:1 als tokens reals a implementació. Cap color nou. ══ */
+  :root{
+    --bg:#f7f5f1; --card:#ffffff; --border:#e5e0d6; --ink:#1c1b19; --soft:#8a8478;
+    --gold:#b8722c; --gold-bg:#f7ecdc; --ok:#3d7a44; --ok-bg:#eef5ef;
+    --paused-bg:#f7ecdc; --paused-ink:#a06a2c; --sel:#faf3e8; --progress:#2e5f36;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"IBM Plex Mono","SFMono-Regular",Menlo,monospace;background:var(--bg);
+       color:var(--ink);font-size:13px;line-height:1.45;padding:32px 40px 80px}
+  .proposta-titol{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--soft);
+    border-bottom:1px solid var(--border);padding-bottom:8px;margin:48px 0 24px}
+  .proposta-titol b{color:var(--ink)}
+  .nota{font-size:11px;color:var(--soft);font-style:italic;margin:-16px 0 20px}
+  .sec{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+  .sec-label{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--soft)}
+  .sec-meta{font-size:11px;color:var(--soft)} .sec-meta b{color:var(--ink)}
+
+  .pill{display:inline-block;font-size:10px;padding:2px 10px;border-radius:999px;border:1px solid transparent;white-space:nowrap}
+  .pill-feta{color:var(--ok);border-color:var(--ok);background:var(--ok-bg)}
+  .pill-pausada{color:var(--paused-ink);background:var(--paused-bg)}
+  .pill-encurs{color:var(--ink);border-color:var(--border);background:var(--card)}
+  .pill-entregada{color:var(--ok);background:var(--ok-bg)}
+  .pill-fase{color:var(--soft);border:1px solid var(--border);background:var(--card)}
+  .pill-espera{color:var(--paused-ink);background:var(--paused-bg)}
+
+  .ronda{background:var(--card);border:1px solid var(--border);border-radius:10px;margin-bottom:14px;overflow:hidden}
+  .ronda-cap{display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--border)}
+  .ronda.collapsed .ronda-cap{border-bottom:none}
+  .chev{color:var(--soft);cursor:pointer;font-size:11px;width:14px}
+  .ronda-num{font-weight:700;font-size:13px;letter-spacing:.02em}
+  .ronda-resum{font-size:11px;color:var(--soft)} .ronda-resum b{color:var(--ink);font-weight:500}
+  .ronda-progres{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--soft);margin-left:auto}
+  .bar{width:110px;height:5px;background:var(--border);border-radius:3px;overflow:hidden}
+  .bar i{display:block;height:100%;background:var(--progress)}
+  .ronda-accions{display:flex;align-items:center;gap:8px;margin-left:8px}
+  .btn{font-family:inherit;font-size:11px;padding:5px 12px;border-radius:7px;cursor:pointer;
+       border:1px solid var(--border);background:var(--card);color:var(--ink)}
+  .btn-ok{border-color:var(--ok);color:var(--ok)}
+  .btn-menu{padding:5px 9px;color:var(--soft)}
+  .btn-ghost{border-style:dashed;color:var(--soft);background:transparent}
+
+  .ronda-cos{padding:12px 14px;display:flex;flex-wrap:wrap;gap:10px}
+  .tasca{border:1px solid var(--border);border-radius:8px;background:var(--card);padding:8px 10px;min-width:190px}
+  .tasca-cap{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+  .tasca-nom{font-size:12px;font-weight:600}
+  .tasca-meta{font-size:10px;color:var(--soft);display:flex;gap:10px;margin-bottom:7px}
+  .tasca-peu{display:flex;align-items:center;justify-content:space-between}
+  .transport{display:flex;gap:4px}
+  .tbtn{width:20px;height:20px;border:1px solid var(--border);border-radius:5px;background:var(--card);
+        display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:var(--ink);font-size:9px;padding:0}
+  .tbtn:disabled{opacity:.35;cursor:default}
+  .segellada .tasca{opacity:.62} .segellada .transport{display:none}
+
+  .entrega-linia{display:flex;align-items:center;gap:10px;padding:8px 14px;font-size:11px;
+    background:var(--sel);border-top:1px solid var(--border);color:var(--ink)}
+  .entrega-linia .icona{color:var(--gold)}
+  .entrega-linia .contingut a{color:var(--gold);text-decoration:none}
+  .entrega-linia .okclient{margin-left:auto}
+
+  .nova-ronda{width:100%;padding:10px;border-radius:10px;text-align:center;margin-bottom:6px}
+  .pla-peu{display:flex;justify-content:space-between;font-size:11px;color:var(--soft);margin-top:4px}
+
+  .reg-caps{display:flex;gap:14px;margin-bottom:18px}
+  .kpi{flex:1;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+  .kpi small{display:block;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--soft);margin-bottom:6px}
+  .kpi b{font-size:22px;font-weight:700}
+  .reg-ronda{background:var(--card);border:1px solid var(--border);border-radius:10px;margin-bottom:14px;overflow:hidden}
+  .reg-ronda-cap{display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--border)}
+  .reg-ronda-cap .agregat{margin-left:auto;font-size:11px;color:var(--soft)}
+  .reg-ronda-cap .agregat b{color:var(--ink)}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--soft);font-weight:500;
+     text-align:left;padding:8px 14px;border-bottom:1px solid var(--border)}
+  td{padding:8px 14px;border-bottom:1px solid var(--border)}
+  tr:last-child td{border-bottom:none}
+  td.num,th.num{text-align:center;font-variant-numeric:tabular-nums}
+  .reg-entrega td{background:var(--sel)}
+  .reg-entrega .icona{color:var(--gold)}
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<div class="proposta-titol"><b>PROPOSTA A · v2</b> — Pla de treball per rondes <span style="float:right">837 VESTIT · TRV-SS27-0001</span></div>
+<p class="nota">Ordre cronològic: R1 a dalt (col·lapsada), la vigent a sota, les noves s'afegeixen a baix. La capçalera de ronda agrega els MATEIXOS camps que el detall de tasca: estat · data inici · data fi · temps total.</p>
+
+<div class="sec">
+  <span class="sec-label">Pla de treball</span>
+  <span class="sec-meta">Temps acumulat sobre el model: <b>1h 56m</b></span>
+</div>
+
+<!-- RONDA 1 · ENTREGADA · COL·LAPSADA (a dalt, cronològic) -->
+<div class="ronda segellada collapsed">
+  <div class="ronda-cap">
+    <span class="chev">▸</span>
+    <span class="ronda-num" style="color:var(--soft)">RONDA 1</span>
+    <span class="pill pill-fase">Desenvolupament</span>
+    <span class="pill pill-entregada">Entregada</span>
+    <span class="ronda-resum">inici <b>20/08 · 16:40</b> · fi <b>20/08 · 18:30</b> · temps <b>1h 18m</b> · 3 tasques</span>
+    <div class="ronda-accions" style="margin-left:auto">
+      <button class="btn btn-menu">···</button>
+    </div>
+  </div>
+  <div class="entrega-linia">
+    <span class="icona">➤</span>
+    <span>Entrega <b>20/08 · 18:30</b> a <b>Trovels</b> · per Montse B.</span>
+    <span class="contingut">· <a href="#">Fitxa tècnica v1</a> · <a href="#">Patró + escalat</a></span>
+    <span class="okclient pill pill-espera">OK client pendent</span>
+  </div>
+</div>
+
+<!-- RONDA 2 · EN CURS (desplegada, a sota) -->
+<div class="ronda">
+  <div class="ronda-cap">
+    <span class="chev">▾</span>
+    <span class="ronda-num">RONDA 2</span>
+    <span class="pill pill-fase">Proto</span>
+    <span class="pill pill-encurs">En curs</span>
+    <span class="ronda-resum">inici <b>21/08 · 09:10</b> · fi <b>—</b> · temps <b>0h 38m</b> · objectiu <b>28/08</b></span>
+    <div class="ronda-progres">
+      <span>1/3 · 33%</span>
+      <span class="bar"><i style="width:33%"></i></span>
+    </div>
+    <div class="ronda-accions">
+      <button class="btn btn-ok">Marcar entregable</button>
+      <button class="btn btn-menu">···</button>
+    </div>
+  </div>
+  <div class="ronda-cos">
+    <div class="tasca">
+      <div class="tasca-cap"><span>✎</span><span class="tasca-nom">Definició POM</span></div>
+      <div class="tasca-meta"><span>0h 58m</span><span>1 obertura</span><span>Montse B.</span></div>
+      <div class="tasca-peu">
+        <div class="transport"><button class="tbtn" disabled>▶</button><button class="tbtn" disabled>⏸</button><button class="tbtn" disabled>■</button></div>
+        <span class="pill pill-feta">Feta</span>
+      </div>
+    </div>
+    <div class="tasca">
+      <div class="tasca-cap"><span>▤</span><span class="tasca-nom">Mesurar prenda</span></div>
+      <div class="tasca-meta"><span>0h 35m</span><span>2 obertures</span></div>
+      <div class="tasca-peu">
+        <div class="transport"><button class="tbtn">▶</button><button class="tbtn" disabled>⏸</button><button class="tbtn" disabled>■</button></div>
+        <span class="pill pill-pausada">Pausada</span>
+      </div>
+    </div>
+    <div class="tasca">
+      <div class="tasca-cap"><span>▦</span><span class="tasca-nom">Escalat</span></div>
+      <div class="tasca-meta"><span>0h 23m</span><span>1 obertura</span></div>
+      <div class="tasca-peu">
+        <div class="transport"><button class="tbtn">▶</button><button class="tbtn" disabled>⏸</button><button class="tbtn" disabled>■</button></div>
+        <span class="pill pill-pausada">Pausada</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<button class="btn btn-ghost nova-ronda">+ Nova ronda</button>
+<div class="pla-peu">
+  <span>Les tasques d'una ronda entregada queden segellades — rectificar obre ronda nova.</span>
+  <span>Data de tancament projectada: <b style="color:var(--ink)">04/09</b></span>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<div class="proposta-titol"><b>PROPOSTA B · v2</b> — Registre d'activitat per rondes <span style="float:right">Blusa KAYCE · BRW-FW26-0001</span></div>
+<p class="nota">Ordre cronològic (R1 a dalt). Capçalera de bloc amb els mateixos agregats: estat · inici · fi · temps.</p>
+
+<div class="reg-caps">
+  <div class="kpi"><small>Temps total</small><b>2h 51m</b></div>
+  <div class="kpi"><small>Rondes</small><b>2</b></div>
+  <div class="kpi"><small>Entregues</small><b>1</b></div>
+  <div class="kpi"><small>Inici activitat</small><b style="font-size:14px">9 d'ag. 18:52</b></div>
+</div>
+
+<!-- RONDA 1 · entregada (a dalt) -->
+<div class="reg-ronda">
+  <div class="reg-ronda-cap">
+    <span class="ronda-num" style="color:var(--soft)">RONDA 1</span>
+    <span class="pill pill-fase">Desenvolupament</span>
+    <span class="pill pill-entregada">Entregada</span>
+    <span class="agregat">inici <b>9 d'ag. 18:42</b> · fi <b>9 d'ag. 21:05</b> · temps <b>1h 18m</b></span>
+  </div>
+  <table>
+    <tr><th>Tasca</th><th>Estat</th><th class="num">Temps</th><th>Inici</th><th>Fi</th></tr>
+    <tr><td>Definició POM</td><td><span class="pill pill-feta">Feta</span></td><td class="num">1h 14m</td><td>9 d'ag. 18:42</td><td>9 d'ag. 20:20</td></tr>
+    <tr><td>Mesurar prenda</td><td><span class="pill pill-feta">Feta</span></td><td class="num">0h 04m</td><td>9 d'ag. 20:29</td><td>9 d'ag. 20:58</td></tr>
+    <tr class="reg-entrega">
+      <td><span class="icona">➤</span> <b>Entrega a Brownie</b></td>
+      <td><span class="pill pill-entregada">OK client 12 d'ag.</span></td>
+      <td class="num">—</td>
+      <td>9 d'ag. 21:05</td>
+      <td>per Montse B.</td>
+    </tr>
+  </table>
+</div>
+
+<!-- RONDA 2 · en curs (a sota) -->
+<div class="reg-ronda">
+  <div class="reg-ronda-cap">
+    <span class="ronda-num">RONDA 2</span>
+    <span class="pill pill-fase">Proto</span>
+    <span class="pill pill-encurs">En curs</span>
+    <span class="agregat">inici <b>10 d'ag. 7:27</b> · fi <b>—</b> · temps <b>1h 33m</b></span>
+  </div>
+  <table>
+    <tr><th>Tasca</th><th>Estat</th><th class="num">Temps</th><th>Inici</th><th>Fi</th></tr>
+    <tr><td>Fitxa tècnica</td><td><span class="pill pill-pausada">Pausada</span></td><td class="num">0h 27m</td><td>10 d'ag. 7:27</td><td>—</td></tr>
+    <tr><td>Patró digitalització</td><td><span class="pill pill-pausada">Pausada</span></td><td class="num">1h 06m</td><td>14 d'ag. 13:55</td><td>—</td></tr>
+  </table>
+</div>
+
+<div class="sec-meta" style="margin-top:10px">▾ Historial complet (transicions)</div>
+
+</body>
+</html>

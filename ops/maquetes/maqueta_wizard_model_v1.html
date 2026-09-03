@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maqueta v1 · Wizard de model alleugerit</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#fbf8f3;--panel:#fff;--ink:#3a3530;--ink-soft:#8a8279;--ink-faint:#a9a199;
+    --line:#e8e0d3;--line-soft:#f0eae0;--head:#f5efe4;--gold:#a8752c;--gold-soft:#c9a227;
+    --chip:#d4a437;--btn:#9a5f22;--danger:#b4483a;--sel:#f2e6cf;--ok:#7d9a5b;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:24px 20px 80px;background:var(--bg);color:var(--ink);
+       font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:13px}
+  .wrap{max-width:1080px;margin:0 auto}
+
+  .top{display:flex;align-items:baseline;gap:14px;margin-bottom:16px}
+  h1{font-size:19px;font-weight:600;margin:0}
+  .cancel{margin-left:auto;color:var(--ink-soft);font-size:12px;cursor:pointer}
+
+  .steps{display:flex;gap:8px;margin-bottom:22px}
+  .st{flex:1;border:1px solid var(--line);background:var(--panel);border-radius:6px;
+      padding:8px 14px;font-size:12px;color:var(--ink-faint)}
+  .st.on{border-color:var(--gold);background:var(--head);color:var(--gold);font-weight:600}
+  .st.done{color:var(--ink-soft)}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:18px 20px}
+  .lbl{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);
+       margin-bottom:9px}
+
+  /* ---- filtres per descarte ---- */
+  .filt{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:6px}
+  .ch{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:4px 13px;
+      font-family:inherit;font-size:11.5px;color:var(--ink-soft);cursor:pointer}
+  .ch:hover{border-color:var(--gold-soft);color:var(--gold)}
+  .ch.on{background:var(--btn);border-color:var(--btn);color:#fff}
+  .ch:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+  .ch.clear{border-style:dashed;color:var(--ink-faint)}
+  .cnt{margin-left:auto;font-size:11px;color:var(--ink-faint);white-space:nowrap}
+
+  /* ---- finder de 3 columnes ---- */
+  .finder{display:grid;grid-template-columns:1fr 1fr 1fr;border:1px solid var(--line);
+          border-radius:8px;overflow:hidden;margin-top:14px;background:var(--panel)}
+  .col{border-right:1px solid var(--line);min-height:268px;max-height:268px;overflow-y:auto}
+  .col:last-child{border-right:none}
+  .colh{position:sticky;top:0;background:var(--head);border-bottom:1px solid var(--line);
+        padding:6px 12px;font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;
+        color:var(--ink-soft);z-index:2}
+  .row{display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;
+       border-bottom:1px solid var(--line-soft);font-size:12px}
+  .row:hover{background:#fdfaf4}
+  .row.on{background:var(--sel)}
+  .row.on .nm{color:var(--gold);font-weight:600}
+  .row .slug{font-size:9.5px;color:var(--ink-faint);display:block;margin-top:1px}
+  .row .chev{margin-left:auto;color:var(--ink-faint);font-size:11px}
+  .row .n{margin-left:auto;font-size:10px;color:var(--ink-faint)}
+  .row.mut{opacity:.32}
+  .empty{padding:14px 12px;font-size:11px;color:var(--ink-faint);font-style:italic}
+
+  input.search{font-family:inherit;font-size:12px;color:var(--ink);border:1px solid var(--line);
+    border-radius:6px;background:var(--panel);padding:6px 10px;width:230px}
+  input.search:focus{outline:none;border-color:var(--gold);background:#fffdf8}
+
+  /* ---- targeta de l'item ---- */
+  .seed{margin-top:14px;border:1px solid var(--gold-soft);border-radius:8px;background:#fffdf8;
+        padding:14px 16px}
+  .seed.void{border-color:var(--line);border-style:dashed;background:#fdfcf9}
+  .sh{display:flex;align-items:baseline;gap:10px;margin-bottom:11px}
+  .sh b{font-size:14px;font-weight:600}
+  .sh .slug{font-size:10.5px;color:var(--ink-faint)}
+  .sh .path{margin-left:auto;font-size:10.5px;color:var(--ink-soft)}
+  .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:10px}
+  .kv{border-left:2px solid var(--line);padding-left:9px}
+  .kv .k{font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint)}
+  .kv .v{font-size:15px;font-weight:600;margin-top:2px}
+  .kv .v.dim{color:var(--ink-faint);font-weight:400;font-size:13px}
+  .kv.good{border-left-color:var(--ok)}
+  .kv.warn{border-left-color:var(--gold-soft)}
+  .seedline{font-size:11.5px;color:var(--ink-soft);border-top:1px solid var(--line-soft);
+            padding-top:9px;line-height:1.7}
+  .seedline b{color:var(--ink)}
+  .btn{border:1px solid var(--gold);background:var(--panel);color:var(--gold);border-radius:6px;
+       padding:6px 14px;font-family:inherit;font-size:11.5px;cursor:pointer}
+  .btn:hover{background:var(--head)}
+  .btn:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+  .btn.solid{background:var(--btn);border-color:var(--btn);color:#fff}
+
+  /* ---- derivats editables ---- */
+  .deriv{margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .dv{border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:6px 12px;font-size:11.5px}
+  .dv .k{font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);
+         display:block;margin-bottom:1px}
+  .dv b{font-weight:600}
+  .dnote{font-size:10.5px;color:var(--ink-faint);font-style:italic}
+
+  /* ---- pas 3 ---- */
+  .sys{border:1px solid var(--line);border-radius:7px;padding:9px 13px;margin-bottom:7px;cursor:pointer;background:var(--panel)}
+  .sys.on{border-color:var(--gold);background:var(--head)}
+  .sys .nm{font-size:12.5px}
+  .sys .slug{font-size:10px;color:var(--ink-faint);margin-top:2px}
+  .tag{font-size:9.5px;border:1px solid var(--line);border-radius:999px;padding:1px 8px;
+       color:var(--ink-soft);margin-left:7px;background:var(--panel)}
+  .tag.brw{border-color:#e3d2ae;background:var(--sel);color:var(--gold)}
+  .sz{border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:5px 13px;
+      font-family:inherit;font-size:12px;color:var(--ink-soft);cursor:pointer;margin-right:6px}
+  .sz.on{background:var(--btn);border-color:var(--btn);color:#fff;font-weight:600}
+  .sz.base{background:var(--head);border-color:var(--gold);color:var(--gold);font-weight:600}
+
+  .nav{display:flex;margin-top:20px}
+  .nav .r{margin-left:auto}
+  .big{border:none;background:var(--btn);color:#fff;border-radius:7px;padding:10px 22px;
+       font-family:inherit;font-size:13px;cursor:pointer}
+  .ghost{border:1px solid var(--line);background:var(--panel);color:var(--ink-soft);
+         border-radius:7px;padding:10px 18px;font-family:inherit;font-size:13px;cursor:pointer}
+
+  .foot{margin-top:24px;padding:15px 18px;border:1px dashed var(--line);border-radius:8px;
+        background:#fdfcf9;color:var(--ink-soft);font-size:11.5px;line-height:1.75}
+  .foot b{color:var(--ink);font-weight:600}
+  .foot ul{margin:8px 0 0;padding-left:18px}
+  .foot li{margin-bottom:5px}
+  .hide{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="top">
+    <h1>Nou model</h1>
+    <span class="cancel">× Cancel·lar</span>
+  </div>
+
+  <div class="steps">
+    <div class="st done">1. Identificació</div>
+    <div class="st on">2. Peça</div>
+    <div class="st">3. Talles</div>
+  </div>
+
+  <div class="card">
+
+    <div class="lbl">Filtra per descarte — comença per tot i ves estrenyent</div>
+    <div class="filt">
+      <span style="font-size:10.5px;color:var(--ink-faint);width:56px">TARGET</span>
+      <button class="ch on" data-t="">Tots</button>
+      <button class="ch" data-t="Dona">Dona</button>
+      <button class="ch" data-t="Home">Home</button>
+      <button class="ch" data-t="Nena">Nena</button>
+      <button class="ch" data-t="Nen">Nen</button>
+      <button class="ch" data-t="Nadó">Nadó</button>
+    </div>
+    <div class="filt" style="margin-bottom:2px">
+      <span style="font-size:10.5px;color:var(--ink-faint);width:56px">FIT</span>
+      <button class="ch on" data-f="">Tots</button>
+      <button class="ch" data-f="Regular">Regular</button>
+      <button class="ch" data-f="Slim">Slim</button>
+      <button class="ch" data-f="Oversized">Oversized</button>
+      <button class="ch" data-f="Relaxed">Relaxed</button>
+      <span class="cnt" id="cnt"></span>
+    </div>
+
+    <div style="margin-top:12px"><input class="search" id="q" placeholder="Cerca peça per nom o codi…"></div>
+
+    <div class="finder">
+      <div class="col"><div class="colh">Grup</div><div id="c1"></div></div>
+      <div class="col"><div class="colh">Família</div><div id="c2"></div></div>
+      <div class="col"><div class="colh">Item</div><div id="c3"></div></div>
+    </div>
+
+    <div id="seed"></div>
+
+  </div>
+
+  <div class="nav">
+    <button class="ghost">← Enrere</button>
+    <div class="r"><button class="big">Següent →</button></div>
+  </div>
+
+  <!-- ══════ PAS 3 ══════ -->
+  <div style="margin-top:46px;border-top:1px dashed var(--line);padding-top:26px">
+    <div class="steps">
+      <div class="st done">1. Identificació</div>
+      <div class="st done">2. Peça</div>
+      <div class="st on">3. Talles</div>
+    </div>
+    <div class="card">
+      <div class="lbl">Sistema de talles — ordenats per proximitat, cap amagat</div>
+      <div class="sys on"><div class="nm">Dona ALPHA — Brownie Run 01 <span class="tag brw">Run de client · BRW</span></div><div class="slug">WOMAN_BRW_01</div></div>
+      <div class="sys"><div class="nm">Alpha EU — Women <span class="tag">Canònic</span></div><div class="slug">ALPHA_EU_W</div></div>
+      <div class="sys"><div class="nm">Numeric EU — Women <span class="tag">Canònic</span></div><div class="slug">NUMERIC_EU_W</div></div>
+      <div style="font-size:10.5px;color:var(--ink-faint);margin:4px 0 16px;font-style:italic">
+        + 3 sistemes més · escriu per filtrar
+      </div>
+
+      <div class="lbl">Talles del run</div>
+      <div style="margin-bottom:16px">
+        <span class="sz">XXS</span><span class="sz on">XS</span><span class="sz on">S</span>
+        <span class="sz">M</span><span class="sz on">L</span><span class="sz">XL</span>
+        <span class="sz">XXL</span><span class="sz">3XL</span>
+      </div>
+
+      <div class="lbl">Talla base</div>
+      <div><span class="sz">XS</span><span class="sz base">S ★</span><span class="sz">L</span></div>
+      <div style="font-size:10.5px;color:var(--ink-faint);margin-top:10px;font-style:italic">
+        L'ordre i la distància entre talles els mana el sistema, no el run.
+      </div>
+    </div>
+    <div class="nav">
+      <button class="ghost">← Enrere</button>
+      <div class="r"><button class="big">Crear model</button></div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <b>Què fixa aquesta maqueta</b>
+    <ul>
+      <li><b>El pas 2 és una sola tria: l'ITEM.</b> Target, construcció i fit deixen de ser portes prèvies — es deriven de l'item i queden editables al costat. Es preguntaven dues vegades i permetien contradir-se.</li>
+      <li><b>Mateix navegador que Garment Types</b>, en mode selecció: grup → família → item, en columnes de finder. Sense <i>Editar</i>, <i>Esborrar</i> ni <i>Nou</i>.</li>
+      <li><b>Filtre per DESCARTE, mai per bloqueig.</b> Es comença amb tot i s'estreny. El que no encaixa <b>s'esvaeix i segueix sent triable</b> — cap opció grisa i morta. Els eixos ja no delimiten (D-31.3); només acosten.</li>
+      <li><b>La targeta diu amb què naixerà el model</b> abans de triar-lo: POMs, quants porten valor base, talla base, target i fit. Un desplegable no ho pot dir.</li>
+      <li><b>Un item buit ho diu clar</b> i ofereix el gest que el resol: omplir-lo des d'un model ja mesurat. La sembra puja <b>POMs informats, valors base, target i fit</b> — i res més.</li>
+      <li><b>El pas de graduació desapareix.</b> El model neix net i la graduació s'incorpora pel seu gest (decisió 31/07). La targeta ja mostra la regla suggerida com a informació.</li>
+      <li><b>Pas 3 simple:</b> sistema, run i talla base. Els sistemes s'ordenen per proximitat, <b>mai s'amaguen</b> per target.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+const DATA = {
+  TOPS: {nom:'Parts superiors', fams:{
+    BUTTONED_TOPS:{nom:'Tops de botonadura', items:[
+      {nom:'Blusa', slug:'blouse', poms:47, amb:0, base:null, tgt:'Dona', fit:'Regular', rs:'BRW · Blusa · ALPHA_EU_W'},
+      {nom:'Shirt Man Regular', slug:'shirt_woven', poms:46, amb:46, base:'L', tgt:'Home', fit:'Regular', rs:'EU Woven Man Regular'},
+      {nom:'Sobrecamisa', slug:'overshirt', poms:46, amb:0, base:null, tgt:'Dona', fit:'Oversized', rs:null},
+      {nom:'Camisola d\'uniforme', slug:'uniform_shirt', poms:44, amb:0, base:null, tgt:'Dona', fit:'Regular', rs:null}]},
+    JERSEY_TOPS:{nom:'Tops de punt', items:[
+      {nom:'Samarreta bàsica', slug:'tshirt_knit', poms:32, amb:32, base:'S', tgt:'Dona', fit:'Regular', rs:'BRW · Tops · ALPHA_EU_W'},
+      {nom:'Top de tirants', slug:'strap_top', poms:28, amb:0, base:null, tgt:'Dona', fit:'Slim', rs:null}]},
+    KNIT_SWEATERS:{nom:'Jerseis i punts tancats', items:[
+      {nom:'Jersei coll rodó', slug:'crew_sweater', poms:38, amb:38, base:'S', tgt:'Dona', fit:'Relaxed', rs:'BRW · Tops · ALPHA_EU_W'}]}
+  }},
+  BOTTOMS: {nom:'Parts inferiors', fams:{
+    TROUSERS:{nom:'Pantalons', items:[
+      {nom:'Pantaló recte', slug:'trouser_straight', poms:31, amb:31, base:'S', tgt:'Dona', fit:'Regular', rs:'BRW · Pantaló'},
+      {nom:'Culotte', slug:'culotte', poms:29, amb:0, base:null, tgt:'Dona', fit:'Oversized', rs:null}]},
+    SKIRTS:{nom:'Faldilles', items:[
+      {nom:'Faldilla recta', slug:'skirt_straight', poms:22, amb:22, base:'S', tgt:'Dona', fit:'Regular', rs:'BRW · Faldilla'}]}
+  }},
+  DRESSES: {nom:'Vestits', fams:{
+    DRESSES_W:{nom:'Vestits', items:[
+      {nom:'Vestit camiser', slug:'shirt_dress', poms:41, amb:0, base:null, tgt:'Dona', fit:'Regular', rs:null}]}
+  }},
+  OUTERWEAR: {nom:'Abrics', fams:{
+    JACKETS:{nom:'Jaquetes i abrics', items:[
+      {nom:'Americana', slug:'blazer', poms:55, amb:0, base:null, tgt:'Dona', fit:'Regular', rs:'BRW · Jaqueta-Abric'},
+      {nom:'Trench', slug:'trench', poms:58, amb:0, base:null, tgt:'Dona', fit:'Oversized', rs:null}]}
+  }}
+};
+
+let S={g:'TOPS', f:'BUTTONED_TOPS', i:'blouse'}, T='', F='', Q='';
+
+const allItems = () => Object.entries(DATA).flatMap(([gk,g]) =>
+  Object.entries(g.fams).flatMap(([fk,f]) => f.items.map(it => ({...it, gk, fk}))));
+
+const passa = it =>
+  (!T || it.tgt === T) && (!F || it.fit === F) &&
+  (!Q || (it.nom+' '+it.slug).toLowerCase().includes(Q.toLowerCase()));
+
+function render(){
+  const items = allItems();
+  const ok = items.filter(passa);
+  document.getElementById('cnt').textContent =
+    (T||F||Q) ? `${ok.length} de ${items.length} peces encaixen` : `${items.length} peces al catàleg`;
+
+  // columna 1
+  document.getElementById('c1').innerHTML = Object.entries(DATA).map(([k,g])=>{
+    const n = ok.filter(i=>i.gk===k).length;
+    return `<div class="row ${S.g===k?'on':''} ${n?'':'mut'}" data-g="${k}">
+      <span><span class="nm">${g.nom}</span><span class="slug">${k}</span></span>
+      <span class="chev">${n||'·'} ›</span></div>`;}).join('');
+
+  // columna 2
+  const fams = DATA[S.g] ? DATA[S.g].fams : {};
+  document.getElementById('c2').innerHTML = Object.keys(fams).length
+    ? Object.entries(fams).map(([k,f])=>{
+        const n = ok.filter(i=>i.fk===k).length;
+        return `<div class="row ${S.f===k?'on':''} ${n?'':'mut'}" data-f="${k}">
+          <span><span class="nm">${f.nom}</span><span class="slug">${k}</span></span>
+          <span class="chev">${n||'·'} ›</span></div>`;}).join('')
+    : '<div class="empty">Tria un grup</div>';
+
+  // columna 3
+  const its = fams[S.f] ? fams[S.f].items : [];
+  document.getElementById('c3').innerHTML = its.length
+    ? its.map(it=>`<div class="row ${S.i===it.slug?'on':''} ${passa(it)?'':'mut'}" data-i="${it.slug}">
+        <span><span class="nm">${it.nom}</span><span class="slug">${it.slug}</span></span>
+        <span class="n">${it.poms} POMs</span></div>`).join('')
+    : '<div class="empty">Tria una família</div>';
+
+  targeta(its.find(x=>x.slug===S.i));
+  lliga();
+}
+
+function targeta(it){
+  const el = document.getElementById('seed');
+  if(!it){ el.innerHTML=''; return; }
+  const buit = it.amb === 0;
+  el.innerHTML = `
+  <div class="seed ${buit?'void':''}">
+    <div class="sh"><b>${it.nom}</b><span class="slug">${it.slug}</span>
+      <span class="path">${DATA[it.gk].nom} › ${DATA[it.gk].fams[it.fk].nom}</span></div>
+    <div class="grid4">
+      <div class="kv"><div class="k">POMs</div><div class="v">${it.poms}</div></div>
+      <div class="kv ${buit?'warn':'good'}"><div class="k">Amb valor base</div>
+        <div class="v ${buit?'dim':''}">${buit?'cap':it.amb}</div></div>
+      <div class="kv"><div class="k">Talla base</div>
+        <div class="v ${it.base?'':'dim'}">${it.base||'—'}</div></div>
+      <div class="kv"><div class="k">Graduació suggerida</div>
+        <div class="v dim" style="font-size:11.5px;line-height:1.4">${it.rs||'cap'}</div></div>
+    </div>
+    <div class="seedline">
+      ${buit
+        ? `Aquest item <b>encara no sembra valors</b>: el model naixeria amb ${it.poms} POMs buits.
+           <button class="btn" style="margin-left:8px" onclick="alert('Maqueta: obre la tria d\\'un model ja mesurat, mostra el diff i demana confirmació abans d\\'escriure a l\\'item.')">Omplir des d\\'un model</button>`
+        : `El model neixerà amb <b>${it.poms} POMs</b>, <b>${it.amb} amb valor base</b> a la talla <b>${it.base}</b>.
+           La graduació s'assigna després, pel seu gest.`}
+    </div>
+  </div>
+  <div class="deriv">
+    <span class="dv"><span class="k">Target</span><b>${it.tgt}</b></span>
+    <span class="dv"><span class="k">Construcció</span><b>${it.slug.includes('knit')||it.slug.includes('sweater')?'Punt':'Teixit pla'}</b></span>
+    <span class="dv"><span class="k">Fit</span><b>${it.fit}</b></span>
+    <span class="dnote">derivats de la peça · editables si aquest model se'n desvia</span>
+  </div>`;
+}
+
+function lliga(){
+  document.querySelectorAll('#c1 .row').forEach(r=>r.onclick=()=>{
+    S.g=r.dataset.g; S.f=Object.keys(DATA[S.g].fams)[0];
+    S.i=(DATA[S.g].fams[S.f].items[0]||{}).slug; render();});
+  document.querySelectorAll('#c2 .row').forEach(r=>r.onclick=()=>{
+    S.f=r.dataset.f; S.i=(DATA[S.g].fams[S.f].items[0]||{}).slug; render();});
+  document.querySelectorAll('#c3 .row').forEach(r=>r.onclick=()=>{S.i=r.dataset.i; render();});
+}
+
+document.querySelectorAll('.ch[data-t]').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.ch[data-t]').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); T=b.dataset.t; render();});
+document.querySelectorAll('.ch[data-f]').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.ch[data-f]').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); F=b.dataset.f; render();});
+document.getElementById('q').oninput = e => { Q=e.target.value; render(); };
+document.querySelectorAll('.sz:not(.base)').forEach(s=>s.onclick=()=>s.classList.toggle('on'));
+document.querySelectorAll('.sys').forEach(s=>s.onclick=()=>{
+  document.querySelectorAll('.sys').forEach(x=>x.classList.remove('on')); s.classList.add('on');});
+
+render();
+</script>
+</body>
+</html>

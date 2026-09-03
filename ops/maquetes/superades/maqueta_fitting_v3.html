@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maqueta v3 · Fitting</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#fbf8f3;--panel:#fff;--ink:#3a3530;--ink-soft:#8a8279;--ink-faint:#a9a199;
+    --line:#e8e0d3;--line-soft:#f0eae0;--head:#f5efe4;--gold:#a8752c;--gold-soft:#c9a227;
+    --btn:#9a5f22;--sel:#f2e6cf;--lining:#fbf6ee;--dec:#f7f5f1;
+    --ok:#5f8a3f;--ok-bg:#eef4e6;--ok-bd:#c6dab0;
+    --adj:#c47f1a;--adj-bg:#fcf2e3;--adj-bd:#e9d3a6;
+    --rej:#b4483a;--rej-bg:#faeae7;--rej-bd:#e5bcb4;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:20px 16px 70px;background:var(--bg);color:var(--ink);
+       font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:13px}
+  .wrap{max-width:1240px;margin:0 auto}
+  .crumb{display:flex;align-items:center;gap:9px;color:var(--ink-soft);font-size:12px;margin-bottom:10px}
+  .crumb b{color:var(--ink);font-weight:600}
+  .chip{background:var(--gold-soft);color:#fff;border-radius:999px;padding:2px 11px;font-size:11px}
+  h1{font-size:17px;font-weight:600;margin:0 0 3px}
+  .sub{color:var(--ink-soft);font-size:12px;margin:0 0 14px}
+  .dl{border:1px solid var(--gold);background:var(--panel);color:var(--gold);border-radius:6px;
+      padding:7px 15px;font-family:inherit;font-size:12px;cursor:pointer}
+  .dl:hover{background:var(--head)}
+  .hint{font-size:10.5px;color:var(--ink-faint);margin:12px 0 10px}
+  kbd{border:1px solid var(--line);border-radius:3px;padding:1px 5px;background:var(--panel);
+      font-family:inherit;font-size:10px;color:var(--ink-soft)}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .scroll{overflow-x:auto}
+  table{border-collapse:separate;border-spacing:0;font-size:12.5px;
+        table-layout:fixed;min-width:1080px}
+  th{font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);
+     font-weight:500;padding:7px 10px;background:var(--head);border-bottom:1px solid var(--line);
+     text-align:left;vertical-align:bottom}
+  th.grp{text-align:center;background:var(--sel);color:var(--gold);font-weight:600}
+  th.histh{background:#fdfcf9;text-align:right}
+  th.dech{background:var(--dec);color:var(--ink-soft)}
+  td{padding:4px 10px;border-bottom:1px solid var(--line-soft);vertical-align:middle}
+
+  col.cLay{width:78px} col.cCode{width:58px} col.cName{width:290px}
+  col.cH{width:92px} col.cReal{width:100px} col.cVerd{width:252px} col.cNote{width:230px}
+
+  .lay{font-size:11.5px;color:var(--ink-soft)}
+  .code{font-size:12.5px;font-weight:600;color:var(--gold)}
+  .nm{font-size:12.5px;line-height:1.4;white-space:normal;
+      word-break:keep-all;overflow-wrap:normal;hyphens:none}
+  .i{color:var(--ink-faint);font-size:11px;margin-left:5px;cursor:help}
+
+  .hist{text-align:right;color:var(--ink-soft);background:#fdfcf9;font-variant-numeric:tabular-nums;
+        white-space:nowrap}
+  .work{background:var(--sel);text-align:right}
+  .val{width:82px;text-align:right;font-size:12.5px;font-weight:600;font-family:inherit;
+       border:1px solid var(--line);border-radius:5px;padding:3px 8px;background:var(--panel);
+       font-variant-numeric:tabular-nums;color:var(--ink)}
+  .val:focus{outline:none;border-color:var(--gold);background:#fffdf8}
+  .val.ok {color:var(--ok); border-color:var(--ok-bd)}
+  .val.adj{color:var(--adj);border-color:var(--adj-bd)}
+  .val.rej{color:var(--rej);border-color:var(--rej-bd);text-decoration:line-through}
+
+  td.dec{background:var(--dec);border-left:1px solid var(--line)}
+  td.dec2{background:var(--dec)}
+  .verd{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--panel)}
+  .vb{border:none;background:transparent;font-family:inherit;font-size:9.5px;padding:2px 7px;
+      color:var(--ink-faint);cursor:pointer;border-right:1px solid var(--line);letter-spacing:.04em}
+  .vb:last-child{border-right:none}
+  .vb:hover{background:#faf8f5}
+  .vb.on.ok {background:var(--ok-bg); color:var(--ok); font-weight:600}
+  .vb.on.adj{background:var(--adj-bg);color:var(--adj);font-weight:600}
+  .vb.on.rej{background:var(--rej-bg);color:var(--rej);font-weight:600}
+  .note{width:100%;font-family:inherit;font-size:11.5px;color:var(--ink);
+        border:1px solid var(--line);border-radius:5px;padding:3px 8px;background:var(--panel)}
+  .note::placeholder{color:var(--ink-faint);font-style:italic}
+  .note:focus{outline:none;border-color:var(--gold);background:#fffdf8}
+
+  /* paginador d'històric */
+  .pg{display:inline-flex;align-items:center;gap:6px;font-size:9.5px;color:var(--ink-soft);
+      text-transform:none;letter-spacing:0}
+  .pgb{border:1px solid var(--line);background:var(--panel);border-radius:4px;width:19px;height:19px;
+       font-family:inherit;font-size:11px;color:var(--gold);cursor:pointer;line-height:1;padding:0}
+  .pgb:disabled{color:var(--ink-faint);cursor:default}
+  .pgb:hover:not(:disabled){background:var(--head)}
+
+  tr.sis td{background:var(--panel)}
+  tr.sis td.dec,tr.sis td.dec2{background:var(--dec)}
+  tr.sis td.work{background:var(--sel)}
+  tr.sis td.hist{background:#fdfcf9}
+  tr.sis .code{color:var(--ink-faint);font-weight:400}
+  .tagd{font-size:9.5px;border:1px solid var(--line);border-radius:999px;padding:1px 7px;
+        color:var(--ink-soft);background:var(--panel);margin-left:6px;white-space:nowrap}
+  .folg{font-size:10.5px;color:var(--ink-soft)}
+  .flash{animation:fl 2.4s ease-out}
+  @keyframes fl{0%,60%{background:#fcf2e3}100%{background:var(--panel)}}
+
+  .bar{display:flex;align-items:center;gap:16px;padding:10px 16px;border-top:1px solid var(--line);
+       background:#fdfcf9;font-size:11.5px;color:var(--ink-soft);flex-wrap:wrap}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:5px}
+  .bar b{color:var(--ink);font-weight:600}
+
+  #toast{position:fixed;right:22px;bottom:22px;background:var(--ink);color:#fff;border-radius:7px;
+         padding:9px 15px;font-size:11.5px;opacity:0;transform:translateY(8px);transition:.25s;
+         pointer-events:none;z-index:50}
+  #toast.on{opacity:1;transform:translateY(0)}
+
+  /* ── previsualització del PDF · A4 VERTICAL ── */
+  .pvlab{margin:26px 0 10px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-faint)}
+  /* A4 horitzontal real: 297×210 mm a 96 dpi = 1123×794 px · marges 12 mm = 45 px */
+  .sheetbox{overflow:hidden;margin-bottom:16px}
+  .page{background:#fff;border:1px solid var(--line);
+        width:1123px;height:794px;padding:45px;margin:0;
+        box-shadow:0 1px 4px rgba(0,0,0,.07);display:flex;flex-direction:column;
+        overflow:hidden;transform:scale(.60);transform-origin:top left}
+  .mg{position:relative}
+  .mg::before{content:'';position:absolute;inset:45px;border:1px dotted #e8e0d3;pointer-events:none}
+  .page>*{min-width:0;max-width:100%}
+  .hdrslot{border:1px dashed #c9bfae;background:#fcfaf6;padding:12px 14px;margin-bottom:14px;
+           font-size:7.5pt;color:var(--ink-faint);line-height:1.6}
+  .hdrslot b{color:var(--ink-soft);font-size:8pt}
+    .tw{width:100%;min-width:0;max-width:100%;overflow:hidden}
+  table.pr{border-collapse:collapse;width:100%;max-width:100%;min-width:0;
+           font-size:8.5pt;table-layout:fixed}
+  table.pr th{background:#fff;border:none;border-bottom:1px solid var(--ink);font-size:7.5pt;
+    text-transform:uppercase;letter-spacing:.05em;color:var(--ink);padding:5px 4px;text-align:left;
+    vertical-align:bottom}
+  table.pr td{border-bottom:1px solid #ddd6c8;padding:2px 5px;font-size:8.5pt;vertical-align:middle;
+    line-height:1.3;white-space:normal;word-break:keep-all;overflow-wrap:normal;height:0}
+  table.pr td.nowrap{white-space:nowrap;overflow:hidden}
+  table.pr td.box{border:1px solid #9a9184;background:#fcfbf9}
+  .tick{display:inline-block;width:9px;height:9px;border:1px solid #7a736a;margin-right:3px;vertical-align:-1px}
+  .tk{font-size:6.8pt;letter-spacing:.01em;white-space:nowrap;display:inline-block;margin-right:5px}
+  .tk:last-child{margin-right:0}
+
+  .pfoot{margin-top:auto;padding-top:9px;border-top:1px solid #ddd6c8;
+         font-size:7.5pt;color:var(--ink-soft);line-height:1.9}
+
+
+  .foot{margin-top:22px;padding:15px 18px;border:1px dashed var(--line);border-radius:8px;
+        background:#fdfcf9;color:var(--ink-soft);font-size:11.5px;line-height:1.75}
+  .foot b{color:var(--ink);font-weight:600}
+  .foot ul{margin:8px 0 0;padding-left:18px} .foot li{margin-bottom:5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="crumb">
+    <span>← Models</span><span>›</span><b>BRW-SS27-0002 · MANDI</b><span>·</span>
+    <span>Plana · Americana / blazer</span><span>·</span><span>Base S</span>
+    <span class="chip">Fitting · 04/08</span>
+  </div>
+  <h1>Fitting — presa de mesures i decisió</h1>
+  <p class="sub">Els POMs, la capa i la instància ja vénen definits. Aquí es mesura i es decideix.</p>
+  <button class="dl" id="btnDl">↓ Descarregar full de fitting (PDF)</button>
+
+  <div class="hint">
+    <kbd>↓</kbd>/<kbd>Enter</kbd> següent · <kbd>↑</kbd> anterior · <kbd>Tab</kbd> valor → veredicte → nota ·
+    <kbd>A</kbd> accepta · <kbd>J</kbd> ajusta · <kbd>R</kbd> rebutja · buit = no mesurat
+  </div>
+
+  <div class="card">
+    <div class="scroll">
+    <table>
+      <colgroup>
+        <col class="cLay"><col class="cCode"><col class="cName">
+        <col class="cH"><col class="cH"><col class="cReal"><col class="cVerd"><col class="cNote">
+      </colgroup>
+      <thead>
+        <tr>
+          <th rowspan="2">Capa</th><th rowspan="2"></th><th rowspan="2">POM</th>
+          <th class="histh" colspan="2">
+            <span class="pg">
+              <button class="pgb" id="pPrev">‹</button>
+              <span id="pLab">històric</span>
+              <button class="pgb" id="pNext">›</button>
+            </span>
+          </th>
+          <th class="grp">Fitting 04/08</th>
+          <th class="dech" colspan="2" style="text-align:center">Decisió</th>
+        </tr>
+        <tr>
+          <th class="histh" id="h1">—</th><th class="histh" id="h2">—</th>
+          <th class="grp" style="text-align:right">Real · S</th>
+          <th class="dech">Veredicte</th><th class="dech">Nota</th>
+        </tr>
+      </thead>
+      <tbody id="tb"></tbody>
+    </table>
+    </div>
+    <div class="bar">
+      <span><span class="dot" style="background:var(--ok)"></span>Accepted <b id="nOk">0</b></span>
+      <span><span class="dot" style="background:var(--adj)"></span>Adjusted <b id="nAdj">0</b></span>
+      <span><span class="dot" style="background:var(--rej)"></span>Rejected <b id="nRej">0</b></span>
+      <span>Sense decidir <b id="nPend">0</b></span>
+    </div>
+  </div>
+
+  <div class="pvlab">Previsualització del PDF · A4 horitzontal real (297×210 mm) · marges 12 mm · vista al 60%</div>
+  <div id="pv"></div>
+
+  <div class="foot">
+    <b>Què fixa aquesta versió</b>
+    <ul>
+      <li><b>Res es defineix aquí.</b> La capa ve informada i és de lectura; no hi ha columna d'ordre ni es poden moure els POMs. Tot això es va fer a la pantalla de definició (v8).</li>
+      <li><b>La instància va dins del nom, en negre</b>, com la resta del nom. No és una etiqueta: forma part de com es diu aquella mesura.</li>
+      <li><b>Els noms no es tallen mai</b>: si no hi caben, salten de línia.</li>
+      <li><b>L'històric es pagina amb ‹ ›</b>, de dues en dues columnes. Un model amb sis preses no eixampla la taula ni obliga a scroll lateral: la columna de treball no es mou mai de lloc.</li>
+      <li><b>El valor té la mida de la resta</b>, en negreta i amb el color del veredicte.</li>
+      <li><b>El PDF és la mateixa taula</b> amb la capçalera de la fitxa tècnica, en anglès, casella de mesura buida i els tres veredictes per marcar. Es parteix en pàgines i repeteix capçalera.</li>
+    </ul>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+/* històric: N preses possibles, es paginen de 2 en 2 */
+const SISH={0:[47.0,46.6,46.8,47.0]};   // històric de la germana de folre, per presa
+const HIST=[
+ {lab:'Base',        v:[49.0,46.0,36.0,50.0,35.5,23.0,23.0,41.0,26.0,31.0]},
+ {lab:'Fitting 21/07',v:[48.6,45.8,36.0,49.6,35.2,22.8,23.0,41.0,25.8,30.8]},
+ {lab:'Check 28/07', v:[48.8,46.0,36.0,49.8,35.4,23.0,23.0,41.0,26.0,31.0]},
+ {lab:'Manual 03/08',v:[49.0,46.0,36.0,50.0,35.5,23.0,23.0,41.0,26.0,31.0]},
+];
+let hp = HIST.length-2;   // per defecte, les dues últimes
+
+const ROWS=[
+ {c:'CH', n:'CHEST WIDTH',           lay:'Exterior', val:49.0, sis:{lay:'Folre', folg:2.0}},
+ {c:'B',  n:'WAIST WIDTH',           lay:'Exterior', val:46.4},
+ {c:'BT', n:'WAIST POSITION FROM HPS',lay:'Exterior',val:36.0},
+ {c:'D',  n:'BOTTOM WIDTH',          lay:'Exterior', val:51.8},
+ {c:'E2', n:'ACROSS FRONT WIDTH (11 CM FROM HPS)', lay:'Exterior', val:35.5},
+ {c:'S',  n:'FRONT ARMHOLE ALONG SEAM · Left',  lay:'Exterior', val:23.2},
+ {c:'S',  n:'FRONT ARMHOLE ALONG SEAM · Right', lay:'Exterior', val:23.0},
+ {c:'E',  n:'SHOULDER TO SHOULDER',  lay:'Exterior', val:41.0},
+ {c:'J1', n:'SLEEVE OPENING · Relaxed',  lay:'Exterior', val:24.5},
+ {c:'J1', n:'SLEEVE OPENING · Extended', lay:'Exterior', val:31.0},
+];
+const LAYEN={'Exterior':'Shell','Folre':'Lining','Entretela':'Interlining',
+             'Vores':'Binding','Punt':'Knit','Reforç':'Reinforcement'};
+const st=ROWS.map(R=>({v:null,sis:!!R.sis}));
+const f=n=>n==null?'—':n.toFixed(1).replace('.',',');
+const toastEl=document.getElementById('toast');
+function toast(t){toastEl.textContent=t;toastEl.classList.add('on');
+  clearTimeout(toastEl._t);toastEl._t=setTimeout(()=>toastEl.classList.remove('on'),2600);}
+
+function drawHead(){
+  document.getElementById('h1').textContent=HIST[hp].lab;
+  document.getElementById('h2').textContent=HIST[hp+1].lab;
+  document.getElementById('pLab').textContent=`${hp+1}-${hp+2} de ${HIST.length}`;
+  pPrev.disabled = hp<=0; pNext.disabled = hp>=HIST.length-2;
+}
+function draw(){
+  drawHead();
+  const tb=document.getElementById('tb'); tb.innerHTML='';
+  ROWS.forEach((R,i)=>{
+    const s=st[i], k=s.v||'';
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td class="lay">${R.lay}</td>
+      <td class="code">${R.c}</td>
+      <td class="nm">${R.n}<span class="i" title="Nom en català">ⓘ</span></td>
+      <td class="hist">${f(HIST[hp].v[i])}</td>
+      <td class="hist">${f(HIST[hp+1].v[i])}</td>
+      <td class="work"><input class="val ${k}" value="${f(R.val)}" data-i="${i}"></td>
+      <td class="dec"><span class="verd">
+        <button class="vb ok  ${k==='ok' ?'on':''}" data-i="${i}" data-v="ok">ACCEPTED</button>
+        <button class="vb adj ${k==='adj'?'on':''}" data-i="${i}" data-v="adj">ADJUSTED</button>
+        <button class="vb rej ${k==='rej'?'on':''}" data-i="${i}" data-v="rej">REJECTED</button>
+      </span></td>
+      <td class="dec2"><input class="note" placeholder="nota…"></td>`;
+    tb.appendChild(tr);
+
+    if(R.sis){
+      const cur=parseFloat((document.querySelector(`input.val[data-i="${i}"]`)||{}).value?.replace(',','.'))||R.val;
+      const viva = s.v!=='rej';
+      const t2=document.createElement('tr'); t2.className='sis'+(s.flash?' flash':'');
+      t2.innerHTML=`
+        <td class="lay">${R.sis.lay}</td>
+        <td class="code">${R.c}</td>
+        <td class="nm" style="color:var(--ink-soft)">${R.n}<span class="tagd">${viva?'DERIVADA':'NO ACTUALITZADA'}</span></td>
+        <td class="hist">${SISH[i]?f(SISH[i][hp]):'—'}</td>
+        <td class="hist">${SISH[i]?f(SISH[i][hp+1]):'—'}</td>
+        <td class="work"><input class="val${viva?'':' rej'}" value="${f((viva?cur:HIST[hp+1].v[i])-R.sis.folg)}"></td>
+        <td class="dec"><span class="folg">${viva?'folgança '+f(R.sis.folg)+' cm':'manté l\'últim valor vàlid'}</span></td>
+        <td class="dec2"><input class="note" placeholder="nota…"></td>`;
+      tb.appendChild(t2);
+    }
+  });
+  bind(); counts(); pv();
+}
+function counts(){
+  const c={ok:0,adj:0,rej:0}; st.forEach(s=>{if(s.v)c[s.v]++;});
+  nOk.textContent=c.ok;nAdj.textContent=c.adj;nRej.textContent=c.rej;
+  nPend.textContent=ROWS.length-c.ok-c.adj-c.rej;
+}
+function setV(i,v){
+  st[i].v = st[i].v===v ? null : v;
+  if(ROWS[i].sis){
+    const sembra = st[i].v==='ok'||st[i].v==='adj';
+    st[i].flash=true; setTimeout(()=>st[i].flash=false,2500);
+    toast(`${ROWS[i].c} · Lining ${sembra?'actualitzat':'NO actualitzat'}`);
+  }
+  draw();
+  const n=document.querySelector(`input.val[data-i="${i}"]`); if(n)n.focus();
+}
+function bind(){
+  document.querySelectorAll('.vb').forEach(b=>b.onclick=()=>setV(+b.dataset.i,b.dataset.v));
+  document.querySelectorAll('input.val[data-i]').forEach(inp=>{
+    inp.onkeydown=e=>{
+      const i=+inp.dataset.i,k=e.key.toLowerCase();
+      if(['a','j','r'].includes(k)){e.preventDefault();setV(i,{a:'ok',j:'adj',r:'rej'}[k]);return;}
+      if(e.key==='ArrowDown'||e.key==='Enter'){e.preventDefault();
+        const n=document.querySelector(`input.val[data-i="${i+1}"]`);if(n){n.focus();n.select();}}
+      if(e.key==='ArrowUp'){e.preventDefault();
+        const n=document.querySelector(`input.val[data-i="${i-1}"]`);if(n){n.focus();n.select();}}
+    };
+  });
+}
+pPrev.onclick=()=>{if(hp>0){hp--;draw();}};
+pNext.onclick=()=>{if(hp<HIST.length-2){hp++;draw();}};
+
+/* ── PDF · A4 vertical ── */
+const PER_PAGE = 24;
+function header(){return `
+  <div class="hdrslot">
+    <b>CAPÇALERA DE FITXA TÈCNICA</b><br>
+    Es reutilitza la capçalera ja dissenyada i aprovada (v3.3): logo del client · MODEL ·
+    SEASON · COLLECTION · INTERNAL REFERENCE · CLIENT REFERENCE.<br>
+    Aquí s'hi afegeix només la línia de sessió: <b>FITTING SHEET · 04/08/2026 · Base size S · run XS·S·M</b>
+  </div>`;}
+function flatRows(){
+  const flat=[];
+  ROWS.forEach(R=>{
+    flat.push({lay:LAYEN[R.lay]||R.lay,c:R.c,n:R.n,spec:R.val});
+    if(R.sis) flat.push({lay:LAYEN[R.sis.lay]||R.sis.lay,c:R.c,n:R.n,spec:R.val-R.sis.folg,d:1});
+  });
+  return flat;
+}
+function prows(list,from){
+  return list.map((R,j)=>`<tr>
+    <td>${from+j+1}</td><td>${R.lay}</td><td><b>${R.c}</b></td>
+    <td>${R.d?'<span style="color:#8a8279">↳ </span>':''}${R.n}${R.d?' <span style="font-size:6.5pt;color:#8a8279">(DERIVED)</span>':''}</td>
+    <td style="text-align:right">${f(R.spec)}</td><td class="box"></td>
+    <td class="nowrap"><span class="tk"><span class="tick"></span>AC</span><span class="tk"><span class="tick"></span>AD</span><span class="tk"><span class="tick"></span>RJ</span></td>
+    <td></td></tr>`).join('');
+}
+function page(list,from,num,tot,last){
+  return `<div class="page mg">${header()}
+    <div class="tw"><table class="pr">
+      <colgroup>
+        <col style="width:24px"><col style="width:66px"><col style="width:40px">
+        <col style="width:320px"><col style="width:58px"><col style="width:50px">
+        <col style="width:108px"><col style="width:324px">
+      </colgroup>
+      <thead><tr><th>#</th><th>Layer</th><th>Code</th><th>POM name</th>
+        <th style="text-align:right">Spec<br><span style="font-weight:400;text-transform:none;letter-spacing:0;color:#8a8279">03/08</span></th>
+        <th style="text-align:center">Meas.</th>
+        <th>Decision</th><th>Comments</th></tr></thead>
+      <tbody>${prows(list,from)}</tbody></table></div>
+    ${last?`<div class="pfoot">
+      <b>AC</b> = ACCEPTED — measurement is correct, no action. &nbsp;·&nbsp;
+      <b>AD</b> = ADJUSTED — the new measurement replaces the spec. &nbsp;·&nbsp;
+      <b>RJ</b> = REJECTED, follow specs — remake to specification; state the reason in Comments.<br>
+      Layers: <b>Shell</b> · <b>Lining</b> · <b>Interlining</b> · <b>Binding</b> · <b>Knit</b> · <b>Reinforcement</b>.
+      Rows marked <b>(DERIVED)</b> are calculated from their parent row; measure them as well.
+      <br><br>Measured by ____________________ · Date ____ / ____ / ______ · Signature ____________________
+    </div>`:''}
+    </div>`;
+}
+function pv(){
+  const flat=flatRows(), tot=Math.max(1,Math.ceil(flat.length/PER_PAGE));
+  let out='';
+  for(let i=0;i<tot;i++){
+    const from=i*PER_PAGE;
+    out+='<div class="sheetbox" style="height:'+Math.round(794*0.6)+'px;width:'+Math.round(1123*0.6)+'px">'
+       + page(flat.slice(from,from+PER_PAGE),from,i+1,tot,i===tot-1) + '</div>';
+  }
+  document.getElementById('pv').innerHTML=out;
+}
+document.getElementById('btnDl').onclick=()=>toast('Maqueta: genera el PDF de 2 pàgines');
+draw();
+</script>
+</body>
+</html>

@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="UTF-8">
+<title>Proposta UX — Intervals a Mesures</title>
+<style>
+  :root{
+    --bg:#f7f5f1; --card:#fff; --border:#e5e0d6; --ink:#1c1b19; --soft:#8a8478;
+    --gold:#b8722c; --sel:#faf3e8; --ok:#3d7a44; --danger:#b3402e;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"IBM Plex Mono",Menlo,monospace;background:var(--bg);color:var(--ink);
+       font-size:13px;padding:32px 40px}
+  .titol{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--soft);
+    border-bottom:1px solid var(--border);padding-bottom:8px;margin-bottom:20px}
+  .nota{font-size:11px;color:var(--soft);font-style:italic;margin:14px 0 24px}
+  table{border-collapse:collapse;background:var(--card);border:1px solid var(--border);
+        border-radius:10px;overflow:hidden;font-size:12px}
+  th{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--soft);
+     font-weight:500;text-align:left;padding:9px 12px;border-bottom:1px solid var(--border)}
+  td{padding:7px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+  tr:last-child td{border-bottom:none}
+  .pomcode{color:var(--gold);font-weight:600}
+  .base{background:var(--sel);font-weight:700;text-align:center}
+  select,input{font-family:inherit;font-size:12px;padding:4px 6px;border:1px solid var(--border);
+    border-radius:6px;background:var(--card);color:var(--ink)}
+  input.delta{width:52px;text-align:center;font-variant-numeric:tabular-nums}
+  select.talla{width:56px}
+  select:disabled,input:disabled{opacity:.4;background:var(--bg)}
+
+  /* ── XIPS D'INTERVAL ── */
+  .breaks{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .xip{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--border);
+       border-radius:999px;padding:3px 10px;background:var(--card);cursor:pointer;
+       font-size:11px;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .xip .fletxa{color:var(--soft)}
+  .xip .d{font-weight:700}
+  .xip .x{color:var(--soft);margin-left:2px;font-size:10px}
+  .xip:hover{border-color:var(--gold)}
+  .afegir{width:22px;height:22px;border:1px dashed var(--border);border-radius:6px;
+    background:transparent;color:var(--soft);cursor:pointer;font-size:12px;line-height:1}
+  .afegir:hover{border-color:var(--gold);color:var(--gold)}
+
+  /* xip en EDICIÓ (obert) */
+  .xip-edit{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--gold);
+    border-radius:999px;padding:2px 6px;background:var(--sel);font-size:11px}
+  .xip-edit .fletxa{color:var(--soft)}
+  .xip-edit .conf{color:var(--ok);cursor:pointer;font-weight:700;padding:0 3px}
+  .xip-edit .canc{color:var(--soft);cursor:pointer;padding:0 3px}
+  .maxim{font-size:10px;color:var(--soft);font-style:italic}
+</style>
+</head>
+<body>
+
+<div class="titol">PROPOSTA UX — Columna «Breaks» amb xips d'interval (Mesures · graduació resident)</div>
+
+<table>
+  <tr>
+    <th>#</th><th>Capa</th><th>POM</th><th>Nom</th>
+    <th style="text-align:center">Talla base<br>S</th>
+    <th>Règim</th><th style="text-align:center">Δ</th><th>Breaks</th>
+  </tr>
+
+  <!-- LINEAR sense breaks: només el delta general -->
+  <tr>
+    <td>8</td><td>Exterior</td><td class="pomcode">EK</td><td>Neck width</td>
+    <td class="base">22</td>
+    <td><select><option>LINEAR</option></select></td>
+    <td style="text-align:center"><input class="delta" value="0"></td>
+    <td><div class="breaks"><button class="afegir">+</button></div></td>
+  </tr>
+
+  <!-- LINEAR amb 1 interval (l'actual «break» migrat: es llegeix S→XL) -->
+  <tr>
+    <td>1</td><td>Exterior</td><td class="pomcode">A</td><td>1/2 chest width</td>
+    <td class="base">44</td>
+    <td><select><option>LINEAR</option></select></td>
+    <td style="text-align:center"><input class="delta" value="2"></td>
+    <td><div class="breaks">
+      <span class="xip">S <span class="fletxa">→</span> XL <span class="d">+3</span><span class="x">✕</span></span>
+      <button class="afegir">+</button>
+    </div></td>
+  </tr>
+
+  <!-- LINEAR amb 2 intervals (el cas Montse: general 2, mig a 3, extrem a 4) -->
+  <tr>
+    <td>4</td><td>Exterior</td><td class="pomcode">D</td><td>Bottom width</td>
+    <td class="base">59</td>
+    <td><select><option>LINEAR</option></select></td>
+    <td style="text-align:center"><input class="delta" value="1.5"></td>
+    <td><div class="breaks">
+      <span class="xip">S <span class="fletxa">→</span> L <span class="d">+3</span><span class="x">✕</span></span>
+      <span class="xip">XL <span class="fletxa">→</span> XL <span class="d">+4</span><span class="x">✕</span></span>
+      <button class="afegir">+</button>
+    </div></td>
+  </tr>
+
+  <!-- Interval EN EDICIÓ: dos selectors + delta, confirmar/cancel·lar -->
+  <tr>
+    <td>18</td><td>Exterior</td><td class="pomcode">J</td><td>1/2 Bicep width</td>
+    <td class="base">16.6</td>
+    <td><select><option>LINEAR</option></select></td>
+    <td style="text-align:center"><input class="delta" value="0.3"></td>
+    <td><div class="breaks">
+      <span class="xip-edit">
+        <select class="talla"><option>M</option></select>
+        <span class="fletxa">→</span>
+        <select class="talla"><option>XL</option></select>
+        <input class="delta" value="0.75" style="width:46px">
+        <span class="conf">✓</span><span class="canc">✕</span>
+      </span>
+    </div></td>
+  </tr>
+
+  <!-- Al màxim (3): el + desapareix i ho diu -->
+  <tr>
+    <td>17</td><td>Exterior</td><td class="pomcode">I</td><td>Sleeve length</td>
+    <td class="base">43.5</td>
+    <td><select><option>LINEAR</option></select></td>
+    <td style="text-align:center"><input class="delta" value="0"></td>
+    <td><div class="breaks">
+      <span class="xip">XS <span class="fletxa">→</span> S <span class="d">+0.5</span><span class="x">✕</span></span>
+      <span class="xip">M <span class="fletxa">→</span> L <span class="d">+1</span><span class="x">✕</span></span>
+      <span class="xip">XL <span class="fletxa">→</span> XL <span class="d">+1.5</span><span class="x">✕</span></span>
+      <span class="maxim">màx. 3</span>
+    </div></td>
+  </tr>
+
+  <!-- FIXED: tot inert, com ara -->
+  <tr>
+    <td>5</td><td>Exterior</td><td class="pomcode">G1</td><td>Bottom finish height</td>
+    <td class="base">2</td>
+    <td><select><option>FIXED</option></select></td>
+    <td style="text-align:center"><input class="delta" value="0" disabled></td>
+    <td><div class="breaks"><button class="afegir" disabled style="opacity:.35">+</button></div></td>
+  </tr>
+</table>
+
+<p class="nota">
+Lectura: Δ = delta general (mana per defecte a totes les talles) · cada xip = interval
+inclusiu «inici → final · delta» que SOBRESCRIU el general dins del seu tram · fora del
+xip es torna sol al general. El xip es llegeix com es pensa: «de la S a la L creix 3».
+Clic al xip = edició inline (selectors de talla del sistema + delta). Els selectors només
+ofereixen talles lliures (no cobertes per un altre interval). Al màxim de 3, el + desapareix.
+Escalat i propagació ensenyen la mateixa frase compacta: «+2,0 · S→L +3,0».
+</p>
+
+</body>
+</html>

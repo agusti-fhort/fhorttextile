@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maqueta v1 · Alta i edició de POM (B2) · NORMA_LAYOUT v1</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  /* ══ TOKENS NORMA_LAYOUT v1 (S37) — pell i bastiment idèntics al Catàleg de POMs v3 ══
+     Aquesta pantalla NO és nova: és el panell dret del catàleg quan es crea o s'edita un POM
+     (§8f — el formulari s'obre AL MATEIX LLOC, mai una pantalla a part ni un modal gran). */
+  :root{
+    --bg:#fbfaf8; --panel:#fff; --ink:#1d1d1b; --ink-soft:#6e6a64; --ink-faint:#98938b;
+    --line:#e8e5e0; --line-soft:#f0eeea;
+    --gold:#c27a2a; --gold-border:#e0c8a0; --sel:#f7f5f2;
+    --accio:#2b65c2;
+    --ok:#2e7d32; --ok-bg:#e9f3ea;
+    --warn:#ff9942; --warn-bg:#ffedd9; --warn-ink:#96500c;
+    --err:#b42318; --err-bg:#fbebe9;
+    --white:#fff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:0;display:grid;grid-template-columns:220px 1fr;min-height:100vh;
+       background:var(--bg);color:var(--ink);
+       font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px;line-height:16px}
+
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .bhead{padding:12px 16px;background:var(--white);border-bottom:1px solid var(--line);
+         display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .bhead input{flex:1;min-width:150px;font-family:inherit;font-size:12px;border:1px solid var(--line);
+    border-radius:6px;padding:8px 12px;background:var(--panel);color:var(--ink)}
+  .bhead input::placeholder{color:var(--ink-faint);font-style:italic}
+  .bhead input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(194,122,42,.15)}
+  .n{font-size:10px;color:var(--ink-faint);white-space:nowrap}
+
+  /* §5 · jerarquia d'acció */
+  .btn{border:1px solid var(--gold-border);background:var(--white);color:var(--ink);border-radius:6px;
+       padding:8px 16px;font-family:inherit;font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap}
+  .btn:hover{background:var(--sel)}
+  .btn.pri{background:var(--accio);border-color:var(--accio);color:#fff}
+  .btn.ter{border-color:transparent;background:none;color:var(--ink-soft)}
+  .btn.ter:hover{background:var(--sel);color:var(--ink)}
+  .btn.dang{color:var(--err);border-color:var(--err)}
+  .btn.dang:hover{background:var(--err-bg)}
+  .btn.sm{padding:6px 12px;font-size:11px}
+  .btn:disabled{background:var(--bg);color:var(--ink-faint);border-color:var(--line);cursor:default}
+
+  /* llista */
+  .list{max-height:640px;overflow-y:auto}
+  .cat{padding:8px 16px 6px;font-size:10px;line-height:12px;letter-spacing:.08em;text-transform:uppercase;
+       color:var(--ink-soft);font-weight:600;background:var(--white);border-bottom:1px solid var(--line-soft);
+       position:sticky;top:0;z-index:2}
+  .cat span{color:var(--ink-faint);letter-spacing:0}
+  .pom{padding:8px 16px;border-bottom:1px solid var(--line-soft);cursor:pointer;display:flex;
+       align-items:center;gap:12px;background:var(--white)}
+  .pom:hover{background:var(--bg)}
+  .pom.on{background:var(--sel);box-shadow:inset 3px 0 0 var(--gold)}
+  .pom .cd{font-size:12px;font-weight:600;color:var(--gold);width:60px;flex:none}
+  .pom .nm{font-size:12px;flex:1;line-height:1.35}
+  .pom .ab{font-size:10px;letter-spacing:.04em;border:1px solid var(--line);border-radius:999px;
+           padding:2px 8px;color:var(--ink-soft);background:var(--panel);flex:none}
+  .pom.off{opacity:.5}
+  .pom.off .cd{color:var(--ink-faint)}
+
+  /* capçalera del panell dret */
+  .fhead{padding:16px;border-bottom:1px solid var(--line)}
+  .fhead .c{font-size:10px;color:var(--ink-faint);letter-spacing:.04em}
+  .fhead .t{font-size:15px;line-height:20px;font-weight:600;margin-top:4px}
+  .badges{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+  .b{font-size:10px;line-height:12px;font-weight:600;letter-spacing:.04em;padding:3px 10px;border-radius:999px}
+  .b.act{background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok)}
+  .b.off{background:var(--bg);color:var(--ink-soft);border:1px solid var(--line)}
+  .b.rev{background:var(--warn-bg);color:var(--warn-ink);border:1px solid var(--warn)}
+  .b.sys{background:var(--sel);color:var(--ink);border:1px solid var(--gold-border)}
+  .b.new{background:var(--sel);color:var(--ink);border:1px solid var(--gold-border)}
+
+  /* ── FORMULARI ── */
+  .fbody{padding:0 16px 16px;max-height:600px;overflow-y:auto}
+  .sec{margin-top:16px}
+  .sec .h{font-size:10px;line-height:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold);
+          font-weight:600;padding-bottom:6px;border-bottom:1px solid var(--line-soft);margin-bottom:12px;
+          display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  .sec .h em{font-style:normal;color:var(--ink-faint);letter-spacing:0;text-transform:none;
+             font-size:10px;font-weight:400;text-align:right}
+  .fld{margin-bottom:12px}
+  .lbl{font-size:10px;line-height:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft);
+       font-weight:600;display:flex;align-items:baseline;gap:6px;margin-bottom:4px}
+  .lbl .req{color:var(--err);font-weight:600;cursor:help}
+  .lbl .cnt{margin-left:auto;color:var(--ink-faint);font-weight:400;letter-spacing:0;text-transform:none}
+  .in{width:100%;font-family:inherit;font-size:12px;line-height:16px;border:1px solid var(--line);
+      border-radius:6px;padding:8px 12px;background:var(--panel);color:var(--ink)}
+  .in::placeholder{color:var(--ink-faint);font-style:italic}
+  .in:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(194,122,42,.15)}
+  .in.err{border-color:var(--err)}
+  .in.num{width:88px;text-align:right;font-variant-numeric:tabular-nums}
+  textarea.in{resize:vertical;min-height:64px;line-height:1.6}
+  select.in{cursor:pointer}
+  .hint{font-size:10px;color:var(--ink-soft);margin-top:4px;line-height:1.55}
+  .hint.warn{color:var(--warn-ink)}
+  .hint.bad{color:var(--err)}
+  .grp{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .grp .u{font-size:11px;color:var(--ink-soft)}
+
+  /* caixes d'estat dins del formulari */
+  .panel{border:1px solid var(--line);border-radius:6px;padding:12px;background:var(--bg)}
+  .panel.link{background:var(--sel);border-color:var(--gold-border)}
+  .panel .pt{font-size:12px;font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .panel .pd{font-size:10px;color:var(--ink-soft);line-height:1.6;margin-top:6px}
+  .kv{display:grid;grid-template-columns:120px 1fr;gap:8px;padding:3px 0;font-size:12px;align-items:baseline}
+  .kv .k{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-soft)}
+  .kv .v{line-height:1.45}
+  .kv .v.buit{color:var(--ink-faint);font-style:italic}
+  .ro{margin-top:10px;padding-top:10px;border-top:1px solid var(--line-soft)}
+
+  /* casella: accent --gold (§8e) */
+  .chk{display:flex;gap:10px;align-items:flex-start;padding:8px 0;cursor:pointer}
+  .chk input{accent-color:var(--gold);width:14px;height:14px;margin:2px 0 0;flex:none;cursor:pointer}
+  .chk .t{font-size:12px;font-weight:600;display:block}
+  .chk .d{font-size:10px;color:var(--ink-soft);line-height:1.55;display:block;margin-top:3px}
+
+  .ffoot{padding:12px 16px;border-top:1px solid var(--line);background:var(--white);
+         display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .note{font-size:10px;color:var(--ink-soft);flex:1;line-height:1.5}
+
+  .foot{margin-top:24px;font-size:11px;color:var(--ink-soft);line-height:1.75;
+        border-left:2px solid var(--line);padding-left:16px}
+  .foot b{color:var(--ink)} .foot ul{margin:8px 0 0;padding-left:18px} .foot li{margin-bottom:6px}
+  .foot code{font-size:10px;color:var(--ink-soft)}
+  .ask{border-left-color:var(--gold);background:var(--white);border:1px solid var(--gold-border);
+       border-left:3px solid var(--gold);padding:12px 16px;border-radius:0 8px 8px 0}
+  .hide{display:none}
+
+  /* ══ §8b · BASTIMENT DE PÀGINA ══ */
+  .side{background:var(--panel);border-right:1px solid var(--line);padding:16px 0}
+  .side .logo{padding:0 16px 16px;font-weight:600;color:var(--gold);font-size:14px}
+  .side .sec2{padding:12px 16px 4px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+              color:var(--ink-soft);font-weight:600}
+  .side a{display:block;padding:7px 16px;color:var(--ink-soft);cursor:pointer;font-size:12px}
+  .side a.on{background:var(--sel);box-shadow:inset 3px 0 0 var(--gold);color:var(--ink);font-weight:600}
+  .main{min-width:0;display:flex;flex-direction:column}
+  .topbar{background:var(--panel);border-bottom:1px solid var(--line);
+          display:flex;align-items:center;gap:8px;padding:10px 20px}
+  .tcrumb .tenant{font-weight:600} .tcrumb .sep{color:var(--ink-faint)}
+  .tcrumb a{color:var(--ink-soft);cursor:pointer} .tcrumb .here{font-weight:600}
+  .topbar .tright{margin-left:auto;display:flex;align-items:center;gap:10px;
+                  font-size:11px;color:var(--ink-soft);white-space:nowrap}
+  .topbar .tright b{color:var(--ink)}
+  .swi{border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:10px;cursor:pointer}
+  .pmenu-bar{background:var(--panel);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .pmenu{padding:8px 20px;display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+  .back{width:32px;height:32px;border:1px solid var(--line);border-radius:6px;background:var(--panel);
+        display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
+  .back:hover{background:var(--sel)}
+  .back svg{width:16px;height:16px;stroke:var(--ink-soft);fill:none;stroke-width:1.75;
+            stroke-linecap:round;stroke-linejoin:round}
+  .psep{width:1px;height:20px;background:var(--line);margin:0 6px}
+  .mitem{border:1px solid transparent;border-radius:999px;background:none;padding:6px 14px;
+         font-family:inherit;font-size:12px;color:var(--ink-soft);cursor:pointer;line-height:16px;
+         display:inline-flex;align-items:center;gap:6px}
+  .mitem:hover{background:var(--sel);color:var(--ink)}
+  .mitem.on{background:var(--sel);border-color:var(--gold-border);color:var(--ink);font-weight:600}
+  .mitem svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round}
+  .mx{padding:0 20px 60px}
+  .ident{display:flex;align-items:baseline;gap:12px;padding:16px 0 12px;flex-wrap:wrap}
+  .ident .kpi{font-size:22px;line-height:28px;font-weight:600;color:var(--ink)}
+  .ident .kpi small{font-size:14px;font-weight:500;color:var(--ink-soft)}
+  .ident .lab{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft);font-weight:600}
+  .ident .desc{font-size:12px;color:var(--ink-soft);flex-basis:100%;margin-top:2px;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="side">
+  <div class="logo">Fhort<br><span style="font-weight:400;color:var(--ink-soft);font-size:10px">Textile Tech</span></div>
+  <div class="sec2">Projectes</div>
+  <a>Desenvolupament</a><a>Models</a><a>Planificació</a><a>Fittings</a>
+  <div class="sec2">Configuració tècnica</div>
+  <a>Garment Types</a><a class="on">POM Systems</a><a>Size Library</a><a>Grading Rules</a>
+</div>
+
+<div class="main">
+  <div class="topbar">
+    <span class="tcrumb"><span class="tenant">Fhort Textile Tech</span>
+      <span class="sep">›</span><a>Configuració tècnica</a>
+      <span class="sep">›</span><span class="here">Catàleg de POMs</span></span>
+    <span class="tright"><b>Agustí Devant</b> · 08/08/26 · 11:05
+      <span class="swi">cm → inch</span><span class="swi">CA ▾</span><span class="swi">👤</span></span>
+  </div>
+  <div class="pmenu-bar">
+    <div class="pmenu">
+      <button class="back" title="Tornar a Configuració tècnica"><svg viewBox="0 0 24 24"><path d="M19 12H5M11 18l-6-6 6-6"/></svg></button>
+      <span class="psep"></span>
+      <button class="mitem" id="mNou" onclick="nou()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nou POM ▾</button>
+      <button class="mitem"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>Accions ▾</button>
+      <button class="mitem"><svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg>Filtres</button>
+    </div>
+  </div>
+  <div class="mx">
+
+  <div class="ident">
+    <span class="kpi">396<small>/396</small></span><span class="lab">POMs</span>
+    <span class="desc">El catàleg de POMs del tenant. <b>Crear un POM és un acte conscient</b>: no en neix
+      cap com a efecte secundari d'obrir aquesta pantalla, de cercar-hi ni de desar res més.</span>
+  </div>
+
+  <div class="split">
+    <div class="box">
+      <div class="bhead">
+        <input placeholder="cerca per codi o nom…">
+        <span class="n" id="cnt">—</span>
+      </div>
+      <div class="list" id="lst"></div>
+    </div>
+    <div class="box" id="fx"></div>
+  </div>
+
+  <div class="foot">
+    <b>Què fixa aquesta v1 · el formulari d'alta i edició de POM (B2)</b>
+    <ul>
+      <li><b>És el panell dret del catàleg, no una pantalla nova</b> (§8f): «Editar» i «Nou POM» obren el
+        formulari <b>al mateix lloc</b> de la fitxa. La llista no perd context i no hi ha cap modal gran.</li>
+      <li><b>Només els camps que el model té.</b> <code>POMMaster</code> en té <b>nou</b> d'escrivibles i hi són
+        tots nou, ni un més: <code>codi_client</code> · <code>nom_client</code> · <code>categoria</code> ·
+        <code>pom_global</code> · <code>notes</code> · <code>actiu</code> · <code>tolerancia_default_minus</code> ·
+        <code>tolerancia_default_plus</code> · <code>pendent_revisio</code>. El desè, <code>origen_import</code>,
+        <b>es mostra però no s'escriu</b>: és provinença de màquina, no un camp per teclejar.</li>
+      <li><b>«Desar» és l'únic blau</b>, i està <b>deshabilitat fins que codi i nom tinguin contingut</b> — són
+        els dos únics camps sense <code>blank=True</code> del model. Deshabilitat baixa el fons, no la tinta (§5.7).</li>
+      <li><b>El lligam amb el catàleg global té TRES estats i es diuen amb paraules diferents</b>, que és
+        exactament el que la Fase 2 va corregir al serializer: <b>no lligat</b> (122 POMs) · <b>lligat però
+        sense informar</b> (149) · <b>lligat amb dada</b> (125). Els guions muts els amagaven tots tres.</li>
+      <li><b>Lligar és un acte a part</b>, mai un efecte secundari de desar: el POM neix sense lligam i el
+        lligam es fa, o es desfà, amb el seu propi gest.</li>
+      <li><b>El bloc «com es mesura» no s'edita aquí</b> i es veu que no: viu a <code>POMGlobal</code>, que és
+        el catàleg de la CASA. Aquest formulari edita el POM del TENANT.</li>
+      <li><b>Les toleràncies són ASIMÈTRIQUES</b> — dos camps, <code>−</code> i <code>+</code>, com al model
+        (per defecte 0,60 cada una). Un sol camp «± 0,6» seria inventar-se una simetria que el sistema no té.</li>
+      <li><b>Pell NORMA v1</b>: bastiment §8b, panells blancs, selecció <code>--sel</code> + filet d'or, badges amb
+        fons suau + tinta + filet del mateix color, caselles amb accent <code>--gold</code>, radis 6/12, cap text
+        sota 10px.</li>
+    </ul>
+  </div>
+
+  <div class="ask foot">
+    <b>Tres coses que has de decidir tu — i una que és un forat de backend</b>
+    <ul>
+      <li>🚨 <b>El codi duplicat: el sistema NO el bloqueja, i el formulari no s'ho pot inventar.</b>
+        <code>codi_client</code> <b>no té unicitat</b> ni a la BD ni al model, i <b>avui hi ha 12 codis
+        repetits</b> a <code>fhort</code> (<code>D · S · S2 · J1 · U1 · BJ · C1 · L1 · E4 · H · U · E7</code>, ×2
+        cadascun). Pitjor: <b>els tres camins d'escriptura no diuen el mateix</b> —
+        <code>POST /poms/crear-tenant/</code> <b>sí</b> que rebutja un codi repetit,
+        <code>POST /poms/</code> (el ViewSet) <b>no</b>, i <code>PATCH /poms/{id}/nomenclatura/</code> deixa
+        <b>renombrar-lo fins a xocar</b> sense mirar-s'ho. El formulari <b>avisa</b> del xoc (és una
+        OBSERVACIÓ, no una comporta) i deixa desar. <b>Decisió:</b> si el codi ha de ser únic, això és una
+        constraint + un backfill dels 12, no una validació de pantalla.</li>
+      <li><b>Qui pot crear POMs?</b> El ViewSet és <code>IsAuthenticated</code> i prou: qualsevol usuari
+        autenticat pot crear, editar i esborrar el catàleg sencer. No hi he posat cap gate perquè no n'hi ha
+        cap; si n'hi ha d'haver, és permís de backend.</li>
+      <li><b>«Pendent de revisió» com a casella editable.</b> El camp és per als POMs nascuts d'una
+        importació i el seu sentit és que la patronista el <b>desmarqui</b>. L'he deixat com a casella real
+        (el model el té escrivible) i en un POM nou neix desmarcada. Si vols que només es pugui desmarcar
+        —mai marcar a mà—, es converteix en una acció d'un sol sentit.</li>
+      <li><b>Esborrar no és en aquest formulari.</b> Es queda a la fitxa, que és qui sap si el POM s'usa
+        (<code>GET /poms/{id}/us/</code> ja retorna <code>pot_esborrar</code> i <code>motiu</code>).</li>
+    </ul>
+  </div>
+
+  </div>
+</div>
+
+<script>
+/* ══ VOCABULARIS · MOSTRA IL·LUSTRATIVA, MAI CONTRACTE ════════════════════════════════
+   Regla d'or (Agus, 08/08): cap enumeració de domini es declara al frontend.
+     · CATEGORIES → `GET /api/v1/pom-categories/`  (router `pom-categories`)
+     · POMs       → `GET /api/v1/poms/`
+   Valors reals de `fhort`, verificats el 08/08.
+
+   🚨 EL CATÀLEG GLOBAL NO TÉ ENDPOINT. `POMGlobal` (274 files) **no té ni ViewSet ni
+   serializer propis** a tot el backend: només s'hi arriba aplanat i read-only des de
+   `/api/v1/poms/`. El cercador de lligam d'aquest formulari, doncs, **no té d'on llegir**:
+   la llista `GLOBALS` d'aquí sota és una MOSTRA per poder dibuixar el gest, i cal exposar
+   el catàleg global abans de construir-lo. */
+const CATEGORIES=[
+  {id:1,codi:'CAT-UB',nom:'Part superior del cos'},
+  {id:2,codi:'CAT-SL',nom:'Màniga'},
+  {id:3,codi:'CAT-CL',nom:'Coll / Escot'},
+  {id:4,codi:'CAT-LB',nom:'Part inferior del cos'},
+  {id:5,codi:'CAT-WB',nom:'Cinturó / Cintura'},
+  {id:6,codi:'CAT-RI',nom:'Cavall'},
+  {id:7,codi:'CAT-SK',nom:'Longitud faldilla / vestit'},
+];
+const GLOBALS={
+  'POM-012':{codi:'POM-012',nom_en:'Chest width',unitat:'cm',start_point:'1 cm below armhole',
+             end_point:'edge to edge',reference_point:'HPS',body_section:'Upper body'},
+  /* LLIGAT PERÒ SENSE INFORMAR: 149 dels 274 POMGlobal tenen aquests camps a cadena buida. */
+  'POM-140':{codi:'POM-140',nom_en:'Across front (stretched)',unitat:'',start_point:'',
+             end_point:'',reference_point:'',body_section:'Upper body'},
+};
+/* Mostra de 6 POMs, triada per ensenyar els TRES estats del lligam i un codi duplicat. */
+const POMS=[
+  {id:1, cod:'CH', nom:'Chest width',            cat:1, pg:'POM-012', act:true,  rev:false, org:'',
+   tmin:'0.60', tmax:'0.60', notes:''},
+  {id:2, cod:'S2', nom:'Back armhole along seam',cat:1, pg:'POM-140', act:true,  rev:false, org:'',
+   tmin:'0.60', tmax:'0.60', notes:''},
+  {id:3, cod:'BJ', nom:'Bomber cuff height',     cat:2, pg:null,      act:true,  rev:true,
+   org:'BRW-SS26-0002 · fitxa tècnica 12/06', tmin:'0.40', tmax:'0.60',
+   notes:'Nascut de la importació de la fitxa. Confirmar el nom amb Montse.'},
+  {id:4, cod:'D',  nom:'Bottom width',           cat:4, pg:null,      act:true,  rev:false, org:'',
+   tmin:'0.60', tmax:'1.00', notes:''},
+  {id:5, cod:'J1', nom:'Sleeve opening',         cat:2, pg:null,      act:true,  rev:false, org:'',
+   tmin:'0.60', tmax:'0.60', notes:''},
+  {id:6, cod:'U1', nom:'Button spacing',         cat:1, pg:null,      act:false, rev:false, org:'',
+   tmin:'0.60', tmax:'0.60', notes:'Desactivat: el client va deixar d\'usar-lo la SS26.'},
+];
+/* Els 12 codis que HI SÓN REPETITS avui a `fhort`. Aquí serveixen per ensenyar l'avís;
+   a la pantalla real el xoc es comprova contra `GET /api/v1/poms/?search=`. */
+const DUPLICATS=['D','S','S2','J1','U1','BJ','C1','L1','E4','H','U','E7'];
+
+let sel=0, mode='edit', draft=null;
+const el=id=>document.getElementById(id);
+const catNom=id=>{const c=CATEGORIES.find(x=>x.id===id);return c?c.codi+' · '+c.nom:''};
+const esc=s=>(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+
+/* Un POM nou neix BUIT. Cap valor heretat de la selecció, cap lligam automàtic:
+   crear és un acte conscient i el que s'hi desa ho ha escrit algú. Els únics valors
+   previs són els `default` que el propi model declara (actiu=True, toleràncies 0.60). */
+const BUIT=()=>({id:null,cod:'',nom:'',cat:'',pg:null,act:true,rev:false,org:'',
+                 tmin:'0.60',tmax:'0.60',notes:''});
+
+function llista(){
+  el('cnt').textContent=POMS.length+' de 396';
+  el('lst').innerHTML=POMS.map((p,i)=>`
+    <div class="pom ${mode==='edit'&&i===sel?'on':''} ${p.act?'':'off'}" onclick="obre(${i})">
+      <span class="cd">${p.cod}</span>
+      <span class="nm">${esc(p.nom)}</span>
+      ${p.rev?'<span class="ab" style="border-color:var(--warn);color:var(--warn-ink)">revisar</span>':''}
+      <span class="ab">${p.pg?p.pg:'sense lligam'}</span>
+    </div>`).join('');
+}
+function obre(i){ sel=i; mode='edit'; draft={...POMS[i]}; llista(); form(); }
+function nou(){ mode='nou'; draft=BUIT(); llista(); form(); window.scrollTo({top:0,behavior:'smooth'}); }
+function cancela(){ if(mode==='nou'){obre(0);} else {draft={...POMS[sel]};form();} }
+
+/* Els dos únics camps sense `blank=True` a POMMaster. */
+const valid=()=>draft.cod.trim().length>0 && draft.nom.trim().length>0;
+const xoca=()=>{
+  const c=draft.cod.trim().toUpperCase(); if(!c) return false;
+  const propi = mode==='edit' ? (POMS[sel].cod||'').toUpperCase() : null;
+  return DUPLICATS.includes(c) && c!==propi;
+};
+
+function upd(camp,v){
+  draft[camp]=v;
+  // Només es repinten les parts DERIVADES: així el focus no salta mentre s'escriu.
+  el('btnDesar').disabled=!valid();
+  const w=el('wCod'); if(w) w.innerHTML=avisCodi();
+  const inp=el('iCod'); if(inp) inp.classList.toggle('err',false);
+  const c=el('cntCod'); if(c) c.textContent=draft.cod.length+'/30';
+  const cn=el('cntNom'); if(cn) cn.textContent=draft.nom.length+'/200';
+}
+function avisCodi(){
+  if(!xoca()) return '';
+  return `<div class="hint warn"><b>Ja hi ha un POM amb el codi ${esc(draft.cod.trim().toUpperCase())}.</b>
+    El sistema <b>no ho impedeix</b>: <code>codi_client</code> no té unicitat i avui n'hi ha 12 de repetits.
+    Si el desas, en seran dos.</div>`;
+}
+
+/* ── EL LLIGAM AMB EL CATÀLEG GLOBAL · TRES ESTATS ──────────────────────────────────
+   null          → no lligat al catàleg global      (122 POMs de fhort)
+   lligat, buit  → lligat, però el global no informa (149)
+   lligat, dada  → dada de debò                      (125)
+   Es diuen amb paraules diferents, perquè un guió mut els confonia tots tres. */
+function blocLligam(){
+  const g = draft.pg ? GLOBALS[draft.pg] : null;
+  if(!g){
+    return `<div class="panel">
+      <div class="pt">Sense lligam <span class="b off">NO LLIGAT</span></div>
+      <div class="pd">Aquest POM no és al catàleg global de la casa. <b>No és un error ni una dada
+        incompleta</b>: 122 dels 396 POMs de <code>fhort</code> estan així, i és un estat legítim
+        (el tenant proposa; promoure'l al catàleg és un acte a part). Mentre no hi estigui lligat,
+        <b>els camps de «com es mesura» no existeixen per a ell</b> — no és que estiguin buits.</div>
+      <div style="margin-top:10px"><button class="btn sm" onclick="lligar()">Cercar al catàleg global…</button></div>
+    </div>`;
+  }
+  const informat = !!(g.start_point||g.end_point||g.reference_point||g.unitat);
+  const camp=(k,v)=>`<div class="kv"><span class="k">${k}</span><span class="v ${v?'':'buit'}">${v?esc(v):'el catàleg global no ho té informat'}</span></div>`;
+  return `<div class="panel link">
+    <div class="pt">${esc(g.codi)} · ${esc(g.nom_en)}
+      ${informat?'<span class="b act">LLIGAT</span>':'<span class="b rev">LLIGAT, SENSE INFORMAR</span>'}</div>
+    <div class="pd">${informat
+      ? 'El bloc «com es mesura» ve del catàleg global i <b>no s\'edita aquí</b>: és de la casa, no del tenant.'
+      : '<b>Lligat, però el catàleg global no diu com es mesura.</b> Passa a 149 dels 274 POMs globals. No és que el lligam estigui malament: és que la dada d\'origen encara no hi és.'}</div>
+    <div class="ro">
+      ${camp('Unitat',g.unitat)}
+      ${camp('Des d\'on',g.start_point)}
+      ${camp('Fins on',g.end_point)}
+      ${camp('Referència',g.reference_point)}
+      ${camp('Zona del cos',g.body_section)}
+    </div>
+    <div style="margin-top:10px"><button class="btn sm ter" onclick="desLligar()">Desfer el lligam</button></div>
+  </div>`;
+}
+/* Lligar i deslligar són gestos PROPIS: mai un efecte secundari de desar el formulari. */
+function lligar(){ draft.pg = draft.pg==='POM-012' ? 'POM-140' : 'POM-012'; form(); }
+function desLligar(){ draft.pg=null; form(); }
+
+function form(){
+  const nouPom = mode==='nou';
+  el('fx').innerHTML=`
+    <div class="fhead">
+      <div class="c">${nouPom?'CATÀLEG DE POMS · TENANT fhort':'POM DEL TENANT · id '+draft.id}</div>
+      <div class="t">${nouPom?'Nou POM':'Editar '+esc(draft.cod)}</div>
+      <div class="badges">
+        ${nouPom?'<span class="b new">ENCARA NO DESAT</span>':''}
+        ${!nouPom&&draft.act?'<span class="b act">ACTIU</span>':''}
+        ${!nouPom&&!draft.act?'<span class="b off">DESACTIVAT</span>':''}
+        ${draft.rev?'<span class="b rev">PENDENT DE REVISIÓ</span>':''}
+        ${draft.pg?'<span class="b sys">'+esc(draft.pg)+'</span>':'<span class="b off">SENSE LLIGAM</span>'}
+      </div>
+    </div>
+
+    <div class="fbody">
+      <div class="sec"><div class="h">Identitat <em>els dos camps obligatoris del model</em></div>
+        <div class="fld">
+          <span class="lbl">Codi del catàleg <span class="req" title="obligatori">*</span>
+            <span class="cnt" id="cntCod">${draft.cod.length}/30</span></span>
+          <input class="in" id="iCod" maxlength="30" value="${esc(draft.cod)}" placeholder="CH, S2, BJ…"
+                 oninput="upd('cod',this.value)">
+          <div class="hint">És el codi d'<b>aquesta casa</b>, no el del client — el camp es diu
+            <code>codi_client</code> per herència, però el vocabulari de cada client viu a part, als
+            <b>àlies</b> (<code>CustomerPOMAlias</code>). Un mateix POM pot tenir un codi diferent per client.</div>
+          <span id="wCod">${avisCodi()}</span>
+        </div>
+        <div class="fld">
+          <span class="lbl">Nom <span class="req" title="obligatori">*</span>
+            <span class="cnt" id="cntNom">${draft.nom.length}/200</span></span>
+          <input class="in" id="iNom" maxlength="200" value="${esc(draft.nom)}"
+                 placeholder="Chest width…" oninput="upd('nom',this.value)">
+        </div>
+        <div class="fld">
+          <span class="lbl">Categoria</span>
+          <select class="in" onchange="draft.cat=this.value?+this.value:''">
+            <option value="">— sense categoria —</option>
+            ${CATEGORIES.map(c=>`<option value="${c.id}" ${draft.cat===c.id?'selected':''}>${c.codi} · ${c.nom}</option>`).join('')}
+          </select>
+          <div class="hint">Opcional al model (<code>null=True, blank=True</code>). Sense categoria, el POM
+            surt al calaix «sense categoria» de la llista — no desapareix.</div>
+        </div>
+      </div>
+
+      <div class="sec"><div class="h">Lligam amb el catàleg global <em>opcional · 3 estats</em></div>
+        ${blocLligam()}
+      </div>
+
+      <div class="sec"><div class="h">Toleràncies per defecte <em>asimètriques, com al model</em></div>
+        <div class="grp">
+          <span><span class="lbl">Menys (−)</span>
+            <input class="in num" value="${esc(draft.tmin)}" oninput="draft.tmin=this.value"></span>
+          <span><span class="lbl">Més (+)</span>
+            <input class="in num" value="${esc(draft.tmax)}" oninput="draft.tmax=this.value"></span>
+          <span class="u" style="align-self:flex-end;padding-bottom:8px">cm</span>
+        </div>
+        <div class="hint">Es <b>copien</b> a la mesura en abocar el POM a un model; no és una referència
+          viva. Canviar-les aquí no toca cap mesura ja abocada.</div>
+      </div>
+
+      <div class="sec"><div class="h">Estat</div>
+        <label class="chk"><input type="checkbox" ${draft.act?'checked':''} onchange="draft.act=this.checked;form()">
+          <span><span class="t">Actiu</span>
+            <span class="d">Un POM desactivat no s'ofereix per a mesures noves, però no s'esborra ni
+              desapareix d'on ja s'usa.</span></span></label>
+        <label class="chk"><input type="checkbox" ${draft.rev?'checked':''} onchange="draft.rev=this.checked;form()">
+          <span><span class="t">Pendent de revisió</span>
+            <span class="d">«POM creat automàticament des d'importació. Requereix revisió de la
+              patronista» — el text del propi model. Un POM creat a mà neix desmarcat.</span></span></label>
+        ${draft.org?`<div class="ro"><div class="kv"><span class="k">Origen</span>
+          <span class="v">${esc(draft.org)}</span></div>
+          <div class="hint">Provinença de la importació (<code>origen_import</code>). <b>Es mostra i no
+            s'edita</b>: diu d'on va sortir el POM, i això no es reescriu a mà.</div></div>`:''}
+      </div>
+
+      <div class="sec"><div class="h">Notes</div>
+        <textarea class="in" placeholder="Notes internes del catàleg…"
+                  oninput="draft.notes=this.value">${esc(draft.notes)}</textarea>
+      </div>
+    </div>
+
+    <div class="ffoot">
+      <span class="note">${nouPom
+        ? 'Res s\'ha creat encara. El POM neix quan cliques Desar, i no abans.'
+        : 'Els canvis es desen a <code>PATCH /api/v1/poms/'+draft.id+'/</code>.'}</span>
+      <button class="btn ter" onclick="cancela()">Cancel·lar</button>
+      <button class="btn pri" id="btnDesar" ${valid()?'':'disabled'}>${nouPom?'Crear el POM':'Desar'}</button>
+    </div>`;
+}
+llista(); obre(0);
+</script>
+</body>
+</html>

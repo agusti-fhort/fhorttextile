@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maqueta v3 · Grading Rules · NORMA_LAYOUT v1</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  /* ══ TOKENS NORMA_LAYOUT v1 (S37) — estructura idèntica a la v2 aprovada, pell nova ══ */
+  :root{
+    --bg:#fbfaf8; --panel:#fff; --ink:#1d1d1b; --ink-soft:#6e6a64; --ink-faint:#98938b;
+    --line:#e8e5e0; --line-soft:#f0eeea;
+    --gold:#c27a2a; --gold-border:#e0c8a0; --sel:#f7f5f2;
+    --accio:#2b65c2;
+    --ok:#2e7d32; --ok-bg:#e9f3ea;
+    --warn:#ff9942; --warn-bg:#ffedd9;
+    --err:#b42318; --err-bg:#fbebe9;
+    --white:#fff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:0;display:grid;grid-template-columns:220px 1fr;min-height:100vh;background:var(--bg);color:var(--ink);
+       font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px;line-height:16px}
+  .wrap{max-width:none;margin:0}
+  .crumb{color:var(--ink-soft);font-size:10px;margin-bottom:8px}
+  .crumb b{color:var(--ink)} .crumb a{color:var(--gold);cursor:pointer}
+  h1{font-size:22px;line-height:28px;font-weight:500;margin:0 0 4px}
+  .sub{color:var(--ink-soft);font-size:12px;margin:0 0 16px;line-height:1.6}
+
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .bhead{padding:12px 16px;background:var(--white);border-bottom:1px solid var(--line);
+         display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .bhead input{flex:1;min-width:150px;font-family:inherit;font-size:12px;border:1px solid var(--line);
+    border-radius:6px;padding:8px 12px;background:var(--panel);color:var(--ink)}
+  .bhead input::placeholder{color:var(--ink-faint);font-style:italic}
+  .bhead input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(194,122,42,.15)}
+  .n{font-size:10px;color:var(--ink-faint);white-space:nowrap}
+  .btn{border:1px solid var(--gold-border);background:var(--white);color:var(--ink);border-radius:6px;
+       padding:8px 16px;font-family:inherit;font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap}
+  .btn:hover{background:var(--sel)}
+  .btn.pri{background:var(--accio);border-color:var(--accio);color:#fff}
+  .btn.ter{border-color:transparent;background:none;color:var(--ink-soft)}
+  .btn.ter:hover{background:var(--sel);color:var(--ink)}
+  .btn.dang{color:var(--err);border-color:var(--err)}
+  .btn.sm{padding:6px 12px;font-size:11px}
+  .btn:disabled{background:var(--bg);color:var(--ink-faint);border-color:var(--line);cursor:default}
+
+  /* llista */
+  .lhead,.lrow{display:grid;grid-template-columns:1fr 132px 128px 92px 168px 96px;gap:12px;align-items:center}
+  .lhead{padding:8px 16px;background:var(--white);border-bottom:1px solid var(--line)}
+  .lhead span{font-size:10px;line-height:12px;letter-spacing:.08em;text-transform:uppercase;
+              color:var(--ink-soft);font-weight:600}
+  .lrow{padding:12px 16px;border-bottom:1px solid var(--line-soft);background:var(--white)}
+  .lrow:hover{background:var(--bg)}
+  .lrow.off{opacity:.55}
+  .lrow .nm{font-size:12px;font-weight:600}
+  .lrow .cd{font-size:10px;color:var(--ink-faint);letter-spacing:.04em;margin-top:2px}
+  .v{font-size:12px}
+  .bg{font-size:10px;line-height:12px;font-weight:600;letter-spacing:.04em;padding:2px 8px;
+      border-radius:999px;display:inline-block}
+  .bg.can{background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok)}
+  .bg.cli{background:var(--sel);color:var(--ink);border:1px solid var(--gold-border)}
+  .bg.imp{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn)}
+  .bg.off{background:var(--bg);color:var(--ink-soft);border:1px solid var(--line)}
+  .bg.bad{background:var(--err-bg);color:var(--err);border:1px solid var(--err)}
+  .rel{font-size:10px;color:var(--ink-soft);line-height:1.5}
+  .rel.cap{color:var(--ink-faint);font-style:italic}
+
+  /* pantalla */
+  .shead{padding:12px 16px;background:var(--white);border-bottom:1px solid var(--line);
+         display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .shead .t{font-size:15px;line-height:20px;font-weight:600}
+  .shead .c{font-size:10px;color:var(--ink-soft)}
+  /* NORMA: tabs germanes = subratllat d'or, no caixetes */
+  .tabs{display:flex;gap:4px;margin-left:auto}
+  .tab{border:none;background:none;padding:8px 16px;font-family:inherit;font-size:12px;
+       color:var(--ink-soft);cursor:pointer;border-bottom:2px solid transparent}
+  .tab.on{color:var(--ink);font-weight:600;border-bottom-color:var(--gold)}
+  .badges{display:flex;gap:6px;flex-wrap:wrap}
+  .b{font-size:10px;line-height:12px;font-weight:600;letter-spacing:.04em;padding:3px 10px;border-radius:999px}
+  .b.act{background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok)}
+  .b.off{background:var(--bg);color:var(--ink-soft);border:1px solid var(--line)}
+  .b.sys{background:var(--sel);color:var(--ink);border:1px solid var(--gold-border)}
+  .b.warn{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn)}
+  .b.bad{background:var(--err-bg);color:var(--err);border:1px solid var(--err)}
+
+  .szbar{padding:12px 16px;border-bottom:1px solid var(--line);background:var(--white);
+         display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  .lb{font-size:10px;line-height:12px;letter-spacing:.08em;text-transform:uppercase;
+      color:var(--ink-soft);font-weight:600;display:block;margin-bottom:4px}
+  .szl{display:flex;gap:6px;flex-wrap:wrap}
+  .sz{border:1px solid var(--line);border-radius:6px;padding:4px 12px;font-size:12px;background:var(--panel);
+      cursor:pointer;font-variant-numeric:tabular-nums;font-family:inherit}
+  .sz:hover{background:var(--sel)}
+  /* NORMA: el trencament = selecció de la casa (--sel + vora daurada), fora el crema */
+  .sz.brk{background:var(--sel);border-color:var(--gold-border);color:var(--ink);font-weight:600;
+          box-shadow:inset 0 -2px 0 var(--gold)}
+  .hint{font-size:10px;color:var(--ink-faint);margin-left:auto;max-width:380px;line-height:1.5;text-align:right}
+
+  table{border-collapse:separate;border-spacing:0;width:100%;font-size:12px;table-layout:fixed}
+  th{font-size:10px;line-height:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft);
+     font-weight:600;padding:8px 12px;background:var(--white);border-bottom:1px solid var(--line);text-align:left}
+  th.r,td.r{text-align:right}
+  td{padding:4px 12px;border-bottom:1px solid var(--line-soft);vertical-align:middle;background:var(--white)}
+  .code{color:var(--gold);font-weight:600}
+  .selr{font-family:inherit;font-size:11px;border:1px solid var(--line);border-radius:6px;
+        padding:4px 8px;background:var(--panel);color:var(--ink);width:100%}
+  .val{width:76px;text-align:right;font-family:inherit;font-size:12px;font-weight:600;
+       border:1px solid var(--line);border-radius:6px;padding:4px 8px;background:var(--panel);
+       font-variant-numeric:tabular-nums;color:var(--ink)}
+  .val:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(194,122,42,.15)}
+  .val::placeholder{color:var(--ink-faint);font-weight:400}
+  .rmv{color:var(--ink-faint);cursor:pointer}
+  .rmv:hover{color:var(--err)}
+
+  /* relacions */
+  .rels{padding:16px}
+  .rblk{margin-bottom:18px}
+  .rblk .h{font-size:10px;line-height:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold);
+           font-weight:600;padding-bottom:6px;border-bottom:1px solid var(--line-soft);margin-bottom:10px;
+           display:flex;justify-content:space-between;align-items:baseline}
+  .rblk .h em{font-style:normal;color:var(--ink-faint);letter-spacing:0;text-transform:none;
+              font-size:10px;font-weight:400}
+  .tags{display:flex;gap:6px;flex-wrap:wrap}
+  .tg{font-size:11px;border:1px solid var(--line);border-radius:999px;padding:4px 12px;
+      background:var(--panel);cursor:pointer;color:var(--ink)}
+  .tg:hover{background:var(--sel)}
+  .tg.on{background:var(--ok-bg);border-color:var(--ok);color:var(--ok);font-weight:600}  /* esmena Agus: inclòs = verd */
+  .avis{padding:10px 12px;border-radius:8px;font-size:11px;line-height:1.6;margin-bottom:16px}
+  .avis.g{background:var(--ok-bg);border:1px solid var(--ok);color:var(--ok)}
+  .avis.w{background:var(--warn-bg);border:1px solid var(--warn);color:var(--ink)}
+  .prev{margin-top:6px;padding:12px 14px;border:1px solid var(--gold-border);border-left:3px solid var(--gold);
+        border-radius:0 8px 8px 0;background:var(--white)}
+  .prev .t{font-size:10px;line-height:12px;letter-spacing:.08em;text-transform:uppercase;
+           color:var(--ink-soft);font-weight:600;margin-bottom:7px}
+  .prev .l{font-size:12px;line-height:1.9}
+  .prev .l b{color:var(--gold)}
+
+  .sfoot{padding:12px 16px;border-top:1px solid var(--line);background:var(--white);
+         display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .note{font-size:10px;color:var(--ink-faint);flex:1;line-height:1.5}
+  .hide{display:none}
+  .foot{margin-top:24px;font-size:11px;color:var(--ink-soft);line-height:1.75;
+        border-left:2px solid var(--line);padding-left:16px}
+  .foot b{color:var(--ink)} .foot ul{margin:8px 0 0;padding-left:18px} .foot li{margin-bottom:6px}
+  .ask{border-left-color:var(--gold);background:var(--white);border:1px solid var(--gold-border);
+       border-left:3px solid var(--gold);padding:12px 16px;border-radius:0 8px 8px 0}
+
+  /* ══ §8b · BASTIMENT DE PÀGINA (afegit a la v3: la v2 és anterior al §8b) ══ */
+  .side{background:var(--panel);border-right:1px solid var(--line);padding:16px 0}
+  .side .logo{padding:0 16px 16px;font-weight:600;color:var(--gold);font-size:14px}
+  .side .sec2{padding:12px 16px 4px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+              color:var(--ink-soft);font-weight:600}
+  .side a{display:block;padding:7px 16px;color:var(--ink-soft);cursor:pointer;font-size:12px}
+  .side a.on{background:var(--sel);box-shadow:inset 3px 0 0 var(--gold);color:var(--ink);font-weight:600}
+  .main{min-width:0;display:flex;flex-direction:column}
+  .topbar{background:var(--panel);border-bottom:1px solid var(--line);
+          display:flex;align-items:center;gap:8px;padding:10px 20px}
+  .tcrumb .tenant{font-weight:600} .tcrumb .sep{color:var(--ink-faint)}
+  .tcrumb a{color:var(--ink-soft);cursor:pointer} .tcrumb .here{font-weight:600}
+  .topbar .tright{margin-left:auto;display:flex;align-items:center;gap:10px;
+                  font-size:11px;color:var(--ink-soft);white-space:nowrap}
+  .topbar .tright b{color:var(--ink)}
+  .swi{border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:10px;cursor:pointer}
+  .pmenu-bar{background:var(--panel);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .pmenu{padding:8px 20px;display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+  .back{width:32px;height:32px;border:1px solid var(--line);border-radius:6px;background:var(--panel);
+        display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
+  .back:hover{background:var(--sel)}
+  .back svg{width:16px;height:16px;stroke:var(--ink-soft);fill:none;stroke-width:1.75;
+            stroke-linecap:round;stroke-linejoin:round}
+  .psep{width:1px;height:20px;background:var(--line);margin:0 6px}
+  .mitem{border:1px solid transparent;border-radius:999px;background:none;padding:6px 14px;
+         font-family:inherit;font-size:12px;color:var(--ink-soft);cursor:pointer;line-height:16px;
+         display:inline-flex;align-items:center;gap:6px}
+  .mitem:hover{background:var(--sel);color:var(--ink)}
+  .mitem.on{background:var(--sel);border-color:var(--gold-border);color:var(--ink);font-weight:600}
+  .mitem svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round}
+  .mx{padding:0 20px 60px}
+  .ident{display:flex;align-items:baseline;gap:12px;padding:16px 0 12px;flex-wrap:wrap}
+  .ident .name{font-size:22px;line-height:28px;font-weight:500}
+  .ident .kpi{font-size:22px;line-height:28px;font-weight:600;color:var(--ink)}
+  .ident .kpi small{font-size:14px;font-weight:500;color:var(--ink-soft)}
+  .ident .lab{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft);font-weight:600}
+  .ident .desc{font-size:12px;color:var(--ink-soft);flex-basis:100%;margin-top:2px}
+</style>
+</head>
+<body>
+<div class="side">
+  <div class="logo">Fhort<br><span style="font-weight:400;color:var(--ink-soft);font-size:10px">Textile Tech</span></div>
+  <div class="sec2">Projectes</div>
+  <a>Desenvolupament</a><a>Models</a><a>Planificació</a><a>Fittings</a>
+  <div class="sec2">Configuració tècnica</div>
+  <a>Garment Types</a><a>POM Systems</a><a>Size Library</a><a class="on">Grading Rules</a>
+</div>
+
+<div class="main">
+  <div class="topbar">
+    <span class="tcrumb"><span class="tenant">Fhort Textile Tech</span>
+      <span class="sep">›</span><a>Configuració tècnica</a>
+      <span class="sep">›</span><span class="here">Grading Rules</span></span>
+    <span class="tright"><b>Agustí Devant</b> · 08/08/26 · 09:40
+      <span class="swi">cm → inch</span><span class="swi">CA ▾</span><span class="swi">👤</span></span>
+  </div>
+  <div class="pmenu-bar">
+    <div class="pmenu">
+      <button class="back" title="Tornar a Configuració tècnica"><svg viewBox="0 0 24 24"><path d="M19 12H5M11 18l-6-6 6-6"/></svg></button>
+      <span class="psep"></span>
+      <button class="mitem on">Jocs actius</button>
+      <button class="mitem">Jubilats</button>
+      <span class="psep"></span>
+      <button class="mitem"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nou joc ▾</button>
+      <button class="mitem"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>Accions ▾</button>
+    </div>
+  </div>
+  <div class="mx">
+
+
+<!-- ══ LLISTA ══ -->
+<div id="vList">
+  <div class="ident">
+    <span class="kpi">6<small>/6</small></span><span class="lab">jocs de regles</span>
+    <span class="desc">Com creix cada mesura d'una talla a la següent. <b>Un joc no depèn de cap run</b>: les regles ancoren per <b>etiqueta de talla</b> i el motor la resol contra el run del model.</span>
+  </div>
+
+  <div class="box">
+    <div class="bhead">
+      <input placeholder="cerca per codi, nom o client…">
+      <span class="n" id="cnt">—</span>
+      <button class="btn sm pri">＋ Nou joc ▾</button>
+      <!-- esmena Agus: un sol blau; desplega «Manual · Importar d'una fitxa» -->
+    </div>
+    <div class="lhead">
+      <span>Joc de regles</span><span>Client</span><span>Origen</span><span>Regles</span>
+      <span>Es proposa a</span><span></span>
+    </div>
+    <div id="lst"></div>
+  </div>
+
+  <div class="foot">
+    <b>Què fixa aquesta v3 (estructura = v2 aprovada · pell = NORMA_LAYOUT v1)</b>
+    <ul>
+      <li><b>La llista és una llista</b>, no mitja pantalla: hi caben totes les columnes que importen i es comparen d'un cop d'ull.</li>
+      <li><b>«Editar» obre una pantalla pròpia amb dos tabs</b> — <b>Talles i regles</b> · <b>Relacions</b>. Mateix patró que l'item del catàleg de peces.</li>
+      <li><b>La columna «Es proposa a» resumeix les relacions</b>: qui no en té, val per a tothom.</li>
+      <li><b>Pell NORMA v1</b>: capçaleres blanques · tabs germanes amb subratllat d'or (fora les caixetes) · «＋ Nou joc» i «Gravar» són els blaus (un per vista) · trencament amb --sel + subratllat d'or · «importat» i «en construcció» amb el taronja viu · «sense origen» amb --err · cap text sota 10px.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ══ PANTALLA DEL JOC ══ -->
+<div id="vSet" class="hide">
+  <div class="crumb"><a onclick="tanca()">← Jocs de regles</a> › <b id="bc">—</b></div>
+
+  <div class="box">
+    <div class="shead">
+      <span><span class="t" id="sT">—</span> <span class="c" id="sC">—</span></span>
+      <span class="badges" id="sB"></span>
+      <span class="tabs">
+        <button class="tab on" onclick="tab(this,'tR')">Talles i regles</button>
+        <button class="tab" onclick="tab(this,'tX')">Relacions</button>
+      </span>
+    </div>
+
+    <!-- Tab 1 -->
+    <div id="tR">
+      <div class="szbar">
+        <span><span class="lb">Talles que cobreix</span><span class="szl" id="szl"></span></span>
+        <span class="hint">Clica una talla per marcar-hi el <b>trencament</b>. Les regles ancoren per <b>etiqueta</b>: aquest joc no apunta a cap run i val igual per a un model amb Alpha EU que per a un amb Alpha agrupat.</span>
+      </div>
+      <table>
+        <colgroup><col style="width:44px"><col style="width:86px"><col><col style="width:158px">
+          <col style="width:104px"><col style="width:112px"><col style="width:104px"><col style="width:44px"></colgroup>
+        <thead><tr><th>#</th><th>POM</th><th>Nom</th><th>Règim</th>
+          <th class="r">Δ</th><th class="r">Δ break</th><th class="r">Talla break</th><th></th></tr></thead>
+        <tbody id="rb"></tbody>
+      </table>
+      <div class="sfoot">
+        <button class="btn">＋ Afegir POM ▾</button>
+        <!-- desplega: Manual · Importar d'una fitxa -->
+        <span class="note" id="rn"></span>
+        <span style="display:flex;gap:8px">
+          <button class="btn" onclick="tanca()">Tornar</button>
+          <button class="btn pri">Gravar regles</button></span>
+      </div>
+    </div>
+
+    <!-- Tab 2 -->
+    <div id="tX" class="hide">
+      <div class="rels">
+        <div class="avis g">Les relacions <b>ordenen la proposta, mai amaguen res</b>. Un joc sense cap relació marcada <b>val per a tothom</b> i simplement no es proposa el primer.</div>
+        <div class="rblk"><div class="h">Target <em>per a qui és la peça</em></div><div class="tags" id="rT"></div></div>
+        <div class="rblk"><div class="h">Construcció <em>tipus de teixit</em></div><div class="tags" id="rC"></div></div>
+        <div class="rblk"><div class="h">Fit <em>caiguda de la peça</em></div><div class="tags" id="rF"></div></div>
+        <div class="rblk"><div class="h">Grup de peça <em>del catàleg de la marca</em></div><div class="tags" id="rG"></div></div>
+        <div class="prev">
+          <div class="t">Com es llegirà</div>
+          <div class="l" id="prev"></div>
+        </div>
+      </div>
+      <div class="sfoot">
+        <span class="note">Les relacions no toquen cap regla: només decideixen quan aquest joc surt primer a la llista.</span>
+        <span style="display:flex;gap:8px">
+          <button class="btn" onclick="tanca()">Tornar</button>
+          <button class="btn pri">Gravar relacions</button></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="ask foot">
+    <b>Decisions heretades de la v2 (vigents)</b>
+    <ul>
+      <li><b>El trencament es marca clicant la talla</b>, no en un desplegable per fila: és una propietat del joc, i tenir-la a dalt evita repetir-la vint vegades.</li>
+      <li><b>«Es proposa a» és el nom de les relacions a la llista</b> — no «restriccions»: cap d'aquestes caselles impedeix res.</li>
+      <li><b>La previsualització de la pestanya de relacions</b> ensenya la frase que el sistema farà servir. Si el que hi diu no és el que volies, la casella està malament.</li>
+    </ul>
+  </div>
+</div>
+</div></div>
+
+<script>
+const N={A:'1/2 chest width',B:'Waist width',C:'Hip width',E:'Shoulder to shoulder',
+E1:'Shoulder width at true shoulder',E3:'Across back width',EK:'Neck width seam to seam',
+S:'Front armhole along seam',S2:'Back armhole along seam',SF:'Armhole depth from HPS',
+F:'Centre front length',FF:'Centre back length',FB:'Body length',FS:'Skirt length',
+D:'Bottom width (leg opening)',G1:'Rib height',I:'Sleeve length',J:'1/2 Bicep width',
+J1:'Sleeve opening relaxed',U1:'Button spacing',E5:'Shoulder drop',EK2:'Back neck drop'};
+const R=(c,r,d,db)=>({c,r,d,db});
+const SETS=[
+ {c:'BRW-CATALEG-v4',n:'Brownie · catàleg canònic v4',cli:'BRW',org:'CLIENT_RUN',act:true,nou:true,
+  sz:['XXS','XS','S','M','L'],brk:'XS',
+  cap:{t:['Dona'],c:[],f:[],g:[]},
+  rules:[R('A','LINEAR+BREAK',2,3),R('B','LINEAR+BREAK',2,3),R('C','LINEAR+BREAK',1.5,2),
+    R('E','LINEAR+BREAK',1,1.5),R('E1','LINEAR+BREAK',0.25,0.4),R('E3','LINEAR+BREAK',1,1.5),
+    R('EK','LINEAR+BREAK',0.5,0.75),R('S','LINEAR+BREAK',0.7,1),R('S2','LINEAR+BREAK',0.7,1),
+    R('SF','LINEAR+BREAK',0.7,1),R('F','LINEAR+BREAK',1,1.5),R('FF','LINEAR+BREAK',1,1.5),
+    R('FB','LINEAR+BREAK',1,1.5),R('FS','LINEAR+BREAK',0.5,1),R('D','LINEAR+BREAK',2,3),
+    R('I','LINEAR',0.7,null),R('J','LINEAR+BREAK',0.6,0.8),R('J1','LINEAR+BREAK',0.3,0.5),
+    R('G1','FIXED',0,null),R('U1','FIXED',0,null),R('E5','FIXED',0,null),R('EK2','FIXED',0,null)],
+  us:{models:0,items:12}},
+ {c:'BRW-KNIT-v1',n:'Brownie · punt agrupat',cli:'BRW',org:'CLIENT_RUN',act:true,
+  sz:['XS-S','S-M','M-L'],brk:null,
+  cap:{t:['Dona'],c:['Punt','Punt elàstic'],f:[],g:['Vestits','Punt i jerseis','Tops']},
+  rules:[R('A','LINEAR',3,null),R('B','LINEAR',3,null),R('C','LINEAR',3,null),
+    R('FB','LINEAR',2,null),R('G1','FIXED',0,null)],
+  us:{models:0,items:6}},
+ {c:'ISO-ALPHA-W',n:'ISO alpha — Women',cli:null,org:'CANONICAL',act:true,
+  sz:['XS','S','M','L','XL'],brk:null,cap:{t:['Dona'],c:[],f:[],g:[]},
+  rules:[R('A','LINEAR',2.5,null),R('B','LINEAR',2.5,null),R('C','LINEAR',2.5,null),
+    R('E','LINEAR',1,null),R('FB','LINEAR',1.5,null)],
+  us:{models:0,items:3}},
+ {c:'LOS-NB-KNIT',n:'Losan · New Born punt',cli:'LOS',org:'IMPORT',act:true,
+  sz:['00/01','01/03','03/06','06/09','09/12'],brk:'03/06',
+  cap:{t:['Nadó nena','Nadó nen'],c:['Punt'],f:[],g:['Newborn']},
+  rules:[R('A','STEP',null,null),R('FB','STEP',null,null),R('I','LINEAR',0.9,null)],
+  us:{models:0,items:6}},
+ {c:'BRW-CATALEG-v3',n:'Brownie · catàleg v3',cli:'BRW',org:'CLIENT_RUN',act:false,
+  sz:['XXS','XS','S','M','L'],brk:'XS',cap:{t:['Dona'],c:[],f:[],g:[]},
+  rules:[R('A','LINEAR+BREAK',2,3),R('B','LINEAR+BREAK',2,3),R('C','LINEAR+BREAK',1.5,2)],
+  us:{models:0,items:0}},
+ {c:'MANGO-TEST',n:'Mango (prova)',cli:null,org:null,act:true,
+  sz:['S','M','L'],brk:null,cap:{t:[],c:[],f:[],g:[]},rules:[],us:{models:0,items:0}}
+];
+const ORG={CANONICAL:['canònic','can'],CLIENT_RUN:['de client','cli'],IMPORT:['importat','imp']};
+const TARGETS=['Dona','Home','Unisex adult','Nadó nena','Nadó nen','Nadó unisex','Baby nena','Baby nen','Nena','Nen','Adolescent nena','Adolescent nen','Maternitat'];
+const CONSTR=['Teixit pla','Punt','Punt elàstic','Tècnic'];
+const FITS=['Regular','Slim','Relaxed','Oversized','Flared','Tapered','Straight','Bodycon','Athletic','Custom'];
+const GRUPS=['Tops','Vestits','Parts inferiors','Punt i jerseis','Jaquetes','Bany','Roba interior','Complements'];
+const REGIMS=['LINEAR','LINEAR+BREAK','STEP','FIXED'];
+let sel=0;
+const el=id=>document.getElementById(id);
+
+function tab(btn,id){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+  btn.classList.add('on');
+  el('tR').classList.toggle('hide',id!=='tR');
+  el('tX').classList.toggle('hide',id!=='tX');
+}
+function llista(){
+  el('cnt').textContent=SETS.length+' jocs';
+  el('lst').innerHTML=SETS.map((s,i)=>{
+    const o=s.org?ORG[s.org]:null;
+    const rl=[...s.cap.t,...s.cap.c,...s.cap.f,...s.cap.g];
+    return `<div class="lrow ${s.act?'':'off'}">
+      <span><span class="nm">${s.n}</span><span class="cd">${s.c}</span></span>
+      <span class="v">${s.cli||'<span style="color:var(--ink-faint)">de la casa</span>'}</span>
+      <span>${o?`<span class="bg ${o[1]}">${o[0]}</span>`:'<span class="bg bad">sense origen</span>'}</span>
+      <span class="v">${s.rules.length}</span>
+      <span class="rel ${rl.length?'':'cap'}">${rl.length?rl.slice(0,4).join(' · ')+(rl.length>4?` +${rl.length-4}`:''):'tothom'}</span>
+      <span style="text-align:right">${s.act?`<button class="btn sm" onclick="obre(${i})">Editar</button>`
+        :'<span class="bg off">jubilat</span>'}</span>
+    </div>`;
+  }).join('');
+}
+function obre(i){
+  sel=i; const s=SETS[i], o=s.org?ORG[s.org]:null;
+  el('bc').textContent=s.n;
+  el('sT').textContent=s.n; el('sC').textContent=s.c;
+  el('sB').innerHTML=`<span class="b ${s.act?'act':'off'}">${s.act?'ACTIU':'JUBILAT'}</span>
+    ${o?`<span class="b sys">${o[0].toUpperCase()}</span>`:'<span class="b bad">SENSE ORIGEN CLASSIFICAT</span>'}
+    ${s.nou?'<span class="b warn">EN CONSTRUCCIÓ</span>':''}
+    ${!s.rules.length?'<span class="b warn">SENSE REGLES</span>':''}`;
+  talles(); regles(); relacions();
+  el('vList').classList.add('hide'); el('vSet').classList.remove('hide');
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function tanca(){el('vSet').classList.add('hide');el('vList').classList.remove('hide');window.scrollTo({top:0});}
+function talles(){
+  const s=SETS[sel];
+  el('szl').innerHTML=s.sz.map(x=>`<button class="sz ${x===s.brk?'brk':''}" onclick="SETS[${sel}].brk=(SETS[${sel}].brk==='${x}'?null:'${x}');talles();regles()">${x}</button>`).join('');
+}
+function regles(){
+  const s=SETS[sel];
+  el('rb').innerHTML=s.rules.length?s.rules.map((r,i)=>`<tr>
+    <td style="color:var(--ink-faint)">${i+1}</td>
+    <td class="code">${r.c}</td><td>${N[r.c]||''}</td>
+    <td><select class="selr">${REGIMS.map(x=>`<option ${x===r.r?'selected':''}>${x}</option>`).join('')}</select></td>
+    <td class="r"><input class="val" value="${r.d==null?'':r.d}" placeholder="—"></td>
+    <td class="r"><input class="val" value="${r.db==null?'':r.db}" placeholder="—" ${s.brk?'':'disabled'}></td>
+    <td class="r" style="color:var(--ink-soft)">${r.r==='LINEAR+BREAK'&&s.brk?s.brk:'—'}</td>
+    <td class="rmv" title="treure">✕</td></tr>`).join('')
+    :`<tr><td colspan="8" style="padding:26px;text-align:center;color:var(--ink-faint);line-height:1.9">
+       <b style="color:var(--ink-soft);display:block;font-size:12px">Encara no té cap regla</b>
+       Un joc buit no es pot assignar a cap model. Afegeix-hi POMs o importa'ls d'una fitxa.</td></tr>`;
+  el('rn').textContent=s.brk?`Trencament a ${s.brk}: la columna Δ break s'aplica a partir d'aquesta talla.`
+    :'Sense trencament: l\'increment és constant a tot el run.';
+}
+function tg(id,list,all,key){
+  el(id).innerHTML=all.map(x=>`<span class="tg ${list.includes(x)?'on':''}" onclick="toggle('${key}','${x}')">${x}</span>`).join('');
+}
+function toggle(key,val){
+  const c=SETS[sel].cap; const i=c[key].indexOf(val);
+  i<0?c[key].push(val):c[key].splice(i,1);
+  relacions(); llista();
+}
+function relacions(){
+  const c=SETS[sel].cap;
+  tg('rT',c.t,TARGETS,'t'); tg('rC',c.c,CONSTR,'c'); tg('rF',c.f,FITS,'f'); tg('rG',c.g,GRUPS,'g');
+  const parts=[];
+  if(c.t.length)parts.push(`per a <b>${c.t.join(' · ')}</b>`);
+  if(c.c.length)parts.push(`en <b>${c.c.join(' · ')}</b>`);
+  if(c.f.length)parts.push(`amb fit <b>${c.f.join(' · ')}</b>`);
+  if(c.g.length)parts.push(`dels grups <b>${c.g.join(' · ')}</b>`);
+  el('prev').innerHTML=parts.length
+    ? `Aquest joc es proposarà primer ${parts.join(', ')}. A la resta de casos hi serà igualment, més avall a la llista.`
+    : `Aquest joc <b>no té cap relació marcada</b>: val per a tothom i no es proposa el primer enlloc.`;
+}
+llista();
+</script>
+</body>
+</html>

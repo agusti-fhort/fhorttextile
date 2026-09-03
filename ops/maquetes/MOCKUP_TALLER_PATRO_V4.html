@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="UTF-8">
+<title>MOCKUP v4 · Taller de Patró — arbre + característiques + NORMA (25/08)</title>
+<style>
+  :root{
+    --bg-page:#fbfaf8; --white:#ffffff; --sel:#f7f5f2; --line:#e8e5e0;
+    --gold:#c27a2a; --gold-border:#e0c8a0;
+    --text-main:#1d1d1b; --text-soft:#6e6a64; --text-faint:#98938b;
+    --accio:#2b65c2;
+    --ok:#2e7d32; --ok-bg:#e9f3ea; --err:#b42318; --err-bg:#fbebe9;
+    --warn-state:#ff9942; --warn-state-bg:#ffedd9; --warn-ink:#a15c0f;
+    --r-ctrl:6px; --mono:"IBM Plex Mono", ui-monospace, Menlo, monospace;
+    --k-cut:#1d1d1b; --k-sew:#1f6feb; --k-int:#868685; --k-notch:#a32d2d;
+    --k-grain:#3b6d11; --k-gir:#3b6d11; --k-pom:#bf3989; --k-mirror:#8250df; --k-corba:#bf8700;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--mono);background:#eceae6;color:var(--text-main);font-size:12px;line-height:16px;padding:16px}
+  .frame{max-width:1560px;margin:0 auto;background:var(--bg-page);border:1px solid var(--line);box-shadow:0 2px 12px rgba(0,0,0,.06)}
+  .nou{display:inline-block;font-size:9px;line-height:12px;padding:0 5px;border-radius:999px;
+       border:1px solid var(--gold-border);color:var(--gold);background:var(--white);margin-left:4px;vertical-align:1px}
+  .ico{stroke:currentColor;fill:none;stroke-linecap:round;stroke-linejoin:round;flex:none}
+  .i14{width:14px;height:14px;stroke-width:1.75}.i16{width:16px;height:16px;stroke-width:1.5}
+  .pill{display:inline-flex;align-items:center;gap:4px;padding:1px 8px;border-radius:999px;
+        border:1px solid var(--line);background:var(--white);font-size:10px;line-height:14px;color:var(--text-main)}
+
+  /* TOP BAR */
+  .topbar{display:flex;align-items:center;gap:12px;background:var(--white);border-bottom:1px solid var(--line);padding:8px 16px}
+  .back{width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);
+        border-radius:var(--r-ctrl);color:var(--text-soft)}
+  .vsep{width:1px;height:20px;background:var(--line)}
+  .crumb{color:var(--text-soft)} .crumb b{color:var(--text-main);font-weight:600}
+
+  /* FILA 1: pestanyes */
+  .tabsrow{display:flex;align-items:center;gap:4px;background:var(--white);border-bottom:1px solid var(--line);padding:6px 16px 0}
+  .tab{padding:6px 14px 8px;color:var(--text-soft);cursor:pointer;border-bottom:2px solid transparent}
+  .tab.on{color:var(--text-main);font-weight:600;border-bottom-color:var(--gold)}
+  .tabsrow .right{margin-left:auto;display:flex;gap:6px;align-items:center;padding-bottom:6px}
+  .pill.task{border-color:var(--gold-border)}
+
+  /* FILA 2: comandos icona+text */
+  .cmdrow{display:flex;align-items:center;gap:6px;background:var(--white);border-bottom:1px solid var(--line);padding:8px 16px;flex-wrap:wrap}
+  .cmd{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:64px;padding:6px 8px;
+       border:1px solid transparent;border-radius:var(--r-ctrl);color:var(--text-soft);cursor:pointer;font-size:10px;line-height:12px;text-align:center}
+  .cmd:hover{background:var(--sel)}
+  .cmd.on{background:var(--sel);border-color:var(--gold-border);color:var(--text-main);font-weight:600}
+  .guia{display:flex;align-items:center;gap:8px;background:var(--warn-state-bg);border-bottom:1px solid var(--line);
+        padding:6px 16px;color:var(--warn-ink)}
+  .guia .x{margin-left:auto;color:var(--text-soft);cursor:pointer}
+
+  /* COS */
+  .body{display:flex;min-height:640px}
+  .colL{width:312px;border-right:1px solid var(--line);background:var(--bg-page);padding:12px;
+        display:flex;flex-direction:column;gap:12px;overflow:auto}
+  .colR{width:288px;border-left:1px solid var(--line);background:var(--bg-page);padding:12px;
+        display:flex;flex-direction:column;gap:12px;overflow:auto}
+  .card{background:var(--white);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .card h3{display:flex;align-items:center;gap:6px;padding:10px 12px 6px;font-size:10px;line-height:12px;
+           font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-soft)}
+  .card h3 .cnt{margin-left:auto;color:var(--text-main);letter-spacing:0;text-transform:none}
+
+  /* ARBRE */
+  .trow{display:flex;align-items:center;gap:6px;padding:4px 12px;cursor:pointer;color:var(--text-main)}
+  .trow:hover{background:var(--sel)}
+  .trow.sel{background:var(--sel);box-shadow:inset 3px 0 0 var(--gold);font-weight:600}
+  .trow .tw{color:var(--text-faint);width:10px;flex:none}
+  .trow .sub{color:var(--text-soft);font-weight:400}
+  .d1{padding-left:24px}.d2{padding-left:44px;font-size:11px}
+  .b-warn{display:inline-block;padding:0 7px;border-radius:999px;font-size:9px;line-height:14px;
+          background:var(--warn-state-bg);color:var(--warn-ink);border:1px solid var(--warn-state)}
+  .b-ok{display:inline-block;padding:0 7px;border-radius:999px;font-size:9px;line-height:14px;
+        background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok)}
+  .b-neu{display:inline-block;padding:0 7px;border-radius:999px;font-size:9px;line-height:14px;
+        background:var(--white);color:var(--text-soft);border:1px solid var(--line)}
+  .treehead-act{margin-left:auto;display:inline-flex;align-items:center;gap:4px;padding:3px 8px;font-size:10px;
+        border:1px solid var(--gold-border);border-radius:var(--r-ctrl);color:var(--text-main);cursor:pointer;text-transform:none;letter-spacing:0}
+
+  /* CARACTERÍSTIQUES */
+  .sec{border-top:1px solid var(--line)}
+  .sec .sh{display:flex;align-items:center;gap:6px;padding:7px 12px;color:var(--text-main);font-weight:600;cursor:pointer}
+  .sec .sh .tw{color:var(--text-faint)}
+  .kv{display:flex;justify-content:space-between;gap:8px;padding:3px 12px 3px 26px;font-size:11px}
+  .kv .k{color:var(--text-soft)} .kv .v{text-align:right}
+  .kv .v i{color:var(--text-faint);font-style:normal}
+  .field{border:1px solid var(--line);border-radius:var(--r-ctrl);padding:1px 6px;background:var(--white);color:var(--text-main)}
+
+  /* DRETA */
+  .laystrip{display:flex;align-items:center;gap:4px;padding:8px 10px}
+  .lic{width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:var(--r-ctrl);
+       border:1px solid var(--line);color:var(--text-soft);cursor:pointer;position:relative}
+  .lic.on{background:var(--sel);border-color:var(--gold-border);color:var(--text-main)}
+  .lic .dotc{position:absolute;bottom:2px;left:50%;transform:translateX(-50%);width:10px;height:2.5px;border-radius:2px}
+  .cta-warn{display:flex;align-items:center;justify-content:center;gap:6px;margin:4px 12px;padding:7px 10px;
+        background:var(--warn-state-bg);border:1px solid var(--warn-state);color:var(--warn-ink);
+        border-radius:var(--r-ctrl);cursor:pointer;font-weight:600}
+  .sec-btn{display:flex;align-items:center;justify-content:center;gap:6px;margin:4px 12px;padding:6px 10px;
+        background:var(--white);border:1px solid var(--gold-border);border-radius:var(--r-ctrl);cursor:pointer}
+  .primary{display:flex;align-items:center;justify-content:center;gap:6px;margin:4px 12px 10px;padding:8px 12px;
+           background:var(--accio);color:#fff;border-radius:var(--r-ctrl);cursor:pointer;font-weight:600}
+  .prow{display:flex;align-items:center;gap:8px;padding:5px 12px;border-top:1px solid var(--line);font-size:11px}
+  .prow .nm{flex:1;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .prow .sub{font-weight:400;color:var(--text-soft)}
+  .sig{display:flex;gap:8px;padding:2px 12px;font-size:10.5px}
+  .sig .s{width:11px;text-align:center;font-weight:700;flex:none}
+  .sig.p .s{color:var(--ok)}.sig.n .s{color:var(--text-soft)}.sig.w .s{color:var(--warn-ink)}
+  .empty{padding:6px 12px 10px;color:var(--text-faint);font-style:italic;font-size:11px}
+  .tert{color:var(--text-soft);padding:0 12px 10px;display:block;cursor:pointer;font-size:10px}
+
+  /* LLENÇ */
+  .canvas{flex:1;position:relative;min-width:0;background:var(--white)}
+  .canvas svg{width:100%;height:100%;display:block}
+  .float{position:absolute;left:14px;top:14px;display:flex;flex-direction:column;gap:4px;
+         background:var(--white);border:1px solid var(--line);border-radius:8px;padding:6px;box-shadow:0 1px 6px rgba(0,0,0,.07)}
+  .fbtn{width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:var(--r-ctrl);
+        color:var(--text-soft);cursor:pointer;border:1px solid transparent}
+  .fbtn.on{background:var(--sel);border-color:var(--gold-border);color:var(--text-main)}
+  .fbtn:hover{background:var(--sel)}
+  .viewpills{position:absolute;right:14px;top:14px;display:flex;gap:6px}
+  .zoomtag{position:absolute;left:14px;bottom:12px;color:var(--text-faint);font-size:10px}
+
+  .status{display:flex;align-items:center;gap:16px;background:var(--white);border-top:1px solid var(--line);
+          padding:6px 16px;color:var(--text-soft);font-size:10px}
+  .legend{max-width:1560px;margin:12px auto 0;font-size:11px;line-height:16px;color:var(--text-soft)}
+  .legend b{color:var(--text-main)}
+  text{font-family:var(--mono)}
+</style>
+</head>
+<body>
+
+<div class="frame">
+
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="back"><svg class="ico i16" viewBox="0 0 24 24"><path d="M14 6l-6 6 6 6"/></svg></div>
+    <div class="vsep"></div>
+    <div class="crumb">fhort › <b>TRV-SS27-0001 · 837 VESTIT</b> › Taller de patró</div>
+    <div style="margin-left:auto;display:flex;gap:8px;align-items:center;color:var(--text-soft);font-size:10px">
+      <svg class="ico i14" viewBox="0 0 24 24"><path d="M14 3v5h5M6 3h8l5 5v13H6z"/></svg>837 CORS 194 VESTIT M3-4 AGUS.DXF
+    </div>
+  </div>
+
+  <!-- FILA 1 · PESTANYES -->
+  <div class="tabsrow">
+    <div class="tab">Fitxer</div><div class="tab">Visualitzar</div><div class="tab">Declarar</div>
+    <div class="tab on">Cotes</div><div class="tab">Cosir</div><div class="tab">Organitzar</div>
+    <div class="right">
+      <span class="pill">v3 · actual</span>
+      <span class="pill task"><svg class="ico i14" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>Patró digitalització · en curs</span>
+    </div>
+  </div>
+
+  <!-- FILA 2 · COMANDOS de «Cotes» -->
+  <div class="cmdrow">
+    <div class="cmd on"><svg class="ico i16" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/></svg>Marcar<br>POM</div>
+    <div class="vsep"></div>
+    <div class="cmd on"><svg class="ico i16" viewBox="0 0 24 24"><path d="M4 12h16M4 12l3-3M4 12l3 3M20 12l-3-3M20 12l-3 3"/></svg>Recta</div>
+    <div class="cmd"><svg class="ico i16" viewBox="0 0 24 24"><path d="M4 16c3-8 13-8 16-4"/></svg>Per vora</div>
+    <div class="cmd"><svg class="ico i16" viewBox="0 0 24 24"><path d="M5 5v10h10"/><path d="M12 15l3 3-3 3"/></svg>Caiguda</div>
+    <div class="cmd"><svg class="ico i16" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14"/><path d="M5 12h14M12 5v14"/></svg>Cota</div>
+    <div class="vsep"></div>
+    <div class="cmd"><svg class="ico i16" viewBox="0 0 24 24"><path d="M3 15l6-6 3 3 6-6"/><path d="M3 20h18M6 18v2m4-2v2m4-2v2m4-2v2"/></svg>Mesura<br>lliure mm<span class="nou">NOU</span></div>
+    <div class="cmd"><svg class="ico i16" viewBox="0 0 24 24"><circle cx="5" cy="19" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="5" r="1.6"/><path d="M6.5 17.5L10.5 13.5M13.5 10.5L17.5 6.5"/></svg>Segment<br>de guia<span class="nou">NOU</span></div>
+    <span style="margin-left:auto;color:var(--text-faint);font-size:10px">l'imant enganxa el cursor al vèrtex</span>
+  </div>
+
+  <!-- bàner guia -->
+  <div class="guia">
+    <svg class="ico i14" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/></svg>
+    <span>Col·locant <b>J</b> (1/2 ample de braç) — clica el punt <b>A</b></span>
+    <span class="x">✕</span>
+  </div>
+
+  <div class="body">
+
+    <!-- ═ ESQUERRA: ARBRE + CARACTERÍSTIQUES ═ -->
+    <div class="colL">
+      <div class="card">
+        <h3>Patró
+          <span class="treehead-act"><svg class="ico i14" viewBox="0 0 24 24"><path d="M7 9h10M7 13h6"/><rect x="4" y="4" width="16" height="16" rx="2"/></svg>Identificar peces</span>
+        </h3>
+        <div class="trow"><span class="tw">▾</span><b>837 VESTIT</b><span class="sub">· v3</span>
+          <span style="margin-left:auto" class="b-neu">21 cotes · 8 cosits</span></div>
+        <div class="trow d1 sel"><span class="tw">▾</span>837.DELANTERO <span class="sub">· Davant</span></div>
+        <div class="trow d2"><span class="tw">▸</span>Trams <span class="sub">(14)</span><span style="margin-left:auto" class="b-warn">2 sense nom</span></div>
+        <div class="trow d2"><span class="tw">▸</span>Costures <span class="sub">(3)</span><span style="margin-left:auto" class="b-ok">casen</span></div>
+        <div class="trow d2"><span class="tw">▸</span>Pinces <span class="sub">(1)</span></div>
+        <div class="trow d2"><span class="tw">▸</span>Cotes <span class="sub">(8)</span><span style="margin-left:auto" class="b-ok">Δ ok</span></div>
+        <div class="trow d1"><span class="tw">▸</span>837.ESPALDA <span class="sub">· Esquena</span></div>
+        <div class="trow d1"><span class="tw">▸</span>837.MANGA <span class="sub">· Màniga</span></div>
+        <div class="trow d1"><span class="tw">▸</span>837.CUELLO <span class="sub">· Coll</span></div>
+        <div class="trow d1"><span class="tw">▸</span>837.TAPETA <span class="sub">· Tapeta</span></div>
+        <div class="trow d1"><span class="tw">▸</span>Relacions del conjunt <span class="sub">(8 · 1 pinça)</span></div>
+      </div>
+
+      <div class="card">
+        <h3>837.DELANTERO <span class="cnt">Davant</span></h3>
+
+        <div class="sec"><div class="sh"><span class="tw">▾</span>Què és</div>
+          <div class="kv"><span class="k">nom (bateig)</span><span class="v"><span class="field">—</span> <i>fitxer: DELANTERO</i></span></div>
+          <div class="kv"><span class="k">rol anatòmic</span><span class="v">Davant</span></div>
+          <div class="kv"><span class="k">lateralitat · ordinal</span><span class="v">— · 2</span></div>
+          <div class="kv"><span class="k">estat</span><span class="v">producció</span></div>
+          <div class="kv"><span class="k">tall</span><span class="v"><span class="field">1 + 1</span><span class="nou">NOU</span></span></div>
+          <div class="kv"><span class="k">material</span><span class="v"><span class="field">tela</span><span class="nou">NOU</span></span></div>
+        </div>
+
+        <div class="sec"><div class="sh"><span class="tw">▾</span>Com és</div>
+          <div class="kv"><span class="k">mida</span><span class="v">113,8 × 64,5 cm</span></div>
+          <div class="kv"><span class="k">fil (grain)</span><span class="v"><span class="field">90°</span><span class="nou">NOU</span></span></div>
+          <div class="kv"><span class="k">doblec</span><span class="v">no en té</span></div>
+          <div class="kv"><span class="k">escala fitxer</span><span class="v">1 mm · <i>confiança baixa</i></span></div>
+          <div class="kv"><span class="k">recomptes</span><span class="v"><i>ⓘ tooltip</i></span></div>
+        </div>
+
+        <div class="sec"><div class="sh"><span class="tw">▾</span>Com es relaciona</div>
+          <div class="kv"><span class="k">costat ↔ ESPALDA</span><span class="v"><span class="b-ok">casa 0,1</span></span></div>
+          <div class="kv"><span class="k">espatlla ↔ ESPALDA</span><span class="v"><span class="b-ok">casa 0,0</span></span></div>
+          <div class="kv"><span class="k">sisa ↔ MANGA</span><span class="v"><span class="b-warn">tol. +0,3 ✎</span></span></div>
+          <div class="kv"><span class="k">sentit relatiu</span><span class="v"><i>t0↔t1</i><span class="nou">NOU</span></span></div>
+          <div class="kv"><span class="k">pinça</span><span class="v">1 · costat</span></div>
+        </div>
+
+        <div class="sec"><div class="sh"><span class="tw">▾</span>Com gradua</div>
+          <div class="kv"><span class="k">origen fix</span><span class="v"><span class="field">fons de sisa</span><span class="nou">NOU</span></span></div>
+          <div class="kv"><span class="k">GV activa</span><span class="v">GV201 v9 · segellada</span></div>
+          <div class="kv"><span class="k">POMs</span><span class="v">8 · <i>7 driving · 1 ref.</i><span class="nou">NOU</span></span></div>
+          <div class="kv"><span class="k">diagnosi</span><span class="v"><span class="b-ok">GdL 0</span> <span class="b-neu">0 conflictes</span></span></div>
+        </div>
+
+        <div class="sec"><div class="sh"><span class="tw">▸</span>Modificable <span style="font-weight:400;color:var(--text-faint)">· trams · col·locació</span></div></div>
+      </div>
+    </div>
+
+    <!-- ═ LLENÇ ═ -->
+    <div class="canvas">
+      <div class="float">
+        <div class="fbtn on"><svg class="ico i16" viewBox="0 0 24 24"><path d="M6 4l12 8-6 1-2 6z"/></svg></div>
+        <div class="fbtn"><svg class="ico i16" viewBox="0 0 24 24"><path d="M8 13V5.5a1.5 1.5 0 013 0V12m0-6.5v-2a1.5 1.5 0 013 0V12m0-5.5a1.5 1.5 0 013 0V12m0-3.5a1.5 1.5 0 013 0V16a6 6 0 01-6 6h-2c-3 0-4.5-1.5-6-4l-2.2-3.6a1.5 1.5 0 012.4-1.8L8 15"/></svg></div>
+        <div class="fbtn"><svg class="ico i16" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="5.5"/><path d="M15 15l4 4M8 10.5h5M10.5 8v5"/></svg></div>
+        <div class="fbtn"><svg class="ico i16" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="5.5"/><path d="M15 15l4 4M8 10.5h5"/></svg></div>
+        <div class="fbtn"><svg class="ico i16" viewBox="0 0 24 24"><path d="M4 9V4h5M20 15v5h-5M4 15v5h5M20 9V4h-5"/></svg></div>
+      </div>
+      <div class="viewpills">
+        <span class="pill">cotes: peça seleccionada</span>
+        <span class="pill" style="color:var(--text-faint)">mostra-les totes</span>
+      </div>
+      <span class="zoomtag">53 %</span>
+
+      <svg viewBox="0 0 980 620">
+        <!-- peces atenuades SENSE cotes -->
+        <g transform="translate(96,86)" opacity=".25">
+          <path d="M30 0 H126 C126 36 148 54 168 58 V280 H-8 V58 C10 54 30 36 30 0 Z" fill="#fff" stroke="var(--k-cut)" stroke-width="1.3"/>
+          <path d="M26 6 H120 C122 40 142 58 162 62 V274 H-2 V62" fill="none" stroke="var(--k-sew)" stroke-width=".9"/>
+          <text x="42" y="298" font-size="10" fill="var(--text-faint)">837.ESPALDA</text>
+        </g>
+        <g transform="translate(96,436)" opacity=".25">
+          <path d="M0 26 C40 -8 140 -8 180 26 L152 108 H28 Z" fill="#fff" stroke="var(--k-cut)" stroke-width="1.3"/>
+          <text x="60" y="126" font-size="10" fill="var(--text-faint)">837.MANGA</text>
+        </g>
+        <g transform="translate(820,120)" opacity=".25">
+          <path d="M0 28 C0 8 16 0 38 0 C60 0 76 8 76 28 C76 42 60 50 38 50 C16 50 0 42 0 28 Z" fill="#fff" stroke="var(--k-cut)" stroke-width="1.3"/>
+          <text x="6" y="68" font-size="10" fill="var(--text-faint)">837.CUELLO</text>
+        </g>
+        <g transform="translate(836,236)" opacity=".25">
+          <rect width="24" height="86" fill="#fff" stroke="var(--k-cut)" stroke-width="1.3"/>
+          <text x="-12" y="104" font-size="10" fill="var(--text-faint)">837.TAPETA</text>
+        </g>
+
+        <!-- DELANTERO seleccionat · cotes fora i esglaonades -->
+        <g transform="translate(430,120)">
+          <path d="M36 0 H140 C140 40 166 60 188 64 V300 H-14 V64 C8 60 36 40 36 0 Z" fill="#fff" stroke="var(--k-cut)" stroke-width="1.5"/>
+          <path d="M32 6 H136 C138 44 162 64 182 68 V294 H-8 V68 C10 64 34 44 32 6 Z" fill="none" stroke="var(--k-sew)" stroke-width="1"/>
+          <path d="M180 220 l-7 -4 v8 z" fill="var(--k-notch)"/><path d="M-6 220 l7 -4 v8 z" fill="var(--k-notch)"/>
+          <path d="M87 200 v-34 M87 166l-4 6M87 166l4 6" stroke="var(--k-grain)" stroke-width="1.3" fill="none"/>
+          <g fill="none" stroke="var(--k-gir)" stroke-width="1.4">
+            <rect x="32" y="-4" width="8" height="8"/><rect x="136" y="-4" width="8" height="8"/>
+            <rect x="184" y="60" width="8" height="8"/><rect x="-18" y="60" width="8" height="8"/>
+            <rect x="184" y="296" width="8" height="8"/><rect x="-18" y="296" width="8" height="8"/>
+          </g>
+          <text x="46" y="322" font-size="10" fill="var(--text-main)">837.DELANTERO · Davant</text>
+
+          <g stroke="var(--k-pom)" stroke-width=".9" fill="none">
+            <path d="M-14 64 V-28" stroke-dasharray="2.5 2.5" opacity=".6"/><path d="M188 64 V-28" stroke-dasharray="2.5 2.5" opacity=".6"/>
+            <path d="M-14 -26 H188"/><path d="M-14 -26l6-3M-14 -26l6 3M188 -26l-6-3M188 -26l-6 3"/>
+          </g>
+          <rect x="52" y="-34" width="72" height="14" fill="#fff"/>
+          <text x="88" y="-23" font-size="10" fill="var(--k-pom)" text-anchor="middle">S2 · 22,4 cm</text>
+
+          <g stroke="var(--k-pom)" stroke-width=".9" fill="none">
+            <path d="M140 0 V-52" stroke-dasharray="2.5 2.5" opacity=".6"/><path d="M188 64 V-52" stroke-dasharray="2.5 2.5" opacity=".6"/>
+            <path d="M140 -50 H188"/><path d="M140 -50l5-3M140 -50l5 3M188 -50l-5-3M188 -50l-5 3"/>
+          </g>
+          <text x="148" y="-56" font-size="10" fill="var(--k-pom)">E1 · 7,7</text>
+
+          <g stroke="var(--k-pom)" stroke-width=".9" fill="none">
+            <path d="M36 0 H-52" stroke-dasharray="2.5 2.5" opacity=".6"/><path d="M-14 300 H-52" stroke-dasharray="2.5 2.5" opacity=".6"/>
+            <path d="M-50 0 V300"/><path d="M-50 0l-3 6M-50 0l3 6M-50 300l-3-6M-50 300l3-6"/>
+          </g>
+          <text x="-58" y="154" font-size="10" fill="var(--k-pom)" text-anchor="end">F · 110,8</text>
+
+          <path d="M146 -8 C148 40 172 62 194 66" fill="none" stroke="var(--k-pom)" stroke-width=".9" stroke-dasharray="3 2.2"/>
+          <text x="204" y="34" font-size="10" fill="var(--k-pom)">EK · 25,1</text>
+
+          <circle cx="-14" cy="220" r="7" fill="none" stroke="var(--k-pom)" stroke-width="1.4"/>
+          <circle cx="-14" cy="220" r="2" fill="var(--k-pom)"/>
+        </g>
+      </svg>
+    </div>
+
+    <!-- ═ DRETA: CAPES (tira) + FEINA ═ -->
+    <div class="colR">
+      <div class="card">
+        <h3>Capes <span class="cnt" style="color:var(--text-faint);font-size:9px">compartit amb Patró</span></h3>
+        <div class="laystrip">
+          <div class="lic on" title="Tall"><svg class="ico i16" viewBox="0 0 24 24"><path d="M4 18L20 6"/></svg><span class="dotc" style="background:var(--k-cut)"></span></div>
+          <div class="lic on" title="Cosit"><svg class="ico i16" viewBox="0 0 24 24"><path d="M4 16c4-6 12-6 16-8"/><path d="M7 14l-1 1.6m4-3.2l-1 1.6m4.3-3l-.9 1.5"/></svg><span class="dotc" style="background:var(--k-sew)"></span></div>
+          <div class="lic" title="Internes"><svg class="ico i16" viewBox="0 0 24 24"><path d="M4 18L20 6" stroke-dasharray="3 3"/></svg><span class="dotc" style="background:var(--k-int)"></span></div>
+          <div class="lic on" title="Piquets"><svg class="ico i16" viewBox="0 0 24 24"><path d="M6 9l4 3-4 3zM14 9l4 3-4 3z"/></svg><span class="dotc" style="background:var(--k-notch)"></span></div>
+          <div class="lic on" title="Fil"><svg class="ico i16" viewBox="0 0 24 24"><path d="M12 19V6M12 6l-3 4M12 6l3 4"/></svg><span class="dotc" style="background:var(--k-grain)"></span></div>
+          <div class="lic on" title="Punts · només semàntics"><svg class="ico i16" viewBox="0 0 24 24"><rect x="9" y="9" width="6" height="6"/></svg><span class="dotc" style="background:var(--k-gir)"></span></div>
+          <span class="nou" style="align-self:center">semàntics</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>POMs del model <span class="cnt">20 de 21</span></h3>
+        <div class="cta-warn"><svg class="ico i14" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/></svg>Col·loca les cotes que falten (1)</div>
+        <div class="sec-btn"><svg class="ico i14" viewBox="0 0 24 24"><path d="M6 21l6-6M15 3l1.5 3L20 7l-3 1.5L15.5 12 14 8.5 10 7l4-1z"/></svg>Proposar cotes (IA)</div>
+        <div class="prow"><span class="nm">A <span class="sub">Chest 1/2</span></span><span class="sub">44,0→44,3</span><span class="b-ok">Δ +0,3</span></div>
+        <div class="prow"><span class="nm">SLT <span class="sub">Side length</span></span><span class="sub">31,5→31,6</span><span class="b-ok">Δ +0,1</span></div>
+        <div class="prow" style="background:var(--sel);box-shadow:inset 3px 0 0 var(--gold)"><span class="nm">J <span class="sub">1/2 ample braç</span></span><span class="b-neu">fitxa</span></div>
+        <span class="tert">veure els 21 ›</span>
+      </div>
+
+      <div class="card">
+        <h3>Propostes del motor</h3>
+        <div class="empty">El motor encara no ha mirat aquest patró.</div>
+        <div class="primary"><svg class="ico i14" viewBox="0 0 24 24"><path d="M6 21l6-6M15 3l1.5 3L20 7l-3 1.5L15.5 12 14 8.5 10 7l4-1z"/></svg>Buscar propostes</div>
+        <div style="border-top:1px solid var(--line)">
+          <div class="prow" style="border-top:none"><span class="nm">DELANTERO ↔ ESPALDA</span><span class="sub">55 %</span></div>
+          <div class="sig p"><span class="s">+</span><span>Els dos costats fan el mateix: 31,6 i 31,7</span></div>
+          <div class="sig p"><span class="s">+</span><span>Són peces veïnes</span></div>
+          <div class="sig p"><span class="s">+</span><span>El taller ja havia confirmat trams així</span></div>
+          <div class="sig n"><span class="s">o</span><span>Cap tram no porta piquets</span></div>
+          <div class="sig w"><span class="s">⚠</span><span>Si la confirmes, NO casarà per 0,1 cm</span></div>
+          <div style="display:flex;gap:8px;padding:8px 12px 12px">
+            <span class="sec-btn" style="margin:0"><svg class="ico i14" viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg>Confirmar</span>
+            <span class="sec-btn" style="margin:0;border-color:var(--err);color:var(--err)">✕ No</span>
+          </div>
+        </div>
+        <span class="tert">7 rebutjades no es mostren · netejar</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- BARRA D'ESTAT -->
+  <div class="status">
+    <span>287,6 · 117,5 mm</span>
+    <span>tram sota el cursor: 31,6 cm</span>
+    <span style="margin-left:auto;color:var(--ok)">8/8 costures casen</span>
+    <span style="color:var(--warn-ink)">2 trams sense nom</span>
+    <span style="color:var(--text-faint)">informa, mai bloqueja</span>
+  </div>
+</div>
+
+<div class="legend">
+<b>v4 — l'estructura ratificada per escrit:</b> pestanyes+comandos (procés fitxa tècnica) · ESQUERRA arbre SolidWorks (patró→peça→trams/costures/pinces/cotes, comptadors que informen) + característiques de la selecció en seccions «Què és · Com és · Com es relaciona · Com gradua · Modificable» · DRETA tira de capes (component compartit) + feina (POMs amb CTA taronja de la fitxa + propostes amb un únic blau) · navegació flotant al llenç (patró CLO) · llei de composició del llenç aplicada (cotes de la peça seleccionada, fora i esglaonades; fil curt).
+<br><b>[NOU] al mockup encara sense columna a BD</b> (dissenyat des de la necessitat): tall · material · fil editable · origen fix · driving/reference · sentit relatiu · mesura lliure · segment de guia · filtre semàntics · moure peça (a Organitzar).
+<br><b>⚖ pendent teu:</b> icona del segment de guia (aquí: punts alineats estil `ti-timeline`; l'alternativa `ti-line-dashed` xoca amb Internes) · «Veure plegat» no surt: el 837 no té doblec.
+</div>
+
+</body>
+</html>
