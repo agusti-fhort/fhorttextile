@@ -265,3 +265,91 @@ F4.2 anterior a la correcció.
 > **La correcció ja està feta i espera al merge**: commit `01002fc0` d'aquesta branca. No
 > l'he desplegada jo: els pushes i els desplegaments són de l'Agus (CLAUDE.md), i el que
 > calia era dir-ho, no saltar-me-la.
+
+---
+
+# APÈNDIX · F4.2-TER — SELECCIONAR UN TRAM L'ENQUADRA (03/09)
+
+Micro-tram sobre el mateix worktree. **Només frontend**, cap endpoint i cap dada.
+
+## T1 · Què fa
+
+Seleccionar una fila —a les **dues** llistes, rols de vora i trams declarats— porta la
+càmera al tram: pan i zoom animats (320 ms, `easeOutCubic`) cap al seu bbox amb un 20 %
+d'aire. És la mateixa pregunta a les dues llistes («ensenya'm aquest tram») i per tant un sol
+camí al visor, amb la comanda com a `{id, n}`.
+
+🚨 **`n` és un COMPTADOR, i aquí hi ha la peça de disseny.** L'efecte s'ha de disparar una
+vegada per GEST i **cap per passada del cursor**: la mateixa llista il·lumina en passar-hi
+per sobre, i una càmera que saltés a cada fila que el ratolí travessa seria inservible. Amb
+un id sol no es distingeixen les dues coses; amb el comptador, sí — i tornar a clicar la
+mateixa fila hi torna, que és el que un vol quan s'ha perdut.
+
+**El zoom i el pan de l'usuari manen sempre.** Roda, arrossegada i botons aturen l'animació
+a mitges. Res es reenquadra fora del moment de la selecció.
+
+Del **llenç a la fila** no s'enquadra: qui clica un tram al patró ja el té davant, i moure-li
+la càmera sota el dit seria prendre-li el lloc on és.
+
+## T2 · Les dues excepcions, i una lectura que he hagut de decidir
+
+**El sostre de zoom** surt del patró, no d'un número escrit a mà: la lupa no s'acosta mai més
+del que demanaria **la peça sencera més PETITA del fitxer**. Mesurat: el replec de 17 mm del
+837 volia **×57** i s'ha quedat a **×5,80** — visible, amb la seva xifra al costat i amb
+prou patró al voltant per saber on s'és.
+
+> ### ⚠️ Una lectura del brief que he hagut de decidir, i que la canvia
+>
+> El brief deia: «si el tram JA és completament visible, només il·luminar».
+>
+> **Al peu de la lletra, la funció no s'hauria disparat MAI**, i es va mesurar: la vista
+> inicial encaixa el patró sencer, de manera que **tots** els trams hi caben. El primer fum
+> ho va ensenyar amb la càmera immòbil als tres casos.
+>
+> Un replec de 17 mm sobre una peça d'1,1 m hi és, sí: fa **nou píxels**. **Visible i
+> il·legible no són el mateix**, i el que aquesta pantalla ha de resoldre és justament poder
+> comprovar-ne la mida.
+>
+> Ho he llegit, doncs, com «ja es veu **i es pot llegir**»: cal que hi càpiga sencer **i**
+> que ocupi almenys el 20 % del viewport. Amb la vora de 62,7 cm ja enquadrada, tornar-hi a
+> clicar no mou res —l'excepció fa el que havia de fer—, i amb el replec de 17 mm sí.
+
+## T3 · El fum, amb la càmera mesurada
+
+| Gest | Càmera |
+|---|---|
+| passar-hi per sobre | ×0,5638 → **sense moure's** ✓ |
+| clic al tram de 1,7 cm | → **×5,7956** (en volia ×57: sostre) ✓ |
+| clic a la vora de 62,7 cm | → ×1,0707 ✓ |
+| re-clic sobre el que ja es veu | **sense moure's** ✓ |
+| clic a un tram **DECLARAT** | → ×2,9838 ✓ |
+
+Captures a `docs/diagnosis/f42ter_smoke/`.
+
+## 🚨 T4 · LA TRAMPA QUE HA COSTAT MITJA SESSIÓ
+
+**`chrome-headless-shell --disable-gpu` torna el fotograma de COMPOSITOR VELL quan un llenç
+canvia DESPRÉS del primer pintat.**
+
+La captura sortia **99,87 % blanca** amb la càmera ja al lloc bo. Semblava un bug greu del
+que acabava de construir. El que ho va desmentir va ser preguntar-ho a Konva en comptes de
+creure la imatge:
+
+- `getAbsoluteTransform().point()` del tram enquadrat → **(606, 420)**, el centre exacte del
+  llenç de 1212×839.
+- 17 formes dins del viewport, la capa `visible()`, i **`layer.draw()` síncron tampoc no ho
+  arreglava**.
+- Dues captures de moments diferents amb **el mateix recompte de píxels no-blancs**: la
+  imatge no s'estava refent.
+
+Un canvi de mida (`setDeviceMetricsOverride` 1601 → 1600) invalida la capa i obliga a
+recompondre. Amb això apareixen els colors que hi havien de ser: `#fb8500` del tram
+assenyalat, `#b45309` de les propostes, `#c27a2a` de la peça seleccionada.
+
+**La imatge mentia, no la pantalla.** Queda escrit al fitxer de QA perquè el proper fum de
+llenç no informi d'un visor buit i faci «arreglar» un bug que no existeix.
+
+## T5 · Verd
+
+`manage.py check` net · `npm run build` net · `npm run lint` **0 errors** · cap canvi d'i18n
+(cap text nou) · cap escriptura de BD · cap endpoint tocat.
