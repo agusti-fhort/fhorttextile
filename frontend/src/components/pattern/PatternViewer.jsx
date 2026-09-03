@@ -157,6 +157,13 @@ export default function PatternViewer({
   // porta la mida escrita al costat: l'ordre de l'Agus és «no puc comprovar la mida si no
   // puc navegar», i una xifra a cada tram tornaria a fer il·legible el que ve a resoldre.
   voresRolades = [], voraRessaltada = null, onClicVora = null,
+  // ── F4.2-TER. L'ordre d'ENQUADRAR un tram: `{ id, n }`, on `n` és un comptador que
+  // puja a cada GEST. La comanda va per comptador i no pel simple id perquè l'efecte ha
+  // de disparar-se una vegada per clic i **cap per passada del cursor**: la mateixa
+  // llista il·lumina en passar-hi per sobre, i una càmera que saltés a cada fila que el
+  // ratolí travessa seria inservible. Tornar a clicar la mateixa fila hi torna, que és el
+  // que un vol quan s'ha perdut.
+  enquadra = null,
   // ── F4.2. Els punts DERIVATS dels rols de vora, ja resolts pel servidor: `{landmark,
   // side, x, y, nom_block}`. **Es LLEGEIXEN, no es calculen**: la regla que diu on és un
   // HPS viu al catàleg i es resol al backend en el marc de la PEÇA, i una segona
@@ -248,6 +255,110 @@ export default function PatternViewer({
 
   useEffect(() => { encaixar() }, [encaixar])
 
+  // ── enquadrar UN TRAM (F4.2-TER) ─────────────────────────────────────────
+  // 🚨 **El zoom i el pan de l'usuari manen sempre.** Això no vigila res ni recol·loca la
+  // càmera pel seu compte: només reacciona al GEST de seleccionar, i qualsevol roda o
+  // arrossegada l'atura a mitja animació (`animRef`). Un visor que es reenquadra sol és
+  // exactament el que el comentari de `encaixar` explica que ja va costar una vegada.
+  const animRef = useRef(null)
+  const aturaAnim = useCallback(() => {
+    if (animRef.current) { cancelAnimationFrame(animRef.current); animRef.current = null }
+  }, [])
+
+  //: EL SOSTRE DE ZOOM, derivat del patró i no escrit a mà: la lupa no s'acosta MAI més
+  //: del que demanaria la peça sencera més PETITA del fitxer. Sense això un replec de
+  //: 17 mm ompliria la pantalla a ×56 i el patronista perdria tota referència del que està
+  //: mirant —que és el contrari d'ajudar-lo a comprovar una mida.
+  const zoomSostre = useMemo(() => {
+    const el = viewportRef.current
+    const w = el?.clientWidth || mida.w
+    const h = (omplirAlcada ? el?.clientHeight : ALCADA) || mida.h
+    let z = 0
+    for (const p of pieces) {
+      const b = p.bbox
+      if (!b) continue
+      z = Math.max(z, escalaPerCabre(
+        { minX: b.min_x, maxX: b.max_x, minY: b.min_y, maxY: b.max_y }, w, h))
+    }
+    return z > 0 ? z : ZOOM_MAX
+  }, [pieces, mida.w, mida.h, omplirAlcada])
+
+  const enquadraId = enquadra?.id ?? null
+  const enquadraN = enquadra?.n ?? 0
+
+  useEffect(() => {
+    if (!enquadraN || enquadraId == null) return undefined
+    const el = viewportRef.current
+    if (!el) return undefined
+    const w = el.clientWidth
+    const h = omplirAlcada ? el.clientHeight : ALCADA
+    if (!w || !h) return undefined
+
+    // El tram pot venir de qualsevol de les dues llistes: la de rols de vora i la de trams
+    // declarats. És la MATEIXA pregunta —«ensenya'm aquest tram»— i per tant un sol camí.
+    const tr = voresRolades.find(v => v.id === enquadraId)
+      || tramsDeclarats.find(v => v.id === enquadraId)
+    if (!tr) return undefined
+    const piece = pieces.find(p => p.id === tr.piece_id)
+    if (!piece) return undefined
+    const pts = puntsDelSegment(piece, tr)
+    if (pts.length < 2) return undefined
+
+    const xs = pts.map(q => q.x)
+    const ys = pts.map(q => q.y)
+    const b = { minX: Math.min(...xs), maxX: Math.max(...xs),
+                minY: Math.min(...ys), maxY: Math.max(...ys) }
+
+    // 1 · JA ES VEU **I ES POT LLEGIR**? Aleshores no es toca la càmera.
+    //
+    // 🚨 «Completament visible» a seques no serveix, i es va MESURAR: amb la vista inicial
+    // —que encaixa el patró sencer— TOTS els trams hi caben, i la regla llegida al peu de
+    // la lletra deixava la funció sense disparar-se mai. Un replec de 17 mm sobre una peça
+    // d'1,1 m hi és, sí: fa NOU PÍXELS. Visible i il·legible no és el mateix, i el que
+    // aquesta pantalla ha de resoldre és justament poder comprovar-ne la mida.
+    //
+    // Per tant fan falta les dues coses: que hi càpiga sencer i que ocupi prou. El llindar
+    // és relatiu al viewport, que és l'única mesura que sap què és «prou gran aquí».
+    const dins = (x, y) => {
+      const sx = pos.x + x * zoom
+      const sy = pos.y - y * zoom
+      return sx >= 8 && sx <= w - 8 && sy >= 8 && sy <= h - 8
+    }
+    const capMinim = Math.min(w, h) * 0.2
+    const jaEsGran = Math.max((b.maxX - b.minX) * zoom, (b.maxY - b.minY) * zoom) >= capMinim
+    if (jaEsGran
+        && dins(b.minX, b.minY) && dins(b.maxX, b.minY)
+        && dins(b.minX, b.maxY) && dins(b.maxX, b.maxY)) return undefined
+
+    // 2 · El zoom que el tram demana, amb un 20 % d'aire, i el sostre per damunt.
+    const zVol = escalaPerCabre(b, w, h, 0) * 0.8
+    const zFi = clampZoom(Math.min(zVol, zoomSostre))
+    const cx = (b.minX + b.maxX) / 2
+    const cy = (b.minY + b.maxY) / 2
+    const posFi = { x: w / 2 - cx * zFi, y: h / 2 + cy * zFi }
+
+    // 3 · L'animació. Curta i amb frenada: prou per veure CAP ON s'ha mogut la vista —que
+    // és el que evita la desorientació d'un salt sec— i prou poc per no fer esperar.
+    const z0 = zoom
+    const p0 = { ...pos }
+    const t0 = performance.now()
+    const DURADA = 320
+    aturaAnim()
+    const pas = (ara) => {
+      const k = Math.min(1, (ara - t0) / DURADA)
+      const e = 1 - (1 - k) ** 3          // easeOutCubic
+      setZoom(z0 + (zFi - z0) * e)
+      setPos({ x: p0.x + (posFi.x - p0.x) * e, y: p0.y + (posFi.y - p0.y) * e })
+      animRef.current = k < 1 ? requestAnimationFrame(pas) : null
+    }
+    animRef.current = requestAnimationFrame(pas)
+    return aturaAnim
+    // Les dependències són el COMPTADOR i prou (i el que fa falta per resoldre el tram).
+    // `zoom` i `pos` es llegeixen dins però NO hi entren: si hi entressin, cada fotograma
+    // de l'animació en tornaria a disparar una de nova.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enquadraN, enquadraId, omplirAlcada, zoomSostre])
+
   useEffect(() => {
     if (omplirAlcada) return          // omplint l'alçada mana el ResizeObserver, aquí sota
     const onResize = () => encaixar()
@@ -304,6 +415,10 @@ export default function PatternViewer({
   // ── zoom amb la roda, ancorat al cursor ──────────────────────────────────
   const onWheel = (e) => {
     e.evt.preventDefault()
+    // 🚨 La mà de l'usuari mana sobre la càmera, sempre i a mitja animació inclosa. Una
+    // roda que hagi de lluitar contra un `setZoom` per fotograma no és un zoom, és una
+    // baralla.
+    aturaAnim()
     const stage = stageRef.current
     if (!stage) return
     const punter = stage.getPointerPosition()
@@ -320,6 +435,7 @@ export default function PatternViewer({
   }
 
   const zoomBoto = (factor) => {
+    aturaAnim()
     const zNou = clampZoom(zoom * factor)
     const centre = { x: mida.w / 2, y: mida.h / 2 }
     const mon = { x: (centre.x - pos.x) / zoom, y: (centre.y - pos.y) / zoom }
@@ -349,6 +465,7 @@ export default function PatternViewer({
     evt.preventDefault()               // el botó del mig, si no, obre l'autoscroll
     const p = stageRef.current?.getPointerPosition()
     if (!p) return
+    aturaAnim()
     panRef.current = { x0: p.x, y0: p.y, px: pos.x, py: pos.y, mogut: false }
   }
 
