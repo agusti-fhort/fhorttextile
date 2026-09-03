@@ -7,7 +7,7 @@ The truth is TYPED OUT, not derived, and that is the point: a labeller graded ag
 anything the labeller itself produced grades its own homework. It was read off the
 measured geometry of `PatternFile#20` (report §D1) and it is the dress the house knows.
 
-    python3 ops/recognition/lab_edges.py [--png DIR] [--pattern-file 20]
+    python3 ops/recognition/lab_edges.py [--svg DIR] [--pattern-file 20]
 """
 from __future__ import annotations
 
@@ -56,37 +56,54 @@ COLOURS = {
 
 
 def draw(name, edges, proposals, truth, out_dir):
-    """One PNG per piece: every edge in the colour of its proposal, labelled. Audit by eye."""
-    import matplotlib
-    matplotlib.use('Agg')
-    import matplotlib.pyplot as plt
+    """One SVG per piece: every edge in the colour of its role, labelled. Audit by eye.
 
-    fig, ax = plt.subplots(figsize=(11, 8))
+    SVG and not PNG, and the reason is a house law rather than a preference: the only
+    Python on this machine is the SHARED staging venv, and adding matplotlib to it to draw
+    five pictures would change the interpreter every other session runs under. An SVG is
+    written with the standard library, opens in any browser, and zooms — which for a 17 mm
+    jog on a 1 100 mm piece is the difference between auditable and decorative.
+    """
+    xs = [q[0] for e in edges for q in e.points]
+    ys = [q[1] for e in edges for q in e.points]
+    pad = 40.0
+    x0, x1, y0, y1 = min(xs) - pad, max(xs) + pad, min(ys) - pad, max(ys) + pad
+    w, h = x1 - x0, y1 - y0
+
+    # The sheet's y grows upwards and SVG's grows down: the flip is applied once, here, so
+    # the picture stands the way the pattern maker's screen does.
+    def P(q):
+        return '{:.2f},{:.2f}'.format(q[0] - x0, y1 - q[1])
+
+    parts = ['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {:.0f} {:.0f}" '
+             'width="{:.0f}" height="{:.0f}">'.format(w, h, min(w, 1100), min(w, 1100) * h / w),
+             '<rect width="100%" height="100%" fill="#ffffff"/>',
+             '<text x="8" y="20" font-family="sans-serif" font-size="16">{}</text>'
+             .format(name)]
     for e, p in zip(edges, proposals):
-        xs = [q[0] for q in e.points]
-        ys = [q[1] for q in e.points]
         role = p['edge_role']
         col = COLOURS.get(role, '#9ca3af')
         ok = (role == truth.get(p['index']))
-        ax.plot(xs, ys, color=col, linewidth=3.2 if role else 1.4,
-                linestyle='-' if role else ':')
-        mx, my = xs[len(xs) // 2], ys[len(ys) // 2]
-        mark = '' if ok else '  ✗'
-        ax.annotate('{} {}{}'.format(p['index'], role or 'silent', mark), (mx, my),
-                    fontsize=7, color=col if ok else '#dc2626',
-                    bbox=dict(fc='white', ec=col, lw=0.5, alpha=0.85, pad=1.2))
-    ax.set_aspect('equal')
-    ax.set_title(name)
-    ax.invert_yaxis()
-    path = Path(out_dir) / '{}.png'.format(name.replace('.', '_'))
-    fig.savefig(path, dpi=110, bbox_inches='tight')
-    plt.close(fig)
+        parts.append(
+            '<polyline points="{}" fill="none" stroke="{}" stroke-width="{}" {}/>'
+            .format(' '.join(P(q) for q in e.points), col,
+                    6 if role else 2, '' if role else 'stroke-dasharray="8 6"'))
+        mid = e.points[len(e.points) // 2]
+        mx, my = mid[0] - x0, y1 - mid[1]
+        parts.append(
+            '<text x="{:.1f}" y="{:.1f}" font-family="monospace" font-size="13" '
+            'fill="{}">{} {}{}</text>'
+            .format(mx + 6, my - 4, col if ok else '#dc2626', p['index'],
+                    role or 'silent', '' if ok else '  MISMATCH'))
+    parts.append('</svg>')
+    path = Path(out_dir) / '{}.svg'.format(name.replace('.', '_'))
+    path.write_text('\n'.join(parts), encoding='utf-8')
     return path
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--png', default='')
+    ap.add_argument('--svg', default='', help='directori on desar un SVG per peça')
     ap.add_argument('--pattern-file', type=int, default=20)
     ap.add_argument('--schema', default='fhort')
     ap.add_argument('--threshold', type=float, default=None)
@@ -148,13 +165,13 @@ def main():
                 if got != want and want != '?':
                     print('        why: {}'.format(p['evidence'].get('why')))
                     print('        scores: {}'.format(p['evidence'].get('scores')))
-            if args.png:
+            if args.svg:
                 try:
                     edges, _ = edges_of_piece(piece)
-                    print('   png: {}'.format(
-                        draw(piece.nom_block, edges, res['proposals'], truth, args.png)))
+                    print('   svg: {}'.format(
+                        draw(piece.nom_block, edges, res['proposals'], truth, args.svg)))
                 except Exception as e:                                # noqa: BLE001
-                    print('   png failed: {}'.format(e))
+                    print('   svg failed: {}'.format(e))
 
     total = hit + miss + wrong + silent_ok + silent_bad
     print('=' * 92)
