@@ -419,6 +419,11 @@ class WorkOrderViewSet(mixins.RetrieveModelMixin, mixins.ListModelMixin, viewset
         .prefetch_related('adjustments', 'tasks__task_type').all()
     serializer_class = WorkOrderSerializer
     filterset_fields = ['kind', 'status', 'customer', 'period', 'model']
+    # El cercador de la llista d'encàrrecs busca per NOM del model primer (llei del nom), i
+    # després pel codi i pel client — els tres camps amb què algú anomena un encàrrec en veu
+    # alta. `number` hi entra perquè és el que es copia d'un correu. `period` NO: és un filtre
+    # (any-mes), no una cosa que es cerqui escrivint.
+    search_fields = ['model__nom_prenda', 'model__codi_intern', 'customer__nom', 'number']
 
     def get_permissions(self):
         if self.action in ('list', 'retrieve'):
