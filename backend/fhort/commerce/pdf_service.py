@@ -787,13 +787,25 @@ def generate_delivery_note_pdf(delivery_note, lang=None):
     # ═══ RESUM (sense venciments; totals sobre línies visibles = els del document) ═══
     # «Import total» amb regla superior --text-main (maqueta: `.sum .tot{border-top:1px solid
     # var(--text-main)}`) — DN_TEXT_MAIN i no la LGREY de la capçalera.
-    pct = _tax_pct(delivery_note.subtotal, delivery_note.tax_amount)
-    story.append(Table([
-        ['', Paragraph(t(lang, 'taxable_base'), S_SUM), Paragraph(f'{_money(delivery_note.subtotal)} €', S_SUM_R)],
-        ['', Paragraph(f'{t(lang, "vat")} {pct}%', S_SUM), Paragraph(f'{_money(delivery_note.tax_amount)} €', S_SUM_R)],
-        ['', Paragraph(t(lang, 'total_amount'), S_SUM_TOT), Paragraph(f'{_money(delivery_note.total)} €', S_SUM_TOT_R)],
-    ], colWidths=[104 * mm, 44 * mm, 26 * mm], style=TableStyle([
-        ('LINEABOVE', (1, 2), (2, 2), 0.5, DN_TEXT_MAIN),
+    #
+    # 🚨 UNA FILA PER TIPUS D'IVA REAL, MAI UN PERCENTATGE EFECTIU. `_tax_pct` (usat pel
+    # pressupost/comanda, capçalera intacta) deriva un % del quocient tax/subtotal — amb dos
+    # tipus barrejats a la mateixa base, això dona un número que no és cap tipus real. Aquí
+    # es llegeix `tax_breakdown` (ja calculat i persistit per `recalculate_totals`, la mateixa
+    # font que Quote/SalesOrder): una fila per tipus, amb la SEVA base. Amb un sol tipus, és
+    # una fila — idèntic al que hi havia, però ja no per casualitat.
+    rows = [['', Paragraph(t(lang, 'taxable_base'), S_SUM),
+             Paragraph(f'{_money(delivery_note.subtotal)} €', S_SUM_R)]]
+    for entry in (delivery_note.tax_breakdown or []):
+        rate = Decimal(entry['rate'])
+        rate_txt = f'{rate:.0f}' if rate == rate.to_integral_value() else str(rate).replace('.', ',')
+        rows.append(['', Paragraph(f'{t(lang, "vat")} {rate_txt}%', S_SUM),
+                     Paragraph(f'{_money(entry["tax"])} €', S_SUM_R)])
+    rows.append(['', Paragraph(t(lang, 'total_amount'), S_SUM_TOT),
+                 Paragraph(f'{_money(delivery_note.total)} €', S_SUM_TOT_R)])
+    last = len(rows) - 1
+    story.append(Table(rows, colWidths=[104 * mm, 44 * mm, 26 * mm], style=TableStyle([
+        ('LINEABOVE', (1, last), (2, last), 0.5, DN_TEXT_MAIN),
         ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
         ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0)])))
 

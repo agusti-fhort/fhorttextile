@@ -1119,10 +1119,35 @@ def add_lines_to_draft(draft, selected_items, user=None):
             concepte = (None if bloc['encarrec_directe']
                         else (grup['pacte'] or {}).get('concepte'))
             concepte = concepte or m['nom_prenda'] or m['codi_intern']
+
+            # 🚨 EL PRODUCTE D'UNA DIRECTA ERA `None`, i per tant SENSE IVA (0 %):
+            # `linia_comanda` es queda a `None` a posta (A7, la volta no es pacta), però una
+            # volta fora de pacte ven el MATEIX servei que la resta del model —només que fora
+            # del numeral— i l'IVA classifica l'ARTICLE, no el pressupost. Es pren el producte
+            # del pacte VIU del model (el mateix que veuria una línia de pacte seva), sense
+            # enganxar-hi `linia_comanda` (que seguiria dient «ve d'aquest pressupost», fals).
+            # Un directe només existeix quan el model té pacte (`fora` exigeix numeral, i
+            # `numeral_efectiu` només en dona un quan hi ha línia de comanda) — si mai no en
+            # tingués, atura: inventar-li un producte seria decidir per qui ven.
+            if bloc['encarrec_directe']:
+                pacte_hdr = grup.get('pacte')
+                if not pacte_hdr:
+                    raise ValidationError(
+                        f"El model {m['codi_intern']} no té cap servei de pacte configurat: "
+                        "no es pot classificar l'IVA d'una volta directa sense un article de "
+                        "referència.")
+                product_directe = (SalesOrderLine.objects
+                                   .select_related('product')
+                                   .get(pk=pacte_hdr['linia_id']).product)
+            else:
+                product_directe = None
+
             line = DeliveryNoteLine(
                 delivery_note=draft, line_kind='TASK', model_id=m['id'],
-                # El producte (i per tant l'IVA) surt de la línia de comanda quan n'hi ha.
-                product=linia_comanda.product if linia_comanda else None,
+                # El producte (i per tant l'IVA) surt de la línia de comanda quan n'hi ha, i del
+                # pacte del model quan és directa (supra).
+                product=product_directe if bloc['encarrec_directe']
+                        else (linia_comanda.product if linia_comanda else None),
                 linia_comanda=linia_comanda,
                 encarrec_directe=bloc['encarrec_directe'],
                 # A1 · SENSE camp quantitat: sempre 1, i l'import és el de la targeta.
