@@ -731,6 +731,21 @@ def _ronda_header(ronda):
     }
 
 
+def cost_hora_efectiu(model_task, rate_tenant):
+    """A3 · QUINA TARIFA/HORA s'aplica a aquesta tasca. Punt únic.
+
+    L'override de la tasca mana; sense override, la tarifa plana del tenant. `None` als dos vol
+    dir que no se'n pot dir el cost, i llavors el cost és `None` —no zero: «no ho sabem» i «no
+    costa res» són coses diferents i el zero les confondria a la cara.
+
+    ⚠️ `0` a l'override SÍ que és una decisió («aquesta hora no la cobrem internament») i s'ha de
+    respectar: per això la comprovació és `is not None` i no la veritat del valor.
+    """
+    if model_task is not None and getattr(model_task, 'hourly_rate_override', None) is not None:
+        return model_task.hourly_rate_override
+    return rate_tenant
+
+
 def get_billable_items(customer):
     """Safata d'albaranables d'un client (v2), agrupada per MODEL. Parteix de ModelTask (NO de
     WorkOrder): així recull també la feina amb work_order=NULL que el flux v1 no podia veure (R2

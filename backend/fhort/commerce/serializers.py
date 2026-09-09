@@ -490,7 +490,7 @@ class DeliveryNoteLineSerializer(PodaEconomicaMixin, serializers.ModelSerializer
     tarifa/hora. Es podava sola quan `hourly_rate` era `null`; el dia que s'omplís a PROD,
     hauria començat a viatjar de debò (diagnosi 2026-08-14 §3.2). `internal_minutes` NO es
     poda: són minuts de feina, no diner, i són patrimoni del tècnic que els ha fet."""
-    CAMPS_ECONOMICS = ('unit_price', 'line_total', 'internal_cost')
+    CAMPS_ECONOMICS = ('unit_price', 'line_total', 'internal_cost', 'internal_rate')
     product_code = serializers.CharField(source='product.code', read_only=True, default=None)
     product_name = serializers.CharField(source='product.name', read_only=True, default=None)
     # v2 — capçalera de bloc-model (agrupació al detall/PDF); read-only, per compondre els blocs.
@@ -509,6 +509,9 @@ class DeliveryNoteLineSerializer(PodaEconomicaMixin, serializers.ModelSerializer
     # de la tasca i cost = minuts interns × tarifa/hora (TenantConfig). Derivats; null sense minuts.
     internal_tecnic = serializers.SerializerMethodField()
     internal_cost = serializers.SerializerMethodField()
+    # A3 — la tarifa que s'ha aplicat de debò (override de la tasca o la del tenant). És dada
+    # ECONÒMICA i es poda com el cost: qui no veu diner tampoc no veu la tarifa.
+    internal_rate = serializers.SerializerMethodField()
 
     def _hourly_rate(self):
         # Memoitzat al serializer fill (compartit per totes les línies del many=True): 1 sola lectura.
@@ -529,8 +532,17 @@ class DeliveryNoteLineSerializer(PodaEconomicaMixin, serializers.ModelSerializer
                .annotate(m=Sum('minuts')).order_by('-m').first())
         return (row or {}).get('tecnic__nom_complet')
 
+    def get_internal_rate(self, obj):
+        from .services import cost_hora_efectiu
+        rate = cost_hora_efectiu(obj.model_task, self._hourly_rate())
+        return str(rate) if rate is not None else None
+
     def get_internal_cost(self, obj):
-        rate = self._hourly_rate()
+        # A3 — la tarifa de la TASCA mana sobre la del tenant. El resolutor viu a `services`
+        # (punt únic) perquè la pantalla d'albarà i el càlcul de la línia no en puguin tenir
+        # dos de diferents.
+        from .services import cost_hora_efectiu
+        rate = cost_hora_efectiu(obj.model_task, self._hourly_rate())
         if rate is None or obj.internal_minutes is None:
             return None
         from decimal import Decimal, ROUND_HALF_UP
@@ -545,7 +557,7 @@ class DeliveryNoteLineSerializer(PodaEconomicaMixin, serializers.ModelSerializer
                   'description', 'quantity', 'unit_price', 'line_total', 'position', 'visible',
                   'model', 'model_intern', 'model_codi_client', 'model_nom', 'model_collection',
                   'model_temporada', 'model_any', 'internal_minutes', 'internal_tecnic',
-                  'internal_cost', 'task_finished_at',
+                  'internal_cost', 'internal_rate', 'task_finished_at',
                   'work_order', 'model_task', 'expense', 'adjustment']
         # v2 — editables en DRAFT: description, quantity, unit_price, visible. La resta (traçabilitat,
         # model, internal_minutes, line_total) read-only: es fixen en compondre la línia.
