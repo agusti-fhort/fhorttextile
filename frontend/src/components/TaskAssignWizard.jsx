@@ -10,6 +10,18 @@ import { selS, primaryBtn } from './ui/buttons'
 // inline amb el patró Feedback (--ok-bg/--warn-bg/--err-bg).
 const MONO = 'IBM Plex Mono, monospace'
 
+// 25' — EL DEFECTE DE PLANIFICACIÓ (decisió d'Agus, lot 09/09).
+//
+// La captura naixia BUIDA i el PM havia d'endevinar un número per a cada tipus abans de poder
+// planificar res. 25 és un punt de partida raonable i, sobretot, EDITABLE: el camp segueix sent
+// seu i el guard de `> 0` no es toca.
+//
+// 🔑 **Això és temps PREVIST, no temps real.** El que es desa és una llavor de planificació
+// (`TimeSeed`, origen CAPTURA) que alimenta `estimated_minutes` i el motor de pla; el temps real
+// el segueix mesurant el rellotge (timers), i cap dels dos toca l'altre. Confondre-ho seria
+// tornar a barrejar planificació i realitat, que és la lliçó d'F1.5.
+const MINUTS_PER_DEFECTE = 25
+
 // Cercle de color d'assignació (color_avatar). Fallback --gold si null. (replica de UsersRoles.ColorDot)
 function ColorDot({ color, size = 16 }) {
   return (
@@ -181,7 +193,7 @@ export default function TaskAssignWizard({ modelIds = [], filters = null, exclud
         if (r.data.needs_estimate?.length) {
           // Captura conscient: no tanquem; el PM entra els minuts que falten i es reintenta.
           const init = {}
-          r.data.needs_estimate.forEach(ne => { init[ne.task_code] = '' })
+          r.data.needs_estimate.forEach(ne => { init[ne.task_code] = String(MINUTS_PER_DEFECTE) })
           setCaptureVals(init)
         } else {
           setTimeout(() => { onSuccess?.(); onClose?.() }, 2000)
@@ -390,6 +402,13 @@ export default function TaskAssignWizard({ modelIds = [], filters = null, exclud
                 }}>
                   <i className="ti ti-clock-question" />{' '}
                   {t('taskassign.needs_estimate_intro', { count: submitResult.needs_estimate.length })}
+                </div>
+                {/* El camp ve prefixat: la nota diu D'ON surt el número i QUÈ és, perquè un
+                    valor que apareix sol sense explicació es llegeix com una mesura i no com
+                    un defecte editable. */}
+                <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)',
+                              marginBottom: 10 }}>
+                  {t('taskassign.default_minutes_hint', { n: MINUTS_PER_DEFECTE })}
                 </div>
                 <div style={{ maxHeight: 200, overflowY: 'auto' }}>
                   {submitResult.needs_estimate.map(ne => (

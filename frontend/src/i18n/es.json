@@ -4046,6 +4046,7 @@
   },
   "taskassign": {
     "needs_estimate_intro": "{{count}} tarea(s) sin estimación de tiempo. Indica los minutos para desbloquear la planificación.",
+    "default_minutes_hint": "Prefijado a {{n}} min · tiempo PREVISTO de planificación, editable. El tiempo real lo mide el reloj y no depende de este valor.",
     "minutes": "minutos",
     "min_abbr": "min",
     "capturing": "Guardando…",

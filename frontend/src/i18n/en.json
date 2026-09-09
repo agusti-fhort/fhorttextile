@@ -4046,6 +4046,7 @@
   },
   "taskassign": {
     "needs_estimate_intro": "{{count}} task(s) without a time estimate. Enter the minutes to unblock planning.",
+    "default_minutes_hint": "Pre-filled at {{n}} min · PLANNED time for scheduling, editable. Actual time is measured by the clock and does not depend on this value.",
     "minutes": "minutes",
     "min_abbr": "min",
     "capturing": "Saving…",

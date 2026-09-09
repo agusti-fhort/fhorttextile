@@ -4046,6 +4046,7 @@
   },
   "taskassign": {
     "needs_estimate_intro": "{{count}} tasca/tasques sense estimació de temps. Indica els minuts per desbloquejar la planificació.",
+    "default_minutes_hint": "Prefixat a {{n}} min · temps PREVIST de planificació, editable. El temps real el mesura el rellotge i no depèn d’aquest valor.",
     "minutes": "minuts",
     "min_abbr": "min",
     "capturing": "Desant…",
