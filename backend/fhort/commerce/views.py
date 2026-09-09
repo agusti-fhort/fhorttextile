@@ -472,6 +472,71 @@ class WorkOrderViewSet(mixins.RetrieveModelMixin, mixins.ListModelMixin, viewset
             })
         return Response({'orphaned': out})
 
+    @action(detail=False, methods=['post'], url_path='close-bulk')
+    def close_bulk(self, request):
+        """POST commerce/work-orders/close-bulk/ — tanca N encàrrecs. Gate DEFINE_TASKS (cau al
+        defecte de `get_permissions`, el MATEIX que `close`: un tancament en lot no pot demanar
+        menys permís que un de sol, ni més).
+
+        Body: {ids:[...], cancel_pending: bool}.
+
+        🔑 **NO ÉS UN TANCAMENT NOU: ÉS EL TANCAMENT INDIVIDUAL, N VEGADES.** Es crida
+        `close_work_order` un cop per encàrrec, amb els mateixos guards i el mateix
+        `cancel_pending`. Aquí no es reimplementa cap política —ni quins estats bloquegen, ni
+        què es dedueix—: si el lot i el gest solt poguessin divergir, tancar deu encàrrecs
+        d'un cop faria una cosa que ningú no ha decidit.
+
+        ⚠️ **EL LOT SERÀ SEMPRE PARCIAL, i la resposta ho ha de dir per ítem.** Un WO amb feina
+        InProgress/Paused no es tanca, i el motiu (`blockers`) és seu, no del lot. Per això la
+        resposta és una llista de resultats i no un booleà: qui la llegeix ha de poder dir a
+        l'usuari QUINS han quedat fora i PER QUÈ.
+
+        CAP TRANSACCIÓ QUE ELS EMBOLIQUI TOTS, a posta: `close_work_order` ja n'obre una de
+        pròpia per encàrrec. Una d'exterior faria que un sol error desfés els tancaments bons,
+        que és exactament el contrari del que un lot parcial ha de fer.
+        """
+        from .services import close_work_order
+        ids = request.data.get('ids') or []
+        cancel_pending = bool(request.data.get('cancel_pending'))
+        profile = getattr(request.user, 'profile', None)
+
+        trobats = {wo.pk: wo for wo in WorkOrder.objects.filter(pk__in=ids)}
+        resultats, tancats, bloquejats, errors = [], [], [], []
+        # S'itera sobre `ids` i no sobre el queryset perquè la resposta segueixi l'ordre que el
+        # client va demanar i perquè els ids inexistents es puguin dir en veu alta.
+        for wid in ids:
+            wo = trobats.get(wid)
+            if wo is None:
+                resultats.append({'id': wid, 'number': None, 'ok': False, 'motiu': 'not_found'})
+                errors.append(wid)
+                continue
+            # Es compta ABANS de tancar: `close_work_order` torna `pending_proposals` BUIT quan
+            # ha tancat de debò (les propostes són el motiu de NO tancar), o sigui que llegir-lo
+            # després diria sempre 0 i el lot mentiria sobre el que acaba de deduir.
+            a_deduir = (wo.tasks.filter(status='Pending').count()
+                        if cancel_pending and wo.status != 'CLOSED' else 0)
+            try:
+                r = close_work_order(wo, user=profile, cancel_pending=cancel_pending)
+            except Exception as e:                                    # noqa: BLE001
+                # Un encàrrec que peta no pot endur-se els altres. L'error es DIU, no s'empassa.
+                resultats.append({'id': wo.pk, 'number': wo.number, 'ok': False,
+                                  'motiu': 'error', 'error': str(e)})
+                errors.append(wo.pk)
+                continue
+            if r['closed']:
+                resultats.append({'id': wo.pk, 'number': wo.number, 'ok': True,
+                                  'ja_tancat': bool(r.get('already_closed')),
+                                  'deduides': a_deduir})
+                tancats.append(wo.pk)
+            else:
+                resultats.append({'id': wo.pk, 'number': wo.number, 'ok': False,
+                                  'motiu': 'blocked' if r['blockers'] else 'pending',
+                                  'blockers': r['blockers'],
+                                  'pending_proposals': r['pending_proposals']})
+                bloquejats.append(wo.pk)
+        return Response({'resultats': resultats, 'tancats': tancats,
+                         'bloquejats': bloquejats, 'errors': errors})
+
     @action(detail=True, methods=['post'])
     def review(self, request, pk=None):
         """POST work-orders/{id}/review/ — revisió COMERCIAL (preu de venda) d'un WO tancat.
