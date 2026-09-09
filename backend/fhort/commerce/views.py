@@ -407,6 +407,12 @@ class SalesOrderLineViewSet(mixins.RetrieveModelMixin, mixins.ListModelMixin,
                         status=status.HTTP_201_CREATED)
 
 
+# Sostre del tancament en lot. La llista en serveix 25 per pàgina; el sostre no és per a ella
+# sinó per a la PORTA, que és pública al gate DEFINE_TASKS: cada encàrrec és una transacció
+# pròpia i una petició de 5.000 ids seria feina de minuts servida en un sol request.
+MAX_TANCAMENT_EN_LOT = 200
+
+
 class WorkOrderViewSet(mixins.RetrieveModelMixin, mixins.ListModelMixin, viewsets.GenericViewSet):
     """Encàrrecs / ordres de treball (B4a). No es crea per POST: els ORDER neixen del wizard
     (B4b) i els COLLECTOR del hook lazy. Llista filtrable per kind/status/customer/period.
@@ -496,7 +502,22 @@ class WorkOrderViewSet(mixins.RetrieveModelMixin, mixins.ListModelMixin, viewset
         que és exactament el contrari del que un lot parcial ha de fer.
         """
         from .services import close_work_order
-        ids = request.data.get('ids') or []
+        ids = request.data.get('ids')
+        # Mateixa validació que el germà `assign_models` (:388-396), i no per simetria: sense
+        # coacció a int, `{"ids": ["12"]}` troba el WO 12 al queryset però `trobats.get("12")`
+        # falla —les claus són int— i la resposta diria `not_found` d'un encàrrec que el mateix
+        # request acaba de llegir: una mentida amb 200 OK. I un escalar petava amb un 500.
+        if not isinstance(ids, list) or not ids:
+            return Response({'detail': 'ids (llista no buida) requerit.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if len(ids) > MAX_TANCAMENT_EN_LOT:
+            return Response({'detail': f'Màxim {MAX_TANCAMENT_EN_LOT} encàrrecs per lot.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        try:
+            ids = [int(x) for x in ids]
+        except (TypeError, ValueError):
+            return Response({'detail': "ids ha de ser una llista d'enters."},
+                            status=status.HTTP_400_BAD_REQUEST)
         cancel_pending = bool(request.data.get('cancel_pending'))
         profile = getattr(request.user, 'profile', None)
 

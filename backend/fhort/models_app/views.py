@@ -4594,6 +4594,8 @@ def model_dashboard_view(request, model_id):
         TaskTransition.objects.filter(model_task__model_id=model.id, to_status='InProgress')
         .values('model_task_id').annotate(c=Count('id')))}
 
+    from fhort.accounts.capabilities import pot_veure_diner
+    _diner = pot_veure_diner(request)
     tasques = [{
         'id': t.id,
         'task_type': t.task_type.name if t.task_type_id else None,
@@ -4632,9 +4634,18 @@ def model_dashboard_view(request, model_id):
         # col·lector — per això la porta és el FK i no `kind`, ni el preu, ni el nom.
         # `comanda` és el document de venda quan n'hi ha (un col·lector no en té, i un WO orfe
         # tampoc): serveix NOMÉS per anomenar-la a l'avís, mai per decidir.
+        #
+        # 🔒 I ES PODA. Aquest compositor és `IsAuthenticated` i el llegeix qualsevol tècnic que
+        # obri la fitxa d'un model; el `document_number` d'una venda és dada COMERCIAL. La llei
+        # de la casa per a aquest cas és PODAR EL CAMP, no tancar la porta («el forat era el
+        # PAYLOAD, no el menú»). Sense COMERCIAL arriba `None` i l'avís de la paperera cau a la
+        # seva variant sense comanda, que diu el mateix FET —la tasca està lligada a un
+        # encàrrec— sense anomenar la venda.
+        # `encarrec` NO es poda: és l'id intern del contenidor de feina, no un import ni un
+        # document de venda, i és el que la cara necessita per decidir el camí del gest.
         'encarrec': t.work_order_id,
         'comanda': (t.work_order.order_line.order.document_number
-                    if t.work_order_id and t.work_order.order_line_id
+                    if _diner and t.work_order_id and t.work_order.order_line_id
                     else None),
     } for t in pla_tasks]
 
