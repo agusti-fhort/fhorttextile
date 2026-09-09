@@ -517,6 +517,16 @@ class DeliveryNoteLineSerializer(PodaEconomicaMixin, serializers.ModelSerializer
     # que el document imprimeix a la línia de la ronda. Va aquí i no a un endpoint a part perquè
     # és la MATEIXA lectura: si fossin dues portes, podrien dir coses diferents del mateix albarà.
     rondes_detall = serializers.SerializerMethodField()
+    # EL PACTE que va proposar el preu, tal com la targeta i el document l'han de dir. Surt de
+    # `linia_comanda` (congelada a la línia) i no de tornar a resoldre el pivot: un model
+    # desassignat després d'emetre ha de seguir dient de quina venda venia.
+    # `pacte_consum` és la cartera de la LÍNIA DE VENDA (imputat/total), que és el «3/20» de la
+    # maqueta; no té res a veure amb el numeral de voltes, que és `pacte_rounds`.
+    pacte_oferta = serializers.CharField(source='linia_comanda.order.document_number',
+                                         read_only=True, default=None)
+    pacte_rounds = serializers.IntegerField(source='linia_comanda.rounds_included',
+                                            read_only=True, default=None)
+    pacte_consum = serializers.SerializerMethodField()
 
     def _hourly_rate(self):
         # Memoitzat al serializer fill (compartit per totes les línies del many=True): 1 sola lectura.
@@ -536,6 +546,13 @@ class DeliveryNoteLineSerializer(PodaEconomicaMixin, serializers.ModelSerializer
         row = (obj.model_task.timers.filter(TRAMS_SANS).values('tecnic__nom_complet')
                .annotate(m=Sum('minuts')).order_by('-m').first())
         return (row or {}).get('tecnic__nom_complet')
+
+    def get_pacte_consum(self, obj):
+        l = obj.linia_comanda
+        if l is None:
+            return None
+        # Sense decimals: és un recompte d'unitats de cartera, no un import.
+        return f'{Decimal(l.qty_allocated or 0):.0f}/{Decimal(l.quantity or 0):.0f}'
 
     def get_rondes_detall(self, obj):
         from django.db.models import Sum
@@ -606,6 +623,7 @@ class DeliveryNoteLineSerializer(PodaEconomicaMixin, serializers.ModelSerializer
                   'model_temporada', 'model_any', 'internal_minutes', 'internal_tecnic',
                   'internal_cost', 'internal_rate', 'task_finished_at',
                   'encarrec_directe', 'linia_comanda', 'rondes_detall',
+                  'pacte_oferta', 'pacte_rounds', 'pacte_consum',
                   'work_order', 'model_task', 'expense', 'adjustment']
         # v2 — editables en DRAFT: description, quantity, unit_price, visible. La resta (traçabilitat,
         # model, internal_minutes, line_total) read-only: es fixen en compondre la línia.

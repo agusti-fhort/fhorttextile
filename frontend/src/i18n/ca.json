@@ -94,7 +94,17 @@
     "tray_en_curs": "En curs",
     "tray_vist_i_plau": "Vist-i-plau del client",
     "tray_vist_i_plau_pendent": "Vist-i-plau pendent",
-    "tray_fora_pressupost": "Encàrrec fora de pressupost"
+    "tray_fora_pressupost": "Encàrrec fora de pressupost",
+    "col_tasca": "Tasca",
+    "col_tecnic": "Tècnic",
+    "col_temps": "Temps",
+    "col_cost_hora": "Cost/h",
+    "col_cost": "Cost",
+    "cost_ronda": "Cost ronda",
+    "no_realitzada": "No realitzada",
+    "encarrec_directe": "Encàrrec directe sense pressupost",
+    "add_line": "+ Afegir línia",
+    "comments": "Comentaris"
   },
   "grading_propagate": {
     "button": "Propagar",

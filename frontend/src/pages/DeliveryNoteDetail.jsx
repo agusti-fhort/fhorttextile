@@ -1,18 +1,17 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useParams, useNavigate } from 'react-router-dom'
 import useAuthStore from '../store/auth'
-import { commerce } from '../api/endpoints'
+import { commerce, modelTasks } from '../api/endpoints'
 import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
-import { ClassificacioBadge } from '../components/commercial/estats'
 import Badge from '../components/ui/Badge'
 import PageMenu from '../components/ui/PageMenu'
 import { camp, forceBarra } from '../components/llista/ChromLlista'
 import PdfButton, { usePdfLang } from '../components/ui/PdfButton'
 import IssueDateField from '../components/commercial/IssueDateField'
-import { botoPri } from '../components/ui/buttons'
-import { DocumentHeader, ModelCard, LineTable, RowBtn, DocumentSummary } from '../components/commercial'
+import { botoDestructiu, botoPri } from '../components/ui/buttons'
+import { DocumentHeader } from '../components/commercial'
 import { DNStatusBadge } from './DeliveryNotes'
 
 // Mòdul Comercial — v2 · fitxa/composició d'albarà (reskin: sistema visual comercial unificat).
@@ -48,21 +47,151 @@ function filenameFromHeaders(res, fallback) {
 }
 
 // Agrupa les línies per model (les MANUAL/sense model van a un bloc "general" final).
-function groupByModel(lines) {
-  const blocks = new Map()
-  for (const l of lines) {
-    const key = l.model ?? '__general__'
-    if (!blocks.has(key)) blocks.set(key, { model: l.model, header: l, lines: [] })
-    blocks.get(key).lines.push(l)
-  }
-  return [...blocks.values()]
-}
-
 // M4 · FIT-12 — LA SAFATA S'AGRUPA PER VOLTA. El backend ja envia la volta amb cada ítem
 // (`it.ronda`) i l'índex ordenat del bloc (`g.rondes`); aquí només es reparteix. Els ítems que no
 // pengen de cap volta —despeses, deduccions de concepte lliure, i tota la feina anterior a la llei
 // de rondes— van a un calaix SENSE capçalera, que és el que la safata ja era abans d'M4: no se'ls
 // inventa cap volta.
+// ── PANTALLA D'ALBARÀ · MAQUETA §2 ─────────────────────────────────────────────────────────
+
+const fmtMin = (m) => `${Math.floor((m || 0) / 60)}h ${String((m || 0) % 60).padStart(2, '0')}m`
+
+// La taula de tasques d'una volta. COST/H és un input (A3) i el cost es recalcula al servidor:
+// aquí no s'inventa cap número. L'entrada NOMÉS existeix en esborrany.
+function TaulaTasquesRonda({ r, editable, busy, onRate, t }) {
+  const th = { textAlign: 'left', fontWeight: 500, color: 'var(--text-soft)',
+               fontSize: 'var(--fs-caption)', lineHeight: '12px', letterSpacing: '.08em',
+               textTransform: 'uppercase', padding: '4px 8px',
+               borderBottom: '1px solid var(--line)' }
+  const td = { padding: '4px 8px', borderBottom: '1px solid var(--line)' }
+  const tdR = { ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }
+  const totalMin = r.tasques.reduce((a, x) => a + (x.feta ? x.minuts : 0), 0)
+  const totalCost = r.tasques.reduce((a, x) => a + (x.feta ? Number(x.cost || 0) : 0), 0)
+  return (
+    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)',
+                    lineHeight: '16px' }}>
+      <thead>
+        <tr>
+          <th style={th}>{t('deliverynotes.col_tasca')}</th>
+          <th style={th}>{t('deliverynotes.col_tecnic')}</th>
+          <th style={{ ...th, textAlign: 'right' }}>{t('deliverynotes.col_temps')}</th>
+          <th style={{ ...th, textAlign: 'right' }}>{t('deliverynotes.col_cost_hora')}</th>
+          <th style={{ ...th, textAlign: 'right' }}>{t('deliverynotes.col_cost')}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {r.tasques.map(x => (
+          <tr key={x.id}>
+            <td style={td}>
+              {x.nom}
+              {/* Una tasca de la recepta que no s'ha fet NO desapareix de la volta: el client
+                  ha de poder veure què s'havia previst i què no s'ha executat. */}
+              {!x.feta && <> <Badge variant="err">{t('deliverynotes.no_realitzada')}</Badge></>}
+            </td>
+            <td style={{ ...td, color: x.feta ? 'inherit' : 'var(--text-faint)' }}>
+              {x.feta ? (x.tecnic || '—') : '—'}
+            </td>
+            <td style={{ ...tdR, color: x.feta ? 'inherit' : 'var(--text-faint)' }}>
+              {x.feta ? fmtMin(x.minuts) : '—'}
+            </td>
+            <td style={tdR}>
+              {!x.feta ? <span style={{ color: 'var(--text-faint)' }}>—</span>
+                : editable ? (
+                  <input type="number" step="0.01" defaultValue={x.cost_hora ?? ''} disabled={busy}
+                    onBlur={e => onRate(x, e.target.value)}
+                    aria-label={t('deliverynotes.col_cost_hora')}
+                    style={{ ...inp, width: 72, textAlign: 'right', fontSize: 'var(--fs-body)' }} />
+                ) : (x.cost_hora != null ? money(x.cost_hora) : '—')}
+            </td>
+            <td style={{ ...tdR, color: x.feta ? 'inherit' : 'var(--text-faint)' }}>
+              {x.feta && x.cost != null ? money(x.cost) : '—'}
+            </td>
+          </tr>
+        ))}
+        <tr>
+          <td style={{ ...td, borderBottom: 0, fontWeight: 600 }} colSpan={2}>
+            {t('deliverynotes.cost_ronda')}
+          </td>
+          <td style={{ ...tdR, borderBottom: 0, fontWeight: 600 }}>{fmtMin(totalMin)}</td>
+          <td style={{ ...tdR, borderBottom: 0 }} />
+          <td style={{ ...tdR, borderBottom: 0, fontWeight: 600 }}>{money(totalCost)}</td>
+        </tr>
+      </tbody>
+    </table>
+  )
+}
+
+// La targeta d'una LÍNIA = un model (A1) o una volta directa (A7). El que canvia entre les dues
+// és la línia de pacte i el badge; l'estructura és la mateixa, i per això és UN component.
+function TargetaLinia({ l, editable, busy, importEdit, onImport, onImportSave, onEsborrar,
+                        onRate, t, locale }) {
+  const refs = [l.model_codi_client, l.model_intern].filter(Boolean).join(' · ')
+  const camp = [l.model_collection, [l.model_temporada, l.model_any].filter(Boolean).join(' ')]
+    .filter(Boolean).join(' · ')
+  return (
+    <div style={{ background: 'var(--panel)', border: '1px solid var(--line)',
+                  borderRadius: 'var(--r-card)', marginBottom: 16, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: 16 }}>
+        <div style={{ lineHeight: '16px', minWidth: 0 }}>
+          <span style={{ fontSize: 'var(--fs-h3)', lineHeight: '20px', fontWeight: 600 }}>
+            {l.model_nom || l.model_intern || l.description}
+          </span>
+          {refs && <span style={{ color: 'var(--text-soft)', fontSize: 'var(--fs-caption)' }}> {refs}</span>}
+          {/* A7 · el badge --err va a la capçalera de la targeta directa, al costat de la
+              identitat: és el primer que s'ha de llegir d'aquesta targeta. */}
+          {l.encarrec_directe && <> <Badge variant="err">{t('deliverynotes.tray_fora_pressupost')}</Badge></>}
+          {camp && <div style={{ color: 'var(--text-soft)' }}>{camp}</div>}
+          <div>
+            {l.encarrec_directe
+              ? <b style={{ fontWeight: 600 }}>{t('deliverynotes.encarrec_directe')}</b>
+              : <>
+                  {l.pacte_oferta && <b style={{ fontWeight: 600 }}>{t('deliverynotes.tray_oferta', { n: l.pacte_oferta })}</b>}
+                  {l.description && <> · {l.description}</>}
+                  {l.pacte_rounds != null && <> · {t('deliverynotes.tray_rondes_incloses', { n: l.pacte_rounds })}</>}
+                  {l.pacte_consum && <> · {l.pacte_consum}</>}
+                </>}
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, alignSelf: 'flex-start' }}>
+          {editable ? (
+            <input type="number" step="0.01" value={importEdit} disabled={busy}
+              onChange={e => onImport(l, e.target.value)} onBlur={() => onImportSave(l)}
+              aria-label={t('deliverynotes.line_price')}
+              style={{ ...inp, width: 96, textAlign: 'right', fontSize: 'var(--fs-h3)',
+                       lineHeight: '20px', fontWeight: 600 }} />
+          ) : (
+            <span style={{ fontSize: 'var(--fs-h3)', lineHeight: '20px', fontWeight: 600,
+                           fontVariantNumeric: 'tabular-nums' }}>{Number(l.unit_price ?? 0).toFixed(2)}</span>
+          )}
+          <span>€</span>
+          {editable && (
+            <button type="button" onClick={() => onEsborrar(l)} disabled={busy}
+              title={t('deliverynotes.remove_line')}
+              onMouseEnter={e => { e.currentTarget.style.background = 'var(--err-bg)' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'none' }}
+              style={{ border: 0, background: 'none', color: 'var(--err)', padding: 4,
+                       marginLeft: 8, borderRadius: 'var(--r-ctrl)', cursor: 'pointer',
+                       display: 'inline-flex', alignSelf: 'center' }}>
+              <i className="ti ti-trash" aria-hidden="true" style={{ fontSize: 14 }} />
+            </button>
+          )}
+        </div>
+      </div>
+      {(l.rondes_detall || []).map((r, i) => (
+        <details key={r.id} open={i === 0} style={{ borderTop: '1px solid var(--line)' }}>
+          <summary style={{ cursor: 'pointer', padding: '8px 16px', color: 'var(--text-soft)' }}>
+            {t('deliverynotes.tray_ronda', { n: r.seq })}
+            {r.data_lliurament && <> · {t('deliverynotes.tray_lliurada', { data: fmtData(r.data_lliurament, locale) })}</>}
+          </summary>
+          <div style={{ padding: '4px 16px 12px 36px', background: 'var(--panel)' }}>
+            <TaulaTasquesRonda r={r} editable={editable} busy={busy} onRate={onRate} t={t} />
+          </div>
+        </details>
+      ))}
+    </div>
+  )
+}
+
 // ── SAFATA · MAQUETA §1 ────────────────────────────────────────────────────────────────────
 //
 // La unitat és el MODEL (A1) i el que es marca és un BLOC de voltes (A7): el bloc del PACTE amb
@@ -219,9 +348,25 @@ export default function DeliveryNoteDetail() {
       .finally(() => setBusy(false))
   }
 
-  const toggleVisible = (line) => {
+  // A3 · el cost/hora d'UNA TASCA. Va a la tasca i no a la línia: el cost intern d'aquella hora
+  // és el mateix a tot arreu on la tasca aparegui. Buit = torna a la tarifa del tenant.
+  const saveRate = (tasca, valor) => {
+    const net = String(valor ?? '').trim()
+    const nou = net === '' ? null : Number(net)
+    if (nou !== null && !Number.isFinite(nou)) return
+    if (String(tasca.cost_hora ?? '') === net) return   // res a desar
     setBusy(true); setFeedback(null)
-    commerce.deliveryNoteLines.update(line.id, { visible: !line.visible })
+    modelTasks.patch(tasca.id, { hourly_rate_override: nou })
+      .then(reload)
+      .catch(err => setFeedback({ type: 'err', text: err?.response?.data?.detail || t('deliverynotes.line_error') }))
+      .finally(() => setBusy(false))
+  }
+
+  // Els comentaris viuen a `DeliveryNote.notes`, que ja existia: cap camp nou i cap migració.
+  const saveNotes = (valor) => {
+    if ((dn.notes || '') === valor) return
+    setBusy(true); setFeedback(null)
+    commerce.deliveryNotes.update(dn.id, { notes: valor })
       .then(reload)
       .catch(err => setFeedback({ type: 'err', text: err?.response?.data?.detail || t('deliverynotes.line_error') }))
       .finally(() => setBusy(false))
@@ -303,80 +448,36 @@ export default function DeliveryNoteDetail() {
       .catch(err => { setFeedback({ type: 'err', text: err?.response?.data?.detail || t('deliverynotes.delete_error') }); setBusy(false) })
   }
 
-  const blocks = useMemo(() => groupByModel(dn?.lines || []), [dn])
-
   if (loading) return <Center>{t('deliverynotes.loading')}</Center>
   if (error || !dn) return <Center>{t('deliverynotes.error')}</Center>
 
   const lines = dn.lines || []
   const visibleCount = lines.filter(l => l.visible).length
-  const internalTotal = lines.reduce((s, l) => s + (l.internal_cost != null ? Number(l.internal_cost) : 0), 0)
-  const hasInternal = lines.some(l => l.internal_cost != null || l.internal_minutes != null)
-  const internalLabels = { time: t('deliverynotes.line_time'), tecnic: t('deliverynotes.line_tecnic'), cost: t('deliverynotes.line_cost') }
 
-  // Columnes de línia (sistema unificat). Cel·les editables amb el patró save-on-blur (INTACTE).
-  const columns = [
-    { key: 'kind', label: t('deliverynotes.line_kind'),
-      render: l => <ClassificacioBadge>{t(`deliverynotes.kind_${l.line_kind}`)}</ClassificacioBadge> },
-    { key: 'desc', label: t('deliverynotes.line_desc'),
-      render: l => editable
-        ? <input value={editVal(l, 'description')} disabled={busy}
-            onChange={e => setEdit(l.id, 'description', e.target.value)} onBlur={() => saveLine(l)}
-            style={{ ...inp, width: '100%' }} />
-        : (l.description || l.product_name || '—') },
-    { key: 'qty', label: t('deliverynotes.line_qty'), align: 'right', width: 90,
-      render: l => editable
-        ? <input type="number" step="0.01" value={editVal(l, 'quantity')} disabled={busy}
-            onChange={e => setEdit(l.id, 'quantity', e.target.value)} onBlur={() => saveLine(l)}
-            style={{ ...inp, width: 70, textAlign: 'right' }} />
-        : <span style={{ fontFamily: MONO, color: 'var(--text-soft)' }}>{Number(l.quantity ?? 0)}</span> },
-    { key: 'price', label: t('deliverynotes.line_price'), align: 'right', width: 110,
-      render: l => editable
-        ? <input type="number" step="0.01" value={editVal(l, 'unit_price')} disabled={busy}
-            onChange={e => setEdit(l.id, 'unit_price', e.target.value)} onBlur={() => saveLine(l)}
-            style={{ ...inp, width: 100, textAlign: 'right' }} />
-        : <span style={{ fontFamily: MONO }}>{money(l.unit_price)}</span> },
-    { key: 'total', label: t('deliverynotes.line_total'), align: 'right', width: 100,
-      render: l => <span style={{ fontFamily: MONO, color: Number(l.line_total ?? 0) < 0 ? 'var(--err)' : 'inherit' }}>{money(l.line_total)}</span> },
-  ]
+  // La graella de línies (`columns`/`renderActions`/`LineTable`/`ModelCard`/`DocumentSummary`)
+  // se'n va sencera: aquella pantalla llistava TASQUES amb quantitat, descripció editable i un
+  // ull de visibilitat. L'A1 diu que la unitat és el MODEL i que l'import és únic i sense camp
+  // de quantitat, i l'A7 que el detall es llegeix DINS de cada volta. `TargetaLinia` ho pinta.
 
-  const renderActions = editable ? (l) => (
-    <>
-      <RowBtn icon={l.visible ? 'ti-eye' : 'ti-eye-off'} active={l.visible} disabled={busy}
-        title={l.visible ? t('deliverynotes.hide') : t('deliverynotes.show')} onClick={() => toggleVisible(l)} />
-      <RowBtn icon="ti-x" danger disabled={busy}
-        title={t('deliverynotes.remove_line')} onClick={() => removeLine(l)} />
-    </>
-  ) : undefined
-
-  // Barra d'accions de la capçalera (segons el sistema de la casa; mai text pla).
+  // MAQUETA §2 · a la dreta de la IDENTITAT NOMÉS el que canvia el document: eliminar-lo
+  // (secundari amb vora --err) i emetre'l. «Emetre albarà» és l'ÚNIC BLAU de la pantalla —§5:
+  // un primari per pantalla, «el que has vingut a fer»— i per això el PDF i el comentari se'n
+  // van al menú i la safata s'obre des del [ + Afegir línia ], que és on es demana.
   const headerActions = (
     <>
-      <PdfButton label={t('deliverynotes.download_pdf')} onClick={doPdf}
-        lang={pdfLang} onLangChange={setPdfLang} t={t} />
       {editable && (
-        <button onClick={openTray} disabled={busy} style={smallBtn}>
-          <i className="ti ti-inbox" style={{ fontSize: 14 }} />{t('deliverynotes.tray_action')}
-        </button>
-      )}
-      {editable && (
-        <button onClick={addComment} disabled={busy} style={smallBtn}>
-          <i className="ti ti-message-plus" style={{ fontSize: 14 }} />{t('deliverynotes.add_comment')}
+        <button onClick={doDelete} disabled={busy} style={botoDestructiu}>
+          {t('deliverynotes.delete')}
         </button>
       )}
       {editable && (
         <button onClick={() => setConfirmIssue(true)} disabled={busy || visibleCount === 0} style={botoPri}>
-          <i className="ti ti-send" style={{ fontSize: 14 }} />{t('deliverynotes.issue_action')}
+          {t('deliverynotes.issue_action')}
         </button>
       )}
       {isIssued && canConfigure && (
         <button onClick={doMarkInvoiced} disabled={busy} style={botoPri}>
-          <i className="ti ti-checkbox" style={{ fontSize: 14 }} />{t('deliverynotes.mark_invoiced')}
-        </button>
-      )}
-      {editable && (
-        <button onClick={doDelete} disabled={busy} style={smallBtn} title={t('deliverynotes.delete')}>
-          <i className="ti ti-trash" style={{ fontSize: 13 }} />
+          {t('deliverynotes.mark_invoiced')}
         </button>
       )}
     </>
@@ -388,8 +489,18 @@ export default function DeliveryNoteDetail() {
           UN lloc a tot el producte, i és aquest. El destí és EXPLÍCIT — mai `history.back()`,
           que no pot garantir on porta si s'hi ha arribat per enllaç, per recàrrega o per una
           pestanya nova. */}
+      {/* MAQUETA §2 · el menú de pantalla porta ← · Idioma ▾ · Descarregar PDF · Afegir
+          comentari, i TOTS A L'ESQUERRA. Abans el PDF i el comentari vivien a la dreta de la
+          identitat, barrejats amb «Emetre» i «Eliminar»: allà hi van les accions que canvien el
+          DOCUMENT, i descarregar-lo o anotar-lo no el canvien. */}
       <div style={forceBarra}>
-        <PageMenu backTo="/comercial/albarans" backTitle={t('deliverynotes.back')} />
+        <PageMenu backTo="/comercial/albarans" backTitle={t('deliverynotes.back')}>
+          <PdfButton label={t('deliverynotes.download_pdf')} onClick={doPdf}
+            lang={pdfLang} onLangChange={setPdfLang} t={t} />
+          <button onClick={addComment} disabled={busy || !editable} style={smallBtn}>
+            <i className="ti ti-message-plus" style={{ fontSize: 14 }} />{t('deliverynotes.add_comment')}
+          </button>
+        </PageMenu>
       </div>
 
       <div style={{ minWidth: 0, maxWidth: 1000 }}>
@@ -410,55 +521,72 @@ export default function DeliveryNoteDetail() {
         <IssueDateField value={dn.issued_at} editable={canEditDate} onSave={saveIssuedAt} t={t} />
       </div>
 
-      {/* Blocs per model */}
+      {/* MAQUETA §2 · UNA TARGETA PER LÍNIA. Cada línia ÉS un model (A1) o una volta directa
+          (A7), i el bloc directe surt just després del seu model perquè les línies arriben en
+          l'ordre en què es van afegir i la safata sempre posa el pacte abans de la directa. */}
       {lines.length === 0 && (
         <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', margin: '18px 0' }}>{t('deliverynotes.empty_lines')}</p>
       )}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14, margin: '16px 0' }}>
-        {blocks.map(block => {
-          const subtotal = block.lines.filter(l => l.visible).reduce((s, l) => s + Number(l.line_total ?? 0), 0)
-          const dates = block.lines.map(l => l.task_finished_at).filter(Boolean).sort()
-          const deliveredAt = dates.length ? dates[dates.length - 1].slice(0, 10) : null
-          const h = block.header
-          const showClient = h.model_codi_client && h.model_codi_client !== h.model_intern
-          const metaParts = []
-          if (showClient) metaParts.push(h.model_codi_client)
-          const camp = [h.model_collection, h.model_temporada, h.model_any].filter(Boolean).join(' · ')
-          if (camp) metaParts.push(camp)
-          if (deliveredAt) metaParts.push(`${t('deliverynotes.delivered_at')} ${deliveredAt}`)
-          const rows = block.lines.map(l => ({
-            ...l,
-            internal: {
-              minutes: l.internal_minutes,
-              tecnic: l.internal_tecnic,
-              cost: l.internal_cost != null ? money(l.internal_cost) : '—',
-            },
-          }))
-          return (
-            <ModelCard key={block.model ?? 'general'}
-              reference={block.model ? h.model_intern : undefined}
-              name={block.model ? (h.model_nom || h.model_intern) : t('deliverynotes.general_block')}
-              meta={metaParts.join(' · ') || undefined}
-              subtotalLabel={t('deliverynotes.model_subtotal')} subtotal={money(subtotal)}>
-              <LineTable columns={columns} rows={rows} renderActions={renderActions}
-                showInternal={hasInternal} internalLabels={internalLabels}
-                rowStyle={l => ({ opacity: l.visible === false ? 0.4 : 1 })} />
-            </ModelCard>
-          )
-        })}
+      <div style={{ marginTop: 16 }}>
+        {lines.filter(l => l.visible).map(l => (
+          <TargetaLinia key={l.id} l={l} editable={editable} busy={busy}
+            importEdit={editVal(l, 'unit_price')}
+            onImport={(x, v) => setEdit(x.id, 'unit_price', v)}
+            onImportSave={saveLine}
+            onEsborrar={removeLine}
+            onRate={saveRate}
+            t={t} locale={i18n.language} />
+        ))}
       </div>
 
-      {/* Resum del document (contenidor propi separat + cost intern al peu) */}
-      <DocumentSummary
-        lines={[
-          { label: t('deliverynotes.subtotal'), value: money(dn.subtotal) },
-          { label: t('deliverynotes.tax'), value: money(dn.tax_amount) },
-          { label: t('deliverynotes.total'), value: money(dn.total), strong: true },
-        ]}
-        showInternal={hasInternal}
-        internalLabel={t('deliverynotes.internal_cost_foot')}
-        internalValue={money(internalTotal)}
-      />
+      {/* [ + Afegir línia ] — puntejat `--line`. És la porta de la safata: afegir una línia i
+          triar un albaranable són el MATEIX gest, i tenir-ne dos botons en llocs diferents feia
+          que el de dalt semblés una altra cosa. Desapareix en emès. */}
+      {editable && (
+        <div role="button" tabIndex={0} onClick={openTray}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') openTray() }}
+          style={{ border: '1px dashed var(--line)', borderRadius: 'var(--r-card)', padding: 12,
+                   textAlign: 'center', color: 'var(--text-soft)', marginBottom: 16,
+                   cursor: 'pointer' }}>
+          {t('deliverynotes.add_line')}
+        </div>
+      )}
+
+      {/* Comentaris a l'ESQUERRA dels totals i alineats PER DALT (maqueta §2). */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 16,
+                    alignItems: 'start' }}>
+        <div style={{ background: 'var(--panel)', border: '1px solid var(--line)',
+                      borderRadius: 'var(--r-card)' }}>
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--line)',
+                        fontSize: 'var(--fs-caption)', lineHeight: '12px', letterSpacing: '.08em',
+                        textTransform: 'uppercase', color: 'var(--text-soft)' }}>
+            {t('deliverynotes.comments')}
+          </div>
+          <div style={{ padding: 16 }}>
+            {editable ? (
+              <textarea defaultValue={dn.notes || ''} disabled={busy} rows={4}
+                onBlur={e => saveNotes(e.target.value)}
+                aria-label={t('deliverynotes.comments')}
+                style={{ ...inp, width: '100%', resize: 'vertical', fontFamily: MONO,
+                         fontSize: 'var(--fs-body)', lineHeight: '16px' }} />
+            ) : (
+              <span style={{ whiteSpace: 'pre-wrap' }}>{dn.notes || '—'}</span>
+            )}
+          </div>
+        </div>
+        <div style={{ width: 300, background: 'var(--panel)', border: '1px solid var(--line)',
+                      borderRadius: 'var(--r-card)' }}>
+          {[[t('deliverynotes.subtotal'), money(dn.subtotal), false],
+            [t('deliverynotes.tax'), money(dn.tax_amount), false],
+            [t('deliverynotes.total'), money(dn.total), true]].map(([k, v, fort], i, arr) => (
+              <div key={k} style={{ display: 'flex', justifyContent: 'space-between',
+                                    padding: '8px 16px', fontWeight: fort ? 600 : 400,
+                                    borderBottom: i === arr.length - 1 ? 0 : '1px solid var(--line)' }}>
+                <span>{k}</span><span>{v}</span>
+              </div>
+          ))}
+        </div>
+      </div>
 
       {/* Safata d'albaranables */}
       {trayOpen && (

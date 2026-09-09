@@ -94,7 +94,17 @@
     "tray_en_curs": "En curso",
     "tray_vist_i_plau": "Visto bueno del cliente",
     "tray_vist_i_plau_pendent": "Visto bueno pendiente",
-    "tray_fora_pressupost": "Encargo fuera de presupuesto"
+    "tray_fora_pressupost": "Encargo fuera de presupuesto",
+    "col_tasca": "Tarea",
+    "col_tecnic": "Técnico",
+    "col_temps": "Tiempo",
+    "col_cost_hora": "Coste/h",
+    "col_cost": "Coste",
+    "cost_ronda": "Coste vuelta",
+    "no_realitzada": "No realizada",
+    "encarrec_directe": "Encargo directo sin presupuesto",
+    "add_line": "+ Añadir línea",
+    "comments": "Comentarios"
   },
   "grading_propagate": {
     "button": "Propagar",

@@ -94,7 +94,17 @@
     "tray_en_curs": "In progress",
     "tray_vist_i_plau": "Customer sign-off",
     "tray_vist_i_plau_pendent": "Sign-off pending",
-    "tray_fora_pressupost": "Order outside the quote"
+    "tray_fora_pressupost": "Order outside the quote",
+    "col_tasca": "Task",
+    "col_tecnic": "Technician",
+    "col_temps": "Time",
+    "col_cost_hora": "Cost/h",
+    "col_cost": "Cost",
+    "cost_ronda": "Round cost",
+    "no_realitzada": "Not performed",
+    "encarrec_directe": "Direct order, no quote",
+    "add_line": "+ Add line",
+    "comments": "Comments"
   },
   "grading_propagate": {
     "button": "Propagate",
