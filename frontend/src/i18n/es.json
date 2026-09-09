@@ -80,7 +80,12 @@
     "encarrec_directe": "Encargo directo sin presupuesto",
     "add_line": "+ Añadir línea",
     "comments": "Comentarios",
-    "line_import": "Importe de la línea"
+    "line_import": "Importe de la línea",
+    "tray_extres": "Extras · Gastos · Deducciones",
+    "kind_EXTRA": "Extra",
+    "kind_DEDUCTION": "Deducción",
+    "kind_EXPENSE": "Gasto",
+    "tray_sense_model": "Sin modelo"
   },
   "grading_propagate": {
     "button": "Propagar",

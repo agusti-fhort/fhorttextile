@@ -123,6 +123,10 @@ function TaulaTasquesRonda({ r, editable, busy, onRate, t }) {
 
 // La targeta d'una LÍNIA = un model (A1) o una volta directa (A7). El que canvia entre les dues
 // és la línia de pacte i el badge; l'estructura és la mateixa, i per això és UN component.
+// Les menes de línia que NO són una targeta de voltes: el seu concepte, quan l'origen no en
+// porta cap, és el nom del seu tipus. Mateix conjunt que `_EXTRA_LABEL` del generador de PDF.
+const KINDS_EXTRA = new Set(['EXTRA', 'DEDUCTION', 'EXPENSE'])
+
 function TargetaLinia({ l, editable, busy, importEdit, onImport, onImportSave, onEsborrar,
                         onRate, t, locale }) {
   const refs = [l.model_codi_client, l.model_intern].filter(Boolean).join(' · ')
@@ -150,11 +154,23 @@ function TargetaLinia({ l, editable, busy, importEdit, onImport, onImportSave, o
           <div>
             {l.encarrec_directe
               ? <b style={{ fontWeight: 600 }}>{t('deliverynotes.encarrec_directe')}</b>
+              /* 🔑 EL SEPARADOR NO POT ANAR ENGANXAT AL TROS. Amb `{x && <> · {x}</>}` per cada
+                 peça, una línia sense pacte —tot un extra n'és una— començava per « · » orfe: el
+                 separador el posava el segon tros i no el fet que n'hi hagués un abans. Ara les
+                 peces es componen i el separador viu ENTRE elles.
+                 Sense cap peça (un extra sense descripció) el concepte és el seu TIPUS, dit
+                 aquí i en l'idioma de la pantalla. */
               : <>
                   {l.pacte_oferta && <b style={{ fontWeight: 600 }}>{t('deliverynotes.tray_oferta', { n: l.pacte_oferta })}</b>}
-                  {l.description && <> · {l.description}</>}
-                  {l.pacte_rounds != null && <> · {t('deliverynotes.tray_rondes_incloses', { n: l.pacte_rounds })}</>}
-                  {l.pacte_consum && <> · {l.pacte_consum}</>}
+                  {[
+                    l.description,
+                    l.pacte_rounds != null ? t('deliverynotes.tray_rondes_incloses', { n: l.pacte_rounds }) : null,
+                    l.pacte_consum,
+                  ].filter(Boolean).map((tros, i) => (
+                    <span key={i}>{(i > 0 || l.pacte_oferta) ? ' · ' : ''}{tros}</span>
+                  ))}
+                  {!l.pacte_oferta && !l.description && KINDS_EXTRA.has(l.line_kind)
+                    && t(`deliverynotes.kind_${l.line_kind}`)}
                 </>}
           </div>
         </div>
@@ -228,19 +244,26 @@ function CapcaleraModelSafata({ g, t, locale }) {
   // hauria prou per pintar-lo i no diria res.
   const entregades = (g.blocs || []).flatMap(b => b.rondes).filter(r => r.entregada)
   const totOk = entregades.length > 0 && entregades.every(r => r.data_ok)
+  // 🔑 EL BADGE DEL VIST-I-PLAU NOMÉS TÉ SENTIT SI HI HA VOLTES. Un grup que porta només un
+  // extra (o una deducció de concepte lliure, que ni tan sols té model) no té cap entrega de
+  // què el client pugui haver dit res: pintar-hi «vist-i-plau pendent» seria inventar una
+  // espera que no existeix i empènyer el comercial a perseguir-la.
+  const teVoltes = (g.blocs || []).some(b => (b.rondes || []).length > 0)
   return (
     <div style={{ padding: '12px 16px 4px', display: 'flex', justifyContent: 'space-between',
                   alignItems: 'baseline', gap: 8, borderTop: '1px solid var(--line)' }}>
       <div style={{ minWidth: 0 }}>
         <span style={{ fontSize: 'var(--fs-h3)', lineHeight: '20px', fontWeight: 600 }}>
-          {m.nom_prenda || m.codi_intern}
+          {m.nom_prenda || m.codi_intern || t('deliverynotes.tray_sense_model')}
         </span>
         {refs && <span style={{ color: 'var(--text-soft)', fontSize: 'var(--fs-caption)' }}> {refs}</span>}
         {context && <div style={{ color: 'var(--text-soft)' }}>{context}</div>}
       </div>
-      <Badge variant={totOk ? 'ok' : 'gray'}>
-        {totOk ? t('deliverynotes.tray_vist_i_plau') : t('deliverynotes.tray_vist_i_plau_pendent')}
-      </Badge>
+      {teVoltes && (
+        <Badge variant={totOk ? 'ok' : 'gray'}>
+          {totOk ? t('deliverynotes.tray_vist_i_plau') : t('deliverynotes.tray_vist_i_plau_pendent')}
+        </Badge>
+      )}
     </div>
   )
 }
@@ -277,6 +300,33 @@ function FilaRondaSafata({ r, bloc, marcat, onToggle, t, locale }) {
       <Badge variant={r.entregada ? 'ok' : 'gray'}>
         {r.entregada ? t('deliverynotes.tray_entregada') : t('deliverynotes.tray_en_curs')}
       </Badge>
+    </label>
+  )
+}
+
+// `.mrow` també per a l'extra: casella · concepte · import. MATEIX format que la fila de
+// volta —una graella de tres columnes separada pel filet `--line`, casella `--gold`— perquè les
+// dues coses es marquen igual i han de llegir-se igual.
+//
+// 🔑 UN EXTRA ES MARCA SOL. La casella d'una fila de volta marca el BLOC sencer (un bloc és una
+// línia d'albarà amb un sol import); un extra JA és una línia, o sigui que la seva casella es
+// governa a ella mateixa. Per això la clau que viatja és la de l'ítem i no la d'un bloc.
+//
+// Sense descripció d'origen, el concepte el diu el TIPUS. La paraula es posa AQUÍ, on hi ha
+// l'idioma, i no congelada a la columna en crear la línia.
+function FilaExtraSafata({ e, clau, marcat, onToggle, t }) {
+  return (
+    <label style={{
+      display: 'grid', gridTemplateColumns: '16px 1fr auto', gap: 8, alignItems: 'center',
+      padding: '8px 16px 8px 32px', borderTop: '1px solid var(--line)', cursor: 'pointer',
+    }}>
+      <input type="checkbox" checked={marcat} onChange={() => onToggle(clau)}
+        aria-label={e.descripcio || t(`deliverynotes.kind_${e.kind}`)}
+        style={{ width: 14, height: 14, accentColor: 'var(--gold)', margin: 0 }} />
+      <span style={{ minWidth: 0 }}>{e.descripcio || t(`deliverynotes.kind_${e.kind}`)}</span>
+      <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+        {Number(e.preu_proposat ?? 0).toFixed(2)} €
+      </span>
     </label>
   )
 }
@@ -396,6 +446,9 @@ export default function DeliveryNoteDetail() {
   // La clau de tria és `<model>:<clau del bloc>` — exactament el que el backend espera. No es
   // deriva de cap ronda: el bloc és la unitat i marcar-ne una volta marca el bloc sencer.
   const blocKey = (g, b) => `${g.model.id}:${b.clau}`
+  // Mateixa forma per a un extra: el backend només distingeix per la `clau`, i un ítem sense
+  // model (una deducció de concepte lliure sobre un col·lector) hi arriba amb `model_id: null`.
+  const extraKey = (g, e) => `${g.model.id}:${e.clau}`
   const togglePick = (k) => setPicked(prev => {
     const n = new Set(prev)
     if (n.has(k)) n.delete(k); else n.add(k)
@@ -403,8 +456,13 @@ export default function DeliveryNoteDetail() {
   })
   const addPicked = () => {
     const items = []
-    for (const g of (tray?.groups || [])) for (const b of (g.blocs || [])) {
-      if (picked.has(blocKey(g, b))) items.push({ model_id: g.model.id, clau: b.clau })
+    for (const g of (tray?.groups || [])) {
+      for (const b of (g.blocs || [])) {
+        if (picked.has(blocKey(g, b))) items.push({ model_id: g.model.id, clau: b.clau })
+      }
+      for (const e of (g.extres || [])) {
+        if (picked.has(extraKey(g, e))) items.push({ model_id: g.model.id, clau: e.clau })
+      }
     }
     if (items.length === 0) { setTrayOpen(false); return }
     setTrayBusy(true); setFeedback(null)
@@ -621,7 +679,7 @@ export default function DeliveryNoteDetail() {
             {!tray ? <Center>{t('deliverynotes.loading')}</Center>
               : (tray.groups || []).length === 0 ? <div style={{ color: 'var(--text-soft)', padding: '10px 0' }}>{t('deliverynotes.tray_empty')}</div>
                 : (tray.groups.map(g => (
-                  <div key={g.model.id}>
+                  <div key={g.model.id ?? 'sense-model'}>
                     <CapcaleraModelSafata g={g} t={t} locale={i18n.language} />
                     {/* Les files separades NOMÉS pel filet `--line` de cada fila (maqueta §1):
                         cap fons alternat, cap caixa per volta. */}
@@ -632,6 +690,21 @@ export default function DeliveryNoteDetail() {
                         marcat={picked.has(blocKey(g, b))} onToggle={togglePick}
                         t={t} locale={i18n.language} />
                     )))}
+                    {/* El bloc dels albaranables que NO són voltes, SOTA les voltes del model.
+                        El rètol és el NOM del bloc (no text d'ajuda: diu què hi ha, no com
+                        fer-ho servir) i només es pinta si el bloc existeix. */}
+                    {(g.extres || []).length > 0 && (
+                      <>
+                        <div style={{ padding: '10px 16px 2px 32px', color: 'var(--text-soft)',
+                                      fontSize: 'var(--fs-caption)', borderTop: '1px solid var(--line)' }}>
+                          {t('deliverynotes.tray_extres')}
+                        </div>
+                        {g.extres.map(e => (
+                          <FilaExtraSafata key={e.clau} e={e} clau={extraKey(g, e)}
+                            marcat={picked.has(extraKey(g, e))} onToggle={togglePick} t={t} />
+                        ))}
+                      </>
+                    )}
                   </div>
                 )))}
             <div style={{ display: 'flex', gap: 8, marginTop: 12, position: 'sticky', bottom: 0, background: 'var(--panel)', paddingTop: 8 }}>

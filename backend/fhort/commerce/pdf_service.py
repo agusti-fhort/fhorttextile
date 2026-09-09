@@ -122,6 +122,7 @@ _PDF_STRINGS = {
 
         # BLOC A · maqueta §3.
         'dn_quote': 'Pressupost', 'dn_direct_order': 'Encàrrec directe sense pressupost', 'dn_round': 'Ronda', 'dn_comments': 'Comentaris', 'dn_qty': 'Qtt',
+        'dn_extra': 'Extra', 'dn_deduction': 'Deducció', 'dn_expense': 'Despesa',
 
     },
     'en': {
@@ -136,6 +137,7 @@ _PDF_STRINGS = {
 
         # BLOC A · maqueta §3.
         'dn_quote': 'Quote', 'dn_direct_order': 'Direct order, no quote', 'dn_round': 'Round', 'dn_comments': 'Comments', 'dn_qty': 'Qty',
+        'dn_extra': 'Extra', 'dn_deduction': 'Deduction', 'dn_expense': 'Expense',
 
     },
     'es': {
@@ -150,6 +152,7 @@ _PDF_STRINGS = {
 
         # BLOC A · maqueta §3.
         'dn_quote': 'Presupuesto', 'dn_direct_order': 'Encargo directo sin presupuesto', 'dn_round': 'Vuelta', 'dn_comments': 'Comentarios', 'dn_qty': 'Ctd',
+        'dn_extra': 'Extra', 'dn_deduction': 'Deducción', 'dn_expense': 'Gasto',
 
     },
 }
@@ -495,6 +498,11 @@ def generate_document_pdf(quote, doc_key='doc_quote', show_payment=True, lang=No
 DET_COLS = [78 * mm, 22 * mm, 16 * mm, 16 * mm, 20 * mm, 22 * mm]  # Descr·Data·Qt·Unitat·Preu·Import = 174
 _UNIT_DEFAULT = 'ut'
 
+# Les línies que NO són una targeta de model sinó una fila dins del bloc del seu model, i la
+# clau amb què es diu el seu tipus quan la descripció ve buida. `MANUAL` en queda FORA a posta:
+# les línies manuals que `generate/` encara pot deixar són targetes pròpies, com abans.
+_EXTRA_LABEL = {'EXTRA': 'dn_extra', 'DEDUCTION': 'dn_deduction', 'EXPENSE': 'dn_expense'}
+
 
 def generate_delivery_note_pdf(delivery_note, lang=None):
     """Retorna els bytes del PDF d'un albarà v2 compost per model. Agrupa les línies VISIBLES pel
@@ -558,6 +566,32 @@ def generate_delivery_note_pdf(delivery_note, lang=None):
     story.append(HRFlowable(width='100%', thickness=0.5, color=LGREY, spaceBefore=4 * mm, spaceAfter=5 * mm))
 
 
+    def _capcalera_model(l):
+        """LA IDENTITAT DEL MODEL d'una línia: nom gran i, sota, col·lecció · temporada · refs.
+
+        Viu a part perquè la fan servir DUES coses: la targeta d'una línia de voltes i el bloc
+        d'un model que en aquest albarà NOMÉS porta extres. Tenir-ne dues còpies era garantir
+        que un dia diguessin identitats diferents del mateix model.
+        """
+        m = l.model
+        # Una línia SENSE model (les 4 llegades i les MANUAL que encara genera `generate/`) no és
+        # una targeta de model: no té identitat ni pacte. El seu nom és la seva descripció, i
+        # llavors la línia de concepte de sota s'ha de callar — si no, el mateix text sortia
+        # DUES vegades, una com a títol i una com a concepte.
+        nom = (m.nom_prenda if m else '') or (l.description or '—')
+        # Identitat: col·lecció · temporada any · ref client · ref nostra. SENSE etiquetes: el
+        # client sap què és cadascuna i els rètols només afegeixen soroll a una línia de 10px.
+        ident = [(m.collection if m else '') or '',
+                 ' '.join(x for x in [(m.temporada if m else ''),
+                                      str(m.any) if (m and m.any) else ''] if x)]
+        refs = [x for x in [(m.codi_client if m else ''), (m.codi_intern if m else '')] if x]
+        ident = [x for x in ident if x] + [f'<font color="#1A1A1A">{x}</font>' for x in refs]
+
+        out = [Paragraph(nom, s('mn', font=FS, size=12.5, leading=16))]
+        if ident:
+            out.append(Paragraph(' · '.join(ident), s('mi', size=10, color=GREY, leading=14)))
+        return out
+
     def _linia_block(l):
         """UN BLOC PER LÍNIA · maqueta §3. La línia ÉS un model (A1) o una volta directa (A7).
 
@@ -571,23 +605,8 @@ def generate_delivery_note_pdf(delivery_note, lang=None):
         una volta sense pressupost ha de dir què s'hi ha fet per justificar el preu.
         """
         m = l.model
-        # Una línia SENSE model (les 4 llegades i les MANUAL que encara genera `generate/`) no és
-        # una targeta de model: no té identitat ni pacte. El seu nom és la seva descripció, i
-        # llavors la línia de concepte de sota s'ha de callar — si no, el mateix text sortia
-        # DUES vegades, una com a títol i una com a concepte.
-        nom = (m.nom_prenda if m else '') or (l.description or '—')
         sense_model = m is None
-        # Identitat: col·lecció · temporada any · ref client · ref nostra. SENSE etiquetes: el
-        # client sap què és cadascuna i els rètols només afegeixen soroll a una línia de 10px.
-        ident = [(m.collection if m else '') or '',
-                 ' '.join(x for x in [(m.temporada if m else ''),
-                                      str(m.any) if (m and m.any) else ''] if x)]
-        refs = [x for x in [(m.codi_client if m else ''), (m.codi_intern if m else '')] if x]
-        ident = [x for x in ident if x] + [f'<font color="#1A1A1A">{x}</font>' for x in refs]
-
-        els = [Paragraph(nom, s('mn', font=FS, size=12.5, leading=16))]
-        if ident:
-            els.append(Paragraph(' · '.join(ident), s('mi', size=10, color=GREY, leading=14)))
+        els = _capcalera_model(l)
 
         # LA LÍNIA DEL PACTE. Una volta directa no en té cap i ho diu en negreta: és la
         # justificació de per què aquell import no surt de cap pressupost.
@@ -636,15 +655,63 @@ def generate_delivery_note_pdf(delivery_note, lang=None):
             ('VALIGN', (0, 0), (-1, -1), 'BOTTOM')])))
         return els
 
+    def _fila_extra(l):
+        """UN EXTRA, UNA DESPESA o UNA DEDUCCIÓ dins del bloc del seu model: concepte a
+        l'esquerra, import a la dreta. NO és una targeta de model —el model ja s'ha dit a la
+        línia de dalt— i repetir-ne la identitat faria que el mateix nom sortís dues vegades.
+
+        El concepte és la descripció de l'origen; quan l'origen no en porta cap, el diu el seu
+        TIPUS, traduït aquí. La v1 congelava la paraula a la columna `description` en crear la
+        línia i llavors un albarà en anglès imprimia «Deducció»: la frase es posa on hi ha
+        l'idioma, que és aquí.
+        """
+        concepte = (l.description or '').strip() or t(lang, _EXTRA_LABEL.get(l.line_kind, 'dn_extra'))
+        return Table([[
+            Paragraph(concepte, s('xl', size=10.5, leading=14)),
+            Paragraph(f'{_money(l.line_total)} €',
+                      s('xla', font=FS, size=10.5, align=TA_RIGHT, leading=14)),
+        ]], colWidths=[CW - 30 * mm, 30 * mm], style=TableStyle([
+            ('TOPPADDING', (0, 0), (-1, -1), 1), ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ('VALIGN', (0, 0), (-1, -1), 'BOTTOM')]))
+
     # UN BLOC PER LÍNIA, en l'ordre en què s'han afegit: la safata posa sempre el pacte abans de
     # la directa, i per això la volta fora de pressupost surt just després del seu model (A7).
-    for ln in (delivery_note.lines.filter(visible=True)
-               .select_related('model', 'linia_comanda__order')
-               .prefetch_related('rondes__entrega', 'rondes__tasques__task_type')
-               .order_by('position', 'id')):
+    #
+    # 🔑 ELS EXTRES NO OBREN BLOC: van SOTA LES VOLTES del bloc del seu model, com una fila més.
+    # Un extra és una línia d'albarà com les altres, però la seva targeta seria una segona
+    # capçalera amb el mateix nom de model just a sota de la primera. S'enganxen a l'ÚLTIMA
+    # línia principal del seu model perquè quedin després de totes les seves voltes, i no entre
+    # el bloc del pacte i el de la volta directa (que han d'anar seguits, A7).
+    totes = list(delivery_note.lines.filter(visible=True)
+                 .select_related('model', 'linia_comanda__order')
+                 .prefetch_related('rondes__entrega', 'rondes__tasques__task_type')
+                 .order_by('position', 'id'))
+    principals = [l for l in totes if l.line_kind not in _EXTRA_LABEL]
+    extres = {}
+    for l in totes:
+        if l.line_kind in _EXTRA_LABEL:
+            extres.setdefault(l.model_id, []).append(l)
+    ultima = {l.model_id: i for i, l in enumerate(principals)}
+
+    for i, ln in enumerate(principals):
         story.append(Spacer(1, 2 * mm))
         for el in _linia_block(ln):
             story.append(el)
+        if ultima.get(ln.model_id) == i:
+            for ex in extres.pop(ln.model_id, []):
+                story.append(_fila_extra(ex))
+        story.append(HRFlowable(width='100%', thickness=0.5, color=LGREY,
+                                spaceBefore=2 * mm, spaceAfter=0))
+
+    # Els extres d'un model que no té cap línia de voltes en aquest albarà: llavors sí que
+    # necessiten capçalera pròpia —si no, sortirien com un import solt sense dir de què és.
+    for _mid, files in extres.items():
+        story.append(Spacer(1, 2 * mm))
+        for el in _capcalera_model(files[0]):
+            story.append(el)
+        for ex in files:
+            story.append(_fila_extra(ex))
         story.append(HRFlowable(width='100%', thickness=0.5, color=LGREY,
                                 spaceBefore=2 * mm, spaceAfter=0))
 

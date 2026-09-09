@@ -80,7 +80,12 @@
     "encarrec_directe": "Encàrrec directe sense pressupost",
     "add_line": "+ Afegir línia",
     "comments": "Comentaris",
-    "line_import": "Import de la línia"
+    "line_import": "Import de la línia",
+    "tray_extres": "Extres · Despeses · Deduccions",
+    "kind_EXTRA": "Extra",
+    "kind_DEDUCTION": "Deducció",
+    "kind_EXPENSE": "Despesa",
+    "tray_sense_model": "Sense model"
   },
   "grading_propagate": {
     "button": "Propagar",

@@ -80,7 +80,12 @@
     "encarrec_directe": "Direct order, no quote",
     "add_line": "+ Add line",
     "comments": "Comments",
-    "line_import": "Line amount"
+    "line_import": "Line amount",
+    "tray_extres": "Extras · Expenses · Deductions",
+    "kind_EXTRA": "Extra",
+    "kind_DEDUCTION": "Deduction",
+    "kind_EXPENSE": "Expense",
+    "tray_sense_model": "No model"
   },
   "grading_propagate": {
     "button": "Propagate",

@@ -622,14 +622,24 @@ def generate_delivery_note(work_orders, user=None):
                     _add('TASK', snap_price, Decimal('1'), label,
                          product=order_product, work_order=wo, model_task=t)
 
+            # 🚨 `delivery_note_lines__isnull=True` ALS TRES ORÍGENS, i és el guard que
+            # impedeix cobrar dues vegades el mateix ítem des de les DUES portes. El guard de WO
+            # (`wo.delivery_note_id is not None`) només protegeix de repetir `generate/` sobre
+            # el mateix encàrrec: la marca `WorkOrder.delivery_note` l'escriu NOMÉS aquesta
+            # funció, o sigui que un extra ja facturat des de la safata arribava aquí amb el WO
+            # «net» i entrava una segona vegada. La safata ja aplicava aquest criteri; ara
+            # l'apliquen les dues, i un ítem albaranat desapareix dels dos camins.
+
             # EXTRA — extres facturables (EXTRA_ABSORB no genera línia).
-            for adj in wo.adjustments.filter(kind='EXTRA_BILL'):
+            for adj in wo.adjustments.filter(kind='EXTRA_BILL',
+                                             delivery_note_lines__isnull=True):
                 _add('EXTRA', Decimal(adj.amount or 0), Decimal('1'),
                      adj.description or "Extra", product=order_product, work_order=wo,
                      model_task=adj.model_task, adjustment=adj)
 
             # DEDUCTION — línia negativa (recepta no executada / concepte lliure).
-            for adj in wo.adjustments.filter(kind='DEDUCTION'):
+            for adj in wo.adjustments.filter(kind='DEDUCTION',
+                                             delivery_note_lines__isnull=True):
                 if adj.model_task_id and wo.kind == 'ORDER' and snap_price:
                     proposed = -snap_price
                 else:
@@ -640,7 +650,8 @@ def generate_delivery_note(work_orders, user=None):
                      adjustment=adj)
 
             # EXPENSE — línies externes (servei extern / mercaderia).
-            for exp in wo.expenses.select_related('product').all():
+            for exp in wo.expenses.filter(delivery_note_lines__isnull=True) \
+                    .select_related('product'):
                 desc = exp.description or (exp.product.name if exp.product_id else "Despesa")
                 _add('EXPENSE', Decimal(exp.sale_price or 0), Decimal(exp.quantity or 0), desc,
                      product=exp.product, work_order=wo, expense=exp)
@@ -787,6 +798,98 @@ def _ronda_albaranable(ronda, fora_efectiu):
     }
 
 
+# Les tres menes d'albaranable que NO són una volta, i la seva forma de línia. El `line_kind`
+# del document ja existia des de la v1: aquí només se'n diu quin correspon a cada origen.
+_EXTRA_KINDS = {'EXTRA_BILL': 'EXTRA', 'DEDUCTION': 'DEDUCTION'}
+
+
+def _extres_albaranables(customer):
+    """ELS ALBARANABLES QUE NO SÓN UNA VOLTA: extres facturables, deduccions i despeses.
+
+    🚨 **AIXÒ ÉS UNA REGRESSIÓ REPARADA.** La safata de tasques els servia (v2, `kind` EXTRA /
+    DEDUCTION / EXPENSE) i la reescriptura del bloc A —que va canviar la unitat a MODEL+VOLTES—
+    se'ls va endur sense substitut. Quedaven vius NOMÉS per `generate/` des de la fitxa
+    d'encàrrec: un `EXTRA_BILL` ja revisat pel comercial no apareixia enlloc de
+    `/comercial/albarans/<id>` i **es facturava de menys, en silenci**. Una volta no és l'única
+    cosa que es cobra.
+
+    Retorna `{model_id | None: [ítem, …]}`. La clau `None` NO és un descart: una deducció de
+    concepte lliure sobre un col·lector no té model resoluble, i deixar-la fora seria repetir el
+    defecte que aquesta funció ve a tancar.
+
+    ── QUÈ ÉS CANDIDAT ────────────────────────────────────────────────────────────────────────
+    El mateix criteri que les voltes: **cap línia d'albarà al darrere** (`delivery_note_lines`
+    buit), DRAFT inclòs. Un ítem ja posat en un esborrany surt de la safata i hi torna sol si
+    l'esborrany s'esborra (CASCADE de línies).
+
+    `EXTRA_ABSORB` queda FORA i no és un oblit: absorbir és la decisió de no cobrar-ho, i
+    ensenyar-lo a la safata seria oferir de facturar el que ja s'ha decidit que no es factura.
+
+    🔑 **AQUÍ NO S'HI ESCRIU CAP FRASE.** La v1 congelava `'Extra'` / `'Deducció'` a la
+    descripció de la línia quan l'origen no en tenia; una frase congelada en una columna no es
+    tradueix mai més i el document surt en tres idiomes. La descripció viatja **buida** i qui
+    renderitza la resol amb el `kind`, en l'idioma que toqui.
+    """
+    from .models import Expense, WorkOrderAdjustment
+
+    fora = {}
+
+    def _posa(model, item):
+        fora.setdefault(model.id if model is not None else None, []).append(item)
+
+    # EXTRA / DEDUCTION — el model surt de la tasca resolta i, si no n'hi ha, del WO.
+    for adj in (WorkOrderAdjustment.objects
+                .filter(work_order__customer=customer, kind__in=tuple(_EXTRA_KINDS),
+                        delivery_note_lines__isnull=True)
+                .select_related('work_order__model', 'work_order__order_line__product',
+                                'model_task__model')
+                .order_by('id')):
+        model = (adj.model_task.model if adj.model_task_id else None) or adj.work_order.model
+        preu = Decimal(adj.amount or 0).quantize(_CENT)
+        # La deducció va en NEGATIU des de l'origen: `compute_document_totals` suma amb signe i
+        # la resta surt sola, sense cap cas especial al motor de totals ni al document.
+        if adj.kind == 'DEDUCTION':
+            preu = -abs(preu)
+        _posa(model, {
+            'clau': f'ajust-{adj.id}',
+            'kind': _EXTRA_KINDS[adj.kind],
+            'descripcio': (adj.description or '').strip(),
+            'preu_proposat': str(preu),
+            # 🚨 EL PRODUCTE ÉS QUI PORTA EL TIPUS D'IVA, i per això viatja encara que la
+            # targeta no en digui res. Un ajust no té article propi i hereta el de la venda del
+            # seu encàrrec, que és el que la v1 ja feia: sense això, `compute_document_totals`
+            # tracta la línia com a 0 % i l'extra es cobra sense IVA — un forat de diner que no
+            # es veu enlloc de la pantalla, perquè el que falla és el que NO hi ha escrit.
+            '_product_id': (adj.work_order.order_line.product_id
+                            if adj.work_order.order_line_id else None),
+            '_work_order_id': adj.work_order_id,
+        })
+
+    # EXPENSE — línia externa (servei extern o mercaderia). El preu és el de VENDA, mai el cost.
+    for exp in (Expense.objects
+                .filter(work_order__customer=customer, delivery_note_lines__isnull=True)
+                .select_related('work_order__model', 'product')
+                .order_by('id')):
+        # A1 · LA LÍNIA NO TÉ COLUMNA DE QUANTITAT: l'import de la targeta és tot el que es
+        # veu, a la pantalla i al document. Una despesa de 3×10 € entra com UN import de 30 €
+        # —el diner és el mateix— i el desglossament segueix llegible per l'FK `expense`.
+        # Servir `quantity=3` a una targeta que no la pinta faria que l'import de la cara i el
+        # del total no quadressin.
+        preu = (Decimal(exp.sale_price or 0) * Decimal(exp.quantity or 0)).quantize(
+            _CENT, rounding=ROUND_HALF_UP)
+        _posa(exp.work_order.model, {
+            'clau': f'despesa-{exp.id}',
+            'kind': 'EXPENSE',
+            'descripcio': (exp.description or (exp.product.name if exp.product_id else '')).strip(),
+            'preu_proposat': str(preu),
+            # Una despesa SÍ que té article propi: el seu IVA és el d'aquell article.
+            '_product_id': exp.product_id,
+            '_work_order_id': exp.work_order_id,
+        })
+
+    return fora
+
+
 def get_billable_items(customer):
     """SAFATA D'ALBARANABLES · BLOC A — la unitat és el MODEL i el que es cobra són RONDES.
 
@@ -825,6 +928,7 @@ def get_billable_items(customer):
     Lectura pura: no persisteix res. En particular **NO reescriu `Ronda.fora_de_comanda`** —el
     camp segueix sent la foto de l'obertura, i qui la congela de debò és l'emissió (commit 5).
     """
+    from fhort.models_app.models import Model
     from fhort.tasks.models import Ronda
     from fhort.tasks.services_r import numeral_efectiu
 
@@ -834,9 +938,32 @@ def get_billable_items(customer):
               .select_related('model', 'entrega', 'linia_comanda__order', 'linia_comanda__product')
               .order_by('model__codi_intern', 'seq'))
 
+    extres = _extres_albaranables(customer)
 
     grups = {}
     numerals = {}          # model_id -> (linia, numeral) — un sol pivot per model
+
+    def _grup(m):
+        """El grup d'un model, creant-lo si cal. `m` pot ser `None` (ítems sense model)."""
+        clau = m.id if m is not None else None
+        g = grups.get(clau)
+        if g is None:
+            if m is not None and clau not in numerals:
+                numerals[clau] = numeral_efectiu(m)
+            linia = numerals.get(clau, (None, None))[0]
+            g = grups[clau] = {
+                'model': _model_header(m),
+                'pacte': _pacte_header(linia) if linia is not None else None,
+                'blocs': [],
+                # Els albaranables que no són voltes. Llista PRÒPIA i no un bloc més: un bloc de
+                # voltes es marca sencer (una línia, un import) i un extra es marca sol. Barrejar
+                # les dues formes en una sola llista obligaria cada lector a distingir-les pel
+                # contingut, que és com es cola un ítem al calaix que no li toca.
+                'extres': extres.get(clau, []),
+                '_pacte_rondes': [],
+            }
+        return g
+
     for r in voltes:
         m = r.model
         if m.id not in numerals:
@@ -853,14 +980,7 @@ def get_billable_items(customer):
         # l'híbrid la fa `issue_delivery_note`, i NOMÉS ell: aquesta funció només recalcula.
         fora = numeral is not None and r.seq > numeral
 
-        g = grups.get(m.id)
-        if g is None:
-            g = grups[m.id] = {
-                'model': _model_header(m),
-                'pacte': _pacte_header(linia) if linia is not None else None,
-                'blocs': [],
-                '_pacte_rondes': [],
-            }
+        g = _grup(m)
         if fora:
             # A7 — cada volta fora de pacte és un albaranable PROPI. Preu lliure: la comanda no
             # el fixa (per definició, aquesta volta no hi és) i qui el posa és el comercial.
@@ -874,13 +994,26 @@ def get_billable_items(customer):
         else:
             g['_pacte_rondes'].append(_ronda_albaranable(r, False))
 
-    # 🔑 UN MODEL ENTRA A LA SAFATA SI TÉ ALGUNA VOLTA ENTREGADA, i prou. Un model amb totes les
-    # voltes en curs no té res per cobrar i seria soroll a la safata del comercial. Les voltes EN
-    # CURS del model que sí que hi entra s'hi queden i es diuen (`entregada: false`): la safata ha
-    # d'ensenyar que existeixen —perquè es vegi que la feina no s'ha acabat— i alhora la cara no
-    # les ha de deixar marcar. Amagar-les faria creure que el model ja està tancat.
+    # Un extra pot ser l'ÚNIC que queda per cobrar d'un model —o pot no tenir model. Els seus
+    # grups s'obren aquí, després de les voltes, perquè un model que ja hi és no se'n fabriqui
+    # un segon. Una sola consulta per als models que encara no hi són.
+    faltants = [k for k in extres if k is not None and k not in grups]
+    if faltants:
+        for m in Model.objects.filter(pk__in=faltants):
+            _grup(m)
+    if None in extres:
+        _grup(None)
+
+    # 🔑 UN MODEL ENTRA A LA SAFATA SI TÉ ALGUNA VOLTA ENTREGADA **O ALGUN EXTRA**. Un model amb
+    # totes les voltes en curs i res més no té cap cosa per cobrar i seria soroll a la safata del
+    # comercial; un model amb un extra pendent SÍ que en té, encara que cap volta seva hagi
+    # arribat —i aquesta és exactament la porta per on el defecte anterior els feia desaparèixer.
+    # Les voltes EN CURS del model que sí que hi entra s'hi queden i es diuen (`entregada: false`):
+    # la safata ha d'ensenyar que existeixen —perquè es vegi que la feina no s'ha acabat— i alhora
+    # la cara no les ha de deixar marcar. Amagar-les faria creure que el model ja està tancat.
     grups = {k: g for k, g in grups.items()
-             if any(r['entregada'] for b in g['blocs'] for r in b['rondes'])
+             if g['extres']
+             or any(r['entregada'] for b in g['blocs'] for r in b['rondes'])
              or any(r['entregada'] for r in g['_pacte_rondes'])}
 
     # El bloc del PACTE va PRIMER (A7: la volta directa ve «immediatament després del mateix
@@ -939,9 +1072,17 @@ def create_or_get_draft(customer, user=None):
 def add_lines_to_draft(draft, selected_items, user=None):
     """Crea UNA línia per BLOC seleccionat de la safata. A1: la unitat és el MODEL.
 
-    `selected_items`: `[{'model_id': int, 'clau': 'pacte'|'directe-<ronda_id>'}]` — exactament les
-    claus que `get_billable_items` emet. No s'accepta cap altra forma: la safata és qui decideix
-    què és un albaranable, i deixar que el client en compongui un altre seria tenir-ne dues.
+    `selected_items`: `[{'model_id': int|None, 'clau': …}]` — exactament les claus que
+    `get_billable_items` emet, de qualsevol de les dues llistes del grup:
+
+      · `'pacte'` / `'directe-<ronda_id>'`  → un BLOC de voltes (`blocs`) → línia `TASK`;
+      · `'ajust-<id>'` / `'despesa-<id>'`   → un EXTRA (`extres`) → línia `EXTRA`/`DEDUCTION`/
+        `EXPENSE`, sense cap volta lligada i mai `encarrec_directe` (un extra no és una volta
+        fora de pacte: és una altra mena de cosa, i marcar-lo com a directa faria que el
+        document li imprimís «encàrrec directe sense pressupost», que seria fals).
+
+    No s'accepta cap altra forma: la safata és qui decideix què és un albaranable, i deixar que
+    el client en compongui un altre seria tenir-ne dues.
 
     ⚠️ **AIXÒ JA NO CREA LÍNIES PER TASCA.** Abans hi havia una línia per `ModelTask`/ajust/despesa
     i el preu sortia del `price_snapshot` del WorkOrder. Ara la línia és el MODEL, el seu import és
@@ -970,13 +1111,47 @@ def add_lines_to_draft(draft, selected_items, user=None):
     # crides; dins d'una crida cal recordar què s'ha consumit. La cara no ho reprodueix (envia un
     # `Set`), però la porta HTTP sí.
     consumides = set()
+    # El mateix guard per als extres: dos `ajust-7` al mateix cos creaven dues línies sobre el
+    # mateix ajust, perquè la foto de la safata no veu el que aquesta crida acaba d'afegir.
+    extres_consumits = set()
     with transaction.atomic():
         pos = draft.lines.count()
         for sel in (selected_items or []):
             grup = safata.get(sel.get('model_id'))
             if grup is None:
                 continue
-            bloc = next((b for b in grup['blocs'] if b['clau'] == sel.get('clau')), None)
+            clau = sel.get('clau')
+
+            # ── EXTRA / DEDUCCIÓ / DESPESA — un ítem, una línia, sense voltes ──────────────
+            extra = next((e for e in grup['extres'] if e['clau'] == clau), None)
+            if extra is not None:
+                if clau in extres_consumits:
+                    continue
+                extres_consumits.add(clau)
+                origen, _, ident = clau.partition('-')
+                line = DeliveryNoteLine(
+                    delivery_note=draft, line_kind=extra['kind'],
+                    model_id=grup['model']['id'],
+                    # L'FK d'ORIGEN és el que treu l'ítem de la safata la propera vegada (i el
+                    # que impedeix que `generate/` el torni a cobrar): sense ella, la línia no
+                    # sabria de què ve i l'ítem seguiria sortint com a pendent.
+                    adjustment_id=int(ident) if origen == 'ajust' else None,
+                    expense_id=int(ident) if origen == 'despesa' else None,
+                    # El producte porta el TIPUS D'IVA; el `work_order`, la traça de l'encàrrec
+                    # —i amb ella el guard que impedeix desassignar un model ja albaranat
+                    # (`unassign_model_from_order_line` mira les línies per `work_order`).
+                    product_id=extra.get('_product_id'),
+                    work_order_id=extra.get('_work_order_id'),
+                    quantity=Decimal('1'),
+                    unit_price=Decimal(extra['preu_proposat']).quantize(
+                        _CENT, rounding=ROUND_HALF_UP),
+                    description=extra['descripcio'][:300], position=pos + 1, visible=True)
+                line.save()
+                created.append(line)
+                pos += 1
+                continue
+
+            bloc = next((b for b in grup['blocs'] if b['clau'] == clau), None)
             if bloc is None:
                 continue
             # Una volta EN CURS no es factura: la safata la mostra, però marcar-la no val.
