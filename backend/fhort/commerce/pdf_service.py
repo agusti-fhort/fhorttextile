@@ -771,43 +771,48 @@ def generate_delivery_note_pdf(delivery_note, lang=None):
 
     story.append(Spacer(1, 4 * mm))
 
-    # ═══ COMENTARIS · a l'esquerra de les sumes (maqueta §3) ═══ — capçalera majúscules amb
-    # tracking .08em (`_TrackedLabel`: Platypus no ho sap fer amb `Paragraph`), cos 9pt.
-    if (delivery_note.notes or '').strip():
-        story.append(Table([[
-            Table([[_TrackedLabel(t(lang, 'dn_comments').upper(), FM, 8, DN_TEXT_SOFT)],
-                   [Spacer(1, 3)],
-                   [Paragraph(delivery_note.notes.strip(), S_COM_B)]],
-                  colWidths=[CW - 70 * mm], style=TableStyle(ZP)),
-            '',
-        ]], colWidths=[CW - 70 * mm, 70 * mm], style=TableStyle(
-            [('VALIGN', (0, 0), (-1, -1), 'TOP')] + ZP)))
-        story.append(Spacer(1, 4 * mm))
+    # ═══ PEU · Comentaris | Sumes, EN UNA SOLA TAULA (maqueta §3) ═══
+    # Dues columnes, VALIGN TOP, sense vores, la dreta d'amplada FIXA (la de les sumes): així
+    # «COMENTARIS» (capçalera majúscules, tracking .08em — `_TrackedLabel`, Platypus no ho sap
+    # fer amb `Paragraph`) queda a la MATEIXA alçada que «Base imposable», perquè totes dues
+    # són el primer element de la seva columna dins la MATEIXA fila. Sense comentaris, la
+    # columna esquerra queda buida i les sumes segueixen al seu lloc — no puja res per omplir
+    # el forat, que seria el senyal contrari (que el document «s'ha mogut» sense comentari).
+    notes = (delivery_note.notes or '').strip()
+    if notes:
+        comentaris = Table([
+            [_TrackedLabel(t(lang, 'dn_comments').upper(), FM, 8, DN_TEXT_SOFT)],
+            [Spacer(1, 3)],
+            [Paragraph(notes, S_COM_B)],
+        ], colWidths=[CW - 70 * mm], style=TableStyle(ZP))
+    else:
+        comentaris = ''
 
-    # ═══ RESUM (sense venciments; totals sobre línies visibles = els del document) ═══
-    # «Import total» amb regla superior --text-main (maqueta: `.sum .tot{border-top:1px solid
-    # var(--text-main)}`) — DN_TEXT_MAIN i no la LGREY de la capçalera.
-    #
     # 🚨 UNA FILA PER TIPUS D'IVA REAL, MAI UN PERCENTATGE EFECTIU. `_tax_pct` (usat pel
     # pressupost/comanda, capçalera intacta) deriva un % del quocient tax/subtotal — amb dos
     # tipus barrejats a la mateixa base, això dona un número que no és cap tipus real. Aquí
     # es llegeix `tax_breakdown` (ja calculat i persistit per `recalculate_totals`, la mateixa
     # font que Quote/SalesOrder): una fila per tipus, amb la SEVA base. Amb un sol tipus, és
     # una fila — idèntic al que hi havia, però ja no per casualitat.
-    rows = [['', Paragraph(t(lang, 'taxable_base'), S_SUM),
-             Paragraph(f'{_money(delivery_note.subtotal)} €', S_SUM_R)]]
+    sum_rows = [[Paragraph(t(lang, 'taxable_base'), S_SUM),
+                Paragraph(f'{_money(delivery_note.subtotal)} €', S_SUM_R)]]
     for entry in (delivery_note.tax_breakdown or []):
         rate = Decimal(entry['rate'])
         rate_txt = f'{rate:.0f}' if rate == rate.to_integral_value() else str(rate).replace('.', ',')
-        rows.append(['', Paragraph(f'{t(lang, "vat")} {rate_txt}%', S_SUM),
-                     Paragraph(f'{_money(entry["tax"])} €', S_SUM_R)])
-    rows.append(['', Paragraph(t(lang, 'total_amount'), S_SUM_TOT),
-                 Paragraph(f'{_money(delivery_note.total)} €', S_SUM_TOT_R)])
-    last = len(rows) - 1
-    story.append(Table(rows, colWidths=[104 * mm, 44 * mm, 26 * mm], style=TableStyle([
-        ('LINEABOVE', (1, last), (2, last), 0.5, DN_TEXT_MAIN),
+        sum_rows.append([Paragraph(f'{t(lang, "vat")} {rate_txt}%', S_SUM),
+                         Paragraph(f'{_money(entry["tax"])} €', S_SUM_R)])
+    sum_rows.append([Paragraph(t(lang, 'total_amount'), S_SUM_TOT),
+                     Paragraph(f'{_money(delivery_note.total)} €', S_SUM_TOT_R)])
+    last = len(sum_rows) - 1
+    # «Import total» amb regla superior --text-main (maqueta: `.sum .tot{border-top:1px solid
+    # var(--text-main)}`) — DN_TEXT_MAIN i no la LGREY de la capçalera.
+    sumes = Table(sum_rows, colWidths=[44 * mm, 26 * mm], style=TableStyle([
+        ('LINEABOVE', (0, last), (1, last), 0.5, DN_TEXT_MAIN),
         ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-        ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0)])))
+        ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0)]))
+
+    story.append(Table([[comentaris, sumes]], colWidths=[CW - 70 * mm, 70 * mm],
+        style=TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP')] + ZP)))
 
     # 🚨 EL BLOC «OBSERVACIONS» SE'N VA. Imprimia `delivery_note.notes` una SEGONA vegada, al
     # peu del document, i el bloc «Comentaris» de la maqueta §3 ja el diu a dalt, al costat de
