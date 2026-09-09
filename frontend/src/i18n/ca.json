@@ -85,7 +85,16 @@
     "entity": "albarans",
     "prev": "Anterior",
     "next": "Següent",
-    "page_info": "Pàgina {{page}} de {{pages}}"
+    "page_info": "Pàgina {{page}} de {{pages}}",
+    "tray_oferta": "Oferta {{n}}",
+    "tray_rondes_incloses": "R×{{n}}",
+    "tray_ronda": "Ronda {{n}}",
+    "tray_lliurada": "lliurada {{data}}",
+    "tray_entregada": "Entregada",
+    "tray_en_curs": "En curs",
+    "tray_vist_i_plau": "Vist-i-plau del client",
+    "tray_vist_i_plau_pendent": "Vist-i-plau pendent",
+    "tray_fora_pressupost": "Encàrrec fora de pressupost"
   },
   "grading_propagate": {
     "button": "Propagar",

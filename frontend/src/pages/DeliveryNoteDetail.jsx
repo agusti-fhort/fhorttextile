@@ -10,7 +10,6 @@ import Badge from '../components/ui/Badge'
 import PageMenu from '../components/ui/PageMenu'
 import { camp, forceBarra } from '../components/llista/ChromLlista'
 import PdfButton, { usePdfLang } from '../components/ui/PdfButton'
-import { perqueForaDeComanda } from '../utils/rondes'
 import IssueDateField from '../components/commercial/IssueDateField'
 import { botoPri } from '../components/ui/buttons'
 import { DocumentHeader, ModelCard, LineTable, RowBtn, DocumentSummary } from '../components/commercial'
@@ -64,72 +63,85 @@ function groupByModel(lines) {
 // pengen de cap volta —despeses, deduccions de concepte lliure, i tota la feina anterior a la llei
 // de rondes— van a un calaix SENSE capçalera, que és el que la safata ja era abans d'M4: no se'ls
 // inventa cap volta.
-function repartirPerRonda(g) {
-  const solts = []
-  const perRonda = new Map()
-  for (const it of (g.items || [])) {
-    const rid = it.ronda?.id
-    if (rid == null) { solts.push(it); continue }
-    if (!perRonda.has(rid)) perRonda.set(rid, [])
-    perRonda.get(rid).push(it)
-  }
-  const blocs = (g.rondes || [])
-    .map(r => ({ ronda: r, items: perRonda.get(r.id) || [] }))
-    .filter(b => b.items.length > 0)
-  return { solts, blocs }
-}
+// ── SAFATA · MAQUETA §1 ────────────────────────────────────────────────────────────────────
+//
+// La unitat és el MODEL (A1) i el que es marca és un BLOC de voltes (A7): el bloc del PACTE amb
+// les voltes que hi caben, i un bloc PROPI per cada volta que en surt. Les targetes de tasca
+// se'n van senceres — el preu d'un model no és la suma dels preus de les seves tasques.
 
-// La capçalera d'una volta dins la safata: quina volta és, si va FORA DE COMANDA i per què, i
-// entre quines dates es va fer. Les dates són el que FIT-12 demana per poder informar QUAN es va
-// fer cada volta; una volta encara oberta no en té de tancament i ho diu amb paraules.
-function CapcaleraRonda({ r, t, locale }) {
-  // La data va amb el LOCALE de l'app, no amb el del navegador. `toLocaleDateString()` pelat
-  // pinta 8/25/2026 al Chromium headless (mesurat al fum de pantalla) i pintaria el que el
-  // navegador de cadascú digués a producció, dins d'una pantalla que ja està en català.
-  const fmt = (iso) => (iso
-    ? new Date(iso).toLocaleDateString(locale || 'ca',
-        { day: '2-digit', month: '2-digit', year: 'numeric' })
-    : null)
-  const inici = fmt(r.oberta_el)
-  const fi = fmt(r.tancada_el) || t('deliverynotes.ronda_oberta')
-  // La tria de frase viu al mòdul compartit de voltes: el Pla de treball ensenya el mateix
-  // veredicte al seu contenidor de ronda i les dues cares no poden divergir.
-  const fora = perqueForaDeComanda(r)
-  const perque = fora ? t(fora.clau, fora.params) : null
+const fmtData = (iso, locale) => (iso
+  // La data va amb el LOCALE de l'app, no amb el del navegador: `toLocaleDateString()` pelat
+  // pinta 8/25/2026 al Chromium headless (mesurat) i pintaria el que el navegador de cadascú
+  // digués a producció, dins d'una pantalla que ja està en català.
+  ? new Date(iso).toLocaleDateString(locale || 'ca', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  : null)
+
+// `.mhead` de la maqueta: nom 14/600 · refs en caption soft · línia de context · badge a la dreta.
+function CapcaleraModelSafata({ g, t, locale }) {
+  const m = g.model
+  const p = g.pacte
+  const refs = [m.codi_client, m.codi_intern].filter(Boolean).join(' · ')
+  const context = [
+    m.collection, [m.temporada, m.any].filter(Boolean).join(' '),
+    p?.oferta && t('deliverynotes.tray_oferta', { n: p.oferta }),
+    p?.concepte,
+    p?.rounds_included != null && t('deliverynotes.tray_rondes_incloses', { n: p.rounds_included }),
+  ].filter(Boolean).join(' · ')
+  // A2 · EL VERD DEL VIST-I-PLAU INFORMA, NO BLOQUEJA. Verd només quan TOTES les voltes
+  // entregades d'aquest model porten l'OK del client: així el verd vol dir «pots facturar això
+  // sabent que el client ho ha donat per bo», que és per al que serveix. Amb un «alguna» n'hi
+  // hauria prou per pintar-lo i no diria res.
+  const entregades = (g.blocs || []).flatMap(b => b.rondes).filter(r => r.entregada)
+  const totOk = entregades.length > 0 && entregades.every(r => r.data_ok)
   return (
-    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap',
-      padding: '6px 6px 4px', marginTop: 6, borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: 'var(--line)' }}>
-      <span style={{ fontFamily: MONO, fontWeight: 600, fontSize: 'var(--fs-body)' }}>
-        {t('deliverynotes.ronda_label', { n: r.seq })}
-      </span>
-      {/* §1 · el badge de la casa, variant `warn`: «fora de comanda» NO és una classificació
-          neutra (decisió 3 d'`estats.jsx`) sinó el fet que reclama la mirada del comercial —és
-          l'única raó per la qual aquesta volta surt agrupada. El «perquè» sencer va al `title`
-          i, quan hi cap, també a la línia de sota. */}
-      {r.fora_de_comanda && (
-        <Badge variant="warn" title={perque}>{t('deliverynotes.ronda_fora')}</Badge>
-      )}
-      <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)', fontFamily: MONO }}>
-        {inici} → {fi}
-      </span>
-      {r.fora_de_comanda && (
-        <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)', flexBasis: '100%' }}>
-          {perque}
+    <div style={{ padding: '12px 16px 4px', display: 'flex', justifyContent: 'space-between',
+                  alignItems: 'baseline', gap: 8, borderTop: '1px solid var(--line)' }}>
+      <div style={{ minWidth: 0 }}>
+        <span style={{ fontSize: 'var(--fs-h3)', lineHeight: '20px', fontWeight: 600 }}>
+          {m.nom_prenda || m.codi_intern}
         </span>
-      )}
+        {refs && <span style={{ color: 'var(--text-soft)', fontSize: 'var(--fs-caption)' }}> {refs}</span>}
+        {context && <div style={{ color: 'var(--text-soft)' }}>{context}</div>}
+      </div>
+      <Badge variant={totOk ? 'ok' : 'gray'}>
+        {totOk ? t('deliverynotes.tray_vist_i_plau') : t('deliverynotes.tray_vist_i_plau_pendent')}
+      </Badge>
     </div>
   )
 }
 
-// Una fila de la safata. Extreta perquè el calaix «sense volta» i els blocs de volta pintin
-// EXACTAMENT la mateixa fila: agrupar no pot canviar què es veu de cada ítem.
-function ItemSafata({ it, k, picked, togglePick, t }) {
+// `.mrow`: casella · «Ronda N · lliurada dd/mm/aaaa» (+ badge --err si va fora) · estat.
+//
+// 🔑 LA CASELLA ÉS DEL BLOC, NO DE LA VOLTA, encara que es pinti a cada fila. Un bloc del pacte
+// és UNA línia d'albarà amb un sol import: no es pot facturar mig bloc, i per això les seves
+// voltes es marquen i es desmarquen juntes. La maqueta dibuixa una casella per fila i això no
+// canvia; el que canvia és què passa en prémer-la.
+function FilaRondaSafata({ r, bloc, marcat, onToggle, t, locale }) {
+  const data = fmtData(r.data_lliurament, locale)
   return (
-    <label style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 6px', cursor: 'pointer', borderRadius: 6 }}>
-      <input type="checkbox" checked={picked.has(k)} onChange={() => togglePick(it)} />
-      <ClassificacioBadge>{t(`deliverynotes.kind_${it.kind}`)}</ClassificacioBadge>
-      <span style={{ flex: 1, fontSize: 'var(--fs-body)' }}>{it.description}</span>
-      <span style={{ fontFamily: MONO, color: 'var(--text-soft)', fontSize: 'var(--fs-label)' }}>{money(it.proposed_price)}</span>
+    <label style={{
+      display: 'grid', gridTemplateColumns: '16px 1fr auto', gap: 8, alignItems: 'center',
+      padding: '8px 16px 8px 32px', borderTop: '1px solid var(--line)',
+      cursor: r.entregada ? 'pointer' : 'not-allowed',
+    }}>
+      <input type="checkbox" checked={marcat} disabled={!r.entregada}
+        onChange={() => onToggle(bloc)}
+        aria-label={t('deliverynotes.tray_ronda', { n: r.seq })}
+        style={{ width: 14, height: 14, accentColor: 'var(--gold)', margin: 0,
+                 opacity: r.entregada ? 1 : 0.4 }} />
+      <span style={{ minWidth: 0, color: r.entregada ? 'var(--text-main)' : 'var(--text-faint)' }}>
+        {t('deliverynotes.tray_ronda', { n: r.seq })}
+        {data && <span style={{ color: 'var(--text-soft)' }}> · {t('deliverynotes.tray_lliurada', { data })}</span>}
+        {/* A7 — el badge --err de la volta fora de pacte. No és una classificació neutra: diu
+            que això es factura a part i sense pressupost, que és el que el comercial ha de
+            veure abans de posar-hi un preu. */}
+        {r.fora_de_comanda && (
+          <> <Badge variant="err">{t('deliverynotes.tray_fora_pressupost')}</Badge></>
+        )}
+      </span>
+      <Badge variant={r.entregada ? 'ok' : 'gray'}>
+        {r.entregada ? t('deliverynotes.tray_entregada') : t('deliverynotes.tray_en_curs')}
+      </Badge>
     </label>
   )
 }
@@ -238,18 +250,18 @@ export default function DeliveryNoteDetail() {
       .then(res => setTray(res.data))
       .catch(() => setTray({ groups: [] }))
   }
-  const itemKey = (it) => `${it.kind}:${it.model_task_id ?? it.adjustment_id ?? it.expense_id}`
-  const togglePick = (it) => setPicked(prev => {
-    const n = new Set(prev); const k = itemKey(it); n.has(k) ? n.delete(k) : n.add(k); return n
+  // La clau de tria és `<model>:<clau del bloc>` — exactament el que el backend espera. No es
+  // deriva de cap ronda: el bloc és la unitat i marcar-ne una volta marca el bloc sencer.
+  const blocKey = (g, b) => `${g.model.id}:${b.clau}`
+  const togglePick = (k) => setPicked(prev => {
+    const n = new Set(prev)
+    if (n.has(k)) n.delete(k); else n.add(k)
+    return n
   })
   const addPicked = () => {
     const items = []
-    for (const g of (tray?.groups || [])) for (const it of g.items) {
-      if (picked.has(itemKey(it))) {
-        const src = it.kind === 'TASK' ? { model_task_id: it.model_task_id }
-          : it.kind === 'EXPENSE' ? { expense_id: it.expense_id } : { adjustment_id: it.adjustment_id }
-        items.push({ kind: it.kind, ...src })
-      }
+    for (const g of (tray?.groups || [])) for (const b of (g.blocs || [])) {
+      if (picked.has(blocKey(g, b))) items.push({ model_id: g.model.id, clau: b.clau })
     }
     if (items.length === 0) { setTrayOpen(false); return }
     setTrayBusy(true); setFeedback(null)
@@ -467,27 +479,15 @@ export default function DeliveryNoteDetail() {
             {!tray ? <Center>{t('deliverynotes.loading')}</Center>
               : (tray.groups || []).length === 0 ? <div style={{ color: 'var(--text-soft)', padding: '10px 0' }}>{t('deliverynotes.tray_empty')}</div>
                 : (tray.groups.map(g => (
-                  <div key={g.model.id ?? 'general'} style={{ marginBottom: 12 }}>
-                    <div style={{ fontFamily: MONO, fontWeight: 600, fontSize: 'var(--fs-body)', marginBottom: 4 }}>
-                      {g.model.codi_intern || t('deliverynotes.general_block')}
-                      {g.model.nom_prenda && <span style={{ color: 'var(--text-soft)', fontWeight: 400 }}> · {g.model.nom_prenda}</span>}
-                    </div>
-                    {(() => {
-                      const { solts, blocs } = repartirPerRonda(g)
-                      return (
-                        <>
-                          {solts.map(it => <ItemSafata key={itemKey(it)} it={it} k={itemKey(it)}
-                            picked={picked} togglePick={togglePick} t={t} />)}
-                          {blocs.map(b => (
-                            <div key={b.ronda.id}>
-                              <CapcaleraRonda r={b.ronda} t={t} locale={i18n.language} />
-                              {b.items.map(it => <ItemSafata key={itemKey(it)} it={it} k={itemKey(it)}
-                                picked={picked} togglePick={togglePick} t={t} />)}
-                            </div>
-                          ))}
-                        </>
-                      )
-                    })()}
+                  <div key={g.model.id}>
+                    <CapcaleraModelSafata g={g} t={t} locale={i18n.language} />
+                    {/* Les files separades NOMÉS pel filet `--line` de cada fila (maqueta §1):
+                        cap fons alternat, cap caixa per volta. */}
+                    {(g.blocs || []).map(b => b.rondes.map(r => (
+                      <FilaRondaSafata key={r.id} r={r} bloc={blocKey(g, b)}
+                        marcat={picked.has(blocKey(g, b))} onToggle={togglePick}
+                        t={t} locale={i18n.language} />
+                    )))}
                   </div>
                 )))}
             <div style={{ display: 'flex', gap: 8, marginTop: 12, position: 'sticky', bottom: 0, background: 'var(--panel)', paddingTop: 8 }}>

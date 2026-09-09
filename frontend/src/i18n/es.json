@@ -85,7 +85,16 @@
     "entity": "albaranes",
     "prev": "Anterior",
     "next": "Siguiente",
-    "page_info": "Página {{page}} de {{pages}}"
+    "page_info": "Página {{page}} de {{pages}}",
+    "tray_oferta": "Oferta {{n}}",
+    "tray_rondes_incloses": "R×{{n}}",
+    "tray_ronda": "Vuelta {{n}}",
+    "tray_lliurada": "entregada {{data}}",
+    "tray_entregada": "Entregada",
+    "tray_en_curs": "En curso",
+    "tray_vist_i_plau": "Visto bueno del cliente",
+    "tray_vist_i_plau_pendent": "Visto bueno pendiente",
+    "tray_fora_pressupost": "Encargo fuera de presupuesto"
   },
   "grading_propagate": {
     "button": "Propagar",
