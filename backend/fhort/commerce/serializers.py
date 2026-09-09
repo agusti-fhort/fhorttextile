@@ -9,7 +9,7 @@ serializers de fora d'aquest fitxer (TenantConfig, Customer). El motiu de podar 
 de tallar amb 403: hi ha pantalles TÈCNIQUES que depenen d'aquests endpoints i no pinten
 cap import — vegeu el docstring del mixin.
 """
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from rest_framework import serializers
 
@@ -512,6 +512,11 @@ class DeliveryNoteLineSerializer(PodaEconomicaMixin, serializers.ModelSerializer
     # A3 — la tarifa que s'ha aplicat de debò (override de la tasca o la del tenant). És dada
     # ECONÒMICA i es poda com el cost: qui no veu diner tampoc no veu la tarifa.
     internal_rate = serializers.SerializerMethodField()
+    # BLOC A · A7 — LES VOLTES QUE LA LÍNIA COBREIX, i dins de cadascuna les seves TASQUES.
+    # És el que la pantalla desplega («Ronda N · lliurada dd/mm/aaaa» → taula de tasques) i el
+    # que el document imprimeix a la línia de la ronda. Va aquí i no a un endpoint a part perquè
+    # és la MATEIXA lectura: si fossin dues portes, podrien dir coses diferents del mateix albarà.
+    rondes_detall = serializers.SerializerMethodField()
 
     def _hourly_rate(self):
         # Memoitzat al serializer fill (compartit per totes les línies del many=True): 1 sola lectura.
@@ -531,6 +536,48 @@ class DeliveryNoteLineSerializer(PodaEconomicaMixin, serializers.ModelSerializer
         row = (obj.model_task.timers.filter(TRAMS_SANS).values('tecnic__nom_complet')
                .annotate(m=Sum('minuts')).order_by('-m').first())
         return (row or {}).get('tecnic__nom_complet')
+
+    def get_rondes_detall(self, obj):
+        from django.db.models import Sum
+        from fhort.tasks.services_i import TRAMS_SANS
+        from .services import cost_hora_efectiu
+        rate_tenant = self._hourly_rate()
+        # `pot_veure_diner` ja el resol el mixin de poda per als camps econòmics; aquí es
+        # replica per al que va NIAT, que la poda de camps de primer nivell no arriba a mirar.
+        diner = self._pot_veure_diner()
+        files = []
+        for r in obj.rondes.select_related('entrega').order_by('seq'):
+            e = getattr(r, 'entrega', None)
+            tasques = []
+            for t in r.tasques.select_related('task_type', 'assignee').order_by(
+                    'task_type__default_order', 'task_type__code'):
+                minuts = t.timers.filter(TRAMS_SANS).aggregate(m=Sum('minuts'))['m'] or 0
+                rate = cost_hora_efectiu(t, rate_tenant)
+                cost = (Decimal(minuts) / Decimal(60) * Decimal(rate)).quantize(
+                    Decimal('0.01'), rounding=ROUND_HALF_UP) if rate is not None else None
+                tasques.append({
+                    'id': t.id,
+                    'code': t.task_type.code,
+                    'nom': t.task_type.name,
+                    'tecnic': t.assignee.nom_complet if t.assignee_id else None,
+                    'minuts': int(minuts),
+                    # 🔒 A3: la tarifa i el cost són COST INTERN i no viatgen mai al client.
+                    'cost_hora': (str(rate) if rate is not None else None) if diner else None,
+                    'cost': (str(cost) if cost is not None else None) if diner else None,
+                    'feta': t.status == 'Done',
+                })
+            files.append({
+                'id': r.id, 'seq': r.seq,
+                'data_lliurament': e.data.isoformat() if e is not None else None,
+                'data_ok': e.data_ok.isoformat() if (e is not None and e.data_ok) else None,
+                'fora_de_comanda': r.fora_de_comanda,
+                'tasques': tasques,
+            })
+        return files
+
+    def _pot_veure_diner(self):
+        from fhort.accounts.capabilities import pot_veure_diner
+        return pot_veure_diner(self.context.get('request'))
 
     def get_internal_rate(self, obj):
         from .services import cost_hora_efectiu
@@ -558,6 +605,7 @@ class DeliveryNoteLineSerializer(PodaEconomicaMixin, serializers.ModelSerializer
                   'model', 'model_intern', 'model_codi_client', 'model_nom', 'model_collection',
                   'model_temporada', 'model_any', 'internal_minutes', 'internal_tecnic',
                   'internal_cost', 'internal_rate', 'task_finished_at',
+                  'encarrec_directe', 'linia_comanda', 'rondes_detall',
                   'work_order', 'model_task', 'expense', 'adjustment']
         # v2 — editables en DRAFT: description, quantity, unit_price, visible. La resta (traçabilitat,
         # model, internal_minutes, line_total) read-only: es fixen en compondre la línia.

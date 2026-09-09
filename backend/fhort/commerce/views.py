@@ -728,9 +728,14 @@ class DeliveryNoteViewSet(_ComercialMixin, mixins.RetrieveModelMixin, mixins.Lis
 
     @action(detail=True, methods=['post'], url_path='add-lines')
     def add_lines(self, request, pk=None):
-        """POST commerce/delivery-notes/{id}/add-lines/ — afegeix línies al DRAFT a partir dels
-        ítems seleccionats de la safata. Gate CONFIGURE. Body: {items:[{kind, model_task_id|
-        adjustment_id|expense_id}]}. Els ítems ja albaranats s'ometen (idempotent)."""
+        """POST commerce/delivery-notes/{id}/add-lines/ — afegeix línies al DRAFT des de la safata.
+
+        Gate CONFIGURE. Body: `{items:[{model_id, clau}]}`, on `clau` és `'pacte'` o
+        `'directe-<ronda_id>'` — exactament les claus que la safata emet (BLOC A · A1: una línia
+        per MODEL). Un bloc les voltes del qual ja tinguin línia s'omet: idempotent.
+
+        ⚠️ El contracte VELL (`{kind, model_task_id|adjustment_id|expense_id}`) ja no s'accepta:
+        la safata no emet ítems de tasca des del bloc A."""
         dn = self.get_object()
         from django.core.exceptions import ValidationError as DjangoValidationError
         from .services import add_lines_to_draft
@@ -825,6 +830,24 @@ class DeliveryNoteLineViewSet(_ComercialMixin, mixins.RetrieveModelMixin,
         if self.action in ('list', 'retrieve'):
             return [IsAuthenticated()]
         return super().get_permissions()
+
+    def destroy(self, request, *args, **kwargs):
+        """Treure una línia NOMÉS en esborrany. 409 amb el motiu, no un 500.
+
+        🚨 El guard ja hi era —`DeliveryNoteLine.delete()` crida `_assert_editable()`— però
+        llançava `ValidationError` de Django SENSE que ningú la recollís, i DRF no la mapeja: la
+        porta contestava **500 amb una pàgina d'error HTML** allà on havia de dir «això no es pot
+        fer perquè el document ja és emès». Un refús correcte disfressat de crash: la UI no en pot
+        treure cap missatge i qui ho llegeixi als logs buscarà un error que no existeix. Mateixa
+        forma que el `destroy` del document (:804).
+        """
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        line = self.get_object()
+        try:
+            line.delete()
+        except DjangoValidationError as e:
+            return Response({'detail': '; '.join(e.messages)}, status=status.HTTP_409_CONFLICT)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     def create(self, request, *args, **kwargs):
         """POST commerce/delivery-note-lines/ — crea una línia MANUAL (comentari/lliure) en un DRAFT.

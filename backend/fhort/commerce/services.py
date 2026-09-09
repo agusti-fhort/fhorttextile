@@ -662,6 +662,25 @@ def issue_delivery_note(delivery_note, user=None):
     if not delivery_note.lines.filter(visible=True).exists():
         raise ValidationError("L'albarà no té cap línia visible; no es pot emetre.")
     with transaction.atomic():
+        # A4 · EMETRE ÉS CONGELAR. Fins aquí `fora_de_comanda` es tornava a pesar contra el
+        # numeral viu a cada lectura de la safata; a partir d'aquí, el veredicte d'aquestes
+        # voltes és el que el document diu i cap edició posterior del numeral el pot moure.
+        # S'escriu ARA i no en obrir la volta perquè és ara quan deixa de ser una opinió: el
+        # document ja ho ha dit al client.
+        #
+        # Es congela el valor EFECTIU (el que la safata acaba de calcular), no el que la fila
+        # portava: si no, emetre no canviaria res i el congelat seria una foto d'un altre dia.
+        from fhort.tasks.services_r import numeral_efectiu
+        vistes = {}
+        for linia in delivery_note.lines.prefetch_related('rondes__model'):
+            for ronda in linia.rondes.all():
+                if ronda.model_id not in vistes:
+                    vistes[ronda.model_id] = numeral_efectiu(ronda.model)[1]
+                numeral = vistes[ronda.model_id]
+                fora = numeral is not None and ronda.seq > numeral
+                if ronda.fora_de_comanda != fora:
+                    ronda.fora_de_comanda = fora
+                    ronda.save(update_fields=['fora_de_comanda'])
         delivery_note.status = 'ISSUED'
         delivery_note.issued_by = user
         if not delivery_note.issued_at:
@@ -920,88 +939,76 @@ def create_or_get_draft(customer, user=None):
 
 
 def add_lines_to_draft(draft, selected_items, user=None):
-    """Crea una DeliveryNoteLine per ítem seleccionat de la safata, amb les FK d'origen correctes
-    (model_task/adjustment/expense), el model FK (agrupació), line_kind, product (IVA), visible=True
-    i els valors proposats (editables després en DRAFT). Resol cada origen AUTORITZAT contra la BD
-    (mateix client, sense línia prèvia) → un ítem ja albaranat s'omet (idempotent, no doble compta).
-    Retorna les línies creades. `selected_items`: [{kind, model_task_id|adjustment_id|expense_id}]."""
+    """Crea UNA línia per BLOC seleccionat de la safata. A1: la unitat és el MODEL.
+
+    `selected_items`: `[{'model_id': int, 'clau': 'pacte'|'directe-<ronda_id>'}]` — exactament les
+    claus que `get_billable_items` emet. No s'accepta cap altra forma: la safata és qui decideix
+    què és un albaranable, i deixar que el client en compongui un altre seria tenir-ne dues.
+
+    ⚠️ **AIXÒ JA NO CREA LÍNIES PER TASCA.** Abans hi havia una línia per `ModelTask`/ajust/despesa
+    i el preu sortia del `price_snapshot` del WorkOrder. Ara la línia és el MODEL, el seu import és
+    el PREU UNITARI DE LA LÍNIA DE COMANDA (editable després, en esborrany) i les voltes que cobreix
+    hi queden lligades per la M2M — que és el que després deixa que el document digui «R1, R2» i
+    baixi a les tasques de cadascuna.
+
+    IDEMPOTENT PER VOLTA, no per origen: es recomprova contra la safata VIVA i, si una volta ja té
+    línia, el bloc s'omet sencer. Aquest és el guard que evita el doble comptatge ara que l'origen
+    ja no és una tasca —el guard vell (`delivery_note_lines__isnull=True` sobre la tasca) no diria
+    res d'un bloc de tres voltes.
+
+    Retorna les línies creades.
+    """
     from django.core.exceptions import ValidationError
-    from django.db.models import Sum
-    from fhort.tasks.models import ModelTask
-    from .models import DeliveryNoteLine, WorkOrderAdjustment, Expense
+    from .models import DeliveryNoteLine, SalesOrderLine
     if draft.status != 'DRAFT':
         raise ValidationError("Només es poden afegir línies a un albarà en esborrany (DRAFT).")
-    cid = draft.customer_id
+
+    # La safata viva és l'ÚNICA autoritat sobre què es pot afegir i a quin preu.
+    safata = {g['model']['id']: g for g in get_billable_items(draft.customer)}
     created = []
     with transaction.atomic():
         pos = draft.lines.count()
-        for sel in selected_items:
-            kind = sel.get('kind')
-            line = None
-            if kind == 'TASK':
-                t = (ModelTask.objects.filter(
-                        pk=sel.get('model_task_id'), model__customer_id=cid, status='Done',
-                        delivery_note_lines__isnull=True)
-                     .select_related('task_type', 'model', 'work_order', 'work_order__order_line__product')
-                     .first())
-                if t is None:
-                    continue
-                wo = t.work_order
-                if wo is not None and wo.kind == 'ORDER':
-                    product = wo.order_line.product if wo.order_line_id else None
-                    price = Decimal(str((wo.price_snapshot or {}).get('unit_price') or '0'))
-                else:
-                    product, price = None, Decimal('0')
-                minutes = t.timers.filter(TRAMS_SANS).aggregate(m=Sum('minuts'))['m'] or 0
-                line = DeliveryNoteLine(
-                    delivery_note=draft, line_kind='TASK', model_id=t.model_id, model_task=t,
-                    work_order=wo, product=product, quantity=Decimal('1'),
-                    unit_price=price.quantize(_CENT, rounding=ROUND_HALF_UP),
-                    description=f"{t.task_type.name} · {t.model.codi_intern}"[:300],
-                    internal_minutes=Decimal(minutes))
-            elif kind in ('EXTRA', 'DEDUCTION'):
-                adj_kind = 'EXTRA_BILL' if kind == 'EXTRA' else 'DEDUCTION'
-                adj = (WorkOrderAdjustment.objects.filter(
-                        pk=sel.get('adjustment_id'), work_order__customer_id=cid, kind=adj_kind,
-                        delivery_note_lines__isnull=True)
-                       .select_related('work_order__order_line__product', 'work_order__model',
-                                       'model_task__model').first())
-                if adj is None:
-                    continue
-                wo = adj.work_order
-                product = wo.order_line.product if (wo.kind == 'ORDER' and wo.order_line_id) else None
-                model = (adj.model_task.model if adj.model_task_id else None) or wo.model
-                if kind == 'EXTRA':
-                    price, desc = Decimal(adj.amount or 0), (adj.description or "Extra")
-                else:
-                    price, desc = -abs(Decimal(adj.amount or 0)), (adj.description or "Deducció")
-                line = DeliveryNoteLine(
-                    delivery_note=draft, line_kind=kind, model=model, adjustment=adj,
-                    work_order=wo, product=product, quantity=Decimal('1'),
-                    unit_price=price.quantize(_CENT, rounding=ROUND_HALF_UP), description=desc[:300])
-            elif kind == 'EXPENSE':
-                exp = (Expense.objects.filter(
-                        pk=sel.get('expense_id'), work_order__customer_id=cid,
-                        delivery_note_lines__isnull=True)
-                       .select_related('work_order__model', 'product').first())
-                if exp is None:
-                    continue
-                line = DeliveryNoteLine(
-                    delivery_note=draft, line_kind='EXPENSE', model=exp.work_order.model,
-                    expense=exp, work_order=exp.work_order, product=exp.product,
-                    unit_price=Decimal(exp.sale_price or 0).quantize(_CENT, rounding=ROUND_HALF_UP),
-                    quantity=Decimal(exp.quantity or 0).quantize(_CENT, rounding=ROUND_HALF_UP),
-                    description=(exp.description or (exp.product.name if exp.product_id else "Despesa"))[:300])
-            else:
+        for sel in (selected_items or []):
+            grup = safata.get(sel.get('model_id'))
+            if grup is None:
                 continue
-            pos += 1
-            line.position = pos
-            line.visible = True
-            line.save()
-            created.append(line)
-    draft.refresh_from_db()
-    return created
+            bloc = next((b for b in grup['blocs'] if b['clau'] == sel.get('clau')), None)
+            if bloc is None:
+                continue
+            # Una volta EN CURS no es factura: la safata la mostra, però marcar-la no val.
+            rondes_ids = [r['id'] for r in bloc['rondes'] if r['entregada']]
+            if not rondes_ids:
+                continue
 
+            linia_comanda = (SalesOrderLine.objects.filter(pk=bloc['linia_comanda']).first()
+                             if bloc['linia_comanda'] else None)
+            m = grup['model']
+            # EL CONCEPTE de la línia. El del pacte NOMÉS quan la línia hi pertany: una volta
+            # fora de pacte no té concepte pactat —per definició no és a cap pressupost— i
+            # heretar-lo diria que sí. Allà el concepte és la identitat del model, i la frase
+            # «encàrrec directe sense pressupost» la posa QUI RENDERITZA, en l'idioma que toqui,
+            # a partir d'`encarrec_directe`. Aquí no s'hi escriu cap frase: una frase congelada
+            # en una columna no es tradueix mai més.
+            concepte = (None if bloc['encarrec_directe']
+                        else (grup['pacte'] or {}).get('concepte'))
+            concepte = concepte or m['nom_prenda'] or m['codi_intern']
+            line = DeliveryNoteLine(
+                delivery_note=draft, line_kind='TASK', model_id=m['id'],
+                # El producte (i per tant l'IVA) surt de la línia de comanda quan n'hi ha.
+                product=linia_comanda.product if linia_comanda else None,
+                linia_comanda=linia_comanda,
+                encarrec_directe=bloc['encarrec_directe'],
+                # A1 · SENSE camp quantitat: sempre 1, i l'import és el de la targeta.
+                quantity=Decimal('1'),
+                unit_price=Decimal(bloc['preu_proposat']).quantize(_CENT, rounding=ROUND_HALF_UP),
+                description=str(concepte)[:300], position=pos, visible=True)
+            line.save()
+            line.rondes.set(rondes_ids)
+            created.append(line)
+            pos += 1
+        if created:
+            draft.recalculate_totals()
+    return created
 
 def apply_commercial_review(work_order, items, user=None):
     """Revisió COMERCIAL d'un WO tancat (B4b, decisió Agus 2026-07-08): el comercial fixa el
