@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next'
 
 import Badge from '../ui/Badge'
 import { formatMinutes, formatDataHora, formatDataCurta, localeDeIdioma } from '../../utils/format'
-import { RONDA_ENTREGADA, RONDA_OBERTA, RONDA_TANCADA } from '../../utils/rondes'
+import { perqueForaDeComanda, RONDA_ENTREGADA, RONDA_OBERTA, RONDA_TANCADA } from '../../utils/rondes'
 
 // M2 · MOCKUP A v2 — EL CONTENIDOR D'UNA VOLTA al Pla de treball.
 //
@@ -33,6 +33,10 @@ export default function RondaPla({ bloc, obert, onToggle, onEntregar, onOkClient
   const { ronda, estat, entrega, tasques, total, fets, pct, minuts, fase, rectificacions } = bloc
   const orfe = ronda == null
   const segellada = estat === RONDA_ENTREGADA
+  // M4 · FIT-12 — el veredicte de numeral, compost al mòdul compartit perquè aquesta capçalera i
+  // la safata d'albaranables diguin la MATEIXA frase. `null` quan la volta cau dins: regla del
+  // silenci, un xip només es pinta si diu alguna cosa.
+  const perqueFora = perqueForaDeComanda(ronda)
 
   return (
     <div style={{
@@ -75,6 +79,19 @@ export default function RondaPla({ bloc, obert, onToggle, onEntregar, onOkClient
 
         {fase && <Badge variant="gray">{fase}</Badge>}
         {estat && <Badge variant={ESTAT_VARIANT[estat] || 'gold'}>{t(`rondes.estat_${estat}`)}</Badge>}
+
+        {/* FORA DE COMANDA · §1, variant `warn` — MATEIXA forma que la safata d'albaranables
+            (DeliveryNoteDetail:107), perquè és el mateix fet dit a dues cares. No és una
+            classificació neutra: diu que aquesta volta es factura a part, que és exactament el
+            que el comercial ha de veure abans de tocar-hi res. El «perquè» sencer (numeral i
+            comanda) va al `title`; la capçalera ja va plena i una segona línia aquí trencaria
+            l'alçada del contenidor. Icona Tabler outline, color per token. */}
+        {perqueFora && (
+          <Badge variant="warn" icon="ti-receipt-off"
+                 title={t(perqueFora.clau, perqueFora.params)}>
+            {t('deliverynotes.ronda_fora')}
+          </Badge>
+        )}
 
         {/* `lliurable` és un SENYAL, no una porta (M2 · CODA-BIS). Diu «ja hi és tot el que
             aquesta volta havia de produir» —totes les tasques `es_lliurable` són Done— i el seu

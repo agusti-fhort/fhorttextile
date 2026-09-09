@@ -86,6 +86,27 @@ export function rectificacionsPerVolta(log) {
 }
 
 /**
+ * M4 · FIT-12 — EL «PERQUÈ» D'UNA VOLTA FORA DE COMANDA, en peces i sense traduir.
+ *
+ * Retorna `{ clau, params }` per a `t()`, o `null` si la volta cau DINS del numeral (regla del
+ * silenci: un xip només es pinta si diu alguna cosa). Les DUES superfícies que ho ensenyen —la
+ * safata d'albaranables i el contenidor de ronda del Pla— han de dir exactament la mateixa
+ * frase, i per això es compon en UN sol lloc i no a cada cara.
+ *
+ * 🔒 AQUÍ NO ES TRADUEIX RES, i és el motiu pel qual això torna una clau i no un text: aquest
+ * mòdul és de regles pures i no pot importar l'i18n. Les claus viuen sota `deliverynotes.*`
+ * perquè és on van néixer amb la safata; el nom del namespace és històric i no vol dir que la
+ * frase sigui d'aquella pantalla.
+ */
+export function perqueForaDeComanda(ronda) {
+  if (!ronda?.fora_de_comanda) return null
+  return {
+    clau: ronda.comanda ? 'deliverynotes.ronda_perque' : 'deliverynotes.ronda_perque_sense_comanda',
+    params: { n: ronda.seq, numeral: ronda.numeral_vigent, comanda: ronda.comanda },
+  }
+}
+
+/**
  * AGRUPA les files d'una superfície per VOLTA i n'agrega els mateixos eixos que el detall.
  *
  * `files` són les tasques del compositor del dashboard (Pla) o els passos de l'albarà

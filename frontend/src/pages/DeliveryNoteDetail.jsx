@@ -10,6 +10,7 @@ import Badge from '../components/ui/Badge'
 import PageMenu from '../components/ui/PageMenu'
 import { camp, forceBarra } from '../components/llista/ChromLlista'
 import PdfButton, { usePdfLang } from '../components/ui/PdfButton'
+import { perqueForaDeComanda } from '../utils/rondes'
 import IssueDateField from '../components/commercial/IssueDateField'
 import { botoPri } from '../components/ui/buttons'
 import { DocumentHeader, ModelCard, LineTable, RowBtn, DocumentSummary } from '../components/commercial'
@@ -91,9 +92,10 @@ function CapcaleraRonda({ r, t, locale }) {
     : null)
   const inici = fmt(r.oberta_el)
   const fi = fmt(r.tancada_el) || t('deliverynotes.ronda_oberta')
-  const perque = r.comanda
-    ? t('deliverynotes.ronda_perque', { n: r.seq, numeral: r.numeral_vigent, comanda: r.comanda })
-    : t('deliverynotes.ronda_perque_sense_comanda', { n: r.seq, numeral: r.numeral_vigent })
+  // La tria de frase viu al mòdul compartit de voltes: el Pla de treball ensenya el mateix
+  // veredicte al seu contenidor de ronda i les dues cares no poden divergir.
+  const fora = perqueForaDeComanda(r)
+  const perque = fora ? t(fora.clau, fora.params) : null
   return (
     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap',
       padding: '6px 6px 4px', marginTop: 6, borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: 'var(--line)' }}>
