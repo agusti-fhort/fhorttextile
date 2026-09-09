@@ -64,6 +64,7 @@ export default function WorkOrders() {
   const [triats, setTriats] = useState(() => new Set())
   const [tancant, setTancant] = useState(false)      // diàleg de confirmació obert
   const [enviant, setEnviant] = useState(false)      // guard anti-doble-clic del lot
+  const [previ, setPrevi] = useState(null)           // recompte de la passada SECA
 
   const { codis: estats } = useCodisEstat('estats_encarrec')
   const { codis: tipus } = useCodisEstat('tipus_encarrec')
@@ -177,6 +178,35 @@ export default function WorkOrders() {
   //
   // El compte és `triats.size` i no una derivada de les files: la tria es buida a cada canvi de
   // consulta, o sigui que el que hi ha triat és sempre el que es veu.
+  // 🚨 **UNA PASSADA SECA ABANS DE DEMANAR EL SÍ.**
+  //
+  // El gest INDIVIDUAL no dedueix mai a la primera: `close(id, {})` va sense `cancel_pending`, el
+  // backend respon 409 amb `pending_proposals` i la fitxa ENSENYA quines tasques concretes es
+  // deduiran abans que ningú confirmi res. El lot no pot ser més destructiu que el gest que diu
+  // replicar: amb `cancel_pending:true` cablejat i una sola confirmació genèrica, marcar la
+  // casella de capçalera i prémer volia dir deduir totes les Pending de N encàrrecs sense que en
+  // cap moment s'hagués dit quantes — i el número només sortia al toast, quan ja no hi ha marxa
+  // enrere.
+  //
+  // Ara, en obrir el diàleg es fa la MATEIXA crida amb `cancel_pending:false`, que no escriu res
+  // (`close_work_order` surt per `if pending and not cancel_pending` sense tocar la BD) i torna
+  // el recompte exacte. La confirmació diu tres números MESURATS, no promesos.
+  const passadaSeca = useCallback(() => {
+    setTancant(true); setPrevi(null)
+    commerce.workOrders.closeBulk({ ids: [...triats], cancel_pending: false })
+      .then(res => {
+        const r = res.data?.resultats || []
+        setPrevi({
+          tancables: r.filter(x => x.ok || x.motiu === 'pending').length,
+          bloquejats: r.filter(x => x.motiu === 'blocked').length,
+          deduibles: r.reduce((a, x) => a + (x.pending_proposals?.length || 0), 0),
+        })
+      })
+      // Si la passada seca falla, NO s'endevina: el diàleg ho diu i el botó de confirmar es
+      // queda apagat. Confirmar un lot destructiu sense saber-ne l'abast és el que això evita.
+      .catch(() => setPrevi({ error: true }))
+  }, [triats])
+
   const tancaSeleccionats = useCallback(() => {
     if (!triats.size || enviant) return
     setEnviant(true)
@@ -186,7 +216,7 @@ export default function WorkOrders() {
         const nOk = (d.tancats || []).length
         const nKo = (d.bloquejats || []).length + (d.errors || []).length
         const deduides = (d.resultats || []).reduce((a, r) => a + (r.deduides || 0), 0)
-        setTancant(false)
+        setTancant(false); setPrevi(null)
         setTriats(new Set())
         // El resum diu els tres números que importen, i el PARCIAL no s'amaga: si algun ha
         // quedat bloquejat, el to és d'avís i no d'èxit. Els motius per encàrrec viuen a la
@@ -195,12 +225,15 @@ export default function WorkOrders() {
           type: nKo ? 'warn' : 'ok',
           text: nKo
             ? t('workorders.bulk_close_partial', { ok: nOk, ko: nKo, deduides })
-            : t('workorders.bulk_close_ok', { ok: nOk, deduides }),
+            // `count` i no `ok`: i18next pluralitza sobre `count`, i amb un sol encàrrec la
+            // frase deia «1 encàrrecs tancats». El resum PARCIAL no es pluralitza perquè és una
+            // línia d'estadística (etiqueta: número) i aquesta forma no demana concordança.
+            : t('workorders.bulk_close_ok', { count: nOk, deduides }),
         })
         load(); carregaTotal()
       })
       .catch(err => {
-        setTancant(false)
+        setTancant(false); setPrevi(null)
         setFeedback({ type: 'err', text: err?.response?.data?.error || t('workorders.bulk_close_error') })
       })
       .finally(() => setEnviant(false))
@@ -355,7 +388,7 @@ export default function WorkOrders() {
                        textDecoration: 'underline', padding: 0 }}>
               {t('workorders.clear_selection')}
             </button>
-            <button type="button" onClick={() => setTancant(true)} disabled={enviant}
+            <button type="button" onClick={passadaSeca} disabled={enviant}
               style={{ ...botoPri, marginLeft: 'auto' }}>
               <i className="ti ti-lock" aria-hidden="true" style={{ fontSize: 16 }} />
               {t('workorders.bulk_close_action')}
@@ -366,12 +399,22 @@ export default function WorkOrders() {
         {tancant && (
           <Modal
             title={t('workorders.bulk_close_title', { count: triats.size })}
-            subtitle={t('workorders.bulk_close_body')}
+            subtitle={
+              previ === null ? t('workorders.bulk_close_comptant')
+                : previ.error ? t('workorders.bulk_close_previ_error')
+                  : t('workorders.bulk_close_body', {
+                      tancables: previ.tancables,
+                      bloquejats: previ.bloquejats,
+                      deduibles: previ.deduibles,
+                    })
+            }
             confirmLabel={t('workorders.bulk_close_confirm')}
             cancelLabel={t('workorders.bulk_close_cancel')}
-            confirmDisabled={enviant}
+            // Fins que la passada seca no ha tornat, no hi ha res a confirmar.
+            confirmDisabled={enviant || previ === null || !!previ.error}
+            confirmVariant="destructiu"
             onConfirm={tancaSeleccionats}
-            onCancel={() => { if (!enviant) setTancant(false) }}
+            onCancel={() => { if (!enviant) { setTancant(false); setPrevi(null) } }}
           />
         )}
 

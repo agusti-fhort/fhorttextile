@@ -1705,12 +1705,15 @@
     "bulk_close_action": "Close selected",
     "bulk_close_title_one": "Close {{count}} work order?",
     "bulk_close_title_other": "Close {{count}} work orders?",
-    "bulk_close_body": "The selected work orders will be closed unless they have work in progress or paused. Any tasks still PENDING will be DEDUCTED: they keep their history, but leave the work order and will not be billed.",
+    "bulk_close_body": "{{tancables}} work orders will be closed · {{bloquejats}} cannot be closed (work in progress or paused) · {{deduibles}} pending tasks will be DEDUCTED: they keep their history, but leave the work order and will not be billed.",
     "bulk_close_confirm": "Close and deduct pending",
     "bulk_close_cancel": "Cancel",
-    "bulk_close_ok": "{{ok}} work orders closed · {{deduides}} tasks deducted",
-    "bulk_close_partial": "{{ok}} closed · {{ko}} could not be closed (see each one) · {{deduides}} tasks deducted",
-    "bulk_close_error": "The batch could not be closed."
+    "bulk_close_ok_one": "{{count}} work order closed · {{deduides}} tasks deducted",
+    "bulk_close_ok_other": "{{count}} work orders closed · {{deduides}} tasks deducted",
+    "bulk_close_partial": "Closed: {{ok}} · Could not be closed: {{ko}} (see each one) · Tasks deducted: {{deduides}}",
+    "bulk_close_error": "The batch could not be closed.",
+    "bulk_close_comptant": "Checking what will be closed…",
+    "bulk_close_previ_error": "Could not check what would be closed. Try again before confirming."
   },
   "orders": {
     "title": "Orders",
@@ -5354,6 +5357,7 @@
     "cancella": "Cancel",
     "ok_esborrada": "“{{tasca}}” deleted",
     "ok_desassignada": "“{{tasca}}” left the round and is pending deduction",
+    "ja_fora": "“{{tasca}}” was already outside any round",
     "error": "The task could not be removed."
   }
 }

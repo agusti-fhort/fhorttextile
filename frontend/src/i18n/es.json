@@ -1705,12 +1705,15 @@
     "bulk_close_action": "Cerrar seleccionados",
     "bulk_close_title_one": "¿Cerrar {{count}} encargo?",
     "bulk_close_title_other": "¿Cerrar {{count}} encargos?",
-    "bulk_close_body": "Se cerrarán los encargos seleccionados que no tengan trabajo en curso o pausado. Las tareas que queden PENDIENTES quedarán DEDUCIDAS: se conservan con su historia, pero salen del encargo y no se facturarán.",
+    "bulk_close_body": "Se cerrarán {{tancables}} encargos · {{bloquejats}} no se podrán cerrar (tienen trabajo en curso o pausado) · {{deduibles}} tareas pendientes quedarán DEDUCIDAS: se conservan con su historia, pero salen del encargo y no se facturarán.",
     "bulk_close_confirm": "Cerrar y deducir las pendientes",
     "bulk_close_cancel": "Cancelar",
-    "bulk_close_ok": "{{ok}} encargos cerrados · {{deduides}} tareas deducidas",
-    "bulk_close_partial": "{{ok}} cerrados · {{ko}} no se han podido cerrar (mira su ficha) · {{deduides}} tareas deducidas",
-    "bulk_close_error": "No se ha podido cerrar el lote."
+    "bulk_close_ok_one": "{{count}} encargo cerrado · {{deduides}} tareas deducidas",
+    "bulk_close_ok_other": "{{count}} encargos cerrados · {{deduides}} tareas deducidas",
+    "bulk_close_partial": "Cerrados: {{ok}} · No se han podido cerrar: {{ko}} (mira su ficha) · Tareas deducidas: {{deduides}}",
+    "bulk_close_error": "No se ha podido cerrar el lote.",
+    "bulk_close_comptant": "Contando qué se cerrará…",
+    "bulk_close_previ_error": "No se ha podido comprobar qué se cerraría. Inténtalo de nuevo antes de confirmar."
   },
   "orders": {
     "title": "Pedidos",
@@ -5354,6 +5357,7 @@
     "cancella": "Cancelar",
     "ok_esborrada": "«{{tasca}}» borrada",
     "ok_desassignada": "«{{tasca}}» ha salido de la vuelta y queda pendiente de deducir",
+    "ja_fora": "«{{tasca}}» ya no estaba en ninguna vuelta",
     "error": "No se ha podido sacar la tarea."
   }
 }

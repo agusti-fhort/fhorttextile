@@ -1705,12 +1705,15 @@
     "bulk_close_action": "Tancar seleccionats",
     "bulk_close_title_one": "Tancar {{count}} encàrrec?",
     "bulk_close_title_other": "Tancar {{count}} encàrrecs?",
-    "bulk_close_body": "Es tancaran els encàrrecs triats que no tinguin feina en curs o pausada. Les tasques que hi quedin PENDENTS quedaran DEDUÏDES: es conserven amb la seva història, però surten de l’encàrrec i no es facturaran.",
+    "bulk_close_body": "Es tancaran {{tancables}} encàrrecs · {{bloquejats}} no es podran tancar (tenen feina en curs o pausada) · {{deduibles}} tasques pendents quedaran DEDUÏDES: es conserven amb la seva història, però surten de l’encàrrec i no es facturaran.",
     "bulk_close_confirm": "Tancar i deduir les pendents",
     "bulk_close_cancel": "Cancel·lar",
-    "bulk_close_ok": "{{ok}} encàrrecs tancats · {{deduides}} tasques deduïdes",
-    "bulk_close_partial": "{{ok}} tancats · {{ko}} no s’han pogut tancar (mira’n la fitxa) · {{deduides}} tasques deduïdes",
-    "bulk_close_error": "No s’ha pogut tancar el lot."
+    "bulk_close_ok_one": "{{count}} encàrrec tancat · {{deduides}} tasques deduïdes",
+    "bulk_close_ok_other": "{{count}} encàrrecs tancats · {{deduides}} tasques deduïdes",
+    "bulk_close_partial": "Tancats: {{ok}} · No s’han pogut tancar: {{ko}} (mira’n la fitxa) · Tasques deduïdes: {{deduides}}",
+    "bulk_close_error": "No s’ha pogut tancar el lot.",
+    "bulk_close_comptant": "Comptant què es tancarà…",
+    "bulk_close_previ_error": "No s’ha pogut comprovar què es tancaria. Torna-ho a provar abans de confirmar."
   },
   "orders": {
     "title": "Comandes",
@@ -5354,6 +5357,7 @@
     "cancella": "Cancel·lar",
     "ok_esborrada": "«{{tasca}}» esborrada",
     "ok_desassignada": "«{{tasca}}» ha sortit de la volta i queda pendent de deduir",
+    "ja_fora": "«{{tasca}}» ja no era a cap volta",
     "error": "No s’ha pogut treure la tasca."
   }
 }

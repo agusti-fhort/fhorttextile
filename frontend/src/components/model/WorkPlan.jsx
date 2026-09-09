@@ -486,11 +486,15 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab, model
     setTraient(true)
     const gest = lligada ? modelTasks.desassignarRonda(task.id) : modelTasks.remove(task.id)
     gest
-      .then(() => {
+      .then(res => {
         setTreient(null)
+        const nom = taskTypeLabel(t, task.task_type_code, task.task_type_name)
+        // `ja_fora` el diu el servidor: la porta és idempotent i, si la tasca ja no tenia volta,
+        // el toast no pot cantar victòria d'un moviment que no ha passat.
         showToast('ok', lligada
-          ? t('paperera.ok_desassignada', { tasca: taskTypeLabel(t, task.task_type_code, task.task_type_name) })
-          : t('paperera.ok_esborrada', { tasca: taskTypeLabel(t, task.task_type_code, task.task_type_name) }))
+          ? (res?.data?.ja_fora ? t('paperera.ja_fora', { tasca: nom })
+                                : t('paperera.ok_desassignada', { tasca: nom }))
+          : t('paperera.ok_esborrada', { tasca: nom }))
         refrescaTot()
       })
       .catch(err => {
@@ -536,12 +540,23 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab, model
             {/* Dins d'una volta, la targeta COMPACTA de la maqueta: quatre o cinc hi caben en
                 una fila sota la capçalera, que és el que fa llegible el pla per rondes. La gran
                 es queda per al pla PLA (model sense voltes), just a sota. */}
+            {/* 🚨 CAP PAPERERA AL BLOC ORFE, i no és una precaució teòrica: és la trampa que
+                aquest mateix tram acaba d'obrir. Des de C3, una tasca que reclama una volta que
+                encara no ens ha arribat cau a «SENSE VOLTA» —que és el que volem, val més mal
+                col·locada que desapareguda—, i aquell bloc no és `segellada` perquè no té ronda.
+                Amb la paperera oberta allà, una tasca VIVA de la R3 es llegiria com a brossa d'un
+                model llegat i, com que el seu `encarrec` ve del MATEIX payload que sospitem
+                ranci, el diàleg oferiria «esborrar» dient «no la reclama ningú»: un DELETE real
+                sobre una premissa que la pantalla acaba de declarar incerta.
+                Al bloc orfe es llegeix; per treure'n res, primer ha de quedar clar de quina
+                volta és. */}
             {bloc.tasques.map(task => (
               <TaskCardCompacta key={task.id} task={task} mine={isMine(task)}
                 hasToolRoute={Boolean(desti(task))}
                 segellada={modelTancat || bloc.estat === RONDA_ENTREGADA}
                 onPlay={handlePlay} onPause={handlePause} onStop={handleStop}
-                onDeclarar={setDeclarant} onTreure={setTreient} />
+                onDeclarar={setDeclarant}
+                onTreure={bloc.ronda ? setTreient : undefined} />
             ))}
           </RondaPla>
         ))
