@@ -45,6 +45,9 @@ TOKEN = os.environ.get('FTT_QA_TOKEN', '')
 
 #: Model amb comanda, numeral 2 i R3 FORA DE COMANDA — el banc del xip de FIT-12.
 MODEL_FIT12 = 1497
+#: Bancs de la paperera: una tasca Pending dins d'una volta, sense encàrrec i amb encàrrec.
+MODEL_LLIURE = 1496
+MODEL_LLIGAT = 1494
 
 #: (nom, ruta, senyal, gestos)
 #: Els gestos van per TEXT o per ARIA a posta: són el que un humà veu, no una classe interna.
@@ -66,6 +69,16 @@ PANTALLES = [
      '[data-ftt-screen="modal-tancament-en-lot"]',
      [('click', 'tbody tr:first-child input[type="checkbox"]'),
       ('click', 'button:has-text("Tancar seleccionats")')]),
+    # Les dues cares de la paperera. Obrir el diàleg NO escriu —l'escriptura és al confirmar, i
+    # aquí no s'hi prem mai—, o sigui que es mesura la cara real i no una reconstrucció.
+    # `MODEL_LLIURE` té una tasca Pending SENSE encàrrec dins d'una volta (cara «esborrar»);
+    # `MODEL_LLIGAT` en té una amb `work_order` (cara «treure de la volta»).
+    (f'M2 · Diàleg · paperera · tasca LLIURE (model {MODEL_LLIURE})',
+     f'/models/{MODEL_LLIURE}', '[data-ftt-screen="modal-paperera-lliure"]',
+     [('click', 'button[title="Esborrar aquesta tasca?"]')]),
+    (f'M3 · Diàleg · paperera · tasca LLIGADA (model {MODEL_LLIGAT})',
+     f'/models/{MODEL_LLIGAT}', '[data-ftt-screen="modal-paperera-lligada"]',
+     [('click', 'button[title="Treure aquesta tasca de la volta"]')]),
 ]
 
 #: BIDIRECCIONAL · (què és, selector maqueta, selector pantalla, gestos, props?)
