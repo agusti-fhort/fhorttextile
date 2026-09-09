@@ -289,30 +289,46 @@ export default function WorkOrders() {
       render: r => r.number || '—',
     },
     {
-      // COLUMNA 2 · EL NOM. La llei del nom: l'identificador més visible és el nom del model i
-      // el codi va a sota, en secundari. Un COLLECTOR no té model i mai en tindrà (ho blinda la
-      // constraint `collector_no_model_no_orderline`): el seu període ocupa aquesta cel·la
-      // perquè és el que l'anomena. `nowrap` de la cel·la fora, que aquí hi ha dues línies.
+      // COLUMNA 2 · EL NOM. La llei del nom: l'identificador més visible és el nom del model i el
+      // codi el segueix en secundari.
+      //
+      // 🚨 **A UNA SOLA LÍNIA.** La primera versió els apilava (nom a sobre, codi a sota) amb un
+      // `whiteSpace: 'normal'` que anul·lava el `nowrap` de `TaulaLlista`, i això trenca la §8e
+      // («MAI salt de línia: trenca la fila d'una línia»). Una graella canònica es llegeix
+      // escombrant una columna amb la vista, i una fila de dues línies obliga a re-enfocar a cada
+      // salt: el que es guanya en detall es perd en la lectura, que és per al que serveix la
+      // llista. El detall sencer és a la fitxa, a un clic.
+      //
+      // Qui s'escurça és el NOM i no el codi, i és a posta: el codi té amplada estable i curta
+      // (`flexShrink: 0`), mentre que el nom pot ser de qualsevol llargada. Escurçar el codi
+      // deixaria un identificador a MITGES —que és pitjor que no tenir-lo, perquè sembla
+      // sencer—; un nom amb ellipsis segueix sent llegible i el `title` de la cel·la porta els
+      // dos sencers.
+      //
+      // Un COLLECTOR no té model i mai en tindrà (ho blinda `collector_no_model_no_orderline`):
+      // el seu període ocupa la cel·la amb el MATEIX tractament —pes 600, tinta principal,
+      // ellipsis— perquè és el que l'anomena. No porta secundari: la seva mena ja la diu el
+      // badge de la columna del costat i repetir-la seria soroll.
       key: 'nom', label: t('workorders.col_nom'), min: 220, max: 380, sort: 'model__nom_prenda',
-      estil: { whiteSpace: 'normal' },
-      titol: r => (r.kind === 'COLLECTOR' ? r.period : r.model_nom) || undefined,
-      render: r => (r.kind === 'COLLECTOR' ? (
-        <span style={{ color: 'var(--text-main)' }}>
-          {t('workorders.collector_period', { period: r.period || '—' })}
-        </span>
-      ) : (
-        <span style={{ display: 'block', minWidth: 0 }}>
-          <span style={{ display: 'block', color: 'var(--text-main)', fontWeight: 600,
-                         overflow: 'hidden',
-                         textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {r.model_nom || t('workorders.no_name')}
+      titol: r => (r.kind === 'COLLECTOR'
+        ? t('workorders.collector_period', { period: r.period || '—' })
+        : [r.model_nom || t('workorders.no_name'), r.model_codi].filter(Boolean).join(' · ')),
+      render: r => (
+        <span style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
+          <span style={{ fontWeight: 600, color: 'var(--text-main)', minWidth: 0,
+                         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {r.kind === 'COLLECTOR'
+              ? t('workorders.collector_period', { period: r.period || '—' })
+              : (r.model_nom || t('workorders.no_name'))}
           </span>
-          {r.model_codi && (
-            <span style={{ display: 'block', fontSize: 'var(--fs-caption)',
-                           color: 'var(--text-soft)' }}>{r.model_codi}</span>
+          {r.kind !== 'COLLECTOR' && r.model_codi && (
+            <span style={{ flexShrink: 0, fontSize: 'var(--fs-caption)',
+                           color: 'var(--text-soft)', whiteSpace: 'nowrap' }}>
+              {r.model_codi}
+            </span>
           )}
         </span>
-      )),
+      ),
     },
     {
       // COLUMNA 3 · LA COL·LECCIÓ. Buida en un col·lector i en un model que no en declara: es
