@@ -35,23 +35,25 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (
     BaseDocTemplate, PageTemplate, Frame,
-    Table, TableStyle, Paragraph, Spacer, Image, HRFlowable,
+    Table, TableStyle, Paragraph, Spacer, Image, HRFlowable, Flowable,
 )
 
 logger = logging.getLogger(__name__)
 
-# Paleta del disseny validat.
+# Paleta del disseny validat (capçalera — Quote/SalesOrder/Albarà, NO tocada pel bloc A).
 GOLD = colors.HexColor('#B8860B')
 GREY = colors.HexColor('#888888')
 LGREY = colors.HexColor('#DDDDDD')
 DARK = colors.HexColor('#1A1A1A')
 DGREY = colors.HexColor('#555555')
 ROWLINE = colors.HexColor('#F0F0F0')
-# Albarà v2 — franja per model (LITERAL del prototip validat).
-CREAM = colors.HexColor('#FBF9F5')
-MODEL_BAND = colors.HexColor('#F4EFE4')
-DET_ROWLINE = colors.HexColor('#F2EFE9')
-FETA_COL, PEND_COL = '#4a7a3a', '#b5892a'   # marcador ● feta (verd) / ● pendent (ambre)
+
+# Albarà v2 · COS (maqueta §3, `ops/maquetes/maqueta_albara_v1.html`) — tokens EXACTES de la
+# maqueta (--text-main/--text-soft/--line). Paleta pròpia i separada de la de dalt: la
+# capçalera hereta el disseny del pressupost validat i aquest bloc no la toca.
+DN_TEXT_MAIN = colors.HexColor('#1D1D1B')
+DN_TEXT_SOFT = colors.HexColor('#6E6A64')
+DN_LINE = colors.HexColor('#E8E5E0')
 
 # Geometria (LITERAL del fitxer de referència v7). Un sol origen X per a tot.
 PAGE_W, PAGE_H = A4
@@ -67,13 +69,21 @@ ZP = [('TOPPADDING', (0, 0), (-1, -1), 1.5), ('BOTTOMPADDING', (0, 0), (-1, -1),
 
 # Noms lògics de font usats al layout → fitxer TTF esperat i fallback Helvetica.
 F_LIGHT, F_REG, F_SEMI, F_BOLD = 'MS-Light', 'MS', 'MS-SemiBold', 'MS-Bold'
+# Albarà v2 · COS (maqueta §3) — IBM Plex Mono, mai la capçalera. Fallback Courier i no
+# Helvetica: és l'únic dels dos que és monospace, com l'original (`--mono` de la maqueta).
+F_MONO, F_MONO_SEMI = 'IBMPlexMono', 'IBMPlexMono-SemiBold'
 _FONT_FILES = {
     F_LIGHT: 'Montserrat-Light.ttf',
     F_REG: 'Montserrat-Regular.ttf',
     F_SEMI: 'Montserrat-SemiBold.ttf',
     F_BOLD: 'Montserrat-Bold.ttf',
+    F_MONO: 'IBMPlexMono-Regular.ttf',
+    F_MONO_SEMI: 'IBMPlexMono-SemiBold.ttf',
 }
-_FALLBACK = {F_LIGHT: 'Helvetica', F_REG: 'Helvetica', F_SEMI: 'Helvetica-Bold', F_BOLD: 'Helvetica-Bold'}
+_FALLBACK = {
+    F_LIGHT: 'Helvetica', F_REG: 'Helvetica', F_SEMI: 'Helvetica-Bold', F_BOLD: 'Helvetica-Bold',
+    F_MONO: 'Courier', F_MONO_SEMI: 'Courier-Bold',
+}
 
 _fonts_cache = None  # {nom_lògic: nom_registrat} — resolt un sol cop per procés
 
@@ -197,6 +207,31 @@ def _money(value):
 def _fmt_date(d):
     """Data en format DD/MM/YYYY, o '—' si no n'hi ha."""
     return d.strftime('%d/%m/%Y') if d else '—'
+
+
+class _TrackedLabel(Flowable):
+    """Una línia de text amb tracking (character spacing) en em, dibuixada directament al
+    canvas. `ParagraphStyle`/`Paragraph` de Platypus no exposen cap primitiu de character
+    spacing (només `spaceBefore`/`spaceAfter`, entre paràgrafs); el canvas de baix nivell sí,
+    via `textobject.setCharSpace()`. Només per a la capçalera «COMENTARIS» de la maqueta §3
+    (0,08em) — cap altra etiqueta d'aquest document el demana."""
+
+    def __init__(self, text, font, size, color, tracking_em=0.08):
+        super().__init__()
+        self.text, self.font, self.size, self.color = text, font, size, color
+        self.char_space = tracking_em * size
+        n = len(text)
+        self.width = pdfmetrics.stringWidth(text, font, size) + self.char_space * max(0, n - 1)
+        self.height = size * 1.3
+
+    def draw(self):
+        c = self.canv
+        c.setFillColor(self.color)
+        txt = c.beginText(0, 0)
+        txt.setFont(self.font, self.size)
+        txt.setCharSpace(self.char_space)
+        txt.textOut(self.text)
+        c.drawText(txt)
 
 
 def _tenant_cfg():
@@ -506,32 +541,48 @@ _EXTRA_LABEL = {'EXTRA': 'dn_extra', 'DEDUCTION': 'dn_deduction', 'EXPENSE': 'dn
 
 def generate_delivery_note_pdf(delivery_note, lang=None):
     """Retorna els bytes del PDF d'un albarà v2 compost per model. Agrupa les línies VISIBLES pel
-    seu model FK; per cada model dibuixa una franja (fons cream) amb ref intern + nom + [ref client
-    si difereix] + collection + temporada/any + data de lliurament (última tasca), els detalls
-    columnats, els comentaris lliures (MANUAL) en cursiva i el subtotal del model. Els totals són
-    els del document (calculats sobre línies visibles). SENSE venciments, SENSE cost intern.
-    `lang` és l'idioma efectiu (ja resolt per resolve_pdf_lang); None → fallback 'ca'."""
+    seu model FK; per cada model dibuixa un bloc (nom + ref intern + [ref client si difereix] +
+    collection + temporada/any), els detalls de cada volta/extra i el subtotal del model. Els
+    totals són els del document (calculats sobre línies visibles). SENSE venciments, SENSE cost
+    intern. `lang` és l'idioma efectiu (ja resolt per resolve_pdf_lang); None → fallback 'ca'.
+
+    TIPOGRAFIA: la capçalera (logo, raó social, NIF, títol, Número/Data, «Per a») hereta
+    Montserrat del disseny validat (B2-PDF-v7) i NO la toca aquesta funció. El COS —des del
+    primer bloc de model fins als totals— és IBM Plex Mono i la paleta pròpia de la maqueta §3
+    (`DN_TEXT_MAIN`/`DN_TEXT_SOFT`/`DN_LINE`), no la del pressupost. Cap franja de color.
+    """
     lang = lang if lang in PDF_LANGS else PDF_LANG_FALLBACK
     F = _fonts()
     FL, FR, FS, FB = F[F_LIGHT], F[F_REG], F[F_SEMI], F[F_BOLD]
+    FM, FMS = F[F_MONO], F[F_MONO_SEMI]
     cfg = _tenant_cfg()
 
     def s(name, font=FL, size=8.5, align=TA_LEFT, color=DARK, leading=None):
         return ParagraphStyle(name, fontName=font, fontSize=size, textColor=color,
                               alignment=align, leading=leading or size * 1.35)
 
-    S = s('n')
-    SB = s('b', font=FS)
-    SR = s('r', align=TA_RIGHT)
-    SRB = s('rb', font=FS, align=TA_RIGHT)
+    # ── CAPÇALERA — Montserrat, paleta DARK/GREY/LGREY del disseny validat. NO TOCAR. ──
     SSM_G = s('smg', size=7.5, color=DGREY)
-    SSM_I = s('smi', size=7.5, color=GREY)
     SSM_R = s('smr', size=7.5, align=TA_RIGHT)
     S_TITDOC = s('titdoc', font=FL, size=14, color=GOLD, align=TA_RIGHT)
     S_CLIENT = s('cli', font=FL, size=13)
     S_LABEL = s('lbl', size=7, color=GREY)
     S_LABEL_R = s('lblr', size=7, color=GREY, align=TA_RIGHT)
-    S_MDELIV = s('mdeliv', size=7.5, color=DGREY, align=TA_RIGHT)
+
+    # ── COS (maqueta §3) — IBM Plex Mono, tokens `DN_*`. Mides EXACTES de l'ordre de tipografia
+    # (regla dels 8pt mínims: la més petita d'aquest document és la capçalera «Comentaris», a 8).
+    S_MODEL = s('dn_model', font=FMS, size=11, color=DN_TEXT_MAIN, leading=14)
+    S_META = s('dn_meta', font=FM, size=8.5, color=DN_TEXT_SOFT, leading=12)
+    S_PACTE = s('dn_pacte', font=FM, size=9, color=DN_TEXT_MAIN, leading=13)
+    S_RONDA = s('dn_ronda', font=FM, size=9, color=DN_TEXT_MAIN, leading=13)
+    S_RONDA_IMP = s('dn_ronda_imp', font=FMS, size=9.5, color=DN_TEXT_MAIN, align=TA_RIGHT, leading=13)
+    S_EXTRA = s('dn_extra_l', font=FM, size=9, color=DN_TEXT_MAIN, leading=13)
+    S_EXTRA_IMP = s('dn_extra_r', font=FM, size=9, color=DN_TEXT_MAIN, align=TA_RIGHT, leading=13)
+    S_COM_B = s('dn_com_b', font=FM, size=9, color=DN_TEXT_MAIN, leading=13)
+    S_SUM = s('dn_sum', font=FM, size=9, color=DN_TEXT_MAIN, leading=13)
+    S_SUM_R = s('dn_sum_r', font=FM, size=9, color=DN_TEXT_MAIN, align=TA_RIGHT, leading=13)
+    S_SUM_TOT = s('dn_sum_tot', font=FMS, size=10, color=DN_TEXT_MAIN, leading=14)
+    S_SUM_TOT_R = s('dn_sum_tot_r', font=FMS, size=10, color=DN_TEXT_MAIN, align=TA_RIGHT, leading=14)
 
     buf = BytesIO()
     doc = BaseDocTemplate(buf, pagesize=A4,
@@ -585,11 +636,14 @@ def generate_delivery_note_pdf(delivery_note, lang=None):
                  ' '.join(x for x in [(m.temporada if m else ''),
                                       str(m.any) if (m and m.any) else ''] if x)]
         refs = [x for x in [(m.codi_client if m else ''), (m.codi_intern if m else '')] if x]
-        ident = [x for x in ident if x] + [f'<font color="#1A1A1A">{x}</font>' for x in refs]
+        # Les refs (client/nostra) es llegeixen en --text-main; la resta de la línia de meta
+        # (col·lecció, temporada) es queda en --text-soft (color per defecte de `S_META`).
+        ident = [x for x in ident if x] + [f'<font color="#{DN_TEXT_MAIN.hexval()[2:]}">{x}</font>'
+                                           for x in refs]
 
-        out = [Paragraph(nom, s('mn', font=FS, size=12.5, leading=16))]
+        out = [Paragraph(nom, S_MODEL)]
         if ident:
-            out.append(Paragraph(' · '.join(ident), s('mi', size=10, color=GREY, leading=14)))
+            out.append(Paragraph(' · '.join(ident), S_META))
         return out
 
     def _linia_block(l):
@@ -611,11 +665,10 @@ def generate_delivery_note_pdf(delivery_note, lang=None):
         # LA LÍNIA DEL PACTE. Una volta directa no en té cap i ho diu en negreta: és la
         # justificació de per què aquell import no surt de cap pressupost.
         if l.encarrec_directe:
-            els.append(Paragraph(f'<font name="{FS}">{t(lang, "dn_direct_order")}</font>',
-                                 s('mp', size=10.5, leading=14)))
+            els.append(Paragraph(f'<font name="{FMS}">{t(lang, "dn_direct_order")}</font>', S_PACTE))
         elif l.linia_comanda_id:
             lc = l.linia_comanda
-            bits = [f'<font name="{FS}">{t(lang, "dn_quote")} '
+            bits = [f'<font name="{FMS}">{t(lang, "dn_quote")} '
                     f'{lc.order.document_number if lc.order_id else "—"}</font>']
             if (l.description or '').strip():
                 bits.append(l.description.strip())
@@ -623,9 +676,9 @@ def generate_delivery_note_pdf(delivery_note, lang=None):
                 bits.append(f'R×{lc.rounds_included}')
             bits.append(f'{t(lang, "dn_qty")} {Decimal(lc.qty_allocated or 0):.0f}/'
                         f'{Decimal(lc.quantity or 0):.0f}')
-            els.append(Paragraph(' · '.join(bits), s('mp', size=10.5, leading=14)))
+            els.append(Paragraph(' · '.join(bits), S_PACTE))
         elif (l.description or '').strip() and not sense_model:
-            els.append(Paragraph(l.description.strip(), s('mp', size=10.5, leading=14)))
+            els.append(Paragraph(l.description.strip(), S_PACTE))
 
         # LES VOLTES EN UNA SOLA LÍNIA, amb l'import a la dreta i SENSE puntets: el punt de
         # conducció és d'una taula de moltes files, i aquí n'hi ha una.
@@ -646,9 +699,8 @@ def generate_delivery_note_pdf(delivery_note, lang=None):
             if fetes:
                 detall = ' · '.join([detall] + fetes) if detall else ' · '.join(fetes)
         els.append(Table([[
-            Paragraph(detall or '—', s('rl', size=10.5, leading=14)),
-            Paragraph(f'{_money(l.line_total)} €',
-                      s('rla', font=FS, size=10.5, align=TA_RIGHT, leading=14)),
+            Paragraph(detall or '—', S_RONDA),
+            Paragraph(f'{_money(l.line_total)} €', S_RONDA_IMP),
         ]], colWidths=[CW - 30 * mm, 30 * mm], style=TableStyle([
             ('TOPPADDING', (0, 0), (-1, -1), 1), ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
             ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
@@ -667,9 +719,8 @@ def generate_delivery_note_pdf(delivery_note, lang=None):
         """
         concepte = (l.description or '').strip() or t(lang, _EXTRA_LABEL.get(l.line_kind, 'dn_extra'))
         return Table([[
-            Paragraph(concepte, s('xl', size=10.5, leading=14)),
-            Paragraph(f'{_money(l.line_total)} €',
-                      s('xla', font=FS, size=10.5, align=TA_RIGHT, leading=14)),
+            Paragraph(concepte, S_EXTRA),
+            Paragraph(f'{_money(l.line_total)} €', S_EXTRA_IMP),
         ]], colWidths=[CW - 30 * mm, 30 * mm], style=TableStyle([
             ('TOPPADDING', (0, 0), (-1, -1), 1), ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
             ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
@@ -694,34 +745,39 @@ def generate_delivery_note_pdf(delivery_note, lang=None):
             extres.setdefault(l.model_id, []).append(l)
     ultima = {l.model_id: i for i, l in enumerate(principals)}
 
+    # 6pt de padding vertical per bloc i una regla fina (--line) entre blocs — maqueta §3
+    # (`.blk{padding:8px 0;border-bottom:1px solid var(--line)}`, adaptat a pt d'impressió).
+    # Cap franja de color.
     for i, ln in enumerate(principals):
-        story.append(Spacer(1, 2 * mm))
+        story.append(Spacer(1, 6))
         for el in _linia_block(ln):
             story.append(el)
         if ultima.get(ln.model_id) == i:
             for ex in extres.pop(ln.model_id, []):
                 story.append(_fila_extra(ex))
-        story.append(HRFlowable(width='100%', thickness=0.5, color=LGREY,
-                                spaceBefore=2 * mm, spaceAfter=0))
+        story.append(HRFlowable(width='100%', thickness=0.5, color=DN_LINE,
+                                spaceBefore=6, spaceAfter=0))
 
     # Els extres d'un model que no té cap línia de voltes en aquest albarà: llavors sí que
     # necessiten capçalera pròpia —si no, sortirien com un import solt sense dir de què és.
     for _mid, files in extres.items():
-        story.append(Spacer(1, 2 * mm))
+        story.append(Spacer(1, 6))
         for el in _capcalera_model(files[0]):
             story.append(el)
         for ex in files:
             story.append(_fila_extra(ex))
-        story.append(HRFlowable(width='100%', thickness=0.5, color=LGREY,
-                                spaceBefore=2 * mm, spaceAfter=0))
+        story.append(HRFlowable(width='100%', thickness=0.5, color=DN_LINE,
+                                spaceBefore=6, spaceAfter=0))
 
     story.append(Spacer(1, 4 * mm))
 
-    # ═══ COMENTARIS · a l'esquerra de les sumes (maqueta §3) ═══
+    # ═══ COMENTARIS · a l'esquerra de les sumes (maqueta §3) ═══ — capçalera majúscules amb
+    # tracking .08em (`_TrackedLabel`: Platypus no ho sap fer amb `Paragraph`), cos 9pt.
     if (delivery_note.notes or '').strip():
         story.append(Table([[
-            Table([[Paragraph(t(lang, 'dn_comments'), s('ch', size=9, color=GREY))],
-                   [Paragraph(delivery_note.notes.strip(), s('cb', size=10, leading=14))]],
+            Table([[_TrackedLabel(t(lang, 'dn_comments').upper(), FM, 8, DN_TEXT_SOFT)],
+                   [Spacer(1, 3)],
+                   [Paragraph(delivery_note.notes.strip(), S_COM_B)]],
                   colWidths=[CW - 70 * mm], style=TableStyle(ZP)),
             '',
         ]], colWidths=[CW - 70 * mm, 70 * mm], style=TableStyle(
@@ -729,13 +785,15 @@ def generate_delivery_note_pdf(delivery_note, lang=None):
         story.append(Spacer(1, 4 * mm))
 
     # ═══ RESUM (sense venciments; totals sobre línies visibles = els del document) ═══
+    # «Import total» amb regla superior --text-main (maqueta: `.sum .tot{border-top:1px solid
+    # var(--text-main)}`) — DN_TEXT_MAIN i no la LGREY de la capçalera.
     pct = _tax_pct(delivery_note.subtotal, delivery_note.tax_amount)
     story.append(Table([
-        ['', Paragraph(t(lang, 'taxable_base'), S), Paragraph(f'{_money(delivery_note.subtotal)} €', SR)],
-        ['', Paragraph(f'{t(lang, "vat")} {pct}%', S), Paragraph(f'{_money(delivery_note.tax_amount)} €', SR)],
-        ['', Paragraph(t(lang, 'total_amount'), SB), Paragraph(f'{_money(delivery_note.total)} €', SRB)],
+        ['', Paragraph(t(lang, 'taxable_base'), S_SUM), Paragraph(f'{_money(delivery_note.subtotal)} €', S_SUM_R)],
+        ['', Paragraph(f'{t(lang, "vat")} {pct}%', S_SUM), Paragraph(f'{_money(delivery_note.tax_amount)} €', S_SUM_R)],
+        ['', Paragraph(t(lang, 'total_amount'), S_SUM_TOT), Paragraph(f'{_money(delivery_note.total)} €', S_SUM_TOT_R)],
     ], colWidths=[104 * mm, 44 * mm, 26 * mm], style=TableStyle([
-        ('LINEABOVE', (1, 2), (2, 2), 0.5, LGREY),
+        ('LINEABOVE', (1, 2), (2, 2), 0.5, DN_TEXT_MAIN),
         ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
         ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0)])))
 
