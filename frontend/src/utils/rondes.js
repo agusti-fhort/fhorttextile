@@ -97,6 +97,16 @@ export function rectificacionsPerVolta(log) {
  * llegats sencers. Van a un bloc propi al final, amb `ronda: null`: fer-les desaparèixer perquè
  * el mockup no les dibuixa seria que la pantalla n'ensenyés menys que abans d'aquest sprint.
  *
+ * 🚨 **NI LES DE VOLTA DESCONEGUDA.** Els blocs es construeixen des de `voltes`, no des de les
+ * files: una fila amb `ronda_seq = N` on `N` no és a `voltes` no queia a `orfes` (la guarda de
+ * sota mira `== null`, i la seva no ho és) ni tenia bloc on anar — **desapareixia en silenci**,
+ * sense error, sense buit i amb 200 OK a la xarxa. És el defecte que va reportar en Salva: les
+ * dues fonts d'aquesta pantalla arriben per portes diferents (`/dashboard/` les tasques,
+ * `/rondes/` les voltes) i, quan la segona va endarrerida, la tasca acabada d'assignar no
+ * apareixia enlloc. Ara aquestes files cauen al mateix bloc `orfes`: sortir al lloc equivocat
+ * és infinitament més diagnosticable que no sortir.
+ * (v. DIAGNOSI_REACTIVITAT_FRONT.md §Q2.2 · §Q4.4·2)
+ *
  * Opcions: `minutsDe` i `esFeta` (els dos payloads anomenen els seus camps diferent).
  */
 export function agrupaPerRonda(files, rondes, opcions = {}) {
@@ -145,7 +155,18 @@ export function agrupaPerRonda(files, rondes, opcions = {}) {
     }
   }
 
-  const blocs = voltes.map(r => bloc(r, perSeq.get(r.seq) || []))
+  const blocs = voltes.map(r => {
+    const tasques = perSeq.get(r.seq) || []
+    perSeq.delete(r.seq)          // consumida: el que quedi a `perSeq` és feina sense volta coneguda
+    return bloc(r, tasques)
+  })
+
+  // Les files que reclamen una volta que no ens ha arribat. `perSeq` es consumeix a mesura que
+  // es reparteix, i el que hi queda són exactament aquestes: cap fila pot sortir d'aquí sense
+  // haver estat mirada. L'ordre de `seq` les manté estables entre renders.
+  for (const seq of [...perSeq.keys()].sort((a, b) => a - b)) {
+    orfes.push(...perSeq.get(seq))
+  }
   if (orfes.length) blocs.push(bloc(null, orfes))
   return blocs
 }

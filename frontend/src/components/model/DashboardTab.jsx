@@ -106,6 +106,18 @@ export default function DashboardTab({ modelId, onOpenTab, navigate, wpVersion =
 
   useEffect(() => load(), [load])
 
+  // C1 · OIENT DE `plan:changed`. Aquest tab era un LECTOR PUR sense cap nansa d'invalidació:
+  // `load` no s'exporta i l'únic que la rebia era el fill (`onRefresh` del WorkPlan), o sigui que
+  // una escriptura de fora —`models.openTask` des de `ModelSheet` o d'una eina— deixava el
+  // compositor ranci fins a l'F5. `wpVersion` NO servia per a això: només re-clava el
+  // `WatchpointsPanel` (v. més avall), i semblar una nansa sense ser-ho era part del problema.
+  // (v. DIAGNOSI_REACTIVITAT_FRONT.md §Q2.4)
+  useEffect(() => {
+    const h = () => load()
+    window.addEventListener('plan:changed', h)
+    return () => window.removeEventListener('plan:changed', h)
+  }, [load])
+
   // Temps acumulat del model: mateixa font que la pestanya Registre (GET /albara/), sense recalcular.
   // Només se'n mostra el "temps total" a la línia del títol "On sóc". Degrada net si no hi ha activitat.
   useEffect(() => {
@@ -118,7 +130,15 @@ export default function DashboardTab({ modelId, onOpenTab, navigate, wpVersion =
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelId])
 
-  if (loading) {
+  // 🚨 **UN REFRESC NO POT BUIDAR LA PANTALLA** — `&& !data`, i és el que fa que la resta
+  // d'aquest tram serveixi de res. `load()` posa `loading=true` a cada càrrega, i amb el retorn
+  // primerenc a seques això DESMUNTAVA el `WorkPlan` a cada gest: el pla es tornava a muntar de
+  // zero, l'usuari perdia el col·lapse que hagués fet a les voltes, i les dues invalidacions
+  // fines d'aquest tram —el bump de `versio` i l'oient de `plan:changed`— quedaven INERTES,
+  // perquè el component que les havia d'aprofitar ja no existia quan arribaven.
+  // El llenç només es buida quan encara no hi ha RES per ensenyar; a partir del segon cop, la
+  // dada anterior es queda a la cara fins que arriba la nova.
+  if (loading && !data) {
     return (
       <div style={{ padding: '2rem', textAlign: 'center',
                     color: 'var(--text-soft)', fontSize: 'var(--fs-body)' }}>

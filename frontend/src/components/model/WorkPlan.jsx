@@ -242,10 +242,36 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab, model
     return () => { alive = false }
   }, [modelId, versio])
 
+  // C1 · OIENT DE `plan:changed`. Aquesta pantalla no és l'única que crea feina sobre el model:
+  // `models.openTask` es crida des de `ModelSheet` (:483/:525/:811), `TallerPatro` (:336) i
+  // `PropagatedEditor` (:220), i qualsevol d'aquestes pot fer néixer una volta mentre el Pla és
+  // muntat. `openTask` ja emet l'esdeveniment (endpoints.js:101) i aquí només se n'escolta la
+  // NOSTRA font: el dashboard el rellegeix el pare, que hi està subscrit pel seu compte.
+  // Mateix patró que els tres oients que ja hi havia (Dashboard.jsx:290, Planning.jsx:175,
+  // ProjectGantt.jsx:84) — un de sol per superfície, i sempre amb el seu `removeEventListener`.
+  useEffect(() => {
+    const h = () => setVersio(v => v + 1)
+    window.addEventListener('plan:changed', h)
+    return () => window.removeEventListener('plan:changed', h)
+  }, [])
+
   // Refresc COMPLET: el dashboard (que el pare recarrega) i les voltes, que són nostres. Tot el
   // que escriu una ronda —entregar, OK del client, +Ronda— pot moure les DUES coses alhora:
   // informar una entrega tanca la volta I tanca la seva feina viva (FIT-13 + FIT-6).
   const refrescaTot = () => { setVersio(v => v + 1); onRefresh?.() }
+
+  // 🚨 **AQUESTA PANTALLA TÉ DUES FONTS I TOT GEST QUE ESCRIU LES POT MOURE TOTES DUES.**
+  //
+  // Fins avui aquí hi convivien dos vocabularis de refresc: els TRES gestos de volta (+Ronda,
+  // entrega, OK client) cridaven `refrescaTot()` i els CINC de TASCA (play, pause, stop, handoff,
+  // temps declarat) només `onRefresh?.()` —el dashboard—, deixant `rondes` ranci. No era un
+  // descuit de cap d'ells: els gestos de tasca són de P3/P4a i van néixer ABANS que M2 afegís la
+  // segona font; ningú els va reobrir. Que una tasca pugui obrir la R1 d'un model (M1-bis · FIT-4:
+  // `open-task` fa néixer la volta) converteix aquesta asimetria en el defecte d'en Salva.
+  //
+  // 🔑 LLEI: afegir una segona font a una pantalla obliga a reobrir els gestos que ja hi vivien.
+  // Aquí ja no queda cap crida a `onRefresh` sola: o `refrescaTot()`, o res.
+  // (v. DIAGNOSI_REACTIVITAT_FRONT.md §Q2.3)
 
   const list = Array.isArray(tasques) ? tasques : []
   const isMine = (task) => task.assignee_id != null && task.assignee_id === myProfileId
@@ -303,10 +329,10 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab, model
   // perquè estat/temps/obertures de la targeta reflecteixin el canvi.
   function doTransition(task, toStatus) {
     modelTasks.transition(task.id, { to_status: toStatus })
-      .then(res => { notifyPaused(res); onRefresh?.() })
+      .then(res => { notifyPaused(res); refrescaTot() })
       .catch(err => {
         showToast('err', transitionError(err))
-        onRefresh?.()   // re-sincronitza amb el backend (la targeta local podia ser obsoleta)
+        refrescaTot()   // re-sincronitza amb el backend (la targeta local podia ser obsoleta)
       })
   }
 
@@ -331,7 +357,11 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab, model
           if (d.tab) onOpenTab?.(d.tab)
           navigate(d.route)
         } else {
-          onRefresh?.()
+          // `open-task` pot haver fet néixer la volta (FIT-4) i no només mogut l'estat de la
+          // targeta: cal rellegir les DUES fonts. `models.openTask` ja emet `plan:changed` i
+          // l'oient de sota també ho faria; la crida explícita es queda perquè aquesta funció
+          // no ha de dependre que un altre mòdul segueixi emetent.
+          refrescaTot()
         }
       })
       .catch(err => {
@@ -340,7 +370,7 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab, model
             ? t('model_sheet.dashboard.workplan.not_allowed')
             : t('model_sheet.dashboard.workplan.transition_error'))
         showToast('err', msg)
-        onRefresh?.()
+        refrescaTot()
       })
   }
 
@@ -393,13 +423,13 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab, model
         notifyPaused(res)   // el play pot haver pausat l'altra InProgress del tècnic
         return modelTasks.transition(task.id, { to_status: 'Done' })
       })
-      .then(() => onRefresh?.())
+      .then(() => refrescaTot())
       .catch(err => {
         const msg = transitionError(err)
         showToast('err', repres
           ? t('model_sheet.dashboard.workplan.stop_resumed_not_closed', { msg })
           : msg)
-        onRefresh?.()
+        refrescaTot()
       })
   }
 
@@ -525,7 +555,7 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab, model
           onFet={(d) => {
             setDeclarant(null)
             showToast('ok', t('temps_declarat.ok', { minuts: d?.minuts ?? 0 }))
-            onRefresh?.()
+            refrescaTot()
           }}
           onCancel={() => setDeclarant(null)}
         />
