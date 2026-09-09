@@ -1698,7 +1698,18 @@
     "select_all": "Seleccionar todos los encargos visibles",
     "select_one": "Seleccionar el encargo {{n}}",
     "collector_period": "Colector {{period}}",
-    "no_name": "(sin nombre)"
+    "no_name": "(sin nombre)",
+    "selected_n_one": "{{count}} encargo seleccionado",
+    "selected_n_other": "{{count}} encargos seleccionados",
+    "clear_selection": "Deshacer la selección",
+    "bulk_close_action": "Cerrar seleccionados",
+    "bulk_close_title": "¿Cerrar {{count}} encargos?",
+    "bulk_close_body": "Se cerrarán los encargos seleccionados que no tengan trabajo en curso o pausado. Las tareas que queden PENDIENTES quedarán DEDUCIDAS: se conservan con su historia, pero salen del encargo y no se facturarán.",
+    "bulk_close_confirm": "Cerrar y deducir las pendientes",
+    "bulk_close_cancel": "Cancelar",
+    "bulk_close_ok": "{{ok}} encargos cerrados · {{deduides}} tareas deducidas",
+    "bulk_close_partial": "{{ok}} cerrados · {{ko}} no se han podido cerrar (mira su ficha) · {{deduides}} tareas deducidas",
+    "bulk_close_error": "No se ha podido cerrar el lote."
   },
   "orders": {
     "title": "Pedidos",

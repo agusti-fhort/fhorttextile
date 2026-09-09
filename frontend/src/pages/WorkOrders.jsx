@@ -6,6 +6,8 @@ import Feedback from '../components/ui/Feedback'
 import PageMenu from '../components/ui/PageMenu'
 import TaulaLlista from '../components/ui/TaulaLlista'
 import SubTabs from '../components/ui/SubTabs'
+import Modal from '../components/ui/Modal'
+import { botoPri } from '../components/ui/buttons'
 import { EstatBadge, ClassificacioBadge, useCodisEstat } from '../components/commercial/estats'
 import {
   Comptador, FilaIdentitat, EstatBuit, Paginacio, camp, forceBarra,
@@ -60,6 +62,8 @@ export default function WorkOrders() {
   // perquè arrossegar una tria a través d'un conjunt que ja no es veu és com es tanca el que
   // no es volia tancar.
   const [triats, setTriats] = useState(() => new Set())
+  const [tancant, setTancant] = useState(false)      // diàleg de confirmació obert
+  const [enviant, setEnviant] = useState(false)      // guard anti-doble-clic del lot
 
   const { codis: estats } = useCodisEstat('estats_encarrec')
   const { codis: tipus } = useCodisEstat('tipus_encarrec')
@@ -156,6 +160,43 @@ export default function WorkOrders() {
     ...(estats || []).map(codi => ({ key: codi, label: `workorders.status_${codi}` })),
     { key: '', label: 'workorders.tab_all' },
   ], [estats])
+
+  // ── TANCAR ELS SELECCIONATS ──────────────────────────────────────────────────────────────
+  //
+  // La confirmació ha de dir DUES coses abans de tocar res: quants encàrrecs es tanquen i que
+  // les tasques pendents que hi pengin quedaran DEDUÏDES. La segona és la que no es veu i la
+  // que no té marxa enrere; callar-la seria demanar un sí a cegues.
+  //
+  // El compte és `triats.size` i no una derivada de les files: la tria es buida a cada canvi de
+  // consulta, o sigui que el que hi ha triat és sempre el que es veu.
+  const tancaSeleccionats = useCallback(() => {
+    if (!triats.size || enviant) return
+    setEnviant(true)
+    commerce.workOrders.closeBulk({ ids: [...triats], cancel_pending: true })
+      .then(res => {
+        const d = res.data || {}
+        const nOk = (d.tancats || []).length
+        const nKo = (d.bloquejats || []).length + (d.errors || []).length
+        const deduides = (d.resultats || []).reduce((a, r) => a + (r.deduides || 0), 0)
+        setTancant(false)
+        setTriats(new Set())
+        // El resum diu els tres números que importen, i el PARCIAL no s'amaga: si algun ha
+        // quedat bloquejat, el to és d'avís i no d'èxit. Els motius per encàrrec viuen a la
+        // seva fitxa —aquí caben els comptes, no la llista.
+        setFeedback({
+          type: nKo ? 'warn' : 'ok',
+          text: nKo
+            ? t('workorders.bulk_close_partial', { ok: nOk, ko: nKo, deduides })
+            : t('workorders.bulk_close_ok', { ok: nOk, deduides }),
+        })
+        load(); carregaTotal()
+      })
+      .catch(err => {
+        setTancant(false)
+        setFeedback({ type: 'err', text: err?.response?.data?.error || t('workorders.bulk_close_error') })
+      })
+      .finally(() => setEnviant(false))
+  }, [triats, enviant, t, load, carregaTotal])
 
   const pages = Math.max(1, Math.ceil(count / PAGE_SIZE))
 
@@ -277,6 +318,46 @@ export default function WorkOrders() {
             {customers.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
           </select>
         </FilaIdentitat>
+
+        {/* BARRA DE SELECCIÓ · només existeix quan hi ha alguna cosa triada. No és un peu fix ni
+            un botó permanent apagat: una acció destructiva no ha d'estar sempre a la vista
+            demanant que la premin. Diu QUANTS n'hi ha triats i ofereix desfer la tria. */}
+        {triats.size > 0 && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+            padding: '8px 12px', marginBottom: 10,
+            background: 'var(--sel)', borderWidth: 1, borderStyle: 'solid',
+            borderColor: 'var(--gold-border)', borderRadius: 'var(--r-card)',
+          }}>
+            <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)' }}>
+              {t('workorders.selected_n', { count: triats.size })}
+            </span>
+            <button type="button" onClick={() => setTriats(new Set())}
+              style={{ border: 'none', background: 'none', cursor: 'pointer',
+                       fontSize: 'var(--fs-caption)', color: 'var(--text-soft)',
+                       textDecoration: 'underline', padding: 0 }}>
+              {t('workorders.clear_selection')}
+            </button>
+            <button type="button" onClick={() => setTancant(true)} disabled={enviant}
+              style={{ ...botoPri, marginLeft: 'auto' }}>
+              <i className="ti ti-lock" aria-hidden="true"
+                 style={{ fontSize: 14, marginRight: 6 }} />
+              {t('workorders.bulk_close_action')}
+            </button>
+          </div>
+        )}
+
+        {tancant && (
+          <Modal
+            title={t('workorders.bulk_close_title', { count: triats.size })}
+            subtitle={t('workorders.bulk_close_body')}
+            confirmLabel={t('workorders.bulk_close_confirm')}
+            cancelLabel={t('workorders.bulk_close_cancel')}
+            confirmDisabled={enviant}
+            onConfirm={tancaSeleccionats}
+            onCancel={() => { if (!enviant) setTancant(false) }}
+          />
+        )}
 
         <Feedback feedback={feedback} onDismiss={() => setFeedback(null)} />
 

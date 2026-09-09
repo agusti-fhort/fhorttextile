@@ -1698,7 +1698,18 @@
     "select_all": "Select all visible work orders",
     "select_one": "Select work order {{n}}",
     "collector_period": "Collector {{period}}",
-    "no_name": "(unnamed)"
+    "no_name": "(unnamed)",
+    "selected_n_one": "{{count}} work order selected",
+    "selected_n_other": "{{count}} work orders selected",
+    "clear_selection": "Clear selection",
+    "bulk_close_action": "Close selected",
+    "bulk_close_title": "Close {{count}} work orders?",
+    "bulk_close_body": "The selected work orders will be closed unless they have work in progress or paused. Any tasks still PENDING will be DEDUCTED: they keep their history, but leave the work order and will not be billed.",
+    "bulk_close_confirm": "Close and deduct pending",
+    "bulk_close_cancel": "Cancel",
+    "bulk_close_ok": "{{ok}} work orders closed · {{deduides}} tasks deducted",
+    "bulk_close_partial": "{{ok}} closed · {{ko}} could not be closed (see each one) · {{deduides}} tasks deducted",
+    "bulk_close_error": "The batch could not be closed."
   },
   "orders": {
     "title": "Orders",

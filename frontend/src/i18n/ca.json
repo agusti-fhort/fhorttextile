@@ -1698,7 +1698,18 @@
     "select_all": "Triar tots els encàrrecs visibles",
     "select_one": "Triar l’encàrrec {{n}}",
     "collector_period": "Col·lector {{period}}",
-    "no_name": "(sense nom)"
+    "no_name": "(sense nom)",
+    "selected_n_one": "{{count}} encàrrec triat",
+    "selected_n_other": "{{count}} encàrrecs triats",
+    "clear_selection": "Desfer la tria",
+    "bulk_close_action": "Tancar seleccionats",
+    "bulk_close_title": "Tancar {{count}} encàrrecs?",
+    "bulk_close_body": "Es tancaran els encàrrecs triats que no tinguin feina en curs o pausada. Les tasques que hi quedin PENDENTS quedaran DEDUÏDES: es conserven amb la seva història, però surten de l’encàrrec i no es facturaran.",
+    "bulk_close_confirm": "Tancar i deduir les pendents",
+    "bulk_close_cancel": "Cancel·lar",
+    "bulk_close_ok": "{{ok}} encàrrecs tancats · {{deduides}} tasques deduïdes",
+    "bulk_close_partial": "{{ok}} tancats · {{ko}} no s’han pogut tancar (mira’n la fitxa) · {{deduides}} tasques deduïdes",
+    "bulk_close_error": "No s’ha pogut tancar el lot."
   },
   "orders": {
     "title": "Comandes",

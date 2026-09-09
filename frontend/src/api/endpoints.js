@@ -734,6 +734,10 @@ export const commerce = {
     list: (params) => client.get('/api/v1/commerce/work-orders/', { params }),   // ?kind=&status=&customer=&period=
     get: (id) => client.get(`/api/v1/commerce/work-orders/${id}/`),
     close: (id, data) => client.post(`/api/v1/commerce/work-orders/${id}/close/`, data || {}),
+    // Tancament en LOT = el mateix `close`, N vegades (mateix gate, mateixos guards). Torna
+    // {resultats:[{id,number,ok,motiu,blockers,pending_proposals,deduides}], tancats, bloquejats,
+    // errors}: un lot és SEMPRE parcial i qui el crida ha de poder dir quins han quedat fora.
+    closeBulk: (data) => client.post('/api/v1/commerce/work-orders/close-bulk/', data),
     // B4b — revisió comercial (preu de venda) d'un WO tancat. {items:[{model_task_id,kind,amount}]}
     review: (id, data) => client.post(`/api/v1/commerce/work-orders/${id}/review/`, data || {}),
     // Desassigna el model de la línia: orfanda el WO (gate CONFIGURE). 400 si ORDER tancat/albaranat.
