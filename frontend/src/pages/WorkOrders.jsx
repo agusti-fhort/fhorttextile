@@ -282,63 +282,46 @@ export default function WorkOrders() {
       ),
     },
     {
-      key: 'number', label: t('workorders.col_number'), min: 130, max: 170, sort: 'number',
-      // §8e — «la dada reina de cada llista porta el pes», i des d'aquest lot la dada reina és
-      // el NOM (columna següent), no el número. El pes hi baixa.
-      titol: r => r.number,
-      render: r => r.number || '—',
+      // ── LES SIS COLUMNES (Agus 09/09) ──────────────────────────────────────────────────
+      // REF DEL MODEL · NOM · COL·LECCIÓ · TIPUS · CLIENT · ESTAT. I cap més.
+      //
+      // Se'n van NÚMERO i TASQUES. El número d'encàrrec no és el que algú busca amb la vista
+      // escombrant la llista —el busca qui ja el té d'un correu, i per a això hi ha el
+      // cercador—, i el comptador de tasques és un detall de dins de l'encàrrec, no un eix de
+      // la safata. Cap dels dos desapareix: el número viatja al `title` de cada fila i mana a
+      // la fitxa; el recompte és a la fitxa.
+      //
+      // La REF passa a columna PRÒPIA i surt de la cel·la del nom, on el commit anterior
+      // l'havia posada com a secundari. Amb la ref com a columna, repetir-la sota el nom seria
+      // dir el mateix dues vegades a la mateixa fila.
+      key: 'ref', label: t('workorders.col_ref'), min: 130, max: 170, sort: 'model__codi_intern',
+      estil: { color: 'var(--text-soft)' },
+      titol: r => r.model_codi || undefined,
+      // Un COLLECTOR no té model i mai en tindrà (`collector_no_model_no_orderline`): no té ref
+      // i es pinta el guió de la casa, no una cadena inventada.
+      render: r => r.model_codi || '—',
     },
     {
-      // COLUMNA 2 · EL NOM. La llei del nom: l'identificador més visible és el nom del model i el
-      // codi el segueix en secundari.
+      // LA DADA REINA. §8e: porta el pes, i el pes va a la CEL·LA (`td.c-nom{font-weight:600}`),
+      // no a un `span` de dins — amb el 600 al fill, el computat del `td` deia 400 i la
+      // bidireccional ho marcava. A UNA SOLA LÍNIA amb ellipsis: la §8e prohibeix el salt, que
+      // trenca la fila d'una línia i obliga a re-enfocar a cada salt.
       //
-      // 🚨 **A UNA SOLA LÍNIA.** La primera versió els apilava (nom a sobre, codi a sota) amb un
-      // `whiteSpace: 'normal'` que anul·lava el `nowrap` de `TaulaLlista`, i això trenca la §8e
-      // («MAI salt de línia: trenca la fila d'una línia»). Una graella canònica es llegeix
-      // escombrant una columna amb la vista, i una fila de dues línies obliga a re-enfocar a cada
-      // salt: el que es guanya en detall es perd en la lectura, que és per al que serveix la
-      // llista. El detall sencer és a la fitxa, a un clic.
-      //
-      // Qui s'escurça és el NOM i no el codi, i és a posta: el codi té amplada estable i curta
-      // (`flexShrink: 0`), mentre que el nom pot ser de qualsevol llargada. Escurçar el codi
-      // deixaria un identificador a MITGES —que és pitjor que no tenir-lo, perquè sembla
-      // sencer—; un nom amb ellipsis segueix sent llegible i el `title` de la cel·la porta els
-      // dos sencers.
-      //
-      // Un COLLECTOR no té model i mai en tindrà (ho blinda `collector_no_model_no_orderline`):
-      // el seu període ocupa la cel·la amb el MATEIX tractament —pes 600, tinta principal,
-      // ellipsis— perquè és el que l'anomena. No porta secundari: la seva mena ja la diu el
-      // badge de la columna del costat i repetir-la seria soroll.
+      // El COLLECTOR posa aquí el seu període, que és el que l'anomena.
       key: 'nom', label: t('workorders.col_nom'), min: 220, max: 380, sort: 'model__nom_prenda',
-      // El pes va a la CEL·LA i no a un `span` de dins, que és on el posa la llista canònica
-      // (`td.c-nom{font-weight:600}`). Amb el 600 al fill, el `getComputedStyle` del `td` deia
-      // 400 i la bidireccional ho marcava —i tenia raó: dos llocs diferents per a la mateixa
-      // regla és com neixen les dues veritats de crom. El codi secundari el torna a 400.
       estil: { fontWeight: 600 },
       titol: r => (r.kind === 'COLLECTOR'
         ? t('workorders.collector_period', { period: r.period || '—' })
-        : [r.model_nom || t('workorders.no_name'), r.model_codi].filter(Boolean).join(' · ')),
-      render: r => (
-        <span style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
-          <span style={{ color: 'var(--text-main)', minWidth: 0,
-                         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {r.kind === 'COLLECTOR'
-              ? t('workorders.collector_period', { period: r.period || '—' })
-              : (r.model_nom || t('workorders.no_name'))}
-          </span>
-          {r.kind !== 'COLLECTOR' && r.model_codi && (
-            <span style={{ flexShrink: 0, fontSize: 'var(--fs-caption)', fontWeight: 400,
-                           color: 'var(--text-soft)', whiteSpace: 'nowrap' }}>
-              {r.model_codi}
-            </span>
-          )}
-        </span>
-      ),
+        : (r.model_nom || t('workorders.no_name'))),
+      render: r => (r.kind === 'COLLECTOR'
+        ? t('workorders.collector_period', { period: r.period || '—' })
+        : (r.model_nom || t('workorders.no_name'))),
     },
     {
-      // COLUMNA 3 · LA COL·LECCIÓ. Buida en un col·lector i en un model que no en declara: es
-      // pinta el guió de la casa i no una cadena inventada.
+      // COL·LECCIÓ. Buida en un col·lector (no té model) i en un model que no en declara: guió
+      // de la casa, mai una cadena inventada. Secundària en tinta, com la ref.
       key: 'collection', label: t('workorders.col_collection'), min: 130, max: 200,
+      sort: 'model__collection',
       estil: { color: 'var(--text-soft)' },
       titol: r => r.model_collection || undefined,
       render: r => r.model_collection || '—',
@@ -355,10 +338,6 @@ export default function WorkOrders() {
     {
       key: 'status', label: t('workorders.col_status'), min: 90, max: 120, sort: 'status',
       render: r => <WOStatusBadge status={r.status} t={t} />,
-    },
-    {
-      key: 'n_tasks', label: t('workorders.col_tasks'), min: 80, max: 100, align: 'right',
-      render: r => r.n_tasks ?? 0,
     },
   ], [t, triats, totsVisibles, commuta, commutaTots])
 
@@ -470,9 +449,13 @@ export default function WorkOrders() {
           : error ? <EstatBuit>{t('workorders.error')}</EstatBuit>
             : items.length === 0 ? <EstatBuit>{t('workorders.empty')}</EstatBuit>
               : (
+                /* `titolFila`: el número d'encàrrec ja no té columna —les sis són del MODEL— i
+                   viu al `title` de la fila. Ningú l'escombra amb la vista; qui el té d'un
+                   correu el busca amb el cercador, que hi cerca des del lot anterior. */
                 <TaulaLlista cols={cols} files={items} clau={(r) => r.id}
                   ordre={ordre} onOrdenar={ordenar}
                   triada={(r) => triats.has(r.id)}
+                  titolFila={(r) => r.number}
                   onObrir={(r) => navigate(`/comercial/encarrecs/${r.id}`)} />
               )}
 

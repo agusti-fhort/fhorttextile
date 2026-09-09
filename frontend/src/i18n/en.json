@@ -1691,6 +1691,7 @@
     "prev": "Previous",
     "next": "Next",
     "page_info": "Page {{page}} of {{pages}}",
+    "col_ref": "Model ref.",
     "col_nom": "Model",
     "col_collection": "Collection",
     "tab_all": "All",

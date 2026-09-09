@@ -1691,6 +1691,7 @@
     "prev": "Anterior",
     "next": "Següent",
     "page_info": "Pàgina {{page}} de {{pages}}",
+    "col_ref": "Ref. model",
     "col_nom": "Model",
     "col_collection": "Col·lecció",
     "tab_all": "Totes",
