@@ -86,6 +86,44 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
             cleanup_after_pending_delete(model_id=model_id, assignee_id=assignee_id)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+    @action(detail=True, methods=['post'], url_path='desassignar-ronda')
+    def desassignar_ronda(self, request, pk=None):
+        """POST /api/v1/model-task-items/{id}/desassignar-ronda/ — treu la tasca de la seva VOLTA
+        sense esborrar-la.
+
+        LA PORTA BESSONA DE `destroy`, i existeix precisament perquè NO són el mateix gest. Una
+        tasca lligada a un encàrrec no s'ha d'esborrar mai: ha de sortir del contenidor i quedar-se
+        `Pending`, perquè el tancament de l'encàrrec la dedueixi (`close_work_order` amb
+        `cancel_pending=True` li escriu un DEDUCTION que en RETÉ la FK per poder-la valorar a
+        l'albarà). Esborrar-la destruiria el que la deducció necessita.
+
+        Mateixos dos guards que `destroy`, i pel mateix motiu:
+          · gate DEFINE_TASKS + abast per fila (get_permissions/get_queryset, ja aplicats);
+          · NOMÉS `Pending` → 409. Una tasca iniciada, pausada o feta té temps i transicions que
+            pertanyen a la SEVA volta; moure-la de contenidor reescriuria història.
+
+        IDEMPOTENT: una tasca que ja no té volta contesta 200 i no toca res —el gest no és
+        «canvia-la de lloc» sinó «que no en tingui», i repetir-lo no ha de ser un error.
+
+        ⚠️ NO es toca el pla: la tasca segueix existint, assignada i planificada. `cleanup_after_
+        pending_delete` és de `destroy`, on la fila desapareix, i cridar-lo aquí buidaria una cua
+        que segueix sent vàlida.
+        """
+        instance = self.get_object()
+        if instance.status != 'Pending':
+            return Response(
+                {'error': 'Només es poden treure de la volta les tasques pendents (Pending). '
+                          'Una tasca iniciada, pausada o feta pertany a la seva volta.',
+                 'code': 'task_not_pending'},
+                status=status.HTTP_409_CONFLICT)
+        ja_fora = instance.ronda_id is None
+        if not ja_fora:
+            instance.ronda = None
+            instance.save(update_fields=['ronda', 'updated_at'])
+        return Response({'id': instance.pk, 'ronda': None, 'ja_fora': ja_fora,
+                         'encarrec': instance.work_order_id},
+                        status=status.HTTP_200_OK)
+
     # Whitelist d'ordenació pública → camp real del queryset agrupat. Qualsevol valor fora
     # d'aquí s'ignora (mai es passa el valor cru a .order_by() → cap injecció d'ordering).
     # Tots els camps de Model referenciats han d'estar a values() perquè order_by no alteri el GROUP BY.

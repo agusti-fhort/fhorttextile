@@ -4580,7 +4580,10 @@ def model_dashboard_view(request, model_id):
 
     pla_tasks = (_ModelTask.objects
                  .filter(model_id=model.id)
-                 .select_related('task_type', 'assignee', 'ronda')
+                 .select_related('task_type', 'assignee', 'ronda',
+                                 # El vincle COMERCIAL de la tasca (v. `encarrec` més avall):
+                                 # dues FK més per fila, resoltes aquí i no una per tasca.
+                                 'work_order__order_line__order')
                  .order_by('task_type__default_order', 'task_type__code'))
     # Temps consumit per tasca amb la regla d'higiene (== helper canònic _real_minutes). 1 query.
     from fhort.tasks.services_i import minuts_per_model_task
@@ -4616,6 +4619,23 @@ def model_dashboard_view(request, model_id):
         # entre voltes: mateix contracte que `ModelTaskSerializer.ronda_seq`.
         'ronda': t.ronda_id,
         'ronda_seq': t.ronda.seq if t.ronda_id else None,
+        # ── EL VINCLE COMERCIAL, perquè la paperera del contenidor de ronda pugui decidir ──
+        #
+        # Una tasca LLIURE s'esborra; una tasca LLIGADA A UN ENCÀRREC no s'esborra mai —surt de
+        # la volta i es queda `Pending`, perquè el tancament de l'encàrrec la dedueixi
+        # (`close_work_order(cancel_pending=True)` li escriu un DEDUCTION i la deslliga).
+        # Esborrar i deduir són DUES operacions i no s'han de fondre: la segona conserva la
+        # història i el vincle per valorar-la a l'albarà.
+        #
+        # 🔑 LA DISTINCIÓ ÉS DE DADES, NO HEURÍSTICA: `encarrec` és el FK `work_order`, i prou.
+        # Qualsevol tasca amb encàrrec entra a `cancel_pending`, sigui de comanda o de
+        # col·lector — per això la porta és el FK i no `kind`, ni el preu, ni el nom.
+        # `comanda` és el document de venda quan n'hi ha (un col·lector no en té, i un WO orfe
+        # tampoc): serveix NOMÉS per anomenar-la a l'avís, mai per decidir.
+        'encarrec': t.work_order_id,
+        'comanda': (t.work_order.order_line.order.document_number
+                    if t.work_order_id and t.work_order.order_line_id
+                    else None),
     } for t in pla_tasks]
 
     # --- Q3: atenció tècnica — alertes POM PENDENTS de resoldre ---
