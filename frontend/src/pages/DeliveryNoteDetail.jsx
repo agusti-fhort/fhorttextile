@@ -66,7 +66,13 @@ function TaulaTasquesRonda({ r, editable, busy, onRate, t }) {
   const td = { padding: '4px 8px', borderBottom: '1px solid var(--line)' }
   const tdR = { ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }
   const totalMin = r.tasques.reduce((a, x) => a + (x.feta ? x.minuts : 0), 0)
-  const totalCost = r.tasques.reduce((a, x) => a + (x.feta ? Number(x.cost || 0) : 0), 0)
+  // El total segueix la mateixa llei que les seves cel·les: si algun cost NO ha viatjat (poda
+  // econòmica, o cap tarifa configurada), la suma no és zero —és desconeguda—, i un `|| 0` la
+  // convertia en un import creïble. Amb tots els costos presents, suma; si en falta un, calla.
+  const fetes = r.tasques.filter(x => x.feta)
+  const costIncomplet = fetes.some(x => x.cost == null)
+  const totalCost = costIncomplet ? null
+    : fetes.reduce((a, x) => a + Number(x.cost), 0)
   return (
     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)',
                     lineHeight: '16px' }}>
@@ -114,7 +120,9 @@ function TaulaTasquesRonda({ r, editable, busy, onRate, t }) {
           </td>
           <td style={{ ...tdR, borderBottom: 0, fontWeight: 600 }}>{fmtMin(totalMin)}</td>
           <td style={{ ...tdR, borderBottom: 0 }} />
-          <td style={{ ...tdR, borderBottom: 0, fontWeight: 600 }}>{money(totalCost)}</td>
+          <td style={{ ...tdR, borderBottom: 0, fontWeight: 600 }}>
+            {totalCost != null ? money(totalCost) : '—'}
+          </td>
         </tr>
       </tbody>
     </table>
@@ -182,8 +190,15 @@ function TargetaLinia({ l, editable, busy, importEdit, onImport, onImportSave, o
               style={{ ...inp, width: 96, textAlign: 'right', fontSize: 'var(--fs-h3)',
                        lineHeight: '20px', fontWeight: 600 }} />
           ) : (
+            /* 🚨 `?? 0` DEIA «0,00» ON VOLIA DIR «AIXÒ NO ET VIATJA». La poda econòmica treu
+               `unit_price` del payload a qui no té COMERCIAL, i un zero imprès amb la mateixa
+               cara que un import real és pitjor que un buit: el buit es nota i el zero es creu.
+               El color es declara —`--text-main`, com la resta de la targeta— perquè un valor en
+               lectura no s'hereti apagat el dia que el contenidor canviï. */
             <span style={{ fontSize: 'var(--fs-h3)', lineHeight: '20px', fontWeight: 600,
-                           fontVariantNumeric: 'tabular-nums' }}>{Number(l.unit_price ?? 0).toFixed(2)}</span>
+                           color: 'var(--text-main)', fontVariantNumeric: 'tabular-nums' }}>
+              {l.unit_price != null ? Number(l.unit_price).toFixed(2) : '—'}
+            </span>
           )}
           <span>€</span>
           {editable && (
@@ -371,7 +386,18 @@ export default function DeliveryNoteDetail() {
 
   const isDraft = dn?.status === 'DRAFT'
   const isIssued = dn?.status === 'ISSUED'
-  const editable = isDraft && canConfigure
+  // 🔒 EDITAR DINER VOL COMERCIAL, I LA CARA HO HA DE DIR IGUAL QUE LA PORTA. `canConfigure`
+  // tot sol obria els inputs a qui NO pot veure els imports: la poda econòmica li deixa
+  // `unit_price` fora del payload, o sigui que hi hauria trobat una casella BUIDA i editable
+  // sobre un preu que no pot llegir —i escriure-hi hauria estat sobreescriure a cegues.
+  //
+  // 📏 MESURAT: avui la porta ja el refusa per TRES bandes (la ruta porta `cap="comercial"`, el
+  // GET de l'albarà dona 403 i el PATCH també), o sigui que això NO corregeix cap defecte viu
+  // —la Montse, que és el cas real (manager, CONFIGURE sense COMERCIAL), ni arriba a la
+  // pantalla. Hi és perquè una condició d'edició que no mira qui pot veure el diner és una
+  // trampa armada esperant la pantalla que un dia la renderitzi des d'una altra ruta.
+  const canComercial = !!me?.capabilities?.includes('comercial')
+  const editable = isDraft && canConfigure && canComercial
   // La data d'emissió es corregeix en DRAFT i ISSUED (l'emissió és seva); INVOICED ja s'ha
   // presentat al client. El guard dur el posa el backend (serializers.guard_issued_at_editable).
   const canEditDate = canConfigure && (isDraft || isIssued)
