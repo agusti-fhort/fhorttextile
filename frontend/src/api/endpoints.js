@@ -454,6 +454,11 @@ export const modelTasks = {
   // Assignació: PATCH {assignee} (gated define_tasks; 400 si fora de l'allow-list de l'assignee).
   patch: (id, data) => client.patch(`/api/v1/model-task-items/${id}/`, data),
   remove: (id) => client.delete(`/api/v1/model-task-items/${id}/`),
+  // La porta BESSONA de `remove`, i no un àlies: una tasca lligada a un encàrrec NO s'esborra
+  // mai —surt de la volta i es queda Pending perquè el tancament de l'encàrrec la dedueixi
+  // (el DEDUCTION en reté la FK per valorar-la a l'albarà). Els dos gestos no es fonen.
+  // Mateixos guards que `remove`: DEFINE_TASKS, abast per fila i NOMÉS Pending (409 si no).
+  desassignarRonda: (id) => client.post(`/api/v1/model-task-items/${id}/desassignar-ronda/`),
   // Màquina d'estats (gated execute_tasks). La resposta pot dur paused_task_id (→ toast 3s).
   // {to_status} i, opcionalment, {auto:'guard_30min'} SOBRE →Paused: marca del guard de tasca
   // oblidada perquè el log no signi l'auto-pausa amb el nom del tècnic. Un gest humà no la porta.

@@ -189,6 +189,8 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab, model
   const [entregant, setEntregant] = useState(null)   // bloc pendent d'informar l'entrega
   const [okClient, setOkClient] = useState(null)     // entrega pendent de l'OK del client
   const [obrintVolta, setObrintVolta] = useState(false)
+  const [treient, setTreient] = useState(null)      // tasca pendent de treure de la volta
+  const [traient, setTraient] = useState(false)     // guard anti-doble-clic del gest
   // Col·lapse: NOMÉS les excepcions que l'usuari ha fet en aquesta pantalla. El defecte el
   // deriva `agrupaPerRonda` de l'estat de la volta i no es desa enlloc (v. `utils/rondes`).
   const [plegatManual, setPlegatManual] = useState({})
@@ -464,6 +466,43 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab, model
       .finally(() => setObrintVolta(false))
   }
 
+  // ── LA PAPERERA DEL CONTENIDOR · DOS GESTOS QUE NO ES FONEN ──────────────────────────────
+  //
+  // Una tasca LLIURE s'esborra: no la reclama ningú i deixar-la seria brossa al pla.
+  // Una tasca LLIGADA A UN ENCÀRREC no s'esborra MAI: surt de la volta i es queda `Pending`,
+  // perquè el tancament de l'encàrrec la dedueixi —`close_work_order(cancel_pending=True)` li
+  // escriu un DEDUCTION que en RETÉ la FK per poder-la valorar a l'albarà. Esborrar-la
+  // destruiria justament el que la deducció necessita, i el comercial perdria la traça d'una
+  // feina contractada que no s'ha fet.
+  //
+  // 🔑 QUI DECIDEIX ÉS EL FK, NO UNA HEURÍSTICA: `task.encarrec` és `ModelTask.work_order`, que
+  // és exactament el que `cancel_pending` mira. Ni el `kind` del WO, ni el preu, ni el nom.
+  // `task.comanda` només serveix per ANOMENAR la venda a l'avís quan n'hi ha (un col·lector i
+  // un WO orfe no en tenen), mai per decidir el camí.
+  function confirmaTreure() {
+    if (!treient || traient) return
+    const task = treient
+    const lligada = task.encarrec != null
+    setTraient(true)
+    const gest = lligada ? modelTasks.desassignarRonda(task.id) : modelTasks.remove(task.id)
+    gest
+      .then(() => {
+        setTreient(null)
+        showToast('ok', lligada
+          ? t('paperera.ok_desassignada', { tasca: taskTypeLabel(t, task.task_type_code, task.task_type_name) })
+          : t('paperera.ok_esborrada', { tasca: taskTypeLabel(t, task.task_type_code, task.task_type_name) }))
+        refrescaTot()
+      })
+      .catch(err => {
+        setTreient(null)
+        // El motiu REAL del servidor mana (409 de no-Pending, 403 de gate): el fallback només
+        // cobreix el cas que no en digui cap.
+        showToast('err', err?.response?.data?.error || t('paperera.error'))
+        refrescaTot()   // la targeta local podia ser obsoleta (algú l'ha començada mentrestant)
+      })
+      .finally(() => setTraient(false))
+  }
+
   return (
     <section style={containerStyle}>
       {/* `.sec` del mockup: el rètol a l'esquerra i el TEMPS ACUMULAT SOBRE EL MODEL a la dreta,
@@ -502,7 +541,7 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab, model
                 hasToolRoute={Boolean(desti(task))}
                 segellada={modelTancat || bloc.estat === RONDA_ENTREGADA}
                 onPlay={handlePlay} onPause={handlePause} onStop={handleStop}
-                onDeclarar={setDeclarant} />
+                onDeclarar={setDeclarant} onTreure={setTreient} />
             ))}
           </RondaPla>
         ))
@@ -580,6 +619,34 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab, model
             refrescaTot()
           }}
           onCancel={() => setOkClient(null)} />
+      )}
+      {/* LES DUES CARES DEL MATEIX GEST. Un sol Modal i no dos components: el que canvia és el
+          text i el verb del botó, no el gest («treu aquesta tasca del contenidor»). El cos de la
+          cara LLIGADA diu el que passarà DESPRÉS —que en tancar l'encàrrec quedarà deduïda—,
+          perquè la conseqüència no la veu ningú al moment de prémer i és la raó per la qual
+          aquesta tasca no s'esborra. */}
+      {treient && (
+        <Modal
+          title={treient.encarrec
+            ? t('paperera.titol_lligada')
+            : t('paperera.titol_lliure')}
+          subtitle={treient.encarrec
+            ? (treient.comanda
+                ? t('paperera.cos_lligada', {
+                    tasca: taskTypeLabel(t, treient.task_type_code, treient.task_type_name),
+                    comanda: treient.comanda })
+                : t('paperera.cos_lligada_sense_comanda', {
+                    tasca: taskTypeLabel(t, treient.task_type_code, treient.task_type_name) }))
+            : t('paperera.cos_lliure', {
+                tasca: taskTypeLabel(t, treient.task_type_code, treient.task_type_name) })}
+          confirmLabel={treient.encarrec
+            ? t('paperera.confirma_lligada')
+            : t('paperera.confirma_lliure')}
+          cancelLabel={t('paperera.cancella')}
+          confirmDisabled={traient}
+          onConfirm={confirmaTreure}
+          onCancel={() => { if (!traient) setTreient(null) }}
+        />
       )}
       {handoff && (
         <Modal

@@ -5322,5 +5322,18 @@
     "reg_entrega_a": "Delivered to {{destinatari}}",
     "reg_buit": "This model has no recorded activity yet",
     "lliurable": "Deliverable"
+  },
+  "paperera": {
+    "titol_lliure": "Delete this task?",
+    "titol_lligada": "Remove this task from the round",
+    "cos_lliure": "“{{tasca}}” has not been started and is not tied to any work order. It will be deleted from the plan, leaving no trace.",
+    "cos_lligada": "“{{tasca}}” is tied to the model through order {{comanda}}. It is not deleted: it leaves the round and stays pending, and when the work order is closed it will be deducted.",
+    "cos_lligada_sense_comanda": "“{{tasca}}” is tied to a work order. It is not deleted: it leaves the round and stays pending, and when the work order is closed it will be deducted.",
+    "confirma_lliure": "Delete task",
+    "confirma_lligada": "Remove from round",
+    "cancella": "Cancel",
+    "ok_esborrada": "“{{tasca}}” deleted",
+    "ok_desassignada": "“{{tasca}}” left the round and is pending deduction",
+    "error": "The task could not be removed."
   }
 }

@@ -5322,5 +5322,18 @@
     "reg_entrega_a": "Entrega a {{destinatari}}",
     "reg_buit": "Este modelo todavía no tiene actividad registrada",
     "lliurable": "Entregable"
+  },
+  "paperera": {
+    "titol_lliure": "¿Borrar esta tarea?",
+    "titol_lligada": "Sacar esta tarea de la vuelta",
+    "cos_lliure": "«{{tasca}}» todavía no se ha empezado y no está ligada a ningún encargo. Se borrará del plan y no quedará rastro.",
+    "cos_lligada": "«{{tasca}}» está ligada al modelo por el pedido {{comanda}}. No se borra: sale de la vuelta y queda pendiente, y al cerrar el encargo quedará deducida.",
+    "cos_lligada_sense_comanda": "«{{tasca}}» está ligada a un encargo. No se borra: sale de la vuelta y queda pendiente, y al cerrar el encargo quedará deducida.",
+    "confirma_lliure": "Borrar la tarea",
+    "confirma_lligada": "Sacarla de la vuelta",
+    "cancella": "Cancelar",
+    "ok_esborrada": "«{{tasca}}» borrada",
+    "ok_desassignada": "«{{tasca}}» ha salido de la vuelta y queda pendiente de deducir",
+    "error": "No se ha podido sacar la tarea."
   }
 }

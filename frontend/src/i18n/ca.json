@@ -5322,5 +5322,18 @@
     "reg_entrega_a": "Entrega a {{destinatari}}",
     "reg_buit": "Aquest model encara no té activitat registrada",
     "lliurable": "Lliurable"
+  },
+  "paperera": {
+    "titol_lliure": "Esborrar aquesta tasca?",
+    "titol_lligada": "Treure aquesta tasca de la volta",
+    "cos_lliure": "«{{tasca}}» encara no s’ha començat i no està lligada a cap encàrrec. S’esborrarà del pla i no en quedarà rastre.",
+    "cos_lligada": "«{{tasca}}» està lligada al model per la comanda {{comanda}}. No s’esborra: surt de la volta i es queda pendent, i en tancar l’encàrrec quedarà deduïda.",
+    "cos_lligada_sense_comanda": "«{{tasca}}» està lligada a un encàrrec. No s’esborra: surt de la volta i es queda pendent, i en tancar l’encàrrec quedarà deduïda.",
+    "confirma_lliure": "Esborrar la tasca",
+    "confirma_lligada": "Treure-la de la volta",
+    "cancella": "Cancel·lar",
+    "ok_esborrada": "«{{tasca}}» esborrada",
+    "ok_desassignada": "«{{tasca}}» ha sortit de la volta i queda pendent de deduir",
+    "error": "No s’ha pogut treure la tasca."
   }
 }

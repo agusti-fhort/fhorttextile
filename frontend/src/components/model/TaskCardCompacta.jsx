@@ -56,7 +56,7 @@ function TransportMini({ icon, active, title, onClick }) {
 }
 
 export default function TaskCardCompacta({
-  task, mine, hasToolRoute, segellada = false, onPlay, onPause, onStop, onDeclarar,
+  task, mine, hasToolRoute, segellada = false, onPlay, onPause, onStop, onDeclarar, onTreure,
 }) {
   const { t } = useTranslation()
   const { transport, playActive, otherTech, out, icon, variant } =
@@ -134,9 +134,26 @@ export default function TaskCardCompacta({
             )}
           </>)}
         </div>
-        <Badge variant={variant}>
-          {t(`model_sheet.dashboard.task_status.${task.status}`, { defaultValue: task.status })}
-        </Badge>
+        {/* Grup DRET: estat + paperera. Van junts perquè el peu segueixi sent un
+            `space-between` de DOS blocs; solta, la paperera cauria al mig i desquadraria la
+            línia. I va a l'extrem OPOSAT del transport a posta: és l'únic gest destructiu de la
+            targeta i no ha de compartir veïnatge amb el Play. */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Badge variant={variant}>
+            {t(`model_sheet.dashboard.task_status.${task.status}`, { defaultValue: task.status })}
+          </Badge>
+          {/* LA PAPERERA · NOMÉS sobre `Pending`, i no com a botó apagat sinó ABSENT.
+              El backend ja refusa la resta amb un 409 («una tasca iniciada, pausada o feta
+              conserva la seva història»), i oferir el gest per després negar-lo seria prometre
+              una cosa que la llei no permet. A la volta segellada tampoc hi és, com el transport.
+              El que passa en prémer-la depèn de si la tasca té ENCÀRREC, i això ho decideix
+              `WorkPlan` amb el FK: aquí només es demana. Tabler outline, tinta per token. */}
+          {!segellada && task.status === 'Pending' && onTreure && (
+            <TransportMini icon="ti-trash" active
+              title={task.encarrec ? t('paperera.titol_lligada') : t('paperera.titol_lliure')}
+              onClick={() => onTreure(task)} />
+          )}
+        </div>
       </div>
     </div>
   )
