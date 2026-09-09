@@ -787,6 +787,38 @@ class DeliveryNoteLine(AbstractDocumentLine):
     model = models.ForeignKey('models_app.Model', on_delete=models.SET_NULL, null=True, blank=True,
                               related_name='delivery_note_lines')
 
+    # ── BLOC A · LA LÍNIA ÉS UN MODEL, I COBREIX RONDES ─────────────────────────────────────
+    #
+    # 🔑 **PER QUÈ M2M I NO UNA FK.** L'A7 demana dues formes alhora: «1 línia = N rondes del
+    # mateix pacte» (les voltes incloses al numeral van juntes a la mateixa targeta, amb el preu
+    # de la línia de comanda) i «1 línia = 1 ronda fora de pacte» (cada volta desbordada és una
+    # targeta pròpia, a preu lliure). Una FK `ronda` a la línia només serveix la segona; una FK
+    # `linia` a la Ronda serviria les dues però posaria una dada de DOCUMENT dins del domini de
+    # tasques —i una ronda ha de poder existir sense saber res de cap albarà. La relació M2M és
+    # la mínima que serveix els dos casos sense que cap dels dos costats hagi de saber de l'altre.
+    #
+    # Fins avui la traça ronda↔albarà anava per `model_task.ronda`, i això era prou mentre la
+    # línia era una TASCA. Amb la línia = MODEL, aquell camí es trenca: una línia que cobreix
+    # tres voltes no té UNA tasca de la qual deduir-les.
+    rondes = models.ManyToManyField('tasks.Ronda', blank=True,
+                                    related_name='delivery_note_lines',
+                                    help_text='Voltes que aquesta línia cobreix. Buida a les '
+                                              'línies llegades (per tasca) i a les manuals.')
+    # A7 — la volta fora de pacte no és una línia més: és una targeta PRÒPIA amb el seu badge i
+    # el seu preu lliure. El booleà és la MARCA declarada i no una deducció de `rondes`: una
+    # línia directa amb la seva ronda esborrada seguiria sent un encàrrec directe, i el document
+    # ja emès ha de poder-ho seguir dient.
+    encarrec_directe = models.BooleanField(
+        default=False,
+        help_text='A7: volta fora del pacte — targeta pròpia, preu lliure, sense pressupost.')
+    # D'ON SURT EL PREU. `unit_price` és el valor viu i editable; això diu quina línia de comanda
+    # el va proposar, perquè el document pugui dir «Pressupost OF-…» sense tornar a resoldre el
+    # pivot (que pot haver canviat: un model es pot desassignar). SET_NULL: esborrar la línia de
+    # venda no pot esborrar la història de l'albarà.
+    linia_comanda = models.ForeignKey('commerce.SalesOrderLine', on_delete=models.SET_NULL,
+                                      null=True, blank=True, related_name='delivery_note_lines',
+                                      help_text="Línia de comanda que va proposar el preu.")
+
     class Meta:
         ordering = ['delivery_note', 'position', 'id']
         verbose_name = 'Delivery note line'
