@@ -271,14 +271,14 @@ export default function WorkOrders() {
       renderCap: () => (
         <input type="checkbox" checked={totsVisibles} onChange={commutaTots}
           aria-label={t('workorders.select_all')}
-          style={{ cursor: 'pointer', accentColor: 'var(--gold)' }} />
+          style={{ cursor: 'pointer', accentColor: 'var(--gold)', width: 14, height: 14 }} />
       ),
       render: r => (
         <input type="checkbox" checked={triats.has(r.id)}
           onClick={e => e.stopPropagation()}
           onChange={() => commuta(r.id)}
           aria-label={t('workorders.select_one', { n: r.number })}
-          style={{ cursor: 'pointer', accentColor: 'var(--gold)' }} />
+          style={{ cursor: 'pointer', accentColor: 'var(--gold)', width: 14, height: 14 }} />
       ),
     },
     {
@@ -310,19 +310,24 @@ export default function WorkOrders() {
       // ellipsis— perquè és el que l'anomena. No porta secundari: la seva mena ja la diu el
       // badge de la columna del costat i repetir-la seria soroll.
       key: 'nom', label: t('workorders.col_nom'), min: 220, max: 380, sort: 'model__nom_prenda',
+      // El pes va a la CEL·LA i no a un `span` de dins, que és on el posa la llista canònica
+      // (`td.c-nom{font-weight:600}`). Amb el 600 al fill, el `getComputedStyle` del `td` deia
+      // 400 i la bidireccional ho marcava —i tenia raó: dos llocs diferents per a la mateixa
+      // regla és com neixen les dues veritats de crom. El codi secundari el torna a 400.
+      estil: { fontWeight: 600 },
       titol: r => (r.kind === 'COLLECTOR'
         ? t('workorders.collector_period', { period: r.period || '—' })
         : [r.model_nom || t('workorders.no_name'), r.model_codi].filter(Boolean).join(' · ')),
       render: r => (
         <span style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
-          <span style={{ fontWeight: 600, color: 'var(--text-main)', minWidth: 0,
+          <span style={{ color: 'var(--text-main)', minWidth: 0,
                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {r.kind === 'COLLECTOR'
               ? t('workorders.collector_period', { period: r.period || '—' })
               : (r.model_nom || t('workorders.no_name'))}
           </span>
           {r.kind !== 'COLLECTOR' && r.model_codi && (
-            <span style={{ flexShrink: 0, fontSize: 'var(--fs-caption)',
+            <span style={{ flexShrink: 0, fontSize: 'var(--fs-caption)', fontWeight: 400,
                            color: 'var(--text-soft)', whiteSpace: 'nowrap' }}>
               {r.model_codi}
             </span>
