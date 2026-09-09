@@ -500,7 +500,7 @@ _UNIT_DEFAULT = 'ut'
 
 # Les línies que NO són una targeta de model sinó una fila dins del bloc del seu model, i la
 # clau amb què es diu el seu tipus quan la descripció ve buida. `MANUAL` en queda FORA a posta:
-# les línies manuals que `generate/` encara pot deixar són targetes pròpies, com abans.
+# una línia manual (comentari lliure, sense model) és una targeta pròpia, com abans.
 _EXTRA_LABEL = {'EXTRA': 'dn_extra', 'DEDUCTION': 'dn_deduction', 'EXPENSE': 'dn_expense'}
 
 
@@ -574,7 +574,7 @@ def generate_delivery_note_pdf(delivery_note, lang=None):
         que un dia diguessin identitats diferents del mateix model.
         """
         m = l.model
-        # Una línia SENSE model (les 4 llegades i les MANUAL que encara genera `generate/`) no és
+        # Una línia SENSE model (les 4 llegades i les MANUAL, comentari lliure) no és
         # una targeta de model: no té identitat ni pacte. El seu nom és la seva descripció, i
         # llavors la línia de concepte de sota s'ha de callar — si no, el mateix text sortia
         # DUES vegades, una com a títol i una com a concepte.

@@ -762,14 +762,12 @@ export const commerce = {
     remove: (id) => client.delete(`/api/v1/commerce/expenses/${id}/`),
   },
   // Albarans (B4c) — document derivat que agrega 1..N WorkOrder CLOSED del mateix client.
-  // No es creen per POST directe: neixen de generate/ (línies proposades pel sistema).
+  // No es creen per POST directe: neixen de draft/ (v2) + add-lines/ (línies de la safata billable/).
   deliveryNotes: {
     list: (params) => client.get('/api/v1/commerce/delivery-notes/', { params }),   // ?status=&customer=
     get: (id) => client.get(`/api/v1/commerce/delivery-notes/${id}/`),
     update: (id, data) => client.patch(`/api/v1/commerce/delivery-notes/${id}/`, data),   // notes en DRAFT
     remove: (id) => client.delete(`/api/v1/commerce/delivery-notes/${id}/`),   // només DRAFT (allibera WO)
-    // Genera un DRAFT amb línies proposades. {work_order_ids:[…]} → 201 o 400 {detail, errors}.
-    generate: (data) => client.post('/api/v1/commerce/delivery-notes/generate/', data),
     issue: (id) => client.post(`/api/v1/commerce/delivery-notes/${id}/issue/`),   // DRAFT→ISSUED (congela)
     pdf: (id, lang) => client.get(`/api/v1/commerce/delivery-notes/${id}/pdf/`, { params: lang ? { lang } : {}, responseType: 'blob' }),
     // v2 — safata d'albaranables per model. ?customer=<id> → {customer, groups:[{model, items}]}.

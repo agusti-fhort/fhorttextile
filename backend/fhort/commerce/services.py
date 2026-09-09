@@ -238,8 +238,9 @@ def close_work_order(work_order, user=None, cancel_pending=False):
       - Pending: NO bloquegen. Es retornen com a proposta; si cancel_pending=True es
         cancel·len creant una DEDUCTION (marcador, amount=0) i es deslliguen del WO.
 
-    TODO B4c: el gate d'extres sense resolució comercial viu a generate_delivery_note()
-    (emissió de l'albarà), NO aquí. Un albarà no s'emet amb extres sense preu de venda fixat.
+    El gate d'extres sense resolució comercial és IMPLÍCIT a la safata (`_extres_albaranables`):
+    un off_recipe sense Adjustment que el resolgui no hi surt, o sigui que no es pot albaranar
+    fins que el comercial li fixi preu de venda. NO viu aquí.
     """
     from .models import WorkOrderAdjustment
     if work_order.status == 'CLOSED':
@@ -522,145 +523,6 @@ def reattach_orphan_to_line(work_order, new_line, user=None):
                                        'price_snapshot', 'recipe_snapshot', 'updated_at'])
 
     return work_order
-
-
-def generate_delivery_note(work_orders, user=None):
-    """Genera un albarà DRAFT amb línies PROPOSADES a partir d'1..N WorkOrder CLOSED del MATEIX
-    customer (B4c, el cor del cas Brownie). El sistema PROPOSA; el comercial edita en DRAFT.
-
-    GUARDS (es recopilen TOTS i es retornen junts com a ValidationError):
-      - work_orders no buit · tots CLOSED · tots del mateix customer · cap ja albaranat.
-      - GATE D'EXTRES (el TODO de B4b, ara viu AQUÍ): cap ModelTask off_recipe=True sense un
-        WorkOrderAdjustment que la resolgui → si n'hi ha, bloqueja llistant-les ("pendent de
-        revisió comercial"). Un albarà no s'emet amb extres sense preu de venda fixat.
-
-    LÍNIES (per WO, en ordre TASK · EXTRA · DEDUCTION · EXPENSE):
-      - TASK (Done, off_recipe=False): ORDER → unit_price del price_snapshot (preu contractat),
-        quantity=1. COLLECTOR → unit_price PROPOSAT 0, quantity = minuts reals (Σ TimerEntrada);
-        el Salva posa preu en DRAFT (NO s'inventa tarifa de venda per defecte).
-      - EXTRA (Adjustment EXTRA_BILL): unit_price=amount, quantity=1. (EXTRA_ABSORB: cap línia.)
-      - DEDUCTION (Adjustment DEDUCTION): línia NEGATIVA. Import proposat: ORDER+model_task →
-        −(preu del price_snapshot); si no → −amount de l'Adjustment; si tots dos 0 → línia a 0.
-      - EXPENSE (Expense del WO): unit_price=sale_price, quantity=quantity.
-
-    El `product` de la línia (NULLABLE) porta el tipus d'IVA: ORDER → order_line.product;
-    COLLECTOR/lliure → None (compute_document_totals tracta None com a 0%). L'albarà neix DRAFT,
-    totals calculats (via signals), SENSE venciments. Marca cada WO com albaranat (ja en DRAFT,
-    per evitar doble inclusió; esborrar el DRAFT allibera els WO via SET_NULL). Retorna la nota.
-    """
-    from django.core.exceptions import ValidationError
-    from django.db.models import Sum
-    from .models import DeliveryNote, DeliveryNoteLine, WorkOrderAdjustment
-
-    wos = list(work_orders)
-    errors = []
-    if not wos:
-        raise ValidationError("Cap encàrrec seleccionat per a l'albarà.")
-
-    # ── GUARDS d'agregació (es recopilen tots) ──
-    customers = {wo.customer_id for wo in wos}
-    if len(customers) > 1:
-        errors.append("Tots els encàrrecs han de ser del mateix client.")
-    for wo in wos:
-        if wo.status != 'CLOSED':
-            errors.append(f"L'encàrrec {wo.number} no està tancat (CLOSED).")
-        if wo.delivery_note_id is not None:
-            errors.append(f"L'encàrrec {wo.number} ja està albaranat.")
-
-    # ── GATE D'EXTRES: off_recipe=True sense Adjustment que la resolgui ──
-    for wo in wos:
-        resolved = set(wo.adjustments.filter(model_task__isnull=False)
-                       .values_list('model_task_id', flat=True))
-        pend = [t.task_type.code for t in wo.tasks.select_related('task_type')
-                .filter(off_recipe=True).exclude(pk__in=resolved)]
-        if pend:
-            errors.append(
-                f"L'encàrrec {wo.number} té extres pendents de revisió comercial: "
-                f"{', '.join(pend)}.")
-
-    if errors:
-        raise ValidationError(errors)
-
-    with transaction.atomic():
-        dn = DeliveryNote.objects.create(
-            customer_id=wos[0].customer_id,
-            created_by=user,
-        )
-        pos = 0
-
-        def _add(line_kind, unit_price, quantity, description, product=None,
-                 work_order=None, model_task=None, expense=None, adjustment=None,
-                 internal_minutes=None):
-            nonlocal pos
-            pos += 1
-            DeliveryNoteLine(
-                delivery_note=dn, line_kind=line_kind,
-                unit_price=Decimal(unit_price).quantize(_CENT, rounding=ROUND_HALF_UP),
-                quantity=Decimal(quantity).quantize(_CENT, rounding=ROUND_HALF_UP),
-                description=description[:300], product=product, work_order=work_order,
-                model_task=model_task, expense=expense, adjustment=adjustment, position=pos,
-                internal_minutes=(Decimal(internal_minutes) if internal_minutes is not None else None),
-            ).save()
-
-        for wo in wos:
-            order_product = wo.order_line.product if wo.order_line_id else None
-            snap_price = Decimal(str(wo.price_snapshot.get('unit_price') or '0'))
-
-            # TASK — tasques acabades de recepta (off_recipe=False).
-            for t in wo.tasks.select_related('task_type', 'model').filter(
-                    status='Done', off_recipe=False):
-                label = f"{t.task_type.name} · {t.model.codi_intern}"
-                if wo.kind == 'COLLECTOR':
-                    # Temps intern = lògica comercial, FORA del document (decisió Agus). Els minuts
-                    # es guarden a internal_minutes; la línia surt amb quantity=1 i sense "(N min)"
-                    # a la descripció (el PDF mai els mostra). El Salva posa preu en DRAFT.
-                    minutes = t.timers.filter(TRAMS_SANS).aggregate(m=Sum('minuts'))['m'] or 0
-                    _add('TASK', Decimal('0'), Decimal('1'), label,
-                         product=None, work_order=wo, model_task=t,
-                         internal_minutes=Decimal(minutes))
-                else:
-                    _add('TASK', snap_price, Decimal('1'), label,
-                         product=order_product, work_order=wo, model_task=t)
-
-            # 🚨 `delivery_note_lines__isnull=True` ALS TRES ORÍGENS, i és el guard que
-            # impedeix cobrar dues vegades el mateix ítem des de les DUES portes. El guard de WO
-            # (`wo.delivery_note_id is not None`) només protegeix de repetir `generate/` sobre
-            # el mateix encàrrec: la marca `WorkOrder.delivery_note` l'escriu NOMÉS aquesta
-            # funció, o sigui que un extra ja facturat des de la safata arribava aquí amb el WO
-            # «net» i entrava una segona vegada. La safata ja aplicava aquest criteri; ara
-            # l'apliquen les dues, i un ítem albaranat desapareix dels dos camins.
-
-            # EXTRA — extres facturables (EXTRA_ABSORB no genera línia).
-            for adj in wo.adjustments.filter(kind='EXTRA_BILL',
-                                             delivery_note_lines__isnull=True):
-                _add('EXTRA', Decimal(adj.amount or 0), Decimal('1'),
-                     adj.description or "Extra", product=order_product, work_order=wo,
-                     model_task=adj.model_task, adjustment=adj)
-
-            # DEDUCTION — línia negativa (recepta no executada / concepte lliure).
-            for adj in wo.adjustments.filter(kind='DEDUCTION',
-                                             delivery_note_lines__isnull=True):
-                if adj.model_task_id and wo.kind == 'ORDER' and snap_price:
-                    proposed = -snap_price
-                else:
-                    proposed = -abs(Decimal(adj.amount or 0))
-                desc = adj.description or "Deducció"
-                _add('DEDUCTION', proposed, Decimal('1'), desc,
-                     product=order_product, work_order=wo, model_task=adj.model_task,
-                     adjustment=adj)
-
-            # EXPENSE — línies externes (servei extern / mercaderia).
-            for exp in wo.expenses.filter(delivery_note_lines__isnull=True) \
-                    .select_related('product'):
-                desc = exp.description or (exp.product.name if exp.product_id else "Despesa")
-                _add('EXPENSE', Decimal(exp.sale_price or 0), Decimal(exp.quantity or 0), desc,
-                     product=exp.product, work_order=wo, expense=exp)
-
-            wo.delivery_note = dn
-            wo.save(update_fields=['delivery_note', 'updated_at'])
-
-    dn.refresh_from_db()
-    return dn
 
 
 class ContradiccioDePacte(Exception):
@@ -1145,8 +1007,8 @@ def _pacte_header(linia):
 
 def create_or_get_draft(customer, user=None):
     """Retorna el DRAFT obert del client o en crea un de nou. Un per client alhora: mentre n'hi ha
-    un d'obert, tot 'afegir' hi apunta (add_lines_to_draft). A diferència de generate_delivery_note,
-    NEIX BUIT (composició manual per check). Retorna (draft, created)."""
+    un d'obert, tot 'afegir' hi apunta (add_lines_to_draft). NEIX BUIT: les línies s'hi afegeixen
+    després, una a una, des de la safata. Retorna (draft, created)."""
     from .models import DeliveryNote
     existing = (DeliveryNote.objects.filter(customer=customer, status='DRAFT')
                 .order_by('created_at').first())
@@ -1218,9 +1080,8 @@ def add_lines_to_draft(draft, selected_items, user=None):
                 line = DeliveryNoteLine(
                     delivery_note=draft, line_kind=extra['kind'],
                     model_id=grup['model']['id'],
-                    # L'FK d'ORIGEN és el que treu l'ítem de la safata la propera vegada (i el
-                    # que impedeix que `generate/` el torni a cobrar): sense ella, la línia no
-                    # sabria de què ve i l'ítem seguiria sortint com a pendent.
+                    # L'FK d'ORIGEN és el que treu l'ítem de la safata la propera vegada: sense
+                    # ella, la línia no sabria de què ve i l'ítem seguiria sortint com a pendent.
                     adjustment_id=int(ident) if origen == 'ajust' else None,
                     expense_id=int(ident) if origen == 'despesa' else None,
                     # El producte porta el TIPUS D'IVA; el `work_order`, la traça de l'encàrrec

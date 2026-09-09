@@ -552,8 +552,10 @@ class WorkOrder(models.Model):
                               help_text="'YYYY-MM' — només per COLLECTOR (mes de recollida).")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='OPEN')
     # B4c — marca "aquest WO ja està albaranat". SET_NULL: esborrar un albarà DRAFT allibera els
-    # WO (delete de DeliveryNote posa aquest camp a NULL). Guard d'inclusió única a
-    # generate_delivery_note: un WO amb delivery_note assignat NO pot entrar a un segon albarà.
+    # WO (delete de DeliveryNote posa aquest camp a NULL). 🚩 LLEGAT: l'única escriptora era
+    # `generate_delivery_note` (retirada); la safata v2 factura per MODEL+VOLTES i mai l'escriu.
+    # Es llegeix encara a `WorkOrderDetail.jsx` per enllaçar a l'albarà d'un WO ja albaranat pel
+    # camí vell.
     delivery_note = models.ForeignKey('commerce.DeliveryNote', on_delete=models.SET_NULL,
                                       null=True, blank=True, related_name='delivery_notes_included')
     # Congelats en crear des d'order_line; buits al col·lector (no hi ha recepta a comparar).
@@ -687,10 +689,11 @@ class Expense(models.Model):
 # ═══════════════════════════════════════════════════════════════════════════════════════
 
 class DeliveryNote(AbstractDocument):
-    """Albarà tenant→client (B4c). Neix DRAFT amb línies PROPOSADES pel sistema
-    (generate_delivery_note): tasques acabades + extres facturables − deduccions per recepta no
-    executada. En DRAFT el comercial edita preu/descripció de les línies (guard patró Quote);
-    ISSUED = congelat (les línies queden bloquejades).
+    """Albarà tenant→client (B4c). Neix DRAFT buit (`create_or_get_draft`) i el comercial hi
+    afegeix línies una a una des de la safata `billable/` (`add_lines_to_draft`): voltes
+    entregades, extres facturables, deduccions i despeses. En DRAFT el comercial edita
+    preu/descripció de les línies (guard patró Quote); ISSUED = congelat (les línies queden
+    bloquejades).
 
     Decisions Agus 2026-07-08: albarà SENSE venciments → recalculate_totals NO crida
     generate_due_dates i cap DocumentDueDate s'hi enganxa (no es reobre el XOR dual-FK de B3b).

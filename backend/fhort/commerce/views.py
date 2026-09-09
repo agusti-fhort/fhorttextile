@@ -664,10 +664,11 @@ class ExpenseViewSet(_ComercialMixin, viewsets.ModelViewSet):
 class DeliveryNoteViewSet(_ComercialMixin, mixins.RetrieveModelMixin, mixins.ListModelMixin,
                           mixins.UpdateModelMixin, mixins.DestroyModelMixin,
                           viewsets.GenericViewSet):
-    """Albarans (B4c). Lectura oberta; `generate`/`issue`/`destroy` gated CONFIGURE; `pdf`
-    lectura. NO es crea per POST directe: neix de `generate/` (agrega 1..N WorkOrder CLOSED del
-    mateix customer). `destroy` només en DRAFT (allibera els WO via SET_NULL). L'UPDATE del
-    header serveix per editar `notes` en DRAFT (el status es mou només per `issue`)."""
+    """Albarans (B4c). Lectura oberta; `issue`/`destroy` gated CONFIGURE; `pdf` lectura. NO es
+    crea per POST directe: neix de `draft/` (v2, un DRAFT buit per client) + `add-lines/` (línies
+    proposades per la safata `billable/`). `destroy` només en DRAFT (allibera els WO via
+    SET_NULL). L'UPDATE del header serveix per editar `notes` en DRAFT (el status es mou només
+    per `issue`)."""
     queryset = DeliveryNote.objects.select_related('customer', 'issued_by', 'created_by') \
         .prefetch_related('lines__product', 'delivery_notes_included',
                           # Mateixa raó que a la vista de línies: `rondes_detall` i `pacte_*`
@@ -696,27 +697,6 @@ class DeliveryNoteViewSet(_ComercialMixin, mixins.RetrieveModelMixin, mixins.Lis
             return Response({'detail': 'Client no trobat.'}, status=status.HTTP_404_NOT_FOUND)
         from .services import get_billable_items
         return Response({'customer': customer.id, 'groups': get_billable_items(customer)})
-
-    @action(detail=False, methods=['post'])
-    def generate(self, request):
-        """POST commerce/delivery-notes/generate/ — genera un albarà DRAFT amb línies proposades
-        a partir de {work_order_ids}. Gate CONFIGURE. Retorna el DRAFT creat (201) o els errors
-        del guard junts (400 amb `detail` i `errors`, p.ex. extres pendents de revisió)."""
-        ids = request.data.get('work_order_ids') or []
-        wos = list(WorkOrder.objects.select_related('order_line__product', 'customer')
-                   .filter(pk__in=ids))
-        missing = set(ids) - {w.pk for w in wos}
-        if missing:
-            return Response({'detail': f'Encàrrecs no trobats: {sorted(missing)}.'},
-                            status=status.HTTP_404_NOT_FOUND)
-        from django.core.exceptions import ValidationError as DjangoValidationError
-        from .services import generate_delivery_note
-        try:
-            dn = generate_delivery_note(wos, user=getattr(request.user, 'profile', None))
-        except DjangoValidationError as e:
-            return Response({'detail': '; '.join(e.messages), 'errors': e.messages},
-                            status=status.HTTP_400_BAD_REQUEST)
-        return Response(self.get_serializer(dn).data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=['post'])
     def draft(self, request):
@@ -838,7 +818,7 @@ class DeliveryNoteLineViewSet(_ComercialMixin, mixins.RetrieveModelMixin,
     """Línies d'albarà (edició filtrada per ?delivery_note=). PATCH de preu/descripció/qty/visible
     en DRAFT (guard replicat al serializer per a un 400 net); FK de traçabilitat read-only. `create`
     crea una línia MANUAL (comentari lliure) en un DRAFT; `destroy` treu una línia del DRAFT. Les
-    línies proposades neixen de `add-lines/` (v2) o `generate/` (v1).
+    línies proposades neixen de `add-lines/`, des de la safata `billable/`.
 
     ⚠️ LECTURA OBERTA A POSTA: `ProductionTab.jsx:76` demana aquestes línies per `?model=` des
     de la fitxa del model i només en pinta `dn_number`/`dn_status`. És el cas que va obrir la
