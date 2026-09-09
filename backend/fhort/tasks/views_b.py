@@ -1960,6 +1960,9 @@ def rondes_del_model_view(request, model_id):
 
     if not Model.objects.filter(pk=model_id).exists():
         return Response({'error': 'Model no trobat.'}, status=http_status.HTTP_404_NOT_FOUND)
+    # `linia_comanda__order` hi entra amb el veredicte de numeral (FIT-12): `get_comanda`
+    # travessa les dues FK i, sense això, cada volta de la llista seria una query de més.
     qs = (Ronda.objects.filter(model_id=model_id)
-          .select_related('entrega__qui_informa', 'entrega__qui_informa_ok').order_by('seq'))
+          .select_related('entrega__qui_informa', 'entrega__qui_informa_ok',
+                          'linia_comanda__order').order_by('seq'))
     return Response(RondaSerializer(qs, many=True).data, status=http_status.HTTP_200_OK)

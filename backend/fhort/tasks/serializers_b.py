@@ -366,11 +366,24 @@ class RondaSerializer(serializers.ModelSerializer):
     entrega = EntregaSerializer(read_only=True)
     entregada = serializers.SerializerMethodField()
     lliurable = serializers.SerializerMethodField()
+    # M4 · FIT-12 — el veredicte de numeral, servit per la porta de voltes.
+    #
+    # Els tres camps ja eren PERSISTITS (`tasks/models.py:204-216`): els escriu `marca_numeral`
+    # UN COP, en obrir la volta, i **no es recalculen mai** (models.py:193-202). Aquí NOMÉS
+    # s'exposen. 🔒 Cap recàlcul en lectura: la política foto/recàlcul/híbrid és decisió d'Agus
+    # i aquest serializer no la pot prejutjar servint un valor viu on la BD en té un de congelat.
+    #
+    # `comanda` és el `document_number` resolt per la línia CONGELADA a la volta, exactament com
+    # ja ho fa la safata d'albaranables (`commerce/services.py:_ronda_header`, :708-731): si el
+    # model s'ha desassignat des de llavors, el «perquè» ha de seguir dient de quina venda
+    # parlava. Les dues superfícies han de dir el mateix amb les mateixes paraules.
+    comanda = serializers.SerializerMethodField()
 
     class Meta:
         model = Ronda
         fields = ['id', 'model', 'seq', 'motiu', 'oberta_el', 'tancada_el',
-                  'entrega', 'entregada', 'lliurable']
+                  'entrega', 'entregada', 'lliurable',
+                  'fora_de_comanda', 'linia_comanda', 'numeral_vigent', 'comanda']
         read_only_fields = fields
 
     def get_entregada(self, obj):
@@ -379,3 +392,7 @@ class RondaSerializer(serializers.ModelSerializer):
     def get_lliurable(self, obj):
         from .services_r import ronda_lliurable
         return ronda_lliurable(obj)
+
+    def get_comanda(self, obj):
+        linia = obj.linia_comanda
+        return linia.order.document_number if linia is not None and linia.order_id else None
