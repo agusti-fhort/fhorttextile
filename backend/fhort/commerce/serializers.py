@@ -404,6 +404,16 @@ class WorkOrderSerializer(PodaEconomicaMixin, serializers.ModelSerializer):
     CAMPS_ECONOMICS = ('price_snapshot',)
     customer_nom = serializers.CharField(source='customer.nom', read_only=True)
     model_codi = serializers.CharField(source='model.codi_intern', read_only=True, default=None)
+    # LLEI DEL NOM — el nom del model és l'identificador més visible, i el codi el secundari.
+    # Fins ara aquest serializer servia NOMÉS `model_codi`, i per això la llista i el detall
+    # d'encàrrecs no podien pintar el nom encara que volguessin (el coll d'ampolla era el
+    # payload, no la taula). Els dos germans d'aquesta mateixa app ja el servien —
+    # `work-orders/orphaned/` (views.py:462) i `order-lines/{id}/allocation/` (views.py:350) —:
+    # el principal era l'únic que no el portava. `collection` l'acompanya perquè el PDF d'albarà
+    # ja identifica el model amb el parell nom + col·lecció (pdf_service.py:585-597).
+    # `default=None` a `model_nom` per als COLLECTOR, que per constraint no tenen model.
+    model_nom = serializers.CharField(source='model.nom_prenda', read_only=True, default=None)
+    model_collection = serializers.CharField(source='model.collection', read_only=True, default=None)
     # v2 albarà — traçabilitat de la cadena comanda→WO→albarà (números de document, read-only).
     order_number = serializers.CharField(source='order_line.order.document_number', read_only=True, default=None)
     delivery_note_number = serializers.CharField(source='delivery_note.document_number', read_only=True, default=None)
@@ -414,7 +424,8 @@ class WorkOrderSerializer(PodaEconomicaMixin, serializers.ModelSerializer):
     class Meta:
         model = WorkOrder
         fields = ['id', 'number', 'kind', 'origin', 'status', 'customer', 'customer_nom',
-                  'model', 'model_codi', 'order_line', 'order_number', 'period', 'delivery_note',
+                  'model', 'model_codi', 'model_nom', 'model_collection',
+                  'order_line', 'order_number', 'period', 'delivery_note',
                   'delivery_note_number', 'price_snapshot', 'recipe_snapshot',
                   'closed_at', 'closed_by', 'created_at', 'n_tasks', 'tasks', 'adjustments']
 
