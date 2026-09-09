@@ -669,7 +669,12 @@ class DeliveryNoteViewSet(_ComercialMixin, mixins.RetrieveModelMixin, mixins.Lis
     mateix customer). `destroy` només en DRAFT (allibera els WO via SET_NULL). L'UPDATE del
     header serveix per editar `notes` en DRAFT (el status es mou només per `issue`)."""
     queryset = DeliveryNote.objects.select_related('customer', 'issued_by', 'created_by') \
-        .prefetch_related('lines__product', 'delivery_notes_included').all()
+        .prefetch_related('lines__product', 'delivery_notes_included',
+                          # Mateixa raó que a la vista de línies: `rondes_detall` i `pacte_*`
+                          # baixen a voltes → tasques i travessen la línia de comanda.
+                          'lines__linia_comanda__order', 'lines__rondes__entrega',
+                          'lines__rondes__tasques__task_type',
+                          'lines__rondes__tasques__assignee').all()
     serializer_class = DeliveryNoteSerializer
     filterset_fields = ['status', 'customer']
 
@@ -822,7 +827,14 @@ class DeliveryNoteLineViewSet(_ComercialMixin, mixins.RetrieveModelMixin,
     de la fitxa del model i només en pinta `dn_number`/`dn_status`. És el cas que va obrir la
     peça — hi viatjaven `unit_price`, `line_total` i `internal_cost` (diagnosi §3.2) — i el
     serializer els poda. L'escriptura (preu de la línia en DRAFT) sí que és comercial."""
-    queryset = DeliveryNoteLine.objects.select_related('delivery_note', 'product', 'model').all()
+    # `rondes_detall` baixa a voltes → tasques → tipus/tècnic, i `pacte_*` travessa
+    # `linia_comanda__order`. Sense això, cada línia era una cascada de consultes — i aquesta
+    # vista la serveix també `?model=` a la pestanya Producció, que obre qualsevol tècnic.
+    queryset = (DeliveryNoteLine.objects
+                .select_related('delivery_note', 'product', 'model', 'linia_comanda__order')
+                .prefetch_related('rondes__entrega', 'rondes__tasques__task_type',
+                                  'rondes__tasques__assignee')
+                .all())
     serializer_class = DeliveryNoteLineSerializer
     filterset_fields = ['delivery_note', 'line_kind', 'model']
 

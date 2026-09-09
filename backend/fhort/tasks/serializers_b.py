@@ -54,6 +54,10 @@ class ModelTaskSerializer(serializers.ModelSerializer):
     es_lliurable = serializers.BooleanField(source='task_type.es_lliurable', read_only=True)
     tipus_extern = serializers.SerializerMethodField()
     ronda_seq = serializers.IntegerField(source='ronda.seq', read_only=True, default=None)
+    # A3 · la tarifa/hora PRÒPIA d'aquesta tasca. READ-ONLY aquí a posta: s'escriu per la porta
+    # `cost-hora/`, que va amb el gate COMERCIAL (v. el seu docstring). I es PODA: `/model-task-
+    # items/` el llegeix qualsevol tècnic, i el cost intern és diner.
+    hourly_rate_override = serializers.SerializerMethodField()
     es_vigent = serializers.SerializerMethodField()
     albaranada = serializers.SerializerMethodField()
     obert_per = serializers.SerializerMethodField()
@@ -73,7 +77,7 @@ class ModelTaskSerializer(serializers.ModelSerializer):
                   'planned_start', 'planned_end', 'planned_locked',
                   'work_order', 'off_recipe', 'fitting_session',
                   # F2.0 — genealogia (F1.1) + estat derivat per al modal de F2.1.
-                  'ronda', 'ronda_seq', 'mare', 'motiu',
+                  'ronda', 'ronda_seq', 'mare', 'motiu', 'hourly_rate_override',
                   'assignee_nom', 'es_lliurable', 'tipus_extern',
                   'es_vigent', 'albaranada', 'obert_per', 'obert_per_nom',
                   'temps_consumit_min', 'sessio_inici', 'sessio_amb_escriptura']
@@ -91,6 +95,13 @@ class ModelTaskSerializer(serializers.ModelSerializer):
                             'work_order', 'off_recipe', 'fitting_session',
                             # La genealogia l'escriu `obrir_ronda`, mai el client.
                             'ronda', 'mare', 'motiu']
+
+    def get_hourly_rate_override(self, obj):
+        from fhort.accounts.capabilities import pot_veure_diner
+        if obj.hourly_rate_override is None:
+            return None
+        return (str(obj.hourly_rate_override)
+                if pot_veure_diner(self.context.get('request')) else None)
 
     def get_rectifications(self, obj):
         return rectification_count(obj)

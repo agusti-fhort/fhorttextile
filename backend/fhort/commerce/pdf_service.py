@@ -117,12 +117,12 @@ _PDF_STRINGS = {
         'description': 'Descripció', 'units': 'Unitats', 'unit_price': 'Preu unit.',
         'amount': 'Import',
         'taxable_base': 'Base imposable', 'vat': 'I.V.A.', 'total_amount': 'Import total',
-        'payment_method': 'Forma de pagament', 'observations': 'Observacions',
+        'payment_method': 'Forma de pagament',
         'payment_terms': 'Condicions de pagament',
-        'qty': 'Qt.', 'unit': 'Unitat', 'price': 'Preu', 'delivery': 'Lliurament',
+
         # BLOC A · maqueta §3.
         'dn_quote': 'Pressupost', 'dn_direct_order': 'Encàrrec directe sense pressupost', 'dn_round': 'Ronda', 'dn_comments': 'Comentaris', 'dn_qty': 'Qtt',
-        'done': 'feta', 'pending': 'pendent', 'model_subtotal': 'Subtotal model',
+
     },
     'en': {
         'doc_quote': 'Quotation', 'doc_order': 'Order', 'doc_delivery_note': 'Delivery note',
@@ -131,12 +131,12 @@ _PDF_STRINGS = {
         'description': 'Description', 'units': 'Units', 'unit_price': 'Unit price',
         'amount': 'Amount',
         'taxable_base': 'Taxable base', 'vat': 'VAT', 'total_amount': 'Total amount',
-        'payment_method': 'Payment method', 'observations': 'Notes',
+        'payment_method': 'Payment method',
         'payment_terms': 'Payment terms',
-        'qty': 'Qty', 'unit': 'Unit', 'price': 'Price', 'delivery': 'Delivery',
+
         # BLOC A · maqueta §3.
         'dn_quote': 'Quote', 'dn_direct_order': 'Direct order, no quote', 'dn_round': 'Round', 'dn_comments': 'Comments', 'dn_qty': 'Qty',
-        'done': 'done', 'pending': 'pending', 'model_subtotal': 'Model subtotal',
+
     },
     'es': {
         'doc_quote': 'Presupuesto', 'doc_order': 'Pedido', 'doc_delivery_note': 'Albarán',
@@ -145,12 +145,12 @@ _PDF_STRINGS = {
         'description': 'Descripción', 'units': 'Unidades', 'unit_price': 'Precio unit.',
         'amount': 'Importe',
         'taxable_base': 'Base imponible', 'vat': 'I.V.A.', 'total_amount': 'Importe total',
-        'payment_method': 'Forma de pago', 'observations': 'Observaciones',
+        'payment_method': 'Forma de pago',
         'payment_terms': 'Condiciones de pago',
-        'qty': 'Cant.', 'unit': 'Unidad', 'price': 'Precio', 'delivery': 'Entrega',
+
         # BLOC A · maqueta §3.
         'dn_quote': 'Presupuesto', 'dn_direct_order': 'Encargo directo sin presupuesto', 'dn_round': 'Vuelta', 'dn_comments': 'Comentarios', 'dn_qty': 'Ctd',
-        'done': 'hecha', 'pending': 'pendiente', 'model_subtotal': 'Subtotal modelo',
+
     },
 }
 
@@ -557,12 +557,6 @@ def generate_delivery_note_pdf(delivery_note, lang=None):
         story.append(Paragraph(oneliner, SSM_G))
     story.append(HRFlowable(width='100%', thickness=0.5, color=LGREY, spaceBefore=4 * mm, spaceAfter=5 * mm))
 
-    # ═══ AGRUPACIÓ per model (només línies VISIBLES) ═══
-    from collections import OrderedDict
-    groups = OrderedDict()
-    for ln in (delivery_note.lines.filter(visible=True)
-               .select_related('model', 'model_task').order_by('position', 'id')):
-        groups.setdefault(ln.model_id, []).append(ln)
 
     def _linia_block(l):
         """UN BLOC PER LÍNIA · maqueta §3. La línia ÉS un model (A1) o una volta directa (A7).
@@ -577,7 +571,12 @@ def generate_delivery_note_pdf(delivery_note, lang=None):
         una volta sense pressupost ha de dir què s'hi ha fet per justificar el preu.
         """
         m = l.model
+        # Una línia SENSE model (les 4 llegades i les MANUAL que encara genera `generate/`) no és
+        # una targeta de model: no té identitat ni pacte. El seu nom és la seva descripció, i
+        # llavors la línia de concepte de sota s'ha de callar — si no, el mateix text sortia
+        # DUES vegades, una com a títol i una com a concepte.
         nom = (m.nom_prenda if m else '') or (l.description or '—')
+        sense_model = m is None
         # Identitat: col·lecció · temporada any · ref client · ref nostra. SENSE etiquetes: el
         # client sap què és cadascuna i els rètols només afegeixen soroll a una línia de 10px.
         ident = [(m.collection if m else '') or '',
@@ -606,7 +605,7 @@ def generate_delivery_note_pdf(delivery_note, lang=None):
             bits.append(f'{t(lang, "dn_qty")} {Decimal(lc.qty_allocated or 0):.0f}/'
                         f'{Decimal(lc.quantity or 0):.0f}')
             els.append(Paragraph(' · '.join(bits), s('mp', size=10.5, leading=14)))
-        elif (l.description or '').strip():
+        elif (l.description or '').strip() and not sense_model:
             els.append(Paragraph(l.description.strip(), s('mp', size=10.5, leading=14)))
 
         # LES VOLTES EN UNA SOLA LÍNIA, amb l'import a la dreta i SENSE puntets: el punt de
@@ -673,12 +672,11 @@ def generate_delivery_note_pdf(delivery_note, lang=None):
         ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
         ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0)])))
 
-    # ═══ OBSERVACIONS (notes de l'albarà; sense pagament/venciments) ═══
-    if (delivery_note.notes or '').strip():
-        story.append(Spacer(1, 8 * mm))
-        story.append(Table([[Paragraph(t(lang, 'observations'), S_LABEL)],
-                            [Paragraph(delivery_note.notes.replace('\n', ' '), SSM_G)]],
-            colWidths=[CW], style=TableStyle(ZP + [('LINEABOVE', (0, 0), (0, 0), 0.5, LGREY)])))
+    # 🚨 EL BLOC «OBSERVACIONS» SE'N VA. Imprimia `delivery_note.notes` una SEGONA vegada, al
+    # peu del document, i el bloc «Comentaris» de la maqueta §3 ja el diu a dalt, al costat de
+    # les sumes. Amb els dos, el mateix text sortia dues vegades a cada albarà amb comentari —
+    # i no es veia llegint el diff, perquè cadascun és correcte per separat: el que falla és que
+    # ara hi ha dos lectors del mateix camp. (Trobat pel guàrdia d'i18n llegint el generador.)
 
     doc.build(story)
     return buf.getvalue()

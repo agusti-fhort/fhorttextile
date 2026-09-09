@@ -162,7 +162,7 @@ function TargetaLinia({ l, editable, busy, importEdit, onImport, onImportSave, o
           {editable ? (
             <input type="number" step="0.01" value={importEdit} disabled={busy}
               onChange={e => onImport(l, e.target.value)} onBlur={() => onImportSave(l)}
-              aria-label={t('deliverynotes.line_price')}
+              aria-label={t('deliverynotes.line_import')}
               style={{ ...inp, width: 96, textAlign: 'right', fontSize: 'var(--fs-h3)',
                        lineHeight: '20px', fontWeight: 600 }} />
           ) : (
@@ -362,7 +362,7 @@ export default function DeliveryNoteDetail() {
     if (nou !== null && !Number.isFinite(nou)) return
     if (String(tasca.cost_hora ?? '') === net) return   // res a desar
     setBusy(true); setFeedback(null)
-    modelTasks.patch(tasca.id, { hourly_rate_override: nou })
+    modelTasks.costHora(tasca.id, nou)
       .then(reload)
       .catch(err => setFeedback({ type: 'err', text: err?.response?.data?.detail || t('deliverynotes.line_error') }))
       .finally(() => setBusy(false))
@@ -381,14 +381,6 @@ export default function DeliveryNoteDetail() {
   const removeLine = (line) => {
     setBusy(true); setFeedback(null)
     commerce.deliveryNoteLines.remove(line.id)
-      .then(reload)
-      .catch(err => setFeedback({ type: 'err', text: err?.response?.data?.detail || t('deliverynotes.line_error') }))
-      .finally(() => setBusy(false))
-  }
-
-  const addComment = () => {
-    setBusy(true); setFeedback(null)
-    commerce.deliveryNoteLines.create({ delivery_note: dn.id, description: t('deliverynotes.comment_placeholder'), quantity: 0, unit_price: 0 })
       .then(reload)
       .catch(err => setFeedback({ type: 'err', text: err?.response?.data?.detail || t('deliverynotes.line_error') }))
       .finally(() => setBusy(false))
@@ -503,9 +495,12 @@ export default function DeliveryNoteDetail() {
         <PageMenu backTo="/comercial/albarans" backTitle={t('deliverynotes.back')}>
           <PdfButton label={t('deliverynotes.download_pdf')} onClick={doPdf}
             lang={pdfLang} onLangChange={setPdfLang} t={t} />
-          <button onClick={addComment} disabled={busy || !editable} style={smallBtn}>
-            <i className="ti ti-message-plus" style={{ fontSize: 14 }} />{t('deliverynotes.add_comment')}
-          </button>
+          {/* 🚨 «AFEGIR COMENTARI» SE'N VA. Creava una `DeliveryNoteLine` MANUAL amb un text de
+              plantilla, i des que la graella de línies ha marxat aquell text ja no es pot
+              editar (no hi ha input de descripció) ni amagar (l'ull de visibilitat també se'n
+              va): quedava una targeta gran amb la plantilla, que sortia al PDF i als totals a
+              0,00 €. El comentari de l'albarà ara viu a la caixa `Comentaris` del peu, que
+              escriu a `notes` i és el que la maqueta §2 demana. */}
         </PageMenu>
       </div>
 
@@ -611,11 +606,17 @@ export default function DeliveryNoteDetail() {
             // de la safata a 16px (les del document) en comptes dels 12 de la maqueta.
             fontFamily: MONO, fontSize: 'var(--fs-body)', lineHeight: '16px',
           }}>
-            <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>
+            {/* Maqueta §1 · `.mt`: títol i, sota, EL CLIENT. On hi havia el títol hi havia
+                també una frase d'ajuda («Tasques acabades, extres, despeses i deduccions
+                pendents d'albarar»): el brief prohibeix el text d'ajuda a pantalla, i a més
+                aquella frase havia quedat FALSA —la safata ja no és de tasques. Se'n va, i el
+                seu lloc el pren el que la maqueta hi posa, que és una dada. */}
+            <h2 style={{ fontSize: 'var(--fs-h2)', lineHeight: '24px', fontWeight: 500,
+                         fontFamily: MONO }}>
               {t('deliverynotes.tray_title')}
             </h2>
             <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', marginBottom: 14 }}>
-              {t('deliverynotes.tray_hint')}
+              {dn.customer_nom}
             </p>
             {!tray ? <Center>{t('deliverynotes.loading')}</Center>
               : (tray.groups || []).length === 0 ? <div style={{ color: 'var(--text-soft)', padding: '10px 0' }}>{t('deliverynotes.tray_empty')}</div>
@@ -624,7 +625,9 @@ export default function DeliveryNoteDetail() {
                     <CapcaleraModelSafata g={g} t={t} locale={i18n.language} />
                     {/* Les files separades NOMÉS pel filet `--line` de cada fila (maqueta §1):
                         cap fons alternat, cap caixa per volta. */}
-                    {(g.blocs || []).map(b => b.rondes.map(r => (
+                    {/* `flatMap` i no un `map` niat: el niat torna ARRAYS al nivell exterior i
+                        React en demana clau —n'hi havia a les files, no als arrays. */}
+                    {(g.blocs || []).flatMap(b => b.rondes.map(r => (
                       <FilaRondaSafata key={r.id} r={r} bloc={blocKey(g, b)}
                         marcat={picked.has(blocKey(g, b))} onToggle={togglePick}
                         t={t} locale={i18n.language} />

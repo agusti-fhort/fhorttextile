@@ -1,3 +1,5 @@
+from decimal import Decimal, InvalidOperation
+
 from rest_framework import viewsets, status
 from rest_framework import status as http_status
 from rest_framework.decorators import api_view, permission_classes, action
@@ -11,7 +13,7 @@ from django.db.models import Count, Q, ProtectedError, Min, OuterRef, Subquery
 from django.db.models.functions import Coalesce
 
 from rest_framework.exceptions import ValidationError
-from fhort.accounts.capabilities import (HasCapability, DEFINE_TASKS, EXECUTE_TASKS,
+from fhort.accounts.capabilities import (HasCapability, COMERCIAL, DEFINE_TASKS, EXECUTE_TASKS,
                                          CLOSE_GATES, SCHEDULE_FITTINGS, CONFIGURE, VIEW_TEAM_TASKS,
                                          get_allowed_task_types, scope_model_task_queryset)
 from fhort.models_app.models import Model
@@ -64,6 +66,11 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ('list', 'retrieve', 'by_model'):
             return [IsAuthenticated()]
+        # A3 · el cost intern és COMERCIAL, no de qui planifica: `cost-hora` NO hereta el gate
+        # del CRUD. Qui assigna tasques no ha de poder tocar quant costa una hora.
+        if self.action == 'cost_hora':
+            perm = HasCapability(); self.required_capability = COMERCIAL
+            return [perm]
         perm = HasCapability(); self.required_capability = DEFINE_TASKS
         return [perm]
 
@@ -85,6 +92,43 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
             from fhort.planning.plan_service import cleanup_after_pending_delete
             cleanup_after_pending_delete(model_id=model_id, assignee_id=assignee_id)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=['post'], url_path='cost-hora')
+    def cost_hora(self, request, pk=None):
+        """POST /api/v1/model-task-items/{id}/cost-hora/ — A3: la tarifa/hora d'AQUESTA tasca.
+
+        Cos: `{"hourly_rate_override": <decimal> | null}`. `null` la treu i torna a la tarifa del
+        tenant; `0` és una decisió («aquesta hora no la cobrem internament») i es desa.
+
+        🚨 **PORTA PRÒPIA I NO UN CAMP DEL PATCH GENERAL**, per dues raons que no es podien
+        resoldre al `partial_update`:
+
+        1. **El GATE.** El CRUD d'aquesta vista va amb `DEFINE_TASKS` —qui planifica feina— i
+           això NO és qui ha de poder tocar el cost intern. Tocar-lo és un acte COMERCIAL, i
+           obrir-lo al PATCH general l'hauria donat a tothom qui pot assignar tasques.
+        2. **El SILENCI.** Amb el camp fora de `Meta.fields`, un
+           `PATCH {"hourly_rate_override": 45}` contestava **200 OK i no escrivia res** — DRF
+           descarta els camps desconeguts sense dir-ho. La pantalla desava, recarregava i
+           ensenyava el valor de sempre, sense error i sense log. Reproduït abans de corregir-ho.
+        """
+        instance = self.get_object()
+        cru = request.data.get('hourly_rate_override', '')
+        if cru in (None, ''):
+            valor = None
+        else:
+            try:
+                valor = Decimal(str(cru))
+            except (InvalidOperation, TypeError):
+                return Response({'error': 'hourly_rate_override ha de ser un decimal o null.'},
+                                status=status.HTTP_400_BAD_REQUEST)
+            if valor < 0:
+                return Response({'error': 'El cost/hora no pot ser negatiu.'},
+                                status=status.HTTP_400_BAD_REQUEST)
+        instance.hourly_rate_override = valor
+        instance.save(update_fields=['hourly_rate_override', 'updated_at'])
+        return Response({'id': instance.pk,
+                         'hourly_rate_override': (str(valor) if valor is not None else None)},
+                        status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['post'], url_path='desassignar-ronda')
     def desassignar_ronda(self, request, pk=None):

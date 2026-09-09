@@ -459,6 +459,10 @@ export const modelTasks = {
   // (el DEDUCTION en reté la FK per valorar-la a l'albarà). Els dos gestos no es fonen.
   // Mateixos guards que `remove`: DEFINE_TASKS, abast per fila i NOMÉS Pending (409 si no).
   desassignarRonda: (id) => client.post(`/api/v1/model-task-items/${id}/desassignar-ronda/`),
+  // A3 · la tarifa/hora d'una tasca. Porta PRÒPIA i no un camp del PATCH general: el CRUD va amb
+  // `define_tasks` i tocar el cost intern és un acte COMERCIAL. `null` treu l'override.
+  costHora: (id, valor) => client.post(`/api/v1/model-task-items/${id}/cost-hora/`,
+    { hourly_rate_override: valor }),
   // Màquina d'estats (gated execute_tasks). La resposta pot dur paused_task_id (→ toast 3s).
   // {to_status} i, opcionalment, {auto:'guard_30min'} SOBRE →Paused: marca del guard de tasca
   // oblidada perquè el log no signi l'auto-pausa amb el nom del tècnic. Un gest humà no la porta.

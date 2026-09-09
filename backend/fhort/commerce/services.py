@@ -834,11 +834,6 @@ def get_billable_items(customer):
               .select_related('model', 'entrega', 'linia_comanda__order', 'linia_comanda__product')
               .order_by('model__codi_intern', 'seq'))
 
-    # Voltes ja EMESES, per model: el que l'A4 no pot tornar a calcular.
-    emeses = set(Ronda.objects
-                 .filter(model__customer=customer,
-                         delivery_note_lines__delivery_note__status__in=('ISSUED', 'INVOICED'))
-                 .values_list('id', flat=True))
 
     grups = {}
     numerals = {}          # model_id -> (linia, numeral) — un sol pivot per model
@@ -848,12 +843,15 @@ def get_billable_items(customer):
             numerals[m.id] = numeral_efectiu(m)
         linia, numeral = numerals[m.id]
 
-        # A4 · HÍBRID. Una volta ja emesa conserva el seu veredicte; la resta es tornen a pesar
-        # contra el numeral d'ARA. `numeral is None` = sense pacte o sense límit: mai desborda.
-        if r.id in emeses:
-            fora = r.fora_de_comanda
-        else:
-            fora = numeral is not None and r.seq > numeral
+        # A4 · HÍBRID. Tota volta que arriba aquí es torna a pesar contra el numeral d'ARA.
+        # `numeral is None` = sense pacte o sense límit: mai desborda.
+        #
+        # 🚩 AQUÍ NO HI HA CAP BRANCA DE «CONSERVA EL CONGELAT», i tenir-n'hi una era codi mort:
+        # `voltes` ja exclou tot el que té línia d'albarà, i «ja emesa» és un subconjunt d'això.
+        # Els dos conjunts són DISJUNTS per construcció, o sigui que la comparació no s'avaluava
+        # mai certa i la consulta que la sostenia es gastava per res. La meitat «congelada» de
+        # l'híbrid la fa `issue_delivery_note`, i NOMÉS ell: aquesta funció només recalcula.
+        fora = numeral is not None and r.seq > numeral
 
         g = grups.get(m.id)
         if g is None:
@@ -966,6 +964,12 @@ def add_lines_to_draft(draft, selected_items, user=None):
     # La safata viva és l'ÚNICA autoritat sobre què es pot afegir i a quin preu.
     safata = {g['model']['id']: g for g in get_billable_items(draft.customer)}
     created = []
+    # 🚨 LA FOTO DE LA SAFATA ES PREN UN COP, i per tant no veu el que aquesta mateixa crida
+    # acaba d'afegir: `{"items":[{...,"clau":"pacte"},{...,"clau":"pacte"}]}` creava DUES línies
+    # sobre les mateixes voltes, amb els dos imports als totals. El guard de la safata val entre
+    # crides; dins d'una crida cal recordar què s'ha consumit. La cara no ho reprodueix (envia un
+    # `Set`), però la porta HTTP sí.
+    consumides = set()
     with transaction.atomic():
         pos = draft.lines.count()
         for sel in (selected_items or []):
@@ -977,8 +981,9 @@ def add_lines_to_draft(draft, selected_items, user=None):
                 continue
             # Una volta EN CURS no es factura: la safata la mostra, però marcar-la no val.
             rondes_ids = [r['id'] for r in bloc['rondes'] if r['entregada']]
-            if not rondes_ids:
+            if not rondes_ids or consumides.intersection(rondes_ids):
                 continue
+            consumides.update(rondes_ids)
 
             linia_comanda = (SalesOrderLine.objects.filter(pk=bloc['linia_comanda']).first()
                              if bloc['linia_comanda'] else None)
@@ -1001,7 +1006,10 @@ def add_lines_to_draft(draft, selected_items, user=None):
                 # A1 · SENSE camp quantitat: sempre 1, i l'import és el de la targeta.
                 quantity=Decimal('1'),
                 unit_price=Decimal(bloc['preu_proposat']).quantize(_CENT, rounding=ROUND_HALF_UP),
-                description=str(concepte)[:300], position=pos, visible=True)
+                # `position` comença a `count()+1`, com fa la creació de línies MANUAL
+                # (`views.py`): amb `count()` a seques, la primera línia afegida naixia amb la
+                # posició de l'última existent i les dues empataven.
+                description=str(concepte)[:300], position=pos + 1, visible=True)
             line.save()
             line.rondes.set(rondes_ids)
             created.append(line)
@@ -1009,6 +1017,7 @@ def add_lines_to_draft(draft, selected_items, user=None):
         if created:
             draft.recalculate_totals()
     return created
+
 
 def apply_commercial_review(work_order, items, user=None):
     """Revisió COMERCIAL d'un WO tancat (B4b, decisió Agus 2026-07-08): el comercial fixa el

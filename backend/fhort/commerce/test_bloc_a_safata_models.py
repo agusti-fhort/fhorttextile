@@ -155,7 +155,14 @@ class SafataModelsTest(TenantTestCase):
         self.assertFalse(r3['fora_de_comanda'], 'efectiu, amb el numeral d\'ara')
         self.assertTrue(r3['fora_de_comanda_congelat'], 'la foto de quan es va obrir')
 
-    def test_una_volta_ja_emesa_conserva_el_veredicte_congelat(self):
+    def test_una_volta_ja_albaranada_surt_de_la_safata(self):
+        # 🚨 EL NOM D'ABANS MENTIA. Es deia «conserva el veredicte congelat» i el que assertava
+        # —correctament— és que la volta ja NO hi és. No podia ser cap altra cosa: la safata
+        # exclou tot el que té línia d'albarà, o sigui que una volta emesa no hi arriba mai i no
+        # hi ha cap veredicte seu per conservar. Qui congela és `issue_delivery_note`, i el test
+        # que ho prova és el curl de l'acta (BD True → False en emetre).
+        # Un test amb un nom que promet més del que mira és pitjor que no tenir-lo: fa creure
+        # que hi ha cobertura on no n'hi ha.
         from fhort.commerce.models import DeliveryNote, DeliveryNoteLine
         dn = DeliveryNote.objects.create(customer=self.customer)
         linia_dn = DeliveryNoteLine.objects.create(delivery_note=dn, model=self.model,
