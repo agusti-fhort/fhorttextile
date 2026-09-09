@@ -129,8 +129,14 @@ function TargetaLinia({ l, editable, busy, importEdit, onImport, onImportSave, o
   const camp = [l.model_collection, [l.model_temporada, l.model_any].filter(Boolean).join(' ')]
     .filter(Boolean).join(' · ')
   return (
+    // 🚨 LA MIDA ES DECLARA AL CONTENIDOR. Sense `fontSize`, la targeta computa els 16px del
+    // document i qualsevol fill sense mida pròpia hi neix — el mateix defecte que la mesura ja
+    // va caçar a `TaulaLlista` i al `stateBox` del dashboard. La bidireccional el va tornar a
+    // trobar aquí (maqueta 12px · pantalla 16px) i no es veia llegint el codi: el que falla és
+    // el que NO hi ha escrit.
     <div style={{ background: 'var(--panel)', border: '1px solid var(--line)',
-                  borderRadius: 'var(--r-card)', marginBottom: 16, overflow: 'hidden' }}>
+                  borderRadius: 'var(--r-card)', marginBottom: 16, overflow: 'hidden',
+                  fontFamily: MONO, fontSize: 'var(--fs-body)', lineHeight: '16px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: 16 }}>
         <div style={{ lineHeight: '16px', minWidth: 0 }}>
           <span style={{ fontSize: 'var(--fs-h3)', lineHeight: '20px', fontWeight: 600 }}>
@@ -503,7 +509,8 @@ export default function DeliveryNoteDetail() {
         </PageMenu>
       </div>
 
-      <div style={{ minWidth: 0, maxWidth: 1000 }}>
+      {/* Àncora de mesura: el senyal que diu que aquesta pantalla s'ha muntat de debò. */}
+      <div data-ftt-screen="albara-pantalla" style={{ minWidth: 0, maxWidth: 1000 }}>
 
       <DocumentHeader
         reference={dn.document_number}
@@ -556,7 +563,8 @@ export default function DeliveryNoteDetail() {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 16,
                     alignItems: 'start' }}>
         <div style={{ background: 'var(--panel)', border: '1px solid var(--line)',
-                      borderRadius: 'var(--r-card)' }}>
+                      borderRadius: 'var(--r-card)',
+                      fontFamily: MONO, fontSize: 'var(--fs-body)', lineHeight: '16px' }}>
           <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--line)',
                         fontSize: 'var(--fs-caption)', lineHeight: '12px', letterSpacing: '.08em',
                         textTransform: 'uppercase', color: 'var(--text-soft)' }}>
@@ -575,7 +583,9 @@ export default function DeliveryNoteDetail() {
           </div>
         </div>
         <div style={{ width: 300, background: 'var(--panel)', border: '1px solid var(--line)',
-                      borderRadius: 'var(--r-card)' }}>
+                      borderRadius: 'var(--r-card)',
+                      // Mateixa raó que a la targeta: la mida va al contenidor.
+                      fontFamily: MONO, fontSize: 'var(--fs-body)', lineHeight: '16px' }}>
           {[[t('deliverynotes.subtotal'), money(dn.subtotal), false],
             [t('deliverynotes.tax'), money(dn.tax_amount), false],
             [t('deliverynotes.total'), money(dn.total), true]].map(([k, v, fort], i, arr) => (
@@ -594,9 +604,12 @@ export default function DeliveryNoteDetail() {
           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex',
           alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16,
         }}>
-          <div onClick={e => e.stopPropagation()} style={{
+          <div onClick={e => e.stopPropagation()} data-ftt-screen="albara-safata" style={{
             background: 'var(--panel)', borderRadius: 'var(--r-card)', padding: '1.2rem 1.4rem',
             maxWidth: 720, width: '100%', maxHeight: '85vh', overflowY: 'auto', borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)',
+            // La mida es declara al CONTENIDOR, també aquí: la bidireccional va trobar les files
+            // de la safata a 16px (les del document) en comptes dels 12 de la maqueta.
+            fontFamily: MONO, fontSize: 'var(--fs-body)', lineHeight: '16px',
           }}>
             <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>
               {t('deliverynotes.tray_title')}
