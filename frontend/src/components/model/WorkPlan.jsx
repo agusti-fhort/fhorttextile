@@ -508,7 +508,9 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab, model
   }
 
   return (
-    <section style={containerStyle}>
+    // Àncora de mesura del Pla de treball i dels seus contenidors de ronda — v. la nota a
+    // `WorkOrders.jsx`. El Dashboard té sis blocs i cinc es munten encara que aquest falli.
+    <section data-ftt-screen="pla-treball" style={containerStyle}>
       {/* `.sec` del mockup: el rètol a l'esquerra i el TEMPS ACUMULAT SOBRE EL MODEL a la dreta,
           alineats a la línia de base. El temps és l'únic número global que sobreviu: és un fet
           del model sencer i no el diu cap capçalera de volta. */}
@@ -642,6 +644,7 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab, model
           aquesta tasca no s'esborra. */}
       {treient && (
         <Modal
+          nom={treient.encarrec ? 'paperera-lligada' : 'paperera-lliure'}
           title={treient.encarrec
             ? t('paperera.titol_lligada')
             : t('paperera.titol_lliure')}

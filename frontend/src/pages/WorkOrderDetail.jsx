@@ -257,7 +257,8 @@ export default function WorkOrderDetail() {
         <PageMenu backTo="/comercial/encarrecs" backTitle={t('workorders.back')} />
       </div>
 
-      <div style={{ minWidth: 0, maxWidth: 900 }}>
+      {/* Àncora de mesura — v. la nota a `WorkOrders.jsx`. */}
+      <div data-ftt-screen="encarrec-detall" style={{ minWidth: 0, maxWidth: 900 }}>
 
       {/* LOT 09/09 · LA LLEI DEL NOM AL CAPDAVANT. El títol deia «{client} · {codi del model}»:
           l'encàrrec s'anomenava pel CODI i el nom del model no hi sortia enlloc, tot i que el

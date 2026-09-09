@@ -363,7 +363,12 @@ export default function WorkOrders() {
         <PageMenu backTo="/" backTitle={t('workorders.back_title')} />
       </div>
 
-      <div style={{ minWidth: 0, maxWidth: '100%' }}>
+      {/* Àncora de mesura (`qa_auditoria_computats` / bidireccional). No és crom i no pinta res:
+          és el SENYAL que diu que aquesta pantalla s'ha muntat de debò. Sense ell, una ruta que
+          cau al 404 o a un tab per defecte dona ZERO incompliments — i zero és el que volem
+          veure. Va al contenidor de la llista, no al `<>` de fora, perquè el que s'audita és
+          això i no la barra de pantalla. */}
+      <div data-ftt-screen="encarrecs-llista" style={{ minWidth: 0, maxWidth: '100%' }}>
         {/* OBERTS · TANCATS · TOTS. El desplegable d'estat se'n va: obert i tancat no són un
             filtre entre molts, són les dues safates on viu la feina, i amagar-les dins d'un
             `select` les feia costar dos clics i una lectura. La resta de filtres (mena, client)
@@ -433,6 +438,7 @@ export default function WorkOrders() {
 
         {tancant && (
           <Modal
+            nom="tancament-en-lot"
             title={t('workorders.bulk_close_title', { count: triats.size })}
             subtitle={
               previ === null ? t('workorders.bulk_close_comptant')

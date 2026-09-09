@@ -30,11 +30,16 @@ const MONO = 'IBM Plex Mono, monospace'
 // tothom: «Esborrar la tasca» i «Tancar i deduir les pendents» sortien del mateix color que
 // «Desar». La família ja existia a `buttons.js` i aquest component no la podia demanar.
 // `confirmVariant` per defecte a 'pri' → cap dels 29 consumidors existents canvia.
-export default function Modal({ title, subtitle, children, confirmLabel, cancelLabel, onConfirm, onCancel, confirmDisabled = false, confirmVariant = 'pri' }) {
+export default function Modal({ title, subtitle, children, confirmLabel, cancelLabel, onConfirm, onCancel, confirmDisabled = false, confirmVariant = 'pri', nom = null }) {
   const estilConfirma = confirmVariant === 'destructiu' ? botoDestructiuPle : botoPri
   return (
     <div onClick={onCancel} style={overlayBase({ alignItems: 'center' })}>
-      <div onClick={e => e.stopPropagation()} style={{
+      {/* `nom` és NOMÉS l'àncora de mesura: un modal es munta i es desmunta amb el gest, i
+          sense senyal la bidireccional mesuraria la pantalla de sota creient que mesura el
+          diàleg. No pinta res i és opcional. */}
+      <div onClick={e => e.stopPropagation()}
+        data-ftt-screen={nom ? `modal-${nom}` : undefined}
+        style={{
         background: 'var(--panel)', borderRadius: 'var(--r-card)', padding: 20,
         width: 460, maxWidth: '92vw', maxHeight: '85vh', overflowY: 'auto',
       }}>
