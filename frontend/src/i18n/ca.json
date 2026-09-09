@@ -1690,7 +1690,15 @@
     "entity": "encàrrecs",
     "prev": "Anterior",
     "next": "Següent",
-    "page_info": "Pàgina {{page}} de {{pages}}"
+    "page_info": "Pàgina {{page}} de {{pages}}",
+    "col_nom": "Model",
+    "col_collection": "Col·lecció",
+    "tab_all": "Totes",
+    "search_placeholder": "Cerca per nom de model, codi o client…",
+    "select_all": "Triar tots els encàrrecs visibles",
+    "select_one": "Triar l’encàrrec {{n}}",
+    "collector_period": "Col·lector {{period}}",
+    "no_name": "(sense nom)"
   },
   "orders": {
     "title": "Comandes",

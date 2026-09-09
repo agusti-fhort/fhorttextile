@@ -259,10 +259,30 @@ export default function WorkOrderDetail() {
 
       <div style={{ minWidth: 0, maxWidth: 900 }}>
 
+      {/* LOT 09/09 · LA LLEI DEL NOM AL CAPDAVANT. El títol deia «{client} · {codi del model}»:
+          l'encàrrec s'anomenava pel CODI i el nom del model no hi sortia enlloc, tot i que el
+          PDF d'albarà ja l'usa per identificar-lo (pdf_service.py:585-597). Ara el H1 és el NOM
+          del model amb la COL·LECCIÓ al costat en to secundari, i els identificadors —número
+          d'encàrrec, codi intern, client— baixen a la línia de referència de sobre, que és
+          exactament el lloc que el `DocumentHeader` té per a això.
+          Un COLLECTOR no té model i mai en tindrà (constraint `collector_no_model_no_orderline`):
+          el seu títol és el període, que és el que l'anomena. */}
       <DocumentHeader
-        reference={wo.number}
+        reference={[wo.number, wo.kind === 'COLLECTOR' ? null : wo.model_codi, wo.customer_nom]
+          .filter(Boolean).join(' · ')}
         statusBadge={<><WOKindBadge kind={wo.kind} t={t} /><WOStatusBadge status={wo.status} t={t} /></>}
-        customer={`${wo.customer_nom} · ${wo.kind === 'COLLECTOR' ? wo.period : (wo.model_codi || '—')}`}
+        customer={wo.kind === 'COLLECTOR'
+          ? t('workorders.collector_period', { period: wo.period || '—' })
+          : (
+            <>
+              {wo.model_nom || t('workorders.no_name')}
+              {wo.model_collection && (
+                <span style={{ color: 'var(--text-soft)', fontWeight: 400 }}>
+                  {' · '}{wo.model_collection}
+                </span>
+              )}
+            </>
+          )}
         actions={<>
           {canClose && isOpen && (
             <button onClick={() => doClose()} disabled={busy} style={botoPri}>

@@ -1690,7 +1690,15 @@
     "entity": "work orders",
     "prev": "Previous",
     "next": "Next",
-    "page_info": "Page {{page}} of {{pages}}"
+    "page_info": "Page {{page}} of {{pages}}",
+    "col_nom": "Model",
+    "col_collection": "Collection",
+    "tab_all": "All",
+    "search_placeholder": "Search by model name, code or customer…",
+    "select_all": "Select all visible work orders",
+    "select_one": "Select work order {{n}}",
+    "collector_period": "Collector {{period}}",
+    "no_name": "(unnamed)"
   },
   "orders": {
     "title": "Orders",

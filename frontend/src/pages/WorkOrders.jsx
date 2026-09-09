@@ -5,6 +5,7 @@ import { commerce, customers as customersApi } from '../api/endpoints'
 import Feedback from '../components/ui/Feedback'
 import PageMenu from '../components/ui/PageMenu'
 import TaulaLlista from '../components/ui/TaulaLlista'
+import SubTabs from '../components/ui/SubTabs'
 import { EstatBadge, ClassificacioBadge, useCodisEstat } from '../components/commercial/estats'
 import {
   Comptador, FilaIdentitat, EstatBuit, Paginacio, camp, forceBarra,
@@ -23,8 +24,16 @@ import {
 //
 // Les tres llistes de codis (`KINDS`, `STATUSES`, i el mapa de tipus) se'n van a `/vocabulari/`
 // (`tipus_encarrec`, `estats_encarrec`).
+//
+// LOT 09/09 · LA LLEI DEL NOM ARRIBA AQUÍ. La llista identificava l'encàrrec pel CODI del model
+// dins d'una columna «Model/Període» que barrejava dues dades («una columna, dues dades»). Ara el
+// NOM del model és la segona columna i la COL·LECCIÓ la tercera, i el codi baixa a secundari sota
+// el nom. La columna barrejada se'n va: el període d'un col·lector ocupa la mateixa cel·la del
+// nom perquè és el que ANOMENA aquell encàrrec —un col·lector no té model i mai en tindrà—, i
+// això no és barrejar dues dades sinó dir el nom de cada mena amb la seva paraula.
 const PAGE_SIZE = 25
 const ORDRE_DEFECTE = { camp: 'number', dir: 'desc' }
+
 const aOrdering = (o) => (o.dir === 'desc' ? `-${o.camp}` : o.camp)
 
 // S'exporten: la fitxa d'encàrrec i la pantalla d'orfes en pinten els mateixos badges.
@@ -46,6 +55,11 @@ export default function WorkOrders() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [feedback, setFeedback] = useState(null)
+  // Selecció múltiple. Viu en memòria i NO a la URL: és una intenció de treball d'aquesta
+  // estona, no un estat compartible per enllaç. Es buida en canviar de safata o de cerca,
+  // perquè arrossegar una tria a través d'un conjunt que ja no es veu és com es tanca el que
+  // no es volia tancar.
+  const [triats, setTriats] = useState(() => new Set())
 
   const { codis: estats } = useCodisEstat('estats_encarrec')
   const { codis: tipus } = useCodisEstat('tipus_encarrec')
@@ -54,6 +68,8 @@ export default function WorkOrders() {
   const kindF = sp.get('kind') || ''
   const statusF = sp.get('status') || ''
   const customerF = sp.get('customer') || ''
+  // La cerca SÍ que va a la URL: un resultat de cerca es comparteix i es torna a obrir.
+  const searchF = sp.get('search') || ''
   const page = Math.max(1, parseInt(sp.get('page') || '1', 10))
   const ordre = useMemo(() => {
     const raw = sp.get('ordering')
@@ -63,6 +79,11 @@ export default function WorkOrders() {
   }, [sp])
 
   const setParams = useCallback((patch) => {
+    // 🔑 QUALSEVOL canvi de consulta BUIDA LA TRIA —safata, cerca, filtre i també pàgina—, i es
+    // fa AQUÍ i no en un efecte: la tria d'abans ja no és a la pantalla, i arrossegar-la a
+    // través d'un conjunt que l'usuari no té davant és com es tanca el que no es volia tancar.
+    // El gest ho ha de dir, no un efecte que ho endreci després.
+    setTriats(new Set())
     setSp(prev => {
       const next = new URLSearchParams(prev)
       Object.entries(patch).forEach(([k, v]) => {
@@ -86,6 +107,7 @@ export default function WorkOrders() {
       ...(kindF ? { kind: kindF } : {}),
       ...(statusF ? { status: statusF } : {}),
       ...(customerF ? { customer: customerF } : {}),
+      ...(searchF ? { search: searchF } : {}),
       ordering: aOrdering(ordre), page, page_size: PAGE_SIZE,
     })
       .then(res => {
@@ -95,7 +117,7 @@ export default function WorkOrders() {
       })
       .catch(() => { setItems([]); setCount(0); setError(true) })
       .finally(() => setLoading(false))
-  }, [kindF, statusF, customerF, ordre, page])
+  }, [kindF, statusF, customerF, searchF, ordre, page])
 
   const carregaTotal = useCallback(() => {
     commerce.workOrders.list({ page_size: 1 }).then(r => setTotal(r.data?.count ?? null)).catch(() => setTotal(null))
@@ -111,13 +133,89 @@ export default function WorkOrders() {
     return () => { alive = false }
   }, [])
 
+  const commuta = useCallback((id) => setTriats(prev => {
+    const next = new Set(prev)
+    if (next.has(id)) next.delete(id); else next.add(id)
+    return next
+  }), [])
+  // La casella de la capçalera opera NOMÉS sobre la pàgina visible, que és el que l'usuari té
+  // davant: «totes» no pot voler dir files que no ha vist mai.
+  const totsVisibles = items.length > 0 && items.every(r => triats.has(r.id))
+  const commutaTots = useCallback(() => setTriats(prev => {
+    const next = new Set(prev)
+    if (items.every(r => next.has(r.id))) items.forEach(r => next.delete(r.id))
+    else items.forEach(r => next.add(r.id))
+    return next
+  }), [items])
+
+  // ELS TABS SURTEN DEL VOCABULARI, no d'una llista escrita aquí: `estats_encarrec` és la
+  // mateixa font que alimentava el desplegable que substitueixen, i els seus rètols són els
+  // `workorders.status_*` que la casa ja té traduïts. L'única cosa que s'hi afegeix és la
+  // safata «totes», que no és cap estat del domini sinó l'absència de filtre.
+  const tabs = useMemo(() => [
+    ...(estats || []).map(codi => ({ key: codi, label: `workorders.status_${codi}` })),
+    { key: '', label: 'workorders.tab_all' },
+  ], [estats])
+
   const pages = Math.max(1, Math.ceil(count / PAGE_SIZE))
 
   const cols = useMemo(() => [
     {
+      // CONTROL, no dada: va abans del número i no ordena. El `stopPropagation` és obligatori
+      // —`TaulaLlista` posa l'`onClick` d'obrir a tot el `<tr>`— o triar una fila navegaria.
+      key: 'tria', label: '', min: 38, max: 38, align: 'center',
+      // `renderCap` ja el preveu la graella canònica per a aquesta columna exacta (v. el
+      // comentari de `Capcalera`): la pantalla hi posa el control de conjunt i el `th` conserva
+      // la caixa de la norma.
+      renderCap: () => (
+        <input type="checkbox" checked={totsVisibles} onChange={commutaTots}
+          aria-label={t('workorders.select_all')} style={{ cursor: 'pointer' }} />
+      ),
+      render: r => (
+        <input type="checkbox" checked={triats.has(r.id)}
+          onClick={e => e.stopPropagation()}
+          onChange={() => commuta(r.id)}
+          aria-label={t('workorders.select_one', { n: r.number })}
+          style={{ cursor: 'pointer' }} />
+      ),
+    },
+    {
       key: 'number', label: t('workorders.col_number'), min: 130, max: 170, sort: 'number',
       estil: { fontWeight: 600 }, titol: r => r.number,
       render: r => r.number || '—',
+    },
+    {
+      // COLUMNA 2 · EL NOM. La llei del nom: l'identificador més visible és el nom del model i
+      // el codi va a sota, en secundari. Un COLLECTOR no té model i mai en tindrà (ho blinda la
+      // constraint `collector_no_model_no_orderline`): el seu període ocupa aquesta cel·la
+      // perquè és el que l'anomena. `nowrap` de la cel·la fora, que aquí hi ha dues línies.
+      key: 'nom', label: t('workorders.col_nom'), min: 220, max: 380, sort: 'model__nom_prenda',
+      estil: { whiteSpace: 'normal' },
+      titol: r => (r.kind === 'COLLECTOR' ? r.period : r.model_nom) || undefined,
+      render: r => (r.kind === 'COLLECTOR' ? (
+        <span style={{ color: 'var(--text-main)' }}>
+          {t('workorders.collector_period', { period: r.period || '—' })}
+        </span>
+      ) : (
+        <span style={{ display: 'block', minWidth: 0 }}>
+          <span style={{ display: 'block', color: 'var(--text-main)', overflow: 'hidden',
+                         textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {r.model_nom || t('workorders.no_name')}
+          </span>
+          {r.model_codi && (
+            <span style={{ display: 'block', fontSize: 'var(--fs-caption)',
+                           color: 'var(--text-soft)' }}>{r.model_codi}</span>
+          )}
+        </span>
+      )),
+    },
+    {
+      // COLUMNA 3 · LA COL·LECCIÓ. Buida en un col·lector i en un model que no en declara: es
+      // pinta el guió de la casa i no una cadena inventada.
+      key: 'collection', label: t('workorders.col_collection'), min: 130, max: 200,
+      estil: { color: 'var(--text-soft)' },
+      titol: r => r.model_collection || undefined,
+      render: r => r.model_collection || '—',
     },
     {
       key: 'kind', label: t('workorders.col_kind'), min: 110, max: 140, sort: 'kind',
@@ -129,15 +227,6 @@ export default function WorkOrders() {
       render: r => r.customer_nom || '—',
     },
     {
-      // UNA columna, DUES dades segons la mena d'encàrrec — i és a posta: un ORDER apunta a un
-      // MODEL i un COLLECTOR a un PERÍODE, i mai tots dos. Dues columnes serien dues columnes
-      // mig buides, que és el que la §8e evita amb les amplades per contingut.
-      key: 'target', label: t('workorders.col_target'), min: 110, max: 150,
-      estil: { fontSize: 11, color: 'var(--text-soft)' },
-      titol: r => (r.kind === 'COLLECTOR' ? r.period : r.model_codi) || undefined,
-      render: r => (r.kind === 'COLLECTOR' ? r.period : (r.model_codi || '—')),
-    },
-    {
       key: 'status', label: t('workorders.col_status'), min: 90, max: 120, sort: 'status',
       render: r => <WOStatusBadge status={r.status} t={t} />,
     },
@@ -145,7 +234,7 @@ export default function WorkOrders() {
       key: 'n_tasks', label: t('workorders.col_tasks'), min: 80, max: 100, align: 'right',
       render: r => r.n_tasks ?? 0,
     },
-  ], [t])
+  ], [t, triats, totsVisibles, commuta, commutaTots])
 
   return (
     <>
@@ -154,17 +243,33 @@ export default function WorkOrders() {
       </div>
 
       <div style={{ minWidth: 0, maxWidth: '100%' }}>
+        {/* OBERTS · TANCATS · TOTS. El desplegable d'estat se'n va: obert i tancat no són un
+            filtre entre molts, són les dues safates on viu la feina, i amagar-les dins d'un
+            `select` les feia costar dos clics i una lectura. La resta de filtres (mena, client)
+            es queden com estaven —aquells sí que són filtres. Els codis segueixen sortint de
+            `/vocabulari/`; aquí només es fixa quin ordre tenen a la barra. */}
+        <SubTabs items={tabs} actiu={statusF}
+                 onTria={(k) => setParams({ status: k, page: undefined })} />
+
         <FilaIdentitat>
           <Comptador valor={count} total={total ?? count} etiqueta={t('workorders.entity')} />
+          {/* Cerca per NOM del model, codi i client (search_fields del ViewSet). Va a la URL
+              perquè un resultat de cerca es comparteix; el `load` ja porta 150 ms de coixí, o
+              sigui que escriure no dispara una crida per lletra. */}
+          <span style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+            <i className="ti ti-search" aria-hidden="true"
+               style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)',
+                        fontSize: 14, color: 'var(--text-soft)', pointerEvents: 'none' }} />
+            <input type="search" value={searchF}
+              onChange={e => setParams({ search: e.target.value, page: undefined })}
+              placeholder={t('workorders.search_placeholder')}
+              aria-label={t('workorders.search_placeholder')}
+              style={{ ...camp, width: '100%', paddingLeft: 28 }} />
+          </span>
           <select value={kindF} onChange={e => setParams({ kind: e.target.value, page: undefined })}
             aria-label={t('workorders.col_kind')} style={camp}>
             <option value="">{t('workorders.filter_kind_all')}</option>
             {(tipus || []).map(k => <option key={k} value={k}>{t(`workorders.kind_${k}`)}</option>)}
-          </select>
-          <select value={statusF} onChange={e => setParams({ status: e.target.value, page: undefined })}
-            aria-label={t('workorders.col_status')} style={camp}>
-            <option value="">{t('workorders.filter_status_all')}</option>
-            {(estats || []).map(s => <option key={s} value={s}>{t(`workorders.status_${s}`)}</option>)}
           </select>
           <select value={customerF} onChange={e => setParams({ customer: e.target.value, page: undefined })}
             aria-label={t('workorders.col_customer')} style={{ ...camp, flex: 1, minWidth: 180 }}>
@@ -181,6 +286,7 @@ export default function WorkOrders() {
               : (
                 <TaulaLlista cols={cols} files={items} clau={(r) => r.id}
                   ordre={ordre} onOrdenar={ordenar}
+                  triada={(r) => triats.has(r.id)}
                   onObrir={(r) => navigate(`/comercial/encarrecs/${r.id}`)} />
               )}
 

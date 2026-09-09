@@ -1690,7 +1690,15 @@
     "entity": "encargos",
     "prev": "Anterior",
     "next": "Siguiente",
-    "page_info": "Página {{page}} de {{pages}}"
+    "page_info": "Página {{page}} de {{pages}}",
+    "col_nom": "Modelo",
+    "col_collection": "Colección",
+    "tab_all": "Todas",
+    "search_placeholder": "Busca por nombre de modelo, código o cliente…",
+    "select_all": "Seleccionar todos los encargos visibles",
+    "select_one": "Seleccionar el encargo {{n}}",
+    "collector_period": "Colector {{period}}",
+    "no_name": "(sin nombre)"
   },
   "orders": {
     "title": "Pedidos",
