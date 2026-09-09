@@ -85,7 +85,13 @@
     "kind_EXTRA": "Extra",
     "kind_DEDUCTION": "Deducción",
     "kind_EXPENSE": "Gasto",
-    "tray_sense_model": "Sin modelo"
+    "tray_sense_model": "Sin modelo",
+    "pacte_title": "El pacto ha cambiado",
+    "pacte_ara_dins": "La vuelta {{ronda}} de {{model}} ahora está DENTRO del pacto (numeral {{numeral}}), y esta línea la factura como encargo directo.",
+    "pacte_ara_fora": "La vuelta {{ronda}} de {{model}} ahora está FUERA del pacto (numeral {{numeral}}), y esta línea la factura bajo el presupuesto.",
+    "pacte_anar_comanda": "Ir al pedido",
+    "pacte_tancar": "Cerrar y convertir a mano",
+    "pacte_sense_limit": "sin límite"
   },
   "grading_propagate": {
     "button": "Propagar",

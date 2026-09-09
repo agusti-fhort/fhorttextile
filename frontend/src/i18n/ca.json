@@ -85,7 +85,13 @@
     "kind_EXTRA": "Extra",
     "kind_DEDUCTION": "Deducció",
     "kind_EXPENSE": "Despesa",
-    "tray_sense_model": "Sense model"
+    "tray_sense_model": "Sense model",
+    "pacte_title": "El pacte ha canviat",
+    "pacte_ara_dins": "La ronda {{ronda}} de {{model}} ara és DINS del pacte (numeral {{numeral}}), i aquesta línia la factura com a encàrrec directe.",
+    "pacte_ara_fora": "La ronda {{ronda}} de {{model}} ara és FORA del pacte (numeral {{numeral}}), i aquesta línia la factura sota el pressupost.",
+    "pacte_anar_comanda": "Anar a la comanda",
+    "pacte_tancar": "Tancar i convertir a mà",
+    "pacte_sense_limit": "sense límit"
   },
   "grading_propagate": {
     "button": "Propagar",

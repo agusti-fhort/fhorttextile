@@ -755,12 +755,29 @@ class DeliveryNoteViewSet(_ComercialMixin, mixins.RetrieveModelMixin, mixins.Lis
     @action(detail=True, methods=['post'])
     def issue(self, request, pk=None):
         """POST commerce/delivery-notes/{id}/issue/ — emet el DRAFT (→ISSUED, congela línies).
-        Gate CONFIGURE. Guard: almenys 1 línia."""
+        Gate CONFIGURE. Guard: almenys 1 línia.
+
+        **409 · CONTRADICCIÓ DE PACTE.** Si algú ha mogut `rounds_included` després que la línia
+        es compongués, el document diria del pacte una cosa que ja no és certa. Es contesta amb
+        `{detail, contradiccions: [{model, ronda, numeral_vigent, ara, …}]}` i **no s'emet res**.
+        409 i no 400 a posta: no és una petició mal formada, és un CONFLICTE amb un estat que ha
+        canviat sota els peus —el mateix codi que ja fan servir el `destroy` del document i el de
+        la línia—, i el que demana és un gest, no una correcció del cos.
+
+        No es converteix res automàticament: el preu d'una volta directa és LLIURE i triar-li'n
+        un de nou sense preguntar seria decidir per l'humà que ha compost el document.
+        """
         dn = self.get_object()
         from django.core.exceptions import ValidationError as DjangoValidationError
-        from .services import issue_delivery_note
+        from .services import ContradiccioDePacte, issue_delivery_note
         try:
             issue_delivery_note(dn, user=getattr(request.user, 'profile', None))
+        except ContradiccioDePacte as e:
+            return Response(
+                {'detail': "El numeral de la comanda ha canviat: aquest albarà diria del pacte "
+                           "una cosa que ja no és certa.",
+                 'contradiccions': e.contradiccions},
+                status=status.HTTP_409_CONFLICT)
         except DjangoValidationError as e:
             return Response({'detail': '; '.join(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(self.get_serializer(dn).data)

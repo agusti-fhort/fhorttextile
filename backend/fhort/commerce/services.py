@@ -663,15 +663,101 @@ def generate_delivery_note(work_orders, user=None):
     return dn
 
 
+class ContradiccioDePacte(Exception):
+    """L'albarà diu una cosa del pacte i el pacte n'ha passat a dir una altra. Porta la LLISTA
+    de contradiccions (`.contradiccions`), no un text: qui la mostri ha de poder dir cada cas
+    amb noms i números, i en l'idioma de qui mira.
+
+    Excepció PRÒPIA i no un `ValidationError` més perquè no és el mateix tipus de refús: els
+    altres guards d'emissió diuen «això encara no es pot fer» (400) i aquest diu «això que tens
+    davant ja no és cert» (409) —un CONFLICTE amb un estat que ha canviat sota els peus— i
+    demana un gest diferent, que és anar a la comanda o convertir la línia a mà.
+    """
+
+    def __init__(self, contradiccions):
+        self.contradiccions = contradiccions
+        super().__init__(f'{len(contradiccions)} contradicció/ons de pacte')
+
+
+def contradiccions_de_pacte(delivery_note):
+    """LES LÍNIES QUE JA NO DIUEN LA VERITAT sobre el pacte, comparades amb el numeral VIGENT.
+
+    🚨 EL FORAT QUE TANCA. El numeral d'una línia de comanda és editable (FIT-5) i el veredicte
+    d'una volta es resol EN OBRIR-LA. Entre l'una i l'altra hi cap que algú pugi
+    `rounds_included` després que el comercial hagi afegit la volta a l'albarà com a
+    `encarrec_directe` amb preu lliure: llavors el document diu «encàrrec directe sense
+    pressupost» d'una volta que ARA hi entra, i el `consumit` del pacte se la compta com a
+    gastada del numeral. El mateix a l'inrevés: una línia facturada sota el pacte la volta de la
+    qual ara en surt.
+
+    Es mira ABANS de congelar, i **només informa**: qui decideix és qui emet. Auto-convertir la
+    línia seria canviar el preu d'un document que una persona ja ha compost —el preu d'una volta
+    directa és LLIURE i no el fixa cap pacte, o sigui que «convertir-la» voldria dir triar-li un
+    import nou sense preguntar.
+
+    Retorna `[{model, model_id, ronda, ronda_id, numeral_vigent, linia, ara}]`, amb `ara`
+    `'dins'` o `'fora'` segons on cau la volta AVUI. Llista buida = res a dir.
+    """
+    from fhort.tasks.services_r import numeral_efectiu
+
+    fora_de_lloc, pactes = [], {}
+    for linia in (delivery_note.lines
+                  .prefetch_related('rondes__model')
+                  .order_by('position', 'id')):
+        for ronda in linia.rondes.all():
+            if ronda.model_id not in pactes:
+                pactes[ronda.model_id] = numeral_efectiu(ronda.model)
+            pacte, numeral = pactes[ronda.model_id]
+            # 🚨 SENSE PACTE VIU NO HI HA CONTRADICCIÓ POSSIBLE, i tractar-ho com si n'hi hagués
+            # era un FALS POSITIU: `numeral_efectiu` torna `(None, None)` quan el model no té cap
+            # comanda, i llavors `fora` surt False i tota línia DIRECTA quedava acusada de
+            # contradir un pacte que no existeix —quan justament diu la veritat: «encàrrec directe
+            # sense pressupost». Els dos `None` de `numeral_efectiu` volen dir coses diferents i
+            # aquí la diferència mana: `(None, None)` = cap pacte · `(linia, None)` = pacte sense
+            # límit, on una volta directa SÍ que contradiu (cap volta en pot sortir).
+            #
+            # I un model desassignat després de compondre tampoc no s'acusa: la línia conserva la
+            # seva `linia_comanda` congelada i el document segueix dient de quina venda venia. El
+            # que aquest guard vigila és que el NUMERAL s'hagi mogut, no que l'assignació canviï.
+            if pacte is None:
+                continue
+            fora = numeral is not None and ronda.seq > numeral
+            # La contradicció és que la MARCA de la línia i el veredicte d'ara no coincideixin.
+            # Les dues direccions són el mateix defecte vist des de cada banda i totes dues
+            # deixen un document que menteix, o sigui que totes dues aturen l'emissió.
+            if bool(linia.encarrec_directe) == bool(fora):
+                continue
+            m = ronda.model
+            fora_de_lloc.append({
+                'linia': linia.id,
+                'model_id': m.id if m else None,
+                # La llei del nom: el nom mana i el codi va de secundari.
+                'model': (m.nom_prenda or m.codi_intern) if m else None,
+                'model_codi': m.codi_intern if m else None,
+                'ronda_id': ronda.id,
+                'ronda': ronda.seq,
+                'numeral_vigent': numeral,
+                'ara': 'fora' if fora else 'dins',
+            })
+    return fora_de_lloc
+
+
 def issue_delivery_note(delivery_note, user=None):
     """Emet un albarà DRAFT→ISSUED (B4c). Guard: almenys 1 línia. Un cop ISSUED les línies queden
-    congelades (guard DRAFT-only de DeliveryNoteLine, patró Quote). Llança ValidationError."""
+    congelades (guard DRAFT-only de DeliveryNoteLine, patró Quote). Llança ValidationError, i
+    `ContradiccioDePacte` si el numeral ha canviat sota una línia ja composta."""
     from django.core.exceptions import ValidationError
     if delivery_note.status != 'DRAFT':
         raise ValidationError("Només es pot emetre un albarà en esborrany (DRAFT).")
     # v2 — el guard compta línies VISIBLES: un albarà només d'ítems amagats no té document a emetre.
     if not delivery_note.lines.filter(visible=True).exists():
         raise ValidationError("L'albarà no té cap línia visible; no es pot emetre.")
+    # 🔒 ABANS DE CONGELAR, I FORA DE LA TRANSACCIÓ. Congelar és el que fa irreversible el
+    # veredicte; si la comprovació anés a dins, el codi hauria de desfer el que acaba d'escriure
+    # per poder-se negar. Aquí encara no s'ha tocat res.
+    contradiccions = contradiccions_de_pacte(delivery_note)
+    if contradiccions:
+        raise ContradiccioDePacte(contradiccions)
     with transaction.atomic():
         # A4 · EMETRE ÉS CONGELAR. Fins aquí `fora_de_comanda` es tornava a pesar contra el
         # numeral viu a cada lectura de la safata; a partir d'aquí, el veredicte d'aquestes

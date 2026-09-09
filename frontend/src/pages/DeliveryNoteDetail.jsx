@@ -347,6 +347,10 @@ export default function DeliveryNoteDetail() {
   const [busy, setBusy] = useState(false)
   const [edits, setEdits] = useState({})          // lineId → {unit_price, description, quantity}
   const [confirmIssue, setConfirmIssue] = useState(false)
+  // Les contradiccions que el 409 d'emissió retorna. `null` = no n'hi ha cap; una llista =
+  // el modal que les diu. NO és un booleà: el que el comercial ha de poder llegir és QUINA
+  // volta de QUIN model i contra quin numeral, i això només ho pot dir la llista sencera.
+  const [contradiccions, setContradiccions] = useState(null)
   // Safata d'albaranables (afegir ítems al DRAFT)
   const [trayOpen, setTrayOpen] = useState(false)
   const [tray, setTray] = useState(null)          // {groups:[…]}
@@ -478,7 +482,14 @@ export default function DeliveryNoteDetail() {
     commerce.deliveryNotes.issue(id)
       .then(() => { setConfirmIssue(false); return reload() })
       .then(() => setFeedback({ type: 'ok', text: t('deliverynotes.issued_ok') }))
-      .catch(err => setFeedback({ type: 'err', text: err?.response?.data?.detail || t('deliverynotes.issue_error') }))
+      .catch(err => {
+        // 409 amb `contradiccions` = el numeral s'ha mogut sota una línia ja composta. No és un
+        // error a ensenyar en una barra de feedback: és una decisió que el comercial ha de
+        // prendre veient cada cas, i per això es tanca el diàleg de confirmació i s'obre el seu.
+        const c = err?.response?.status === 409 && err?.response?.data?.contradiccions
+        if (c) { setConfirmIssue(false); setContradiccions(c); return }
+        setFeedback({ type: 'err', text: err?.response?.data?.detail || t('deliverynotes.issue_error') })
+      })
       .finally(() => setBusy(false))
   }
 
@@ -740,7 +751,69 @@ export default function DeliveryNoteDetail() {
           </div>
         </div>
       )}
+
+      {/* CONTRADICCIÓ DE PACTE (409) · el numeral s'ha mogut sota una línia ja composta.
+          🔑 DUES SORTIDES, I CAP D'ELLES EMET. Anar a la comanda (corregir el numeral, que és
+          on viu la causa) o tancar i convertir la línia a mà. **Mai auto-convertir**: el preu
+          d'una volta directa és LLIURE, i triar-li'n un de nou sense preguntar seria decidir
+          per qui ha compost el document. Aquí no hi ha cap botó que emeti igualment. */}
+      {contradiccions && (
+        <div onClick={() => setContradiccions(null)} data-ftt-screen="albara-contradiccio" style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex',
+          alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16,
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background: 'var(--panel)', borderRadius: 'var(--r-card)', padding: '1.2rem 1.4rem',
+            maxWidth: 520, width: '100%', maxHeight: '80vh', overflowY: 'auto',
+            borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)',
+            // La mida al CONTENIDOR, com a la resta de superfícies d'aquesta pantalla.
+            fontFamily: MONO, fontSize: 'var(--fs-body)', lineHeight: '16px',
+          }}>
+            <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginBottom: 10, fontFamily: MONO }}>
+              {t('deliverynotes.pacte_title')}
+            </h2>
+            {/* El text MESURAT, un per contradicció: quina volta, de quin model, on cau ara i
+                contra quin numeral. Cada peça ve del servidor; la frase es compon aquí, que és
+                on hi ha l'idioma. */}
+            {contradiccions.map(c => (
+              <div key={`${c.linia}-${c.ronda_id}`} style={{ marginBottom: 8 }}>
+                {t(c.ara === 'dins' ? 'deliverynotes.pacte_ara_dins' : 'deliverynotes.pacte_ara_fora',
+                   { ronda: c.ronda,
+                     model: c.model || c.model_codi,
+                     // Un pacte pot existir i no fixar cap numeral (`rounds_included` null): llavors
+                     // cap volta en surt mai. «numeral null» no és una frase; «sense límit» sí.
+                     numeral: c.numeral_vigent ?? t('deliverynotes.pacte_sense_limit') })}
+              </div>
+            ))}
+            <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
+              <button onClick={() => navigate(`/comercial/comandes/${ordreDeContradiccio(contradiccions, dn)}`)}
+                disabled={busy || !ordreDeContradiccio(contradiccions, dn)} style={botoPri}>
+                {t('deliverynotes.pacte_anar_comanda')}
+              </button>
+              <button onClick={() => setContradiccions(null)} disabled={busy} style={smallBtn}>
+                {t('deliverynotes.pacte_tancar')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     </>
   )
+}
+
+// La comanda a la qual porta «Anar a la comanda»: la de la línia de venda que governa la volta
+// contradita. Es busca a les línies de l'albarà que JA es tenen —`linia_comanda` hi viatja amb
+// el seu `pacte_oferta_id`— i no es demana res de nou: el 409 ja diu quina línia d'albarà és.
+//
+// 🔑 SENSE CANDIDAT, EL BOTÓ S'APAGA. Una contradicció pot venir d'una línia DIRECTA, que per
+// definició no té `linia_comanda`; llavors no hi ha comanda on anar i oferir-ho seria una porta
+// que no obre res. La segona sortida —tancar i convertir a mà— sempre hi és.
+function ordreDeContradiccio(contradiccions, dn) {
+  const linies = dn?.lines || []
+  for (const c of contradiccions) {
+    const l = linies.find(x => x.id === c.linia)
+    if (l?.pacte_oferta_id) return l.pacte_oferta_id
+  }
+  return null
 }

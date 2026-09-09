@@ -524,6 +524,12 @@ class DeliveryNoteLineSerializer(PodaEconomicaMixin, serializers.ModelSerializer
     # maqueta; no té res a veure amb el numeral de voltes, que és `pacte_rounds`.
     pacte_oferta = serializers.CharField(source='linia_comanda.order.document_number',
                                          read_only=True, default=None)
+    # L'ID de la comanda, per poder-hi ANAR. El `document_number` és per llegir-lo i no serveix
+    # per navegar: la ruta `/comercial/comandes/:id` va per pk. Ho demana la sortida «Anar a la
+    # comanda» del refús per contradicció de pacte, que ha de portar exactament a on es corregeix
+    # el numeral que ha provocat el refús.
+    pacte_oferta_id = serializers.IntegerField(source='linia_comanda.order_id',
+                                               read_only=True, default=None)
     pacte_rounds = serializers.IntegerField(source='linia_comanda.rounds_included',
                                             read_only=True, default=None)
     pacte_consum = serializers.SerializerMethodField()
@@ -642,7 +648,7 @@ class DeliveryNoteLineSerializer(PodaEconomicaMixin, serializers.ModelSerializer
                   'model_temporada', 'model_any', 'internal_minutes', 'internal_tecnic',
                   'internal_cost', 'internal_rate', 'task_finished_at',
                   'encarrec_directe', 'linia_comanda', 'rondes_detall',
-                  'pacte_oferta', 'pacte_rounds', 'pacte_consum',
+                  'pacte_oferta', 'pacte_oferta_id', 'pacte_rounds', 'pacte_consum',
                   'work_order', 'model_task', 'expense', 'adjustment']
         # v2 — editables en DRAFT: description, quantity, unit_price, visible. La resta (traçabilitat,
         # model, internal_minutes, line_total) read-only: es fixen en compondre la línia.

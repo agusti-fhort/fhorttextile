@@ -85,7 +85,13 @@
     "kind_EXTRA": "Extra",
     "kind_DEDUCTION": "Deduction",
     "kind_EXPENSE": "Expense",
-    "tray_sense_model": "No model"
+    "tray_sense_model": "No model",
+    "pacte_title": "The agreement has changed",
+    "pacte_ara_dins": "Round {{ronda}} of {{model}} is now INSIDE the agreement (allowance {{numeral}}), yet this line bills it as a direct order.",
+    "pacte_ara_fora": "Round {{ronda}} of {{model}} is now OUTSIDE the agreement (allowance {{numeral}}), yet this line bills it under the quote.",
+    "pacte_anar_comanda": "Go to the order",
+    "pacte_tancar": "Close and convert by hand",
+    "pacte_sense_limit": "no limit"
   },
   "grading_propagate": {
     "button": "Propagate",
