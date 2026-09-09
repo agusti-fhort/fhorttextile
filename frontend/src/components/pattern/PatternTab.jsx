@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import FileDropCard from '../ui/FileDropCard'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -56,6 +56,16 @@ export default function PatternTab({ modelId }) {
   const [desantIdentitat, setDesantIdentitat] = useState(false)
   const [reconeixent, setReconeixent] = useState(false)
   const [errorIdentitat, setErrorIdentitat] = useState('')
+
+  // ── ELS LANDMARKS DERIVATS (F4.2) ─────────────────────────────────────────
+  // 🚨 **La porta LLEGEIX, no declara** (F4.2-BIS). Batejar les vores és feina i viu al
+  // Taller, on el rellotge corre i on hi ha zoom i pan per comprovar cada mida abans de
+  // dir-la. Aquí només hi queden els punts que se'n deriven, que són lectura: mirar un
+  // patró no ha d'obrir cap tasca.
+  //
+  // La crida és la mateixa d'allà perquè els landmarks hi viatgen; el que NO hi ha és cap
+  // manera d'escriure des d'aquesta pantalla.
+  const [vores, setVores] = useState(null)
 
   // Els fitxers triats: estat CONTROLAT (les FileDropCard són controlades). Abans eren dos
   // refs a <input type="file">, i el DOM era l'única font de veritat de què havia triat
@@ -155,6 +165,36 @@ export default function PatternTab({ modelId }) {
       setReconeixent(false)
     }
   }, [actual, t])
+
+  // ── ROLS DE VORA (F4.2) ───────────────────────────────────────────────────
+  /** Els trams, la proposta i els landmarks. Una crida per a la pantalla sencera. */
+  const carregaVores = useCallback(async (fp) => {
+    if (!fp) { setVores(null); return }
+    try {
+      const { data } = await patterns.edgeRoles(fp.id)
+      setVores(data.results || [])
+      // El vocabulari NO es demana aquí: només el vol el desplegable de declarar, i
+      // declarar ja no es fa des d'aquesta pantalla. Eren N crides per a una resposta que
+      // ningú no llegeix.
+    } catch {
+      setVores([])
+    }
+  }, [])
+
+  useEffect(() => {
+    let viu = true
+    if (!actual) { setVores(null); return undefined }
+    carregaVores(actual).then(() => { if (!viu) setVores(null) })
+    return () => { viu = false }
+  }, [actual, carregaVores])
+
+
+  // Els landmarks que el visor ha de pintar, plans i amb el nom de la seva peça. Es
+  // LLEGEIXEN del servei, mai es calculen aquí: la regla que diu on és un HPS viu al
+  // catàleg i es resol al backend, i una segona implementació al navegador seria una
+  // segona veritat que ningú no compararia mai amb la primera.
+  const landmarksDelVisor = useMemo(() => (vores || []).flatMap(f =>
+    (f.landmarks || []).map(l => ({ ...l, nom_block: f.nom_block }))), [vores])
 
   // ── la geometria (el que el visor Konva dibuixa) ──────────────────────────
   useEffect(() => {
@@ -295,6 +335,7 @@ export default function PatternTab({ modelId }) {
                     pieces={geometria.pieces}
                     pecaSel={pecaSel}
                     onTriaPeca={setPecaSel}
+                    landmarks={landmarksDelVisor}
                   />
                 )
               ) : (

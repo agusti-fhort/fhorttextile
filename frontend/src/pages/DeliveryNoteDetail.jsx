@@ -1,18 +1,17 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useParams, useNavigate } from 'react-router-dom'
 import useAuthStore from '../store/auth'
-import { commerce } from '../api/endpoints'
+import { commerce, modelTasks } from '../api/endpoints'
 import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
-import { ClassificacioBadge } from '../components/commercial/estats'
 import Badge from '../components/ui/Badge'
 import PageMenu from '../components/ui/PageMenu'
 import { camp, forceBarra } from '../components/llista/ChromLlista'
 import PdfButton, { usePdfLang } from '../components/ui/PdfButton'
 import IssueDateField from '../components/commercial/IssueDateField'
-import { botoPri } from '../components/ui/buttons'
-import { DocumentHeader, ModelCard, LineTable, RowBtn, DocumentSummary } from '../components/commercial'
+import { botoDestructiu, botoPri } from '../components/ui/buttons'
+import { DocumentHeader } from '../components/commercial'
 import { DNStatusBadge } from './DeliveryNotes'
 
 // Mòdul Comercial — v2 · fitxa/composició d'albarà (reskin: sistema visual comercial unificat).
@@ -48,86 +47,301 @@ function filenameFromHeaders(res, fallback) {
 }
 
 // Agrupa les línies per model (les MANUAL/sense model van a un bloc "general" final).
-function groupByModel(lines) {
-  const blocks = new Map()
-  for (const l of lines) {
-    const key = l.model ?? '__general__'
-    if (!blocks.has(key)) blocks.set(key, { model: l.model, header: l, lines: [] })
-    blocks.get(key).lines.push(l)
-  }
-  return [...blocks.values()]
-}
-
 // M4 · FIT-12 — LA SAFATA S'AGRUPA PER VOLTA. El backend ja envia la volta amb cada ítem
 // (`it.ronda`) i l'índex ordenat del bloc (`g.rondes`); aquí només es reparteix. Els ítems que no
 // pengen de cap volta —despeses, deduccions de concepte lliure, i tota la feina anterior a la llei
 // de rondes— van a un calaix SENSE capçalera, que és el que la safata ja era abans d'M4: no se'ls
 // inventa cap volta.
-function repartirPerRonda(g) {
-  const solts = []
-  const perRonda = new Map()
-  for (const it of (g.items || [])) {
-    const rid = it.ronda?.id
-    if (rid == null) { solts.push(it); continue }
-    if (!perRonda.has(rid)) perRonda.set(rid, [])
-    perRonda.get(rid).push(it)
-  }
-  const blocs = (g.rondes || [])
-    .map(r => ({ ronda: r, items: perRonda.get(r.id) || [] }))
-    .filter(b => b.items.length > 0)
-  return { solts, blocs }
+// ── PANTALLA D'ALBARÀ · MAQUETA §2 ─────────────────────────────────────────────────────────
+
+const fmtMin = (m) => `${Math.floor((m || 0) / 60)}h ${String((m || 0) % 60).padStart(2, '0')}m`
+
+// La taula de tasques d'una volta. COST/H és un input (A3) i el cost es recalcula al servidor:
+// aquí no s'inventa cap número. L'entrada NOMÉS existeix en esborrany.
+function TaulaTasquesRonda({ r, editable, busy, onRate, t }) {
+  const th = { textAlign: 'left', fontWeight: 500, color: 'var(--text-soft)',
+               fontSize: 'var(--fs-caption)', lineHeight: '12px', letterSpacing: '.08em',
+               textTransform: 'uppercase', padding: '4px 8px',
+               borderBottom: '1px solid var(--line)' }
+  const td = { padding: '4px 8px', borderBottom: '1px solid var(--line)' }
+  const tdR = { ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }
+  const totalMin = r.tasques.reduce((a, x) => a + (x.feta ? x.minuts : 0), 0)
+  // El total segueix la mateixa llei que les seves cel·les: si algun cost NO ha viatjat (poda
+  // econòmica, o cap tarifa configurada), la suma no és zero —és desconeguda—, i un `|| 0` la
+  // convertia en un import creïble. Amb tots els costos presents, suma; si en falta un, calla.
+  const fetes = r.tasques.filter(x => x.feta)
+  const costIncomplet = fetes.some(x => x.cost == null)
+  const totalCost = costIncomplet ? null
+    : fetes.reduce((a, x) => a + Number(x.cost), 0)
+  return (
+    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)',
+                    lineHeight: '16px' }}>
+      <thead>
+        <tr>
+          <th style={th}>{t('deliverynotes.col_tasca')}</th>
+          <th style={th}>{t('deliverynotes.col_tecnic')}</th>
+          <th style={{ ...th, textAlign: 'right' }}>{t('deliverynotes.col_temps')}</th>
+          <th style={{ ...th, textAlign: 'right' }}>{t('deliverynotes.col_cost_hora')}</th>
+          <th style={{ ...th, textAlign: 'right' }}>{t('deliverynotes.col_cost')}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {r.tasques.map(x => (
+          <tr key={x.id}>
+            <td style={td}>
+              {x.nom}
+              {/* Una tasca de la recepta que no s'ha fet NO desapareix de la volta: el client
+                  ha de poder veure què s'havia previst i què no s'ha executat. */}
+              {!x.feta && <> <Badge variant="err">{t('deliverynotes.no_realitzada')}</Badge></>}
+            </td>
+            <td style={{ ...td, color: x.feta ? 'inherit' : 'var(--text-faint)' }}>
+              {x.feta ? (x.tecnic || '—') : '—'}
+            </td>
+            <td style={{ ...tdR, color: x.feta ? 'inherit' : 'var(--text-faint)' }}>
+              {x.feta ? fmtMin(x.minuts) : '—'}
+            </td>
+            <td style={tdR}>
+              {!x.feta ? <span style={{ color: 'var(--text-faint)' }}>—</span>
+                : editable ? (
+                  <input type="number" step="0.01" defaultValue={x.cost_hora ?? ''} disabled={busy}
+                    onBlur={e => onRate(x, e.target.value)}
+                    aria-label={t('deliverynotes.col_cost_hora')}
+                    style={{ ...inp, width: 72, textAlign: 'right', fontSize: 'var(--fs-body)' }} />
+                ) : (x.cost_hora != null ? money(x.cost_hora) : '—')}
+            </td>
+            <td style={{ ...tdR, color: x.feta ? 'inherit' : 'var(--text-faint)' }}>
+              {x.feta && x.cost != null ? money(x.cost) : '—'}
+            </td>
+          </tr>
+        ))}
+        <tr>
+          <td style={{ ...td, borderBottom: 0, fontWeight: 600 }} colSpan={2}>
+            {t('deliverynotes.cost_ronda')}
+          </td>
+          <td style={{ ...tdR, borderBottom: 0, fontWeight: 600 }}>{fmtMin(totalMin)}</td>
+          <td style={{ ...tdR, borderBottom: 0 }} />
+          <td style={{ ...tdR, borderBottom: 0, fontWeight: 600 }}>
+            {totalCost != null ? money(totalCost) : '—'}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  )
 }
 
-// La capçalera d'una volta dins la safata: quina volta és, si va FORA DE COMANDA i per què, i
-// entre quines dates es va fer. Les dates són el que FIT-12 demana per poder informar QUAN es va
-// fer cada volta; una volta encara oberta no en té de tancament i ho diu amb paraules.
-function CapcaleraRonda({ r, t, locale }) {
-  // La data va amb el LOCALE de l'app, no amb el del navegador. `toLocaleDateString()` pelat
-  // pinta 8/25/2026 al Chromium headless (mesurat al fum de pantalla) i pintaria el que el
-  // navegador de cadascú digués a producció, dins d'una pantalla que ja està en català.
-  const fmt = (iso) => (iso
-    ? new Date(iso).toLocaleDateString(locale || 'ca',
-        { day: '2-digit', month: '2-digit', year: 'numeric' })
-    : null)
-  const inici = fmt(r.oberta_el)
-  const fi = fmt(r.tancada_el) || t('deliverynotes.ronda_oberta')
-  const perque = r.comanda
-    ? t('deliverynotes.ronda_perque', { n: r.seq, numeral: r.numeral_vigent, comanda: r.comanda })
-    : t('deliverynotes.ronda_perque_sense_comanda', { n: r.seq, numeral: r.numeral_vigent })
+// La targeta d'una LÍNIA = un model (A1) o una volta directa (A7). El que canvia entre les dues
+// és la línia de pacte i el badge; l'estructura és la mateixa, i per això és UN component.
+// Les menes de línia que NO són una targeta de voltes: el seu concepte, quan l'origen no en
+// porta cap, és el nom del seu tipus. Mateix conjunt que `_EXTRA_LABEL` del generador de PDF.
+const KINDS_EXTRA = new Set(['EXTRA', 'DEDUCTION', 'EXPENSE'])
+
+function TargetaLinia({ l, editable, busy, importEdit, onImport, onImportSave, onEsborrar,
+                        onRate, t, locale }) {
+  const refs = [l.model_codi_client, l.model_intern].filter(Boolean).join(' · ')
+  const camp = [l.model_collection, [l.model_temporada, l.model_any].filter(Boolean).join(' ')]
+    .filter(Boolean).join(' · ')
   return (
-    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap',
-      padding: '6px 6px 4px', marginTop: 6, borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: 'var(--line)' }}>
-      <span style={{ fontFamily: MONO, fontWeight: 600, fontSize: 'var(--fs-body)' }}>
-        {t('deliverynotes.ronda_label', { n: r.seq })}
-      </span>
-      {/* §1 · el badge de la casa, variant `warn`: «fora de comanda» NO és una classificació
-          neutra (decisió 3 d'`estats.jsx`) sinó el fet que reclama la mirada del comercial —és
-          l'única raó per la qual aquesta volta surt agrupada. El «perquè» sencer va al `title`
-          i, quan hi cap, també a la línia de sota. */}
-      {r.fora_de_comanda && (
-        <Badge variant="warn" title={perque}>{t('deliverynotes.ronda_fora')}</Badge>
-      )}
-      <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)', fontFamily: MONO }}>
-        {inici} → {fi}
-      </span>
-      {r.fora_de_comanda && (
-        <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)', flexBasis: '100%' }}>
-          {perque}
+    // 🚨 LA MIDA ES DECLARA AL CONTENIDOR. Sense `fontSize`, la targeta computa els 16px del
+    // document i qualsevol fill sense mida pròpia hi neix — el mateix defecte que la mesura ja
+    // va caçar a `TaulaLlista` i al `stateBox` del dashboard. La bidireccional el va tornar a
+    // trobar aquí (maqueta 12px · pantalla 16px) i no es veia llegint el codi: el que falla és
+    // el que NO hi ha escrit.
+    <div style={{ background: 'var(--panel)', border: '1px solid var(--line)',
+                  borderRadius: 'var(--r-card)', marginBottom: 16, overflow: 'hidden',
+                  fontFamily: MONO, fontSize: 'var(--fs-body)', lineHeight: '16px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: 16 }}>
+        <div style={{ lineHeight: '16px', minWidth: 0 }}>
+          <span style={{ fontSize: 'var(--fs-h3)', lineHeight: '20px', fontWeight: 600 }}>
+            {l.model_nom || l.model_intern || l.description}
+          </span>
+          {refs && <span style={{ color: 'var(--text-soft)', fontSize: 'var(--fs-caption)' }}> {refs}</span>}
+          {/* A7 · el badge --err va a la capçalera de la targeta directa, al costat de la
+              identitat: és el primer que s'ha de llegir d'aquesta targeta. */}
+          {l.encarrec_directe && <> <Badge variant="err">{t('deliverynotes.tray_fora_pressupost')}</Badge></>}
+          {camp && <div style={{ color: 'var(--text-soft)' }}>{camp}</div>}
+          <div>
+            {l.encarrec_directe
+              ? <b style={{ fontWeight: 600 }}>{t('deliverynotes.encarrec_directe')}</b>
+              /* 🔑 EL SEPARADOR NO POT ANAR ENGANXAT AL TROS. Amb `{x && <> · {x}</>}` per cada
+                 peça, una línia sense pacte —tot un extra n'és una— començava per « · » orfe: el
+                 separador el posava el segon tros i no el fet que n'hi hagués un abans. Ara les
+                 peces es componen i el separador viu ENTRE elles.
+                 Sense cap peça (un extra sense descripció) el concepte és el seu TIPUS, dit
+                 aquí i en l'idioma de la pantalla. */
+              : <>
+                  {l.pacte_oferta && <b style={{ fontWeight: 600 }}>{t('deliverynotes.tray_oferta', { n: l.pacte_oferta })}</b>}
+                  {[
+                    l.description,
+                    l.pacte_rounds != null ? t('deliverynotes.tray_rondes_incloses', { n: l.pacte_rounds }) : null,
+                    l.pacte_consum,
+                  ].filter(Boolean).map((tros, i) => (
+                    <span key={i}>{(i > 0 || l.pacte_oferta) ? ' · ' : ''}{tros}</span>
+                  ))}
+                  {!l.pacte_oferta && !l.description && KINDS_EXTRA.has(l.line_kind)
+                    && t(`deliverynotes.kind_${l.line_kind}`)}
+                </>}
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, alignSelf: 'flex-start' }}>
+          {editable ? (
+            <input type="number" step="0.01" value={importEdit} disabled={busy}
+              onChange={e => onImport(l, e.target.value)} onBlur={() => onImportSave(l)}
+              aria-label={t('deliverynotes.line_import')}
+              style={{ ...inp, width: 96, textAlign: 'right', fontSize: 'var(--fs-h3)',
+                       lineHeight: '20px', fontWeight: 600 }} />
+          ) : (
+            /* 🚨 `?? 0` DEIA «0,00» ON VOLIA DIR «AIXÒ NO ET VIATJA». La poda econòmica treu
+               `unit_price` del payload a qui no té COMERCIAL, i un zero imprès amb la mateixa
+               cara que un import real és pitjor que un buit: el buit es nota i el zero es creu.
+               El color es declara —`--text-main`, com la resta de la targeta— perquè un valor en
+               lectura no s'hereti apagat el dia que el contenidor canviï. */
+            <span style={{ fontSize: 'var(--fs-h3)', lineHeight: '20px', fontWeight: 600,
+                           color: 'var(--text-main)', fontVariantNumeric: 'tabular-nums' }}>
+              {l.unit_price != null ? Number(l.unit_price).toFixed(2) : '—'}
+            </span>
+          )}
+          <span>€</span>
+          {editable && (
+            <button type="button" onClick={() => onEsborrar(l)} disabled={busy}
+              title={t('deliverynotes.remove_line')}
+              onMouseEnter={e => { e.currentTarget.style.background = 'var(--err-bg)' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'none' }}
+              style={{ border: 0, background: 'none', color: 'var(--err)', padding: 4,
+                       marginLeft: 8, borderRadius: 'var(--r-ctrl)', cursor: 'pointer',
+                       display: 'inline-flex', alignSelf: 'center' }}>
+              <i className="ti ti-trash" aria-hidden="true" style={{ fontSize: 14 }} />
+            </button>
+          )}
+        </div>
+      </div>
+      {(l.rondes_detall || []).map((r, i) => (
+        <details key={r.id} open={i === 0} style={{ borderTop: '1px solid var(--line)' }}>
+          <summary style={{ cursor: 'pointer', padding: '8px 16px', color: 'var(--text-soft)' }}>
+            {t('deliverynotes.tray_ronda', { n: r.seq })}
+            {r.data_lliurament && <> · {t('deliverynotes.tray_lliurada', { data: fmtData(r.data_lliurament, locale) })}</>}
+          </summary>
+          <div style={{ padding: '4px 16px 12px 36px', background: 'var(--panel)' }}>
+            <TaulaTasquesRonda r={r} editable={editable} busy={busy} onRate={onRate} t={t} />
+          </div>
+        </details>
+      ))}
+    </div>
+  )
+}
+
+// ── SAFATA · MAQUETA §1 ────────────────────────────────────────────────────────────────────
+//
+// La unitat és el MODEL (A1) i el que es marca és un BLOC de voltes (A7): el bloc del PACTE amb
+// les voltes que hi caben, i un bloc PROPI per cada volta que en surt. Les targetes de tasca
+// se'n van senceres — el preu d'un model no és la suma dels preus de les seves tasques.
+
+const fmtData = (iso, locale) => (iso
+  // La data va amb el LOCALE de l'app, no amb el del navegador: `toLocaleDateString()` pelat
+  // pinta 8/25/2026 al Chromium headless (mesurat) i pintaria el que el navegador de cadascú
+  // digués a producció, dins d'una pantalla que ja està en català.
+  ? new Date(iso).toLocaleDateString(locale || 'ca', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  : null)
+
+// `.mhead` de la maqueta: nom 14/600 · refs en caption soft · línia de context · badge a la dreta.
+function CapcaleraModelSafata({ g, t, locale }) {
+  const m = g.model
+  const p = g.pacte
+  const refs = [m.codi_client, m.codi_intern].filter(Boolean).join(' · ')
+  const context = [
+    m.collection, [m.temporada, m.any].filter(Boolean).join(' '),
+    p?.oferta && t('deliverynotes.tray_oferta', { n: p.oferta }),
+    p?.concepte,
+    p?.rounds_included != null && t('deliverynotes.tray_rondes_incloses', { n: p.rounds_included }),
+  ].filter(Boolean).join(' · ')
+  // A2 · EL VERD DEL VIST-I-PLAU INFORMA, NO BLOQUEJA. Verd només quan TOTES les voltes
+  // entregades d'aquest model porten l'OK del client: així el verd vol dir «pots facturar això
+  // sabent que el client ho ha donat per bo», que és per al que serveix. Amb un «alguna» n'hi
+  // hauria prou per pintar-lo i no diria res.
+  const entregades = (g.blocs || []).flatMap(b => b.rondes).filter(r => r.entregada)
+  const totOk = entregades.length > 0 && entregades.every(r => r.data_ok)
+  // 🔑 EL BADGE DEL VIST-I-PLAU NOMÉS TÉ SENTIT SI HI HA VOLTES. Un grup que porta només un
+  // extra (o una deducció de concepte lliure, que ni tan sols té model) no té cap entrega de
+  // què el client pugui haver dit res: pintar-hi «vist-i-plau pendent» seria inventar una
+  // espera que no existeix i empènyer el comercial a perseguir-la.
+  const teVoltes = (g.blocs || []).some(b => (b.rondes || []).length > 0)
+  return (
+    <div style={{ padding: '12px 16px 4px', display: 'flex', justifyContent: 'space-between',
+                  alignItems: 'baseline', gap: 8, borderTop: '1px solid var(--line)' }}>
+      <div style={{ minWidth: 0 }}>
+        <span style={{ fontSize: 'var(--fs-h3)', lineHeight: '20px', fontWeight: 600 }}>
+          {m.nom_prenda || m.codi_intern || t('deliverynotes.tray_sense_model')}
         </span>
+        {refs && <span style={{ color: 'var(--text-soft)', fontSize: 'var(--fs-caption)' }}> {refs}</span>}
+        {context && <div style={{ color: 'var(--text-soft)' }}>{context}</div>}
+      </div>
+      {teVoltes && (
+        <Badge variant={totOk ? 'ok' : 'gray'}>
+          {totOk ? t('deliverynotes.tray_vist_i_plau') : t('deliverynotes.tray_vist_i_plau_pendent')}
+        </Badge>
       )}
     </div>
   )
 }
 
-// Una fila de la safata. Extreta perquè el calaix «sense volta» i els blocs de volta pintin
-// EXACTAMENT la mateixa fila: agrupar no pot canviar què es veu de cada ítem.
-function ItemSafata({ it, k, picked, togglePick, t }) {
+// `.mrow`: casella · «Ronda N · lliurada dd/mm/aaaa» (+ badge --err si va fora) · estat.
+//
+// 🔑 LA CASELLA ÉS DEL BLOC, NO DE LA VOLTA, encara que es pinti a cada fila. Un bloc del pacte
+// és UNA línia d'albarà amb un sol import: no es pot facturar mig bloc, i per això les seves
+// voltes es marquen i es desmarquen juntes. La maqueta dibuixa una casella per fila i això no
+// canvia; el que canvia és què passa en prémer-la.
+function FilaRondaSafata({ r, bloc, marcat, onToggle, t, locale }) {
+  const data = fmtData(r.data_lliurament, locale)
   return (
-    <label style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 6px', cursor: 'pointer', borderRadius: 6 }}>
-      <input type="checkbox" checked={picked.has(k)} onChange={() => togglePick(it)} />
-      <ClassificacioBadge>{t(`deliverynotes.kind_${it.kind}`)}</ClassificacioBadge>
-      <span style={{ flex: 1, fontSize: 'var(--fs-body)' }}>{it.description}</span>
-      <span style={{ fontFamily: MONO, color: 'var(--text-soft)', fontSize: 'var(--fs-label)' }}>{money(it.proposed_price)}</span>
+    <label style={{
+      display: 'grid', gridTemplateColumns: '16px 1fr auto', gap: 8, alignItems: 'center',
+      padding: '8px 16px 8px 32px', borderTop: '1px solid var(--line)',
+      cursor: r.entregada ? 'pointer' : 'not-allowed',
+    }}>
+      <input type="checkbox" checked={marcat} disabled={!r.entregada}
+        onChange={() => onToggle(bloc)}
+        aria-label={t('deliverynotes.tray_ronda', { n: r.seq })}
+        style={{ width: 14, height: 14, accentColor: 'var(--gold)', margin: 0,
+                 opacity: r.entregada ? 1 : 0.4 }} />
+      <span style={{ minWidth: 0, color: r.entregada ? 'var(--text-main)' : 'var(--text-faint)' }}>
+        {t('deliverynotes.tray_ronda', { n: r.seq })}
+        {data && <span style={{ color: 'var(--text-soft)' }}> · {t('deliverynotes.tray_lliurada', { data })}</span>}
+        {/* A7 — el badge --err de la volta fora de pacte. No és una classificació neutra: diu
+            que això es factura a part i sense pressupost, que és el que el comercial ha de
+            veure abans de posar-hi un preu. */}
+        {r.fora_de_comanda && (
+          <> <Badge variant="err">{t('deliverynotes.tray_fora_pressupost')}</Badge></>
+        )}
+      </span>
+      <Badge variant={r.entregada ? 'ok' : 'gray'}>
+        {r.entregada ? t('deliverynotes.tray_entregada') : t('deliverynotes.tray_en_curs')}
+      </Badge>
+    </label>
+  )
+}
+
+// `.mrow` també per a l'extra: casella · concepte · import. MATEIX format que la fila de
+// volta —una graella de tres columnes separada pel filet `--line`, casella `--gold`— perquè les
+// dues coses es marquen igual i han de llegir-se igual.
+//
+// 🔑 UN EXTRA ES MARCA SOL. La casella d'una fila de volta marca el BLOC sencer (un bloc és una
+// línia d'albarà amb un sol import); un extra JA és una línia, o sigui que la seva casella es
+// governa a ella mateixa. Per això la clau que viatja és la de l'ítem i no la d'un bloc.
+//
+// Sense descripció d'origen, el concepte el diu el TIPUS. La paraula es posa AQUÍ, on hi ha
+// l'idioma, i no congelada a la columna en crear la línia.
+function FilaExtraSafata({ e, clau, marcat, onToggle, t }) {
+  return (
+    <label style={{
+      display: 'grid', gridTemplateColumns: '16px 1fr auto', gap: 8, alignItems: 'center',
+      padding: '8px 16px 8px 32px', borderTop: '1px solid var(--line)', cursor: 'pointer',
+    }}>
+      <input type="checkbox" checked={marcat} onChange={() => onToggle(clau)}
+        aria-label={e.descripcio || t(`deliverynotes.kind_${e.kind}`)}
+        style={{ width: 14, height: 14, accentColor: 'var(--gold)', margin: 0 }} />
+      <span style={{ minWidth: 0 }}>{e.descripcio || t(`deliverynotes.kind_${e.kind}`)}</span>
+      <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+        {Number(e.preu_proposat ?? 0).toFixed(2)} €
+      </span>
     </label>
   )
 }
@@ -148,6 +362,10 @@ export default function DeliveryNoteDetail() {
   const [busy, setBusy] = useState(false)
   const [edits, setEdits] = useState({})          // lineId → {unit_price, description, quantity}
   const [confirmIssue, setConfirmIssue] = useState(false)
+  // Les contradiccions que el 409 d'emissió retorna. `null` = no n'hi ha cap; una llista =
+  // el modal que les diu. NO és un booleà: el que el comercial ha de poder llegir és QUINA
+  // volta de QUIN model i contra quin numeral, i això només ho pot dir la llista sencera.
+  const [contradiccions, setContradiccions] = useState(null)
   // Safata d'albaranables (afegir ítems al DRAFT)
   const [trayOpen, setTrayOpen] = useState(false)
   const [tray, setTray] = useState(null)          // {groups:[…]}
@@ -168,7 +386,18 @@ export default function DeliveryNoteDetail() {
 
   const isDraft = dn?.status === 'DRAFT'
   const isIssued = dn?.status === 'ISSUED'
-  const editable = isDraft && canConfigure
+  // 🔒 EDITAR DINER VOL COMERCIAL, I LA CARA HO HA DE DIR IGUAL QUE LA PORTA. `canConfigure`
+  // tot sol obria els inputs a qui NO pot veure els imports: la poda econòmica li deixa
+  // `unit_price` fora del payload, o sigui que hi hauria trobat una casella BUIDA i editable
+  // sobre un preu que no pot llegir —i escriure-hi hauria estat sobreescriure a cegues.
+  //
+  // 📏 MESURAT: avui la porta ja el refusa per TRES bandes (la ruta porta `cap="comercial"`, el
+  // GET de l'albarà dona 403 i el PATCH també), o sigui que això NO corregeix cap defecte viu
+  // —la Montse, que és el cas real (manager, CONFIGURE sense COMERCIAL), ni arriba a la
+  // pantalla. Hi és perquè una condició d'edició que no mira qui pot veure el diner és una
+  // trampa armada esperant la pantalla que un dia la renderitzi des d'una altra ruta.
+  const canComercial = !!me?.capabilities?.includes('comercial')
+  const editable = isDraft && canConfigure && canComercial
   // La data d'emissió es corregeix en DRAFT i ISSUED (l'emissió és seva); INVOICED ja s'ha
   // presentat al client. El guard dur el posa el backend (serializers.guard_issued_at_editable).
   const canEditDate = canConfigure && (isDraft || isIssued)
@@ -205,9 +434,25 @@ export default function DeliveryNoteDetail() {
       .finally(() => setBusy(false))
   }
 
-  const toggleVisible = (line) => {
+  // A3 · el cost/hora d'UNA TASCA. Va a la tasca i no a la línia: el cost intern d'aquella hora
+  // és el mateix a tot arreu on la tasca aparegui. Buit = torna a la tarifa del tenant.
+  const saveRate = (tasca, valor) => {
+    const net = String(valor ?? '').trim()
+    const nou = net === '' ? null : Number(net)
+    if (nou !== null && !Number.isFinite(nou)) return
+    if (String(tasca.cost_hora ?? '') === net) return   // res a desar
     setBusy(true); setFeedback(null)
-    commerce.deliveryNoteLines.update(line.id, { visible: !line.visible })
+    modelTasks.costHora(tasca.id, nou)
+      .then(reload)
+      .catch(err => setFeedback({ type: 'err', text: err?.response?.data?.detail || t('deliverynotes.line_error') }))
+      .finally(() => setBusy(false))
+  }
+
+  // Els comentaris viuen a `DeliveryNote.notes`, que ja existia: cap camp nou i cap migració.
+  const saveNotes = (valor) => {
+    if ((dn.notes || '') === valor) return
+    setBusy(true); setFeedback(null)
+    commerce.deliveryNotes.update(dn.id, { notes: valor })
       .then(reload)
       .catch(err => setFeedback({ type: 'err', text: err?.response?.data?.detail || t('deliverynotes.line_error') }))
       .finally(() => setBusy(false))
@@ -221,14 +466,6 @@ export default function DeliveryNoteDetail() {
       .finally(() => setBusy(false))
   }
 
-  const addComment = () => {
-    setBusy(true); setFeedback(null)
-    commerce.deliveryNoteLines.create({ delivery_note: dn.id, description: t('deliverynotes.comment_placeholder'), quantity: 0, unit_price: 0 })
-      .then(reload)
-      .catch(err => setFeedback({ type: 'err', text: err?.response?.data?.detail || t('deliverynotes.line_error') }))
-      .finally(() => setBusy(false))
-  }
-
   // ── Safata ──
   const openTray = () => {
     setTrayOpen(true); setPicked(new Set()); setTray(null)
@@ -236,17 +473,25 @@ export default function DeliveryNoteDetail() {
       .then(res => setTray(res.data))
       .catch(() => setTray({ groups: [] }))
   }
-  const itemKey = (it) => `${it.kind}:${it.model_task_id ?? it.adjustment_id ?? it.expense_id}`
-  const togglePick = (it) => setPicked(prev => {
-    const n = new Set(prev); const k = itemKey(it); n.has(k) ? n.delete(k) : n.add(k); return n
+  // La clau de tria és `<model>:<clau del bloc>` — exactament el que el backend espera. No es
+  // deriva de cap ronda: el bloc és la unitat i marcar-ne una volta marca el bloc sencer.
+  const blocKey = (g, b) => `${g.model.id}:${b.clau}`
+  // Mateixa forma per a un extra: el backend només distingeix per la `clau`, i un ítem sense
+  // model (una deducció de concepte lliure sobre un col·lector) hi arriba amb `model_id: null`.
+  const extraKey = (g, e) => `${g.model.id}:${e.clau}`
+  const togglePick = (k) => setPicked(prev => {
+    const n = new Set(prev)
+    if (n.has(k)) n.delete(k); else n.add(k)
+    return n
   })
   const addPicked = () => {
     const items = []
-    for (const g of (tray?.groups || [])) for (const it of g.items) {
-      if (picked.has(itemKey(it))) {
-        const src = it.kind === 'TASK' ? { model_task_id: it.model_task_id }
-          : it.kind === 'EXPENSE' ? { expense_id: it.expense_id } : { adjustment_id: it.adjustment_id }
-        items.push({ kind: it.kind, ...src })
+    for (const g of (tray?.groups || [])) {
+      for (const b of (g.blocs || [])) {
+        if (picked.has(blocKey(g, b))) items.push({ model_id: g.model.id, clau: b.clau })
+      }
+      for (const e of (g.extres || [])) {
+        if (picked.has(extraKey(g, e))) items.push({ model_id: g.model.id, clau: e.clau })
       }
     }
     if (items.length === 0) { setTrayOpen(false); return }
@@ -263,7 +508,14 @@ export default function DeliveryNoteDetail() {
     commerce.deliveryNotes.issue(id)
       .then(() => { setConfirmIssue(false); return reload() })
       .then(() => setFeedback({ type: 'ok', text: t('deliverynotes.issued_ok') }))
-      .catch(err => setFeedback({ type: 'err', text: err?.response?.data?.detail || t('deliverynotes.issue_error') }))
+      .catch(err => {
+        // 409 amb `contradiccions` = el numeral s'ha mogut sota una línia ja composta. No és un
+        // error a ensenyar en una barra de feedback: és una decisió que el comercial ha de
+        // prendre veient cada cas, i per això es tanca el diàleg de confirmació i s'obre el seu.
+        const c = err?.response?.status === 409 && err?.response?.data?.contradiccions
+        if (c) { setConfirmIssue(false); setContradiccions(c); return }
+        setFeedback({ type: 'err', text: err?.response?.data?.detail || t('deliverynotes.issue_error') })
+      })
       .finally(() => setBusy(false))
   }
 
@@ -289,80 +541,36 @@ export default function DeliveryNoteDetail() {
       .catch(err => { setFeedback({ type: 'err', text: err?.response?.data?.detail || t('deliverynotes.delete_error') }); setBusy(false) })
   }
 
-  const blocks = useMemo(() => groupByModel(dn?.lines || []), [dn])
-
   if (loading) return <Center>{t('deliverynotes.loading')}</Center>
   if (error || !dn) return <Center>{t('deliverynotes.error')}</Center>
 
   const lines = dn.lines || []
   const visibleCount = lines.filter(l => l.visible).length
-  const internalTotal = lines.reduce((s, l) => s + (l.internal_cost != null ? Number(l.internal_cost) : 0), 0)
-  const hasInternal = lines.some(l => l.internal_cost != null || l.internal_minutes != null)
-  const internalLabels = { time: t('deliverynotes.line_time'), tecnic: t('deliverynotes.line_tecnic'), cost: t('deliverynotes.line_cost') }
 
-  // Columnes de línia (sistema unificat). Cel·les editables amb el patró save-on-blur (INTACTE).
-  const columns = [
-    { key: 'kind', label: t('deliverynotes.line_kind'),
-      render: l => <ClassificacioBadge>{t(`deliverynotes.kind_${l.line_kind}`)}</ClassificacioBadge> },
-    { key: 'desc', label: t('deliverynotes.line_desc'),
-      render: l => editable
-        ? <input value={editVal(l, 'description')} disabled={busy}
-            onChange={e => setEdit(l.id, 'description', e.target.value)} onBlur={() => saveLine(l)}
-            style={{ ...inp, width: '100%' }} />
-        : (l.description || l.product_name || '—') },
-    { key: 'qty', label: t('deliverynotes.line_qty'), align: 'right', width: 90,
-      render: l => editable
-        ? <input type="number" step="0.01" value={editVal(l, 'quantity')} disabled={busy}
-            onChange={e => setEdit(l.id, 'quantity', e.target.value)} onBlur={() => saveLine(l)}
-            style={{ ...inp, width: 70, textAlign: 'right' }} />
-        : <span style={{ fontFamily: MONO, color: 'var(--text-soft)' }}>{Number(l.quantity ?? 0)}</span> },
-    { key: 'price', label: t('deliverynotes.line_price'), align: 'right', width: 110,
-      render: l => editable
-        ? <input type="number" step="0.01" value={editVal(l, 'unit_price')} disabled={busy}
-            onChange={e => setEdit(l.id, 'unit_price', e.target.value)} onBlur={() => saveLine(l)}
-            style={{ ...inp, width: 100, textAlign: 'right' }} />
-        : <span style={{ fontFamily: MONO }}>{money(l.unit_price)}</span> },
-    { key: 'total', label: t('deliverynotes.line_total'), align: 'right', width: 100,
-      render: l => <span style={{ fontFamily: MONO, color: Number(l.line_total ?? 0) < 0 ? 'var(--err)' : 'inherit' }}>{money(l.line_total)}</span> },
-  ]
+  // La graella de línies (`columns`/`renderActions`/`LineTable`/`ModelCard`/`DocumentSummary`)
+  // se'n va sencera: aquella pantalla llistava TASQUES amb quantitat, descripció editable i un
+  // ull de visibilitat. L'A1 diu que la unitat és el MODEL i que l'import és únic i sense camp
+  // de quantitat, i l'A7 que el detall es llegeix DINS de cada volta. `TargetaLinia` ho pinta.
 
-  const renderActions = editable ? (l) => (
-    <>
-      <RowBtn icon={l.visible ? 'ti-eye' : 'ti-eye-off'} active={l.visible} disabled={busy}
-        title={l.visible ? t('deliverynotes.hide') : t('deliverynotes.show')} onClick={() => toggleVisible(l)} />
-      <RowBtn icon="ti-x" danger disabled={busy}
-        title={t('deliverynotes.remove_line')} onClick={() => removeLine(l)} />
-    </>
-  ) : undefined
-
-  // Barra d'accions de la capçalera (segons el sistema de la casa; mai text pla).
+  // MAQUETA §2 · a la dreta de la IDENTITAT NOMÉS el que canvia el document: eliminar-lo
+  // (secundari amb vora --err) i emetre'l. «Emetre albarà» és l'ÚNIC BLAU de la pantalla —§5:
+  // un primari per pantalla, «el que has vingut a fer»— i per això el PDF i el comentari se'n
+  // van al menú i la safata s'obre des del [ + Afegir línia ], que és on es demana.
   const headerActions = (
     <>
-      <PdfButton label={t('deliverynotes.download_pdf')} onClick={doPdf}
-        lang={pdfLang} onLangChange={setPdfLang} t={t} />
       {editable && (
-        <button onClick={openTray} disabled={busy} style={smallBtn}>
-          <i className="ti ti-inbox" style={{ fontSize: 14 }} />{t('deliverynotes.tray_action')}
-        </button>
-      )}
-      {editable && (
-        <button onClick={addComment} disabled={busy} style={smallBtn}>
-          <i className="ti ti-message-plus" style={{ fontSize: 14 }} />{t('deliverynotes.add_comment')}
+        <button onClick={doDelete} disabled={busy} style={botoDestructiu}>
+          {t('deliverynotes.delete')}
         </button>
       )}
       {editable && (
         <button onClick={() => setConfirmIssue(true)} disabled={busy || visibleCount === 0} style={botoPri}>
-          <i className="ti ti-send" style={{ fontSize: 14 }} />{t('deliverynotes.issue_action')}
+          {t('deliverynotes.issue_action')}
         </button>
       )}
       {isIssued && canConfigure && (
         <button onClick={doMarkInvoiced} disabled={busy} style={botoPri}>
-          <i className="ti ti-checkbox" style={{ fontSize: 14 }} />{t('deliverynotes.mark_invoiced')}
-        </button>
-      )}
-      {editable && (
-        <button onClick={doDelete} disabled={busy} style={smallBtn} title={t('deliverynotes.delete')}>
-          <i className="ti ti-trash" style={{ fontSize: 13 }} />
+          {t('deliverynotes.mark_invoiced')}
         </button>
       )}
     </>
@@ -374,11 +582,25 @@ export default function DeliveryNoteDetail() {
           UN lloc a tot el producte, i és aquest. El destí és EXPLÍCIT — mai `history.back()`,
           que no pot garantir on porta si s'hi ha arribat per enllaç, per recàrrega o per una
           pestanya nova. */}
+      {/* MAQUETA §2 · el menú de pantalla porta ← · Idioma ▾ · Descarregar PDF · Afegir
+          comentari, i TOTS A L'ESQUERRA. Abans el PDF i el comentari vivien a la dreta de la
+          identitat, barrejats amb «Emetre» i «Eliminar»: allà hi van les accions que canvien el
+          DOCUMENT, i descarregar-lo o anotar-lo no el canvien. */}
       <div style={forceBarra}>
-        <PageMenu backTo="/comercial/albarans" backTitle={t('deliverynotes.back')} />
+        <PageMenu backTo="/comercial/albarans" backTitle={t('deliverynotes.back')}>
+          <PdfButton label={t('deliverynotes.download_pdf')} onClick={doPdf}
+            lang={pdfLang} onLangChange={setPdfLang} t={t} />
+          {/* 🚨 «AFEGIR COMENTARI» SE'N VA. Creava una `DeliveryNoteLine` MANUAL amb un text de
+              plantilla, i des que la graella de línies ha marxat aquell text ja no es pot
+              editar (no hi ha input de descripció) ni amagar (l'ull de visibilitat també se'n
+              va): quedava una targeta gran amb la plantilla, que sortia al PDF i als totals a
+              0,00 €. El comentari de l'albarà ara viu a la caixa `Comentaris` del peu, que
+              escriu a `notes` i és el que la maqueta §2 demana. */}
+        </PageMenu>
       </div>
 
-      <div style={{ minWidth: 0, maxWidth: 1000 }}>
+      {/* Àncora de mesura: el senyal que diu que aquesta pantalla s'ha muntat de debò. */}
+      <div data-ftt-screen="albara-pantalla" style={{ minWidth: 0, maxWidth: 1000 }}>
 
       <DocumentHeader
         reference={dn.document_number}
@@ -396,55 +618,75 @@ export default function DeliveryNoteDetail() {
         <IssueDateField value={dn.issued_at} editable={canEditDate} onSave={saveIssuedAt} t={t} />
       </div>
 
-      {/* Blocs per model */}
+      {/* MAQUETA §2 · UNA TARGETA PER LÍNIA. Cada línia ÉS un model (A1) o una volta directa
+          (A7), i el bloc directe surt just després del seu model perquè les línies arriben en
+          l'ordre en què es van afegir i la safata sempre posa el pacte abans de la directa. */}
       {lines.length === 0 && (
         <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', margin: '18px 0' }}>{t('deliverynotes.empty_lines')}</p>
       )}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14, margin: '16px 0' }}>
-        {blocks.map(block => {
-          const subtotal = block.lines.filter(l => l.visible).reduce((s, l) => s + Number(l.line_total ?? 0), 0)
-          const dates = block.lines.map(l => l.task_finished_at).filter(Boolean).sort()
-          const deliveredAt = dates.length ? dates[dates.length - 1].slice(0, 10) : null
-          const h = block.header
-          const showClient = h.model_codi_client && h.model_codi_client !== h.model_intern
-          const metaParts = []
-          if (showClient) metaParts.push(h.model_codi_client)
-          const camp = [h.model_collection, h.model_temporada, h.model_any].filter(Boolean).join(' · ')
-          if (camp) metaParts.push(camp)
-          if (deliveredAt) metaParts.push(`${t('deliverynotes.delivered_at')} ${deliveredAt}`)
-          const rows = block.lines.map(l => ({
-            ...l,
-            internal: {
-              minutes: l.internal_minutes,
-              tecnic: l.internal_tecnic,
-              cost: l.internal_cost != null ? money(l.internal_cost) : '—',
-            },
-          }))
-          return (
-            <ModelCard key={block.model ?? 'general'}
-              reference={block.model ? h.model_intern : undefined}
-              name={block.model ? (h.model_nom || h.model_intern) : t('deliverynotes.general_block')}
-              meta={metaParts.join(' · ') || undefined}
-              subtotalLabel={t('deliverynotes.model_subtotal')} subtotal={money(subtotal)}>
-              <LineTable columns={columns} rows={rows} renderActions={renderActions}
-                showInternal={hasInternal} internalLabels={internalLabels}
-                rowStyle={l => ({ opacity: l.visible === false ? 0.4 : 1 })} />
-            </ModelCard>
-          )
-        })}
+      <div style={{ marginTop: 16 }}>
+        {lines.filter(l => l.visible).map(l => (
+          <TargetaLinia key={l.id} l={l} editable={editable} busy={busy}
+            importEdit={editVal(l, 'unit_price')}
+            onImport={(x, v) => setEdit(x.id, 'unit_price', v)}
+            onImportSave={saveLine}
+            onEsborrar={removeLine}
+            onRate={saveRate}
+            t={t} locale={i18n.language} />
+        ))}
       </div>
 
-      {/* Resum del document (contenidor propi separat + cost intern al peu) */}
-      <DocumentSummary
-        lines={[
-          { label: t('deliverynotes.subtotal'), value: money(dn.subtotal) },
-          { label: t('deliverynotes.tax'), value: money(dn.tax_amount) },
-          { label: t('deliverynotes.total'), value: money(dn.total), strong: true },
-        ]}
-        showInternal={hasInternal}
-        internalLabel={t('deliverynotes.internal_cost_foot')}
-        internalValue={money(internalTotal)}
-      />
+      {/* [ + Afegir línia ] — puntejat `--line`. És la porta de la safata: afegir una línia i
+          triar un albaranable són el MATEIX gest, i tenir-ne dos botons en llocs diferents feia
+          que el de dalt semblés una altra cosa. Desapareix en emès. */}
+      {editable && (
+        <div role="button" tabIndex={0} onClick={openTray}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') openTray() }}
+          style={{ border: '1px dashed var(--line)', borderRadius: 'var(--r-card)', padding: 12,
+                   textAlign: 'center', color: 'var(--text-soft)', marginBottom: 16,
+                   cursor: 'pointer' }}>
+          {t('deliverynotes.add_line')}
+        </div>
+      )}
+
+      {/* Comentaris a l'ESQUERRA dels totals i alineats PER DALT (maqueta §2). */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 16,
+                    alignItems: 'start' }}>
+        <div style={{ background: 'var(--panel)', border: '1px solid var(--line)',
+                      borderRadius: 'var(--r-card)',
+                      fontFamily: MONO, fontSize: 'var(--fs-body)', lineHeight: '16px' }}>
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--line)',
+                        fontSize: 'var(--fs-caption)', lineHeight: '12px', letterSpacing: '.08em',
+                        textTransform: 'uppercase', color: 'var(--text-soft)' }}>
+            {t('deliverynotes.comments')}
+          </div>
+          <div style={{ padding: 16 }}>
+            {editable ? (
+              <textarea defaultValue={dn.notes || ''} disabled={busy} rows={4}
+                onBlur={e => saveNotes(e.target.value)}
+                aria-label={t('deliverynotes.comments')}
+                style={{ ...inp, width: '100%', resize: 'vertical', fontFamily: MONO,
+                         fontSize: 'var(--fs-body)', lineHeight: '16px' }} />
+            ) : (
+              <span style={{ whiteSpace: 'pre-wrap' }}>{dn.notes || '—'}</span>
+            )}
+          </div>
+        </div>
+        <div style={{ width: 300, background: 'var(--panel)', border: '1px solid var(--line)',
+                      borderRadius: 'var(--r-card)',
+                      // Mateixa raó que a la targeta: la mida va al contenidor.
+                      fontFamily: MONO, fontSize: 'var(--fs-body)', lineHeight: '16px' }}>
+          {[[t('deliverynotes.subtotal'), money(dn.subtotal), false],
+            [t('deliverynotes.tax'), money(dn.tax_amount), false],
+            [t('deliverynotes.total'), money(dn.total), true]].map(([k, v, fort], i, arr) => (
+              <div key={k} style={{ display: 'flex', justifyContent: 'space-between',
+                                    padding: '8px 16px', fontWeight: fort ? 600 : 400,
+                                    borderBottom: i === arr.length - 1 ? 0 : '1px solid var(--line)' }}>
+                <span>{k}</span><span>{v}</span>
+              </div>
+          ))}
+        </div>
+      </div>
 
       {/* Safata d'albaranables */}
       {trayOpen && (
@@ -452,40 +694,54 @@ export default function DeliveryNoteDetail() {
           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex',
           alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16,
         }}>
-          <div onClick={e => e.stopPropagation()} style={{
+          <div onClick={e => e.stopPropagation()} data-ftt-screen="albara-safata" style={{
             background: 'var(--panel)', borderRadius: 'var(--r-card)', padding: '1.2rem 1.4rem',
             maxWidth: 720, width: '100%', maxHeight: '85vh', overflowY: 'auto', borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)',
+            // La mida es declara al CONTENIDOR, també aquí: la bidireccional va trobar les files
+            // de la safata a 16px (les del document) en comptes dels 12 de la maqueta.
+            fontFamily: MONO, fontSize: 'var(--fs-body)', lineHeight: '16px',
           }}>
-            <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>
+            {/* Maqueta §1 · `.mt`: títol i, sota, EL CLIENT. On hi havia el títol hi havia
+                també una frase d'ajuda («Tasques acabades, extres, despeses i deduccions
+                pendents d'albarar»): el brief prohibeix el text d'ajuda a pantalla, i a més
+                aquella frase havia quedat FALSA —la safata ja no és de tasques. Se'n va, i el
+                seu lloc el pren el que la maqueta hi posa, que és una dada. */}
+            <h2 style={{ fontSize: 'var(--fs-h2)', lineHeight: '24px', fontWeight: 500,
+                         fontFamily: MONO }}>
               {t('deliverynotes.tray_title')}
             </h2>
             <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', marginBottom: 14 }}>
-              {t('deliverynotes.tray_hint')}
+              {dn.customer_nom}
             </p>
             {!tray ? <Center>{t('deliverynotes.loading')}</Center>
               : (tray.groups || []).length === 0 ? <div style={{ color: 'var(--text-soft)', padding: '10px 0' }}>{t('deliverynotes.tray_empty')}</div>
                 : (tray.groups.map(g => (
-                  <div key={g.model.id ?? 'general'} style={{ marginBottom: 12 }}>
-                    <div style={{ fontFamily: MONO, fontWeight: 600, fontSize: 'var(--fs-body)', marginBottom: 4 }}>
-                      {g.model.codi_intern || t('deliverynotes.general_block')}
-                      {g.model.nom_prenda && <span style={{ color: 'var(--text-soft)', fontWeight: 400 }}> · {g.model.nom_prenda}</span>}
-                    </div>
-                    {(() => {
-                      const { solts, blocs } = repartirPerRonda(g)
-                      return (
-                        <>
-                          {solts.map(it => <ItemSafata key={itemKey(it)} it={it} k={itemKey(it)}
-                            picked={picked} togglePick={togglePick} t={t} />)}
-                          {blocs.map(b => (
-                            <div key={b.ronda.id}>
-                              <CapcaleraRonda r={b.ronda} t={t} locale={i18n.language} />
-                              {b.items.map(it => <ItemSafata key={itemKey(it)} it={it} k={itemKey(it)}
-                                picked={picked} togglePick={togglePick} t={t} />)}
-                            </div>
-                          ))}
-                        </>
-                      )
-                    })()}
+                  <div key={g.model.id ?? 'sense-model'}>
+                    <CapcaleraModelSafata g={g} t={t} locale={i18n.language} />
+                    {/* Les files separades NOMÉS pel filet `--line` de cada fila (maqueta §1):
+                        cap fons alternat, cap caixa per volta. */}
+                    {/* `flatMap` i no un `map` niat: el niat torna ARRAYS al nivell exterior i
+                        React en demana clau —n'hi havia a les files, no als arrays. */}
+                    {(g.blocs || []).flatMap(b => b.rondes.map(r => (
+                      <FilaRondaSafata key={r.id} r={r} bloc={blocKey(g, b)}
+                        marcat={picked.has(blocKey(g, b))} onToggle={togglePick}
+                        t={t} locale={i18n.language} />
+                    )))}
+                    {/* El bloc dels albaranables que NO són voltes, SOTA les voltes del model.
+                        El rètol és el NOM del bloc (no text d'ajuda: diu què hi ha, no com
+                        fer-ho servir) i només es pinta si el bloc existeix. */}
+                    {(g.extres || []).length > 0 && (
+                      <>
+                        <div style={{ padding: '10px 16px 2px 32px', color: 'var(--text-soft)',
+                                      fontSize: 'var(--fs-caption)', borderTop: '1px solid var(--line)' }}>
+                          {t('deliverynotes.tray_extres')}
+                        </div>
+                        {g.extres.map(e => (
+                          <FilaExtraSafata key={e.clau} e={e} clau={extraKey(g, e)}
+                            marcat={picked.has(extraKey(g, e))} onToggle={togglePick} t={t} />
+                        ))}
+                      </>
+                    )}
                   </div>
                 )))}
             <div style={{ display: 'flex', gap: 8, marginTop: 12, position: 'sticky', bottom: 0, background: 'var(--panel)', paddingTop: 8 }}>
@@ -521,7 +777,69 @@ export default function DeliveryNoteDetail() {
           </div>
         </div>
       )}
+
+      {/* CONTRADICCIÓ DE PACTE (409) · el numeral s'ha mogut sota una línia ja composta.
+          🔑 DUES SORTIDES, I CAP D'ELLES EMET. Anar a la comanda (corregir el numeral, que és
+          on viu la causa) o tancar i convertir la línia a mà. **Mai auto-convertir**: el preu
+          d'una volta directa és LLIURE, i triar-li'n un de nou sense preguntar seria decidir
+          per qui ha compost el document. Aquí no hi ha cap botó que emeti igualment. */}
+      {contradiccions && (
+        <div onClick={() => setContradiccions(null)} data-ftt-screen="albara-contradiccio" style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex',
+          alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16,
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background: 'var(--panel)', borderRadius: 'var(--r-card)', padding: '1.2rem 1.4rem',
+            maxWidth: 520, width: '100%', maxHeight: '80vh', overflowY: 'auto',
+            borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)',
+            // La mida al CONTENIDOR, com a la resta de superfícies d'aquesta pantalla.
+            fontFamily: MONO, fontSize: 'var(--fs-body)', lineHeight: '16px',
+          }}>
+            <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginBottom: 10, fontFamily: MONO }}>
+              {t('deliverynotes.pacte_title')}
+            </h2>
+            {/* El text MESURAT, un per contradicció: quina volta, de quin model, on cau ara i
+                contra quin numeral. Cada peça ve del servidor; la frase es compon aquí, que és
+                on hi ha l'idioma. */}
+            {contradiccions.map(c => (
+              <div key={`${c.linia}-${c.ronda_id}`} style={{ marginBottom: 8 }}>
+                {t(c.ara === 'dins' ? 'deliverynotes.pacte_ara_dins' : 'deliverynotes.pacte_ara_fora',
+                   { ronda: c.ronda,
+                     model: c.model || c.model_codi,
+                     // Un pacte pot existir i no fixar cap numeral (`rounds_included` null): llavors
+                     // cap volta en surt mai. «numeral null» no és una frase; «sense límit» sí.
+                     numeral: c.numeral_vigent ?? t('deliverynotes.pacte_sense_limit') })}
+              </div>
+            ))}
+            <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
+              <button onClick={() => navigate(`/comercial/comandes/${ordreDeContradiccio(contradiccions, dn)}`)}
+                disabled={busy || !ordreDeContradiccio(contradiccions, dn)} style={botoPri}>
+                {t('deliverynotes.pacte_anar_comanda')}
+              </button>
+              <button onClick={() => setContradiccions(null)} disabled={busy} style={smallBtn}>
+                {t('deliverynotes.pacte_tancar')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     </>
   )
+}
+
+// La comanda a la qual porta «Anar a la comanda»: la de la línia de venda que governa la volta
+// contradita. Es busca a les línies de l'albarà que JA es tenen —`linia_comanda` hi viatja amb
+// el seu `pacte_oferta_id`— i no es demana res de nou: el 409 ja diu quina línia d'albarà és.
+//
+// 🔑 SENSE CANDIDAT, EL BOTÓ S'APAGA. Una contradicció pot venir d'una línia DIRECTA, que per
+// definició no té `linia_comanda`; llavors no hi ha comanda on anar i oferir-ho seria una porta
+// que no obre res. La segona sortida —tancar i convertir a mà— sempre hi és.
+function ordreDeContradiccio(contradiccions, dn) {
+  const linies = dn?.lines || []
+  for (const c of contradiccions) {
+    const l = linies.find(x => x.id === c.linia)
+    if (l?.pacte_oferta_id) return l.pacte_oferta_id
+  }
+  return null
 }

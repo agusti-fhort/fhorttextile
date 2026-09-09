@@ -189,6 +189,8 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab, model
   const [entregant, setEntregant] = useState(null)   // bloc pendent d'informar l'entrega
   const [okClient, setOkClient] = useState(null)     // entrega pendent de l'OK del client
   const [obrintVolta, setObrintVolta] = useState(false)
+  const [treient, setTreient] = useState(null)      // tasca pendent de treure de la volta
+  const [traient, setTraient] = useState(false)     // guard anti-doble-clic del gest
   // Col·lapse: NOMÉS les excepcions que l'usuari ha fet en aquesta pantalla. El defecte el
   // deriva `agrupaPerRonda` de l'estat de la volta i no es desa enlloc (v. `utils/rondes`).
   const [plegatManual, setPlegatManual] = useState({})
@@ -242,10 +244,36 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab, model
     return () => { alive = false }
   }, [modelId, versio])
 
+  // C1 · OIENT DE `plan:changed`. Aquesta pantalla no és l'única que crea feina sobre el model:
+  // `models.openTask` es crida des de `ModelSheet` (:483/:525/:811), `TallerPatro` (:336) i
+  // `PropagatedEditor` (:220), i qualsevol d'aquestes pot fer néixer una volta mentre el Pla és
+  // muntat. `openTask` ja emet l'esdeveniment (endpoints.js:101) i aquí només se n'escolta la
+  // NOSTRA font: el dashboard el rellegeix el pare, que hi està subscrit pel seu compte.
+  // Mateix patró que els tres oients que ja hi havia (Dashboard.jsx:290, Planning.jsx:175,
+  // ProjectGantt.jsx:84) — un de sol per superfície, i sempre amb el seu `removeEventListener`.
+  useEffect(() => {
+    const h = () => setVersio(v => v + 1)
+    window.addEventListener('plan:changed', h)
+    return () => window.removeEventListener('plan:changed', h)
+  }, [])
+
   // Refresc COMPLET: el dashboard (que el pare recarrega) i les voltes, que són nostres. Tot el
   // que escriu una ronda —entregar, OK del client, +Ronda— pot moure les DUES coses alhora:
   // informar una entrega tanca la volta I tanca la seva feina viva (FIT-13 + FIT-6).
   const refrescaTot = () => { setVersio(v => v + 1); onRefresh?.() }
+
+  // 🚨 **AQUESTA PANTALLA TÉ DUES FONTS I TOT GEST QUE ESCRIU LES POT MOURE TOTES DUES.**
+  //
+  // Fins avui aquí hi convivien dos vocabularis de refresc: els TRES gestos de volta (+Ronda,
+  // entrega, OK client) cridaven `refrescaTot()` i els CINC de TASCA (play, pause, stop, handoff,
+  // temps declarat) només `onRefresh?.()` —el dashboard—, deixant `rondes` ranci. No era un
+  // descuit de cap d'ells: els gestos de tasca són de P3/P4a i van néixer ABANS que M2 afegís la
+  // segona font; ningú els va reobrir. Que una tasca pugui obrir la R1 d'un model (M1-bis · FIT-4:
+  // `open-task` fa néixer la volta) converteix aquesta asimetria en el defecte d'en Salva.
+  //
+  // 🔑 LLEI: afegir una segona font a una pantalla obliga a reobrir els gestos que ja hi vivien.
+  // Aquí ja no queda cap crida a `onRefresh` sola: o `refrescaTot()`, o res.
+  // (v. DIAGNOSI_REACTIVITAT_FRONT.md §Q2.3)
 
   const list = Array.isArray(tasques) ? tasques : []
   const isMine = (task) => task.assignee_id != null && task.assignee_id === myProfileId
@@ -303,10 +331,10 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab, model
   // perquè estat/temps/obertures de la targeta reflecteixin el canvi.
   function doTransition(task, toStatus) {
     modelTasks.transition(task.id, { to_status: toStatus })
-      .then(res => { notifyPaused(res); onRefresh?.() })
+      .then(res => { notifyPaused(res); refrescaTot() })
       .catch(err => {
         showToast('err', transitionError(err))
-        onRefresh?.()   // re-sincronitza amb el backend (la targeta local podia ser obsoleta)
+        refrescaTot()   // re-sincronitza amb el backend (la targeta local podia ser obsoleta)
       })
   }
 
@@ -331,7 +359,11 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab, model
           if (d.tab) onOpenTab?.(d.tab)
           navigate(d.route)
         } else {
-          onRefresh?.()
+          // `open-task` pot haver fet néixer la volta (FIT-4) i no només mogut l'estat de la
+          // targeta: cal rellegir les DUES fonts. `models.openTask` ja emet `plan:changed` i
+          // l'oient de sota també ho faria; la crida explícita es queda perquè aquesta funció
+          // no ha de dependre que un altre mòdul segueixi emetent.
+          refrescaTot()
         }
       })
       .catch(err => {
@@ -340,7 +372,7 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab, model
             ? t('model_sheet.dashboard.workplan.not_allowed')
             : t('model_sheet.dashboard.workplan.transition_error'))
         showToast('err', msg)
-        onRefresh?.()
+        refrescaTot()
       })
   }
 
@@ -393,13 +425,13 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab, model
         notifyPaused(res)   // el play pot haver pausat l'altra InProgress del tècnic
         return modelTasks.transition(task.id, { to_status: 'Done' })
       })
-      .then(() => onRefresh?.())
+      .then(() => refrescaTot())
       .catch(err => {
         const msg = transitionError(err)
         showToast('err', repres
           ? t('model_sheet.dashboard.workplan.stop_resumed_not_closed', { msg })
           : msg)
-        onRefresh?.()
+        refrescaTot()
       })
   }
 
@@ -434,8 +466,51 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab, model
       .finally(() => setObrintVolta(false))
   }
 
+  // ── LA PAPERERA DEL CONTENIDOR · DOS GESTOS QUE NO ES FONEN ──────────────────────────────
+  //
+  // Una tasca LLIURE s'esborra: no la reclama ningú i deixar-la seria brossa al pla.
+  // Una tasca LLIGADA A UN ENCÀRREC no s'esborra MAI: surt de la volta i es queda `Pending`,
+  // perquè el tancament de l'encàrrec la dedueixi —`close_work_order(cancel_pending=True)` li
+  // escriu un DEDUCTION que en RETÉ la FK per poder-la valorar a l'albarà. Esborrar-la
+  // destruiria justament el que la deducció necessita, i el comercial perdria la traça d'una
+  // feina contractada que no s'ha fet.
+  //
+  // 🔑 QUI DECIDEIX ÉS EL FK, NO UNA HEURÍSTICA: `task.encarrec` és `ModelTask.work_order`, que
+  // és exactament el que `cancel_pending` mira. Ni el `kind` del WO, ni el preu, ni el nom.
+  // `task.comanda` només serveix per ANOMENAR la venda a l'avís quan n'hi ha (un col·lector i
+  // un WO orfe no en tenen), mai per decidir el camí.
+  function confirmaTreure() {
+    if (!treient || traient) return
+    const task = treient
+    const lligada = task.encarrec != null
+    setTraient(true)
+    const gest = lligada ? modelTasks.desassignarRonda(task.id) : modelTasks.remove(task.id)
+    gest
+      .then(res => {
+        setTreient(null)
+        const nom = taskTypeLabel(t, task.task_type_code, task.task_type_name)
+        // `ja_fora` el diu el servidor: la porta és idempotent i, si la tasca ja no tenia volta,
+        // el toast no pot cantar victòria d'un moviment que no ha passat.
+        showToast('ok', lligada
+          ? (res?.data?.ja_fora ? t('paperera.ja_fora', { tasca: nom })
+                                : t('paperera.ok_desassignada', { tasca: nom }))
+          : t('paperera.ok_esborrada', { tasca: nom }))
+        refrescaTot()
+      })
+      .catch(err => {
+        setTreient(null)
+        // El motiu REAL del servidor mana (409 de no-Pending, 403 de gate): el fallback només
+        // cobreix el cas que no en digui cap.
+        showToast('err', err?.response?.data?.error || t('paperera.error'))
+        refrescaTot()   // la targeta local podia ser obsoleta (algú l'ha començada mentrestant)
+      })
+      .finally(() => setTraient(false))
+  }
+
   return (
-    <section style={containerStyle}>
+    // Àncora de mesura del Pla de treball i dels seus contenidors de ronda — v. la nota a
+    // `WorkOrders.jsx`. El Dashboard té sis blocs i cinc es munten encara que aquest falli.
+    <section data-ftt-screen="pla-treball" style={containerStyle}>
       {/* `.sec` del mockup: el rètol a l'esquerra i el TEMPS ACUMULAT SOBRE EL MODEL a la dreta,
           alineats a la línia de base. El temps és l'únic número global que sobreviu: és un fet
           del model sencer i no el diu cap capçalera de volta. */}
@@ -467,12 +542,23 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab, model
             {/* Dins d'una volta, la targeta COMPACTA de la maqueta: quatre o cinc hi caben en
                 una fila sota la capçalera, que és el que fa llegible el pla per rondes. La gran
                 es queda per al pla PLA (model sense voltes), just a sota. */}
+            {/* 🚨 CAP PAPERERA AL BLOC ORFE, i no és una precaució teòrica: és la trampa que
+                aquest mateix tram acaba d'obrir. Des de C3, una tasca que reclama una volta que
+                encara no ens ha arribat cau a «SENSE VOLTA» —que és el que volem, val més mal
+                col·locada que desapareguda—, i aquell bloc no és `segellada` perquè no té ronda.
+                Amb la paperera oberta allà, una tasca VIVA de la R3 es llegiria com a brossa d'un
+                model llegat i, com que el seu `encarrec` ve del MATEIX payload que sospitem
+                ranci, el diàleg oferiria «esborrar» dient «no la reclama ningú»: un DELETE real
+                sobre una premissa que la pantalla acaba de declarar incerta.
+                Al bloc orfe es llegeix; per treure'n res, primer ha de quedar clar de quina
+                volta és. */}
             {bloc.tasques.map(task => (
               <TaskCardCompacta key={task.id} task={task} mine={isMine(task)}
                 hasToolRoute={Boolean(desti(task))}
                 segellada={modelTancat || bloc.estat === RONDA_ENTREGADA}
                 onPlay={handlePlay} onPause={handlePause} onStop={handleStop}
-                onDeclarar={setDeclarant} />
+                onDeclarar={setDeclarant}
+                onTreure={bloc.ronda ? setTreient : undefined} />
             ))}
           </RondaPla>
         ))
@@ -525,7 +611,7 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab, model
           onFet={(d) => {
             setDeclarant(null)
             showToast('ok', t('temps_declarat.ok', { minuts: d?.minuts ?? 0 }))
-            onRefresh?.()
+            refrescaTot()
           }}
           onCancel={() => setDeclarant(null)}
         />
@@ -550,6 +636,38 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab, model
             refrescaTot()
           }}
           onCancel={() => setOkClient(null)} />
+      )}
+      {/* LES DUES CARES DEL MATEIX GEST. Un sol Modal i no dos components: el que canvia és el
+          text i el verb del botó, no el gest («treu aquesta tasca del contenidor»). El cos de la
+          cara LLIGADA diu el que passarà DESPRÉS —que en tancar l'encàrrec quedarà deduïda—,
+          perquè la conseqüència no la veu ningú al moment de prémer i és la raó per la qual
+          aquesta tasca no s'esborra. */}
+      {treient && (
+        <Modal
+          nom={treient.encarrec ? 'paperera-lligada' : 'paperera-lliure'}
+          title={treient.encarrec
+            ? t('paperera.titol_lligada')
+            : t('paperera.titol_lliure')}
+          subtitle={treient.encarrec
+            ? (treient.comanda
+                ? t('paperera.cos_lligada', {
+                    tasca: taskTypeLabel(t, treient.task_type_code, treient.task_type_name),
+                    comanda: treient.comanda })
+                : t('paperera.cos_lligada_sense_comanda', {
+                    tasca: taskTypeLabel(t, treient.task_type_code, treient.task_type_name) }))
+            : t('paperera.cos_lliure', {
+                tasca: taskTypeLabel(t, treient.task_type_code, treient.task_type_name) })}
+          confirmLabel={treient.encarrec
+            ? t('paperera.confirma_lligada')
+            : t('paperera.confirma_lliure')}
+          cancelLabel={t('paperera.cancella')}
+          confirmDisabled={traient}
+          // §5.5 · el vermell ple NOMÉS a la cara que destrueix. Treure de la volta una tasca
+          // lligada conserva la tasca sencera: no és destructiu i no s'ha de pintar com si ho fos.
+          confirmVariant={treient.encarrec ? 'pri' : 'destructiu'}
+          onConfirm={confirmaTreure}
+          onCancel={() => { if (!traient) setTreient(null) }}
+        />
       )}
       {handoff && (
         <Modal

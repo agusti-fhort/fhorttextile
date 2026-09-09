@@ -82,29 +82,48 @@ export default function DashboardTab({ modelId, onOpenTab, navigate, wpVersion =
   const { t } = useTranslation()
   const token = localStorage.getItem('access_token')
   const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
+  // DE QUIN MODEL és `data`. Sense això, `if (loading && !data)` obre una finestra en què la
+  // fitxa d'un model pinta les dades de l'anterior — v. el bloc de sota.
+  const [dadesDe, setDadesDe] = useState(null)
   const [error, setError] = useState('')
   const [showTech, setShowTech] = useState(false)
-  const [albaraTime, setAlbaraTime] = useState(null)   // temps total del model (GET /albara/), per al títol "On sóc"
+  const [albaraTime, setAlbaraTime] = useState(null)   // {text, de} — temps total del model (GET /albara/)
 
   // Càrrega del compositor. Reutilitzable: el transport del Pla de treball (P3) la torna a
   // cridar (onRefresh) després de cada transició que NO navega, perquè estat/temps/obertures
   // de les targetes reflecteixin el canvi sense recarregar la pàgina.
   const load = useCallback(() => {
     let alive = true
-    setLoading(true); setError('')
+    setError('')
     fetch(`${API}/api/v1/models/${modelId}/dashboard/`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => { if (!r.ok) throw new Error('http'); return r.json() })
-      .then(d => { if (alive) setData(d) })
+      .then(d => { if (alive) { setData(d); setDadesDe(modelId) } })
       .catch(() => { if (alive) setError(t('model_sheet.dashboard.err_load')) })
-      .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelId])
 
   useEffect(() => load(), [load])
+
+  // C1 · OIENT DE `plan:changed`. Aquest tab era un LECTOR PUR sense cap nansa d'invalidació:
+  // `load` no s'exporta i l'únic que la rebia era el fill (`onRefresh` del WorkPlan), o sigui que
+  // una escriptura de fora —`models.openTask` des de `ModelSheet` o d'una eina— deixava el
+  // compositor ranci fins a l'F5. `wpVersion` NO servia per a això: només re-clava el
+  // `WatchpointsPanel` (v. més avall), i semblar una nansa sense ser-ho era part del problema.
+  // (v. DIAGNOSI_REACTIVITAT_FRONT.md §Q2.4)
+  //
+  // ⚠️ La nansa de cancel·lació de `load()` NO es pot llençar. `load` torna `() => alive = false`
+  // i el `useEffect` de sobre l'aprofita com a cleanup; aquí, descartar-la volia dir que cap
+  // fetch obert per un esdeveniment no es podia avortar mai — i el de dos models enrere acabava
+  // escrivint sobre la pantalla d'ara.
+  useEffect(() => {
+    let cancel = null
+    const h = () => { cancel?.(); cancel = load() }
+    window.addEventListener('plan:changed', h)
+    return () => { cancel?.(); window.removeEventListener('plan:changed', h) }
+  }, [load])
 
   // Temps acumulat del model: mateixa font que la pestanya Registre (GET /albara/), sense recalcular.
   // Només se'n mostra el "temps total" a la línia del títol "On sóc". Degrada net si no hi ha activitat.
@@ -112,13 +131,35 @@ export default function DashboardTab({ modelId, onOpenTab, navigate, wpVersion =
     let alive = true
     fetch(`${API}/api/v1/models/${modelId}/albara/`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => (r.ok ? r.json() : null))
-      .then(d => { if (alive) setAlbaraTime(d && d.merited !== false ? formatMinutes(d.totals?.total_minutes) : null) })
+      // Viatja amb el seu `modelId` pel mateix motiu que `dadesDe`: el temps acumulat d'un
+      // model no pot quedar-se a la línia del títol d'un altre mentre arriba el seu.
+      .then(d => { if (alive) setAlbaraTime({ de: modelId,
+        text: d && d.merited !== false ? formatMinutes(d.totals?.total_minutes) : null }) })
       .catch(() => {})
     return () => { alive = false }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelId])
 
-  if (loading) {
+  // 🚨 **UN REFRESC NO POT BUIDAR LA PANTALLA, PERÒ TAMPOC POT ENSENYAR UN ALTRE MODEL.**
+  //
+  // Abans, `load()` posava `loading=true` a cada càrrega i el retorn primerenc a seques
+  // DESMUNTAVA el `WorkPlan` a cada gest: el pla es tornava a muntar de zero, l'usuari perdia el
+  // col·lapse de les voltes, i les dues invalidacions fines d'aquest tram —el bump de `versio` i
+  // l'oient de `plan:changed`— quedaven INERTES, perquè el component que les havia d'aprofitar
+  // ja no existia quan arribaven. D'aquí el `&& !data`.
+  //
+  // 🚨 PERÒ `&& !data` SOL ERA UNA REGRESSIÓ, i grossa. La ruta `models/:id` no porta `key`
+  // (App.jsx:457) i aquest tab tampoc: anar de `/models/100` a `/models/200` canvia la PROP
+  // `modelId` **sense desmuntar res**. Amb `data` encara ple del model anterior, la condició era
+  // falsa i la fitxa del 200 pintava el «On sóc», els artefactes i el Pla del 100 durant tota la
+  // latència del fetch —i el `WorkPlan` rebia les tasques del 100 amb `modelId=200`, o sigui que
+  // un Play hi hauria operat sobre la tasca d'un altre model.
+  //
+  // Per això la pregunta no és «hi ha dades?» sinó «hi ha dades D'AQUEST model?». `dadesDe`
+  // l'estampa el `.then` amb el `modelId` que la seva pròpia crida portava, de manera que una
+  // resposta endarrerida d'un model anterior tampoc no pot passar per fresca.
+  const fresc = data !== null && dadesDe === modelId
+  if (!fresc && !error) {
     return (
       <div style={{ padding: '2rem', textAlign: 'center',
                     color: 'var(--text-soft)', fontSize: 'var(--fs-body)' }}>
@@ -136,7 +177,7 @@ export default function DashboardTab({ modelId, onOpenTab, navigate, wpVersion =
       </div>
     )
   }
-  if (!data) return null
+  if (!fresc) return null
 
   const onSoc = data.on_soc || {}
   const art = data.artefactes_vigents || {}
@@ -202,9 +243,9 @@ export default function DashboardTab({ modelId, onOpenTab, navigate, wpVersion =
                 {t('model_sheet.dashboard.ready_for_gate')}
               </Badge>
             )}
-            {albaraTime && (
+            {albaraTime?.de === modelId && albaraTime.text && (
               <span style={{ marginLeft: 'auto', fontSize: 'var(--fs-h2)', fontWeight: 500, color: 'var(--text-main)' }}>
-                {albaraTime}
+                {albaraTime.text}
               </span>
             )}
           </div>

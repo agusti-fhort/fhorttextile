@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maqueta · Vista de família</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#fbf8f3;--panel:#fff;--ink:#3a3530;--ink-soft:#8a8279;--ink-faint:#a9a199;
+    --line:#e8e0d3;--line-soft:#f0eae0;--head:#f5efe4;--gold:#a8752c;--gold-soft:#c9a227;
+    --chip:#d4a437;--btn:#9a5f22;--danger:#b4483a;--sel:#f2e6cf;--lining:#fbf6ee;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:28px 20px 90px;background:var(--bg);color:var(--ink);
+       font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:13px}
+  .wrap{max-width:1120px;margin:0 auto}
+  .crumb{display:flex;align-items:center;gap:10px;color:var(--ink-soft);font-size:12px;margin-bottom:18px}
+  .crumb b{color:var(--ink);font-weight:600}
+  .chip-st{background:var(--chip);color:#fff;border-radius:999px;padding:3px 12px;font-size:11px}
+  .tabs{display:flex;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:24px}
+  .tab{border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:6px 14px;font-size:12px;color:var(--ink-soft)}
+  .tab.on{background:var(--btn);border-color:var(--btn);color:#fff}
+  h1{font-size:19px;font-weight:600;margin:0 0 4px}
+  .sub{color:var(--ink-soft);font-size:12px;margin:0 0 18px}
+
+  .bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:20px}
+  .sw{border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:7px 14px;
+      font-family:inherit;font-size:12px;color:var(--ink-soft);cursor:pointer}
+  .sw.on{background:var(--head);border-color:var(--gold);color:var(--gold)}
+  .sw:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+  .count{margin-left:auto;font-size:11px;color:var(--ink-faint)}
+
+  /* ---- targeta de família ---- */
+  .fam{background:var(--panel);border:1px solid var(--line);border-radius:9px;margin-bottom:14px;overflow:hidden}
+  .fhead{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--head);
+         border-bottom:1px solid var(--line)}
+  .fcode{font-size:13px;font-weight:600;color:var(--gold);min-width:52px}
+  .fname{font-size:12.5px}
+  .fkind{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);
+         border:1px solid var(--line);border-radius:4px;padding:2px 8px;background:var(--panel)}
+  .fmeta{margin-left:auto;display:flex;align-items:center;gap:14px;font-size:11px;color:var(--ink-soft)}
+  .dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:5px}
+  .dot.ok{background:#7d9a5b}.dot.warn{background:var(--gold-soft)}.dot.solo{background:var(--ink-faint)}
+
+  /* ---- graella de germanes ---- */
+  .grid{padding:14px 16px 16px;overflow-x:auto}
+  table{border-collapse:collapse;width:100%;min-width:520px}
+  th{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);
+     font-weight:500;text-align:left;padding:0 10px 8px;white-space:nowrap}
+  th.n{text-align:right}
+  td{padding:8px 10px;border-top:1px solid var(--line-soft);white-space:nowrap;vertical-align:middle}
+  td.n{text-align:right;font-weight:500}
+  tr.lin td{background:var(--lining)}
+  .xip{background:var(--sel);color:var(--gold);border:1px solid #e3d2ae;border-radius:999px;
+       padding:2px 9px;font-size:11px;display:inline-block;margin-right:4px}
+  .xip.none{background:transparent;border-color:var(--line);color:var(--ink-faint)}
+  .code{color:var(--gold);font-weight:600}
+  .delta{font-size:11px;color:var(--ink-soft)}
+  .delta b{color:var(--ink);font-weight:600}
+
+  /* ---- fila absent ---- */
+  tr.gap td{background:repeating-linear-gradient(45deg,#fdfbf7,#fdfbf7 6px,#faf6ee 6px,#faf6ee 12px)}
+  .absent{color:var(--ink-faint);font-style:italic;font-size:11.5px}
+  .why{font-size:10.5px;color:var(--ink-faint);padding-left:6px}
+  .mini{background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:3px 10px;
+        font-family:inherit;font-size:10.5px;color:var(--gold);cursor:pointer}
+  .mini:hover{border-color:var(--gold-soft)}
+  .mini:focus-visible{outline:2px solid var(--gold);outline-offset:1px}
+
+  .note{padding:9px 16px 13px;font-size:10.5px;color:var(--ink-faint);line-height:1.6;
+        border-top:1px solid var(--line-soft);background:#fdfcf9}
+  .note b{color:var(--ink-soft)}
+
+  .foot{margin-top:22px;padding:16px 18px;border:1px dashed var(--line);border-radius:8px;
+        background:#fdfcf9;color:var(--ink-soft);font-size:11.5px;line-height:1.75}
+  .foot b{color:var(--ink);font-weight:600}
+  .foot ul{margin:8px 0 0;padding-left:18px}
+  .hide{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="crumb">
+    <span>← Models</span><span>›</span><span>BRW-FW27-0044</span><span>·</span>
+    <b>Top asimètric</b><span class="chip-st">Desenvolupament</span>
+  </div>
+  <div class="tabs">
+    <span class="tab">Dashboard</span><span class="tab">Resum</span><span class="tab on">Mesures</span>
+    <span class="tab">Escalat</span><span class="tab">Patró</span><span class="tab">Fitxa tècnica</span>
+    <span class="tab">Fitxers</span><span class="tab">Registre d'activitat</span><span class="tab">Tasques</span>
+  </div>
+
+  <h1>Famílies de mesura</h1>
+  <p class="sub">Quantes cares té cada POM en aquest model, i quines no s'han informat.</p>
+
+  <div class="bar">
+    <button class="sw on" id="swAll" aria-pressed="true">Totes</button>
+    <button class="sw" id="swGaps" aria-pressed="false">Només amb buits</button>
+    <span class="count" id="cnt"></span>
+  </div>
+
+  <div id="host"></div>
+
+  <div class="foot">
+    <b>Què resol aquesta vista</b>
+    <ul>
+      <li>És per <b>entendre</b>, no per crear. El gest de crear germanes viu al modal de la taula de Mesures.</li>
+      <li><b>Les famílies són desiguals per naturalesa, i això no és un error.</b> `S` té sisa dreta i no esquerra perquè el top és asimètric: la germana es va proposar i el tècnic la va treure. La vista ho diu amb paraules, no amb una alerta.</li>
+      <li><b>Un POM de col·locació va sol per construcció.</b> `O.31` és una adreça (upper left), no un estat: no té complementària i no se n'espera cap.</li>
+      <li>El <b>buit real</b> és el de `A`: el folre existeix i no té valor. Aquest sí que demana feina.</li>
+      <li>La <b>folgança</b> es mostra com el que és: la resta entre germanes de capa. No és cap norma desada enlloc.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+const FAMS = [
+  {
+    code:'A', name:'CHEST WIDTH', kind:'Dimensió',
+    rows:[
+      {capa:'Exterior', inst:[], val:46, origen:'Manual · 17/07'},
+      {capa:'Lining',   inst:[], val:null, origen:'Sembrat de l\'item', lin:true}
+    ],
+    note:'Folgança pendent: el folre existeix però no té valor. Fins que no en tingui, no hi ha res a derivar.'
+  },
+  {
+    code:'D', name:'BOTTOM WIDTH', kind:'Dimensió',
+    rows:[
+      {capa:'Exterior', inst:[], val:54, origen:'Fitting · 18/07'},
+      {capa:'Lining',   inst:[], val:52, origen:'Derivat de l\'exterior · 18/07', lin:true}
+    ],
+    note:'Folgança 2,0 cm — la resta entre les dues germanes. Si l\'exterior es mou, el folre el segueix.'
+  },
+  {
+    code:'S', name:'ARMHOLE', kind:'Dimensió',
+    rows:[
+      {capa:'Exterior', inst:['Right'], val:23, origen:'Manual · 17/07'},
+      {gap:true, capa:'Exterior', inst:['Left'],
+       why:'La germana es va proposar i es va treure: el top és asimètric i el coll passa sota l\'aixella esquerra.'}
+    ],
+    note:'Asimetria declarada. No és un buit: és el disseny de la peça.'
+  },
+  {
+    code:'O.20', name:'POCKET WIDTH', kind:'Dimensió',
+    rows:[
+      {capa:'Exterior', inst:['Side'],  val:13.5, origen:'Manual · 17/07'},
+      {capa:'Exterior', inst:['Back'],  val:12.0, origen:'Manual · 17/07'},
+      {capa:'Lining',   inst:['Side'],  val:13.0, origen:'Derivat de l\'exterior · 17/07', lin:true},
+      {gap:true, capa:'Lining', inst:['Back'],
+       why:'La butxaca de darrere no porta folre.'}
+    ],
+    note:'Quatre cares possibles, tres informades. La posició és una ADREÇA: no genera parell, s\'informa la que existeix.'
+  },
+  {
+    code:'O.31', name:'EMBROIDERY PLACEMENT', kind:'Col·locació',
+    rows:[
+      {capa:'Exterior', inst:['Upper','Left'], val:8.5, origen:'Manual · 17/07'}
+    ],
+    note:'POM de col·locació: mesura ON va un element aplicat, des d\'un punt de referència. Va sol per construcció — no se n\'espera cap germana.'
+  }
+];
+
+const fmt = v => v===null ? '—' : String(v).replace('.',',');
+
+function estat(f){
+  const gaps = f.rows.filter(r=>r.gap).length;
+  const buits = f.rows.filter(r=>!r.gap && r.val===null).length;
+  if (buits) return ['warn', `${buits} sense valor`];
+  if (gaps)  return ['solo', `${gaps} no informada${gaps>1?'s':''}`];
+  return ['ok', 'completa'];
+}
+
+function folgança(f){
+  const ext = f.rows.find(r=>!r.gap && r.capa==='Exterior' && r.val!==null);
+  const lin = f.rows.find(r=>!r.gap && r.capa==='Lining'   && r.val!==null
+                             && JSON.stringify(r.inst)===JSON.stringify(ext?.inst||[]));
+  if (!ext || !lin) return null;
+  return (ext.val - lin.val).toFixed(1).replace('.',',');
+}
+
+function card(f){
+  const [cls, txt] = estat(f);
+  const fg = folgança(f);
+  const rows = f.rows.map(r => r.gap
+    ? `<tr class="gap"><td>${r.capa}</td>
+         <td>${r.inst.map(i=>`<span class="xip none">${i}</span>`).join('')||'<span class="xip none">—</span>'}</td>
+         <td class="n absent">no informada</td>
+         <td class="why">${r.why}</td>
+         <td><button class="mini">Crear-la</button></td></tr>`
+    : `<tr class="${r.lin?'lin':''}"><td>${r.capa}</td>
+         <td>${r.inst.map(i=>`<span class="xip">${i}</span>`).join('')||'<span class="xip none">—</span>'}</td>
+         <td class="n">${fmt(r.val)}</td>
+         <td class="delta">${r.origen}</td>
+         <td></td></tr>`).join('');
+  return `<div class="fam" data-gaps="${f.rows.some(r=>r.gap||r.val===null)}">
+    <div class="fhead">
+      <span class="fcode">${f.code}</span>
+      <span class="fname">${f.name}</span>
+      <span class="fkind">${f.kind}</span>
+      <span class="fmeta">
+        ${fg?`<span>Folgança <b style="color:var(--ink)">${fg} cm</b></span>`:''}
+        <span><span class="dot ${cls}"></span>${txt}</span>
+      </span>
+    </div>
+    <div class="grid"><table>
+      <thead><tr><th>Capa</th><th>Instància</th><th class="n">Talla base · S</th><th>Origen</th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>
+    <div class="note">${f.note}</div>
+  </div>`;
+}
+
+document.getElementById('host').innerHTML = FAMS.map(card).join('');
+const cnt = document.getElementById('cnt');
+const swAll = document.getElementById('swAll'), swGaps = document.getElementById('swGaps');
+function sync(only){
+  document.querySelectorAll('.fam').forEach(e =>
+    e.classList.toggle('hide', only && e.dataset.gaps !== 'true'));
+  const vis = [...document.querySelectorAll('.fam')].filter(e=>!e.classList.contains('hide')).length;
+  cnt.textContent = `${vis} famílies · ${FAMS.reduce((a,f)=>a+f.rows.filter(r=>!r.gap).length,0)} files de mesura`;
+}
+swAll.onclick = () => { swAll.classList.add('on'); swGaps.classList.remove('on');
+  swAll.setAttribute('aria-pressed',true); swGaps.setAttribute('aria-pressed',false); sync(false); };
+swGaps.onclick = () => { swGaps.classList.add('on'); swAll.classList.remove('on');
+  swGaps.setAttribute('aria-pressed',true); swAll.setAttribute('aria-pressed',false); sync(true); };
+sync(false);
+</script>
+</body>
+</html>

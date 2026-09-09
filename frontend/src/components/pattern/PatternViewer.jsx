@@ -52,6 +52,16 @@ export const KONVA_COL = {
   tram: '#0969da',     // = var(--tram) · identitat del tram, declarant-lo i declarat
   tramSel: '#fb8500',  // = var(--tram-sel) · el tram que s'assenyala: èmfasi, no identitat
   pinca: '#1b7c83',    // una PINÇA declarada: els seus dos costats i el seu vèrtex
+  // F4.2 · un LANDMARK derivat. No és una anotació: ningú l'ha marcat, i el dia que un
+  // rol de vora canviï el punt es mourà tot sol. Per això té color propi i no el del POM,
+  // que sí que és una decisió que algú ha pres.
+  landmark: '#7c3aed',
+  // F4.2-BIS · els ROLS DE VORA. Dos colors perquè són dos ESTATS de dada, no dos
+  // èmfasis: `vora` és un rol que una persona ha gravat, `voraProposta` un que el catàleg
+  // suggereix i encara no ha desat ningú. L'èmfasi de «la fila que assenyales» segueix
+  // sent `tramSel`, que és el que aquesta paleta ja fa servir per a èmfasi i no identitat.
+  vora: '#0d9488',
+  voraProposta: '#b45309',
 }
 
 // El rang de zoom no és una preferència estètica: és el que decideix si un vèrtex es pot
@@ -141,6 +151,24 @@ export default function PatternViewer({
   // glif és petit i buit a posta: una pinça proposada no és una pinça, i si es pintés com la
   // declarada ningú sabria quines ha marcat ell.
   pincesProposades = [], pincaProposadaRessaltada = null,
+  // ── F4.2-BIS. Els trams amb rol de vora de la peça que s'està declarant, per pintar-los
+  // sobre la geometria: `{id, piece_id, vora, t_inici, t_fi, edge_role, confirmat,
+  // longitud_cm}`. `voraRessaltada` és l'id del que la llista assenyala —i és l'ÚNIC que
+  // porta la mida escrita al costat: l'ordre de l'Agus és «no puc comprovar la mida si no
+  // puc navegar», i una xifra a cada tram tornaria a fer il·legible el que ve a resoldre.
+  voresRolades = [], voraRessaltada = null, onClicVora = null,
+  // ── F4.2-TER. L'ordre d'ENQUADRAR un tram: `{ id, n }`, on `n` és un comptador que
+  // puja a cada GEST. La comanda va per comptador i no pel simple id perquè l'efecte ha
+  // de disparar-se una vegada per clic i **cap per passada del cursor**: la mateixa
+  // llista il·lumina en passar-hi per sobre, i una càmera que saltés a cada fila que el
+  // ratolí travessa seria inservible. Tornar a clicar la mateixa fila hi torna, que és el
+  // que un vol quan s'ha perdut.
+  enquadra = null,
+  // ── F4.2. Els punts DERIVATS dels rols de vora, ja resolts pel servidor: `{landmark,
+  // side, x, y, nom_block}`. **Es LLEGEIXEN, no es calculen**: la regla que diu on és un
+  // HPS viu al catàleg i es resol al backend en el marc de la PEÇA, i una segona
+  // implementació aquí seria una segona veritat que ningú compararia amb la primera.
+  landmarks = [],
   // La unitat del tenant (CM|INCH): el canvas també és taller, i hi val la mateixa llei.
   unit = 'CM',
   // ── W2. Al Taller el canvas no té una alçada de maqueta: ocupa el que li deixa el
@@ -227,6 +255,110 @@ export default function PatternViewer({
 
   useEffect(() => { encaixar() }, [encaixar])
 
+  // ── enquadrar UN TRAM (F4.2-TER) ─────────────────────────────────────────
+  // 🚨 **El zoom i el pan de l'usuari manen sempre.** Això no vigila res ni recol·loca la
+  // càmera pel seu compte: només reacciona al GEST de seleccionar, i qualsevol roda o
+  // arrossegada l'atura a mitja animació (`animRef`). Un visor que es reenquadra sol és
+  // exactament el que el comentari de `encaixar` explica que ja va costar una vegada.
+  const animRef = useRef(null)
+  const aturaAnim = useCallback(() => {
+    if (animRef.current) { cancelAnimationFrame(animRef.current); animRef.current = null }
+  }, [])
+
+  //: EL SOSTRE DE ZOOM, derivat del patró i no escrit a mà: la lupa no s'acosta MAI més
+  //: del que demanaria la peça sencera més PETITA del fitxer. Sense això un replec de
+  //: 17 mm ompliria la pantalla a ×56 i el patronista perdria tota referència del que està
+  //: mirant —que és el contrari d'ajudar-lo a comprovar una mida.
+  const zoomSostre = useMemo(() => {
+    const el = viewportRef.current
+    const w = el?.clientWidth || mida.w
+    const h = (omplirAlcada ? el?.clientHeight : ALCADA) || mida.h
+    let z = 0
+    for (const p of pieces) {
+      const b = p.bbox
+      if (!b) continue
+      z = Math.max(z, escalaPerCabre(
+        { minX: b.min_x, maxX: b.max_x, minY: b.min_y, maxY: b.max_y }, w, h))
+    }
+    return z > 0 ? z : ZOOM_MAX
+  }, [pieces, mida.w, mida.h, omplirAlcada])
+
+  const enquadraId = enquadra?.id ?? null
+  const enquadraN = enquadra?.n ?? 0
+
+  useEffect(() => {
+    if (!enquadraN || enquadraId == null) return undefined
+    const el = viewportRef.current
+    if (!el) return undefined
+    const w = el.clientWidth
+    const h = omplirAlcada ? el.clientHeight : ALCADA
+    if (!w || !h) return undefined
+
+    // El tram pot venir de qualsevol de les dues llistes: la de rols de vora i la de trams
+    // declarats. És la MATEIXA pregunta —«ensenya'm aquest tram»— i per tant un sol camí.
+    const tr = voresRolades.find(v => v.id === enquadraId)
+      || tramsDeclarats.find(v => v.id === enquadraId)
+    if (!tr) return undefined
+    const piece = pieces.find(p => p.id === tr.piece_id)
+    if (!piece) return undefined
+    const pts = puntsDelSegment(piece, tr)
+    if (pts.length < 2) return undefined
+
+    const xs = pts.map(q => q.x)
+    const ys = pts.map(q => q.y)
+    const b = { minX: Math.min(...xs), maxX: Math.max(...xs),
+                minY: Math.min(...ys), maxY: Math.max(...ys) }
+
+    // 1 · JA ES VEU **I ES POT LLEGIR**? Aleshores no es toca la càmera.
+    //
+    // 🚨 «Completament visible» a seques no serveix, i es va MESURAR: amb la vista inicial
+    // —que encaixa el patró sencer— TOTS els trams hi caben, i la regla llegida al peu de
+    // la lletra deixava la funció sense disparar-se mai. Un replec de 17 mm sobre una peça
+    // d'1,1 m hi és, sí: fa NOU PÍXELS. Visible i il·legible no és el mateix, i el que
+    // aquesta pantalla ha de resoldre és justament poder comprovar-ne la mida.
+    //
+    // Per tant fan falta les dues coses: que hi càpiga sencer i que ocupi prou. El llindar
+    // és relatiu al viewport, que és l'única mesura que sap què és «prou gran aquí».
+    const dins = (x, y) => {
+      const sx = pos.x + x * zoom
+      const sy = pos.y - y * zoom
+      return sx >= 8 && sx <= w - 8 && sy >= 8 && sy <= h - 8
+    }
+    const capMinim = Math.min(w, h) * 0.2
+    const jaEsGran = Math.max((b.maxX - b.minX) * zoom, (b.maxY - b.minY) * zoom) >= capMinim
+    if (jaEsGran
+        && dins(b.minX, b.minY) && dins(b.maxX, b.minY)
+        && dins(b.minX, b.maxY) && dins(b.maxX, b.maxY)) return undefined
+
+    // 2 · El zoom que el tram demana, amb un 20 % d'aire, i el sostre per damunt.
+    const zVol = escalaPerCabre(b, w, h, 0) * 0.8
+    const zFi = clampZoom(Math.min(zVol, zoomSostre))
+    const cx = (b.minX + b.maxX) / 2
+    const cy = (b.minY + b.maxY) / 2
+    const posFi = { x: w / 2 - cx * zFi, y: h / 2 + cy * zFi }
+
+    // 3 · L'animació. Curta i amb frenada: prou per veure CAP ON s'ha mogut la vista —que
+    // és el que evita la desorientació d'un salt sec— i prou poc per no fer esperar.
+    const z0 = zoom
+    const p0 = { ...pos }
+    const t0 = performance.now()
+    const DURADA = 320
+    aturaAnim()
+    const pas = (ara) => {
+      const k = Math.min(1, (ara - t0) / DURADA)
+      const e = 1 - (1 - k) ** 3          // easeOutCubic
+      setZoom(z0 + (zFi - z0) * e)
+      setPos({ x: p0.x + (posFi.x - p0.x) * e, y: p0.y + (posFi.y - p0.y) * e })
+      animRef.current = k < 1 ? requestAnimationFrame(pas) : null
+    }
+    animRef.current = requestAnimationFrame(pas)
+    return aturaAnim
+    // Les dependències són el COMPTADOR i prou (i el que fa falta per resoldre el tram).
+    // `zoom` i `pos` es llegeixen dins però NO hi entren: si hi entressin, cada fotograma
+    // de l'animació en tornaria a disparar una de nova.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enquadraN, enquadraId, omplirAlcada, zoomSostre])
+
   useEffect(() => {
     if (omplirAlcada) return          // omplint l'alçada mana el ResizeObserver, aquí sota
     const onResize = () => encaixar()
@@ -283,6 +415,10 @@ export default function PatternViewer({
   // ── zoom amb la roda, ancorat al cursor ──────────────────────────────────
   const onWheel = (e) => {
     e.evt.preventDefault()
+    // 🚨 La mà de l'usuari mana sobre la càmera, sempre i a mitja animació inclosa. Una
+    // roda que hagi de lluitar contra un `setZoom` per fotograma no és un zoom, és una
+    // baralla.
+    aturaAnim()
     const stage = stageRef.current
     if (!stage) return
     const punter = stage.getPointerPosition()
@@ -299,6 +435,7 @@ export default function PatternViewer({
   }
 
   const zoomBoto = (factor) => {
+    aturaAnim()
     const zNou = clampZoom(zoom * factor)
     const centre = { x: mida.w / 2, y: mida.h / 2 }
     const mon = { x: (centre.x - pos.x) / zoom, y: (centre.y - pos.y) / zoom }
@@ -328,6 +465,7 @@ export default function PatternViewer({
     evt.preventDefault()               // el botó del mig, si no, obre l'autoscroll
     const p = stageRef.current?.getPointerPosition()
     if (!p) return
+    aturaAnim()
     panRef.current = { x0: p.x, y0: p.y, px: pos.x, py: pos.y, mogut: false }
   }
 
@@ -747,6 +885,101 @@ export default function PatternViewer({
                 />
               </Group>
             )}
+            {/* Els landmarks derivats. Amb nom al costat: un punt sense nom en un patró
+                és soroll, i el que aquest punt aporta és justament que se sap com es diu. */}
+            {/* F4.2-BIS · ELS ROLS DE VORA sobre la geometria. Es pinten com els trams
+                declarats i pel mateix camí (`puntsDelSegment` resol el rang `t` sobre els
+                punts que el servidor ja ha enviat): el front no calcula geometria, la
+                RESOL, que és per a això que un tram es desa com a fracció de vora i no com
+                a llista de punts.
+
+                El que assenyala la llista va amb `tramSel` i més gruix —èmfasi, no
+                identitat— i porta la MIDA al costat, que és el que aquesta pantalla ve a
+                fer possible. */}
+            {voresRolades.map(vr => {
+              const piece = pieces.find(p => p.id === vr.piece_id)
+              if (!piece) return null
+              const pts = puntsDelSegment(piece, vr)
+              if (pts.length < 2) return null
+              const marcat = voraRessaltada === vr.id
+              const color = marcat ? KONVA_COL.tramSel
+                : vr.confirmat ? KONVA_COL.vora : KONVA_COL.voraProposta
+              const mig = pts[Math.floor(pts.length / 2)]
+              return (
+                <Group key={`vora-${vr.id}`}>
+                  <Line
+                    points={pts.flatMap(p => [p.x, -p.y])}
+                    stroke={color}
+                    strokeWidth={(marcat ? 6 : 3) / zoom}
+                    // Ratllat mentre és una PROPOSTA: la mateixa gramàtica que les
+                    // costures proposades d'A2 —ratlles = encara no és del patró— i que
+                    // el groc de la llista. Un rol gravat va sencer.
+                    dash={vr.confirmat || marcat ? undefined : [10 / zoom, 6 / zoom]}
+                    lineCap="round"
+                    listening={!!onClicVora}
+                    hitStrokeWidth={Math.max(16 / zoom, 6)}
+                    onClick={() => onClicVora && onClicVora(vr)}
+                    onTap={() => onClicVora && onClicVora(vr)}
+                    perfectDrawEnabled={false}
+                  />
+                  {marcat && mig && (() => {
+                    // 🚨 LA MIDA S'HA DE PODER LLEGIR, que és tot el que aquesta pantalla
+                    // ve a fer possible. Escrita al mig del tram i prou, al coll del 837 va
+                    // caure damunt de la cota d'un POM i les dues xifres es van fer un
+                    // garbuix — mesurat a la captura del fum, no suposat. Dues correccions,
+                    // i totes dues calen:
+                    //  · s'aparta cap AFORA seguint la direcció que va del centre de la
+                    //    peça al tram, com fa una cota de CAD;
+                    //  · va sobre una caixa opaca, perquè «afora» no és garantia de buit
+                    //    en una niada.
+                    const bb = piece.bbox
+                    const cx = bb ? (bb.min_x + bb.max_x) / 2 : mig.x
+                    const cy = bb ? (bb.min_y + bb.max_y) / 2 : mig.y
+                    const dx = mig.x - cx
+                    const dy = mig.y - cy
+                    const d = Math.hypot(dx, dy) || 1
+                    const fora = 26 / zoom
+                    const tx = mig.x + (dx / d) * fora
+                    const ty = -(mig.y + (dy / d) * fora)
+                    const txt = vr.longitud_cm != null ? formatLen(vr.longitud_cm, unit) : ''
+                    if (!txt) return null
+                    const w = (txt.length * 8 + 10) / zoom
+                    const h = 19 / zoom
+                    return (
+                      <>
+                        <Rect
+                          x={tx - w / 2} y={ty - h / 2} width={w} height={h}
+                          fill={KONVA_COL.bg} stroke={KONVA_COL.tramSel}
+                          strokeWidth={1 / zoom} cornerRadius={3 / zoom}
+                          listening={false} perfectDrawEnabled={false}
+                        />
+                        <Text
+                          x={tx - w / 2} y={ty - h / 2} width={w} height={h}
+                          text={txt} align="center" verticalAlign="middle"
+                          fontSize={13 / zoom} fontStyle="bold"
+                          fill={KONVA_COL.tramSel}
+                          listening={false} perfectDrawEnabled={false}
+                        />
+                      </>
+                    )
+                  })()}
+                </Group>
+              )
+            })}
+
+            {landmarks.map((lm, i) => (
+              <Group key={`lm-${lm.nom_block}-${lm.landmark}-${lm.side}-${i}`}
+                     x={lm.x} y={-lm.y} listening={false}>
+                <Circle radius={4 / zoom} stroke={KONVA_COL.landmark}
+                        strokeWidth={1.6 / zoom} fill={KONVA_COL.bg} />
+                <Circle radius={1.2 / zoom} fill={KONVA_COL.landmark} />
+                <Text
+                  text={lm.side ? `${lm.landmark}·${lm.side}` : lm.landmark}
+                  x={6 / zoom} y={-11 / zoom}
+                  fontSize={10 / zoom} fill={KONVA_COL.landmark}
+                />
+              </Group>
+            ))}
           </Layer>
         </Stage>
       </div>

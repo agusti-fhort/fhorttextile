@@ -344,6 +344,29 @@ class ModelTask(models.Model):
     # respondre-ho. Quan totes dues hi són, `obrir_ronda` les escriu iguals.
     motiu = models.CharField(max_length=20, choices=Ronda.MOTIU_CHOICES, null=True, blank=True)
 
+    # ── BLOC A · A3 · EL COST/HORA D'AQUESTA TASCA ──────────────────────────────────────────
+    #
+    # El cost intern es calculava SEMPRE amb `TenantConfig.hourly_rate`, una tarifa plana per a
+    # tot el tenant. L'A3 diu que a l'albarà el comercial ha de poder tocar-la TASCA A TASCA —una
+    # hora de patronatge i una de repàs no valen el mateix— i que la tarifa del tenant es queda
+    # com a DEFECTE, no com a llei.
+    #
+    # 🔑 `null` NO vol dir 0: vol dir «aquesta tasca no té tarifa pròpia, fes servir la del
+    # tenant». Un 0 explícit és una decisió («aquesta hora no costa») i s'ha de poder desar; per
+    # això el camp és nul·lable i no té `default`.
+    #
+    # 🔒 VIU A LA TASCA I NO A LA LÍNIA D'ALBARÀ a posta: una tasca pot entrar a més d'un
+    # document al llarg de la seva vida (una volta reoberta, una rectificació), i el cost intern
+    # d'aquella hora és el mateix a tot arreu. A la línia hi viu el PREU DE VENDA, que sí que és
+    # del document.
+    #
+    # 🔒 I NO SURT MAI AL CLIENT (A3): el cost és lectura interna —pantalla d'albarà i prou—, mai
+    # PDF. La poda econòmica ja separa qui pot veure diner; això a més no és ni diner de VENDA.
+    hourly_rate_override = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text='A3: cost/hora propi d\'aquesta tasca. null = fes servir '
+                  'TenantConfig.hourly_rate. Cost INTERN: mai viatja al client.')
+
     class Meta:
         ordering = ['model', 'order']
         verbose_name = 'Model task'

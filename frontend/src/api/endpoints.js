@@ -454,6 +454,15 @@ export const modelTasks = {
   // Assignació: PATCH {assignee} (gated define_tasks; 400 si fora de l'allow-list de l'assignee).
   patch: (id, data) => client.patch(`/api/v1/model-task-items/${id}/`, data),
   remove: (id) => client.delete(`/api/v1/model-task-items/${id}/`),
+  // La porta BESSONA de `remove`, i no un àlies: una tasca lligada a un encàrrec NO s'esborra
+  // mai —surt de la volta i es queda Pending perquè el tancament de l'encàrrec la dedueixi
+  // (el DEDUCTION en reté la FK per valorar-la a l'albarà). Els dos gestos no es fonen.
+  // Mateixos guards que `remove`: DEFINE_TASKS, abast per fila i NOMÉS Pending (409 si no).
+  desassignarRonda: (id) => client.post(`/api/v1/model-task-items/${id}/desassignar-ronda/`),
+  // A3 · la tarifa/hora d'una tasca. Porta PRÒPIA i no un camp del PATCH general: el CRUD va amb
+  // `define_tasks` i tocar el cost intern és un acte COMERCIAL. `null` treu l'override.
+  costHora: (id, valor) => client.post(`/api/v1/model-task-items/${id}/cost-hora/`,
+    { hourly_rate_override: valor }),
   // Màquina d'estats (gated execute_tasks). La resposta pot dur paused_task_id (→ toast 3s).
   // {to_status} i, opcionalment, {auto:'guard_30min'} SOBRE →Paused: marca del guard de tasca
   // oblidada perquè el log no signi l'auto-pausa amb el nom del tècnic. Un gest humà no la porta.
@@ -729,6 +738,10 @@ export const commerce = {
     list: (params) => client.get('/api/v1/commerce/work-orders/', { params }),   // ?kind=&status=&customer=&period=
     get: (id) => client.get(`/api/v1/commerce/work-orders/${id}/`),
     close: (id, data) => client.post(`/api/v1/commerce/work-orders/${id}/close/`, data || {}),
+    // Tancament en LOT = el mateix `close`, N vegades (mateix gate, mateixos guards). Torna
+    // {resultats:[{id,number,ok,motiu,blockers,pending_proposals,deduides}], tancats, bloquejats,
+    // errors}: un lot és SEMPRE parcial i qui el crida ha de poder dir quins han quedat fora.
+    closeBulk: (data) => client.post('/api/v1/commerce/work-orders/close-bulk/', data),
     // B4b — revisió comercial (preu de venda) d'un WO tancat. {items:[{model_task_id,kind,amount}]}
     review: (id, data) => client.post(`/api/v1/commerce/work-orders/${id}/review/`, data || {}),
     // Desassigna el model de la línia: orfanda el WO (gate CONFIGURE). 400 si ORDER tancat/albaranat.
@@ -749,14 +762,12 @@ export const commerce = {
     remove: (id) => client.delete(`/api/v1/commerce/expenses/${id}/`),
   },
   // Albarans (B4c) — document derivat que agrega 1..N WorkOrder CLOSED del mateix client.
-  // No es creen per POST directe: neixen de generate/ (línies proposades pel sistema).
+  // No es creen per POST directe: neixen de draft/ (v2) + add-lines/ (línies de la safata billable/).
   deliveryNotes: {
     list: (params) => client.get('/api/v1/commerce/delivery-notes/', { params }),   // ?status=&customer=
     get: (id) => client.get(`/api/v1/commerce/delivery-notes/${id}/`),
     update: (id, data) => client.patch(`/api/v1/commerce/delivery-notes/${id}/`, data),   // notes en DRAFT
     remove: (id) => client.delete(`/api/v1/commerce/delivery-notes/${id}/`),   // només DRAFT (allibera WO)
-    // Genera un DRAFT amb línies proposades. {work_order_ids:[…]} → 201 o 400 {detail, errors}.
-    generate: (data) => client.post('/api/v1/commerce/delivery-notes/generate/', data),
     issue: (id) => client.post(`/api/v1/commerce/delivery-notes/${id}/issue/`),   // DRAFT→ISSUED (congela)
     pdf: (id, lang) => client.get(`/api/v1/commerce/delivery-notes/${id}/pdf/`, { params: lang ? { lang } : {}, responseType: 'blob' }),
     // v2 — safata d'albaranables per model. ?customer=<id> → {customer, groups:[{model, items}]}.
@@ -1009,6 +1020,26 @@ export const patterns = {
   // escriu res que un humà hagi confirmat, només els camps `proposed_*`.
   reconeixer: id =>
     client.post(`/api/v1/patterns/pattern-files/${id}/recognize/`),
+
+  // ── F4.2 · ELS ROLS DE VORA ────────────────────────────────────────────────
+  // Els trams de cada peça identificada, la PROPOSTA del catàleg i els landmarks que
+  // se'n deriven. Una sola crida per a la pantalla sencera: el vocabulari permès és
+  // per peça, i demanar-lo peça a peça seria N crides per a una taula que ja hi és.
+  edgeRoles: (id) =>
+    client.get(`/api/v1/patterns/pattern-files/${id}/edge-roles/`),
+
+  // El gest HUMÀ. En bloc per peça, com `identificar`: acceptar un contorn sencer és un
+  // sol gest. El servidor valida cada slug contra el vocabulari del rol de la peça abans
+  // d'escriure res, o sigui que el desplegable manual passa pel mateix guard que la
+  // proposta acceptada.
+  confirmarVores: (id, data) =>
+    client.post(`/api/v1/patterns/pattern-files/${id}/confirm-edge-roles/`, data),
+
+  // El vocabulari de vora d'un rol de peça, amb els noms als tres idiomes. Serveix el
+  // desplegable manual: només mostra rols que aquesta peça pot portar de debò.
+  edgeVocabulary: (id, pieceRole, face) =>
+    client.get(`/api/v1/patterns/pattern-files/${id}/edge-vocabulary/`,
+      { params: { piece_role: pieceRole, face: face || '' } }),
 
   // L'última acta del fitxer. D'aquí surt el verd de la pantalla — del servidor i no del
   // navegador: un estat que viu a localStorage diu que algú va confirmar en AQUELL

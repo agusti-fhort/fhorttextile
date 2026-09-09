@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maqueta v1 · Temps declarat + modal d'acabar</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#fbf8f3;--panel:#fff;--ink:#3a3530;--ink-soft:#8a8279;--ink-faint:#a9a199;
+    --line:#e8e0d3;--line-soft:#f0eae0;--head:#f5efe4;--gold:#a8752c;--gold-soft:#c9a227;
+    --btn:#9a5f22;--sel:#f2e6cf;--dec:#f7f5f1;
+    --ok:#5f8a3f;--ok-bg:#eef4e6;--ok-bd:#c6dab0;
+    --adj:#c47f1a;--adj-bg:#fcf2e3;--adj-bd:#e9d3a6;
+    --rej:#b4483a;--rej-bg:#faeae7;--rej-bd:#e5bcb4;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:22px 16px 80px;background:var(--bg);color:var(--ink);
+       font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:13px}
+  .wrap{max-width:1080px;margin:0 auto}
+  h1{font-size:17px;font-weight:600;margin:0 0 3px}
+  .sub{color:var(--ink-soft);font-size:12px;margin:0 0 20px}
+  h2{font-size:13px;font-weight:600;margin:26px 0 4px;display:flex;align-items:center;gap:9px}
+  h2 .n{background:var(--gold);color:#fff;border-radius:999px;width:19px;height:19px;
+        display:inline-flex;align-items:center;justify-content:center;font-size:10px}
+  .cap{color:var(--ink-soft);font-size:11.5px;margin:0 0 12px;line-height:1.6}
+  .row{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:16px 18px}
+  .card.w{width:430px}
+  .btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:6px;
+       padding:8px 15px;font-family:inherit;font-size:12px;cursor:pointer}
+  .btn:hover{background:var(--head)}
+  .btn.pri{background:var(--btn);border-color:var(--btn);color:#fff;font-weight:600}
+  .btn.gh{border-color:transparent;color:var(--ink-soft)}
+  .btn.sm{padding:5px 11px;font-size:11px}
+  .btn:disabled{opacity:.45;cursor:default}
+
+  /* ── crono ── */
+  .tkhead{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:12px}
+  .tkname{font-size:13px;font-weight:600}
+  .tkmeta{font-size:10.5px;color:var(--ink-soft);margin-top:3px}
+  .pill{font-size:9px;font-weight:600;letter-spacing:.05em;padding:2px 8px;border-radius:999px;
+        background:var(--sel);color:var(--gold);white-space:nowrap}
+  .clock{font-size:34px;font-weight:600;letter-spacing:.04em;font-variant-numeric:tabular-nums;
+         text-align:center;padding:14px 0 6px}
+  .clock.run{color:var(--gold)}
+  .clock.stop{color:var(--ink)}
+  .live{display:flex;align-items:center;justify-content:center;gap:7px;font-size:10.5px;
+        color:var(--ink-soft);margin-bottom:14px}
+  .bl{width:7px;height:7px;border-radius:50%;background:var(--gold);animation:b 1.6s infinite}
+  @keyframes b{0%,100%{opacity:1}50%{opacity:.25}}
+  .acts{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+  .persist{margin-top:13px;padding-top:11px;border-top:1px solid var(--line-soft);
+           font-size:10px;color:var(--ink-faint);line-height:1.6;text-align:center}
+
+  /* correcció manual */
+  .modes{display:flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;margin:4px 0 12px}
+  .modes button{flex:1;border:none;background:transparent;font-family:inherit;font-size:10.5px;
+    padding:7px 8px;color:var(--ink-faint);cursor:pointer;border-right:1px solid var(--line)}
+  .modes button:last-child{border-right:none}
+  .modes button.on{background:var(--sel);color:var(--gold);font-weight:600}
+  .fld{margin-bottom:10px}
+  .lbl{font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-soft);
+       display:block;margin-bottom:4px}
+  .in{font-family:inherit;font-size:12.5px;border:1px solid var(--line);border-radius:5px;
+      padding:6px 9px;background:var(--panel);color:var(--ink);font-variant-numeric:tabular-nums}
+  .in:focus{outline:none;border-color:var(--gold);background:#fffdf8}
+  .in.sm{width:74px;text-align:right}
+  .in.dt{width:132px} .in.hr{width:74px}
+  .grp{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .xor{font-size:10px;color:var(--ink-faint);margin:-4px 0 12px;font-style:italic}
+
+  /* ── modal ── */
+  .stage{position:relative;background:var(--head);border:1px solid var(--line);border-radius:9px;
+         height:330px;overflow:hidden}
+  .ghost{filter:blur(1.5px);opacity:.5;padding:14px 16px;font-size:11px;color:var(--ink-soft);line-height:1.9}
+  .veil{position:absolute;inset:0;background:rgba(58,53,48,.32);display:flex;align-items:center;
+        justify-content:center;padding:16px}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:11px;
+         box-shadow:0 12px 34px rgba(58,53,48,.22);width:454px;max-width:100%;padding:20px 22px}
+  .modal h3{margin:0 0 5px;font-size:14px;font-weight:600}
+  .modal .ctx{font-size:11px;color:var(--ink-soft);margin:0 0 15px;line-height:1.6}
+  .opt{display:flex;gap:11px;align-items:flex-start;border:1px solid var(--line);border-radius:8px;
+       padding:11px 13px;margin-bottom:9px;cursor:pointer;background:var(--panel)}
+  .opt:hover{background:#fdfcf9}
+  .opt.sel{border-color:var(--gold);background:var(--sel);box-shadow:0 0 0 2px rgba(168,117,44,.13)}
+  .opt .k{width:19px;height:19px;border-radius:50%;border:1px solid var(--line);flex:none;margin-top:1px;
+          display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--ink-faint);background:var(--panel)}
+  .opt.sel .k{border-color:var(--gold);background:var(--gold);color:#fff}
+  .opt .t{font-size:12.5px;font-weight:600}
+  .opt .d{font-size:10.5px;color:var(--ink-soft);margin-top:3px;line-height:1.55}
+  .mfoot{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:15px;flex-wrap:wrap}
+  .tot{font-size:10.5px;color:var(--ink-soft)}
+  .tot b{color:var(--ink)}
+
+  /* indicador de sessió */
+  .ind{display:inline-flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);
+       border-radius:999px;padding:7px 15px;box-shadow:0 3px 12px rgba(58,53,48,.09);font-size:12px}
+  .ind .d{width:8px;height:8px;border-radius:50%;background:var(--gold);animation:b 1.6s infinite}
+  .ind .r{font-size:10.5px;color:var(--ink-soft);font-variant-numeric:tabular-nums}
+
+  .foot{margin-top:30px;font-size:11.5px;color:var(--ink-soft);line-height:1.75;
+        border-left:2px solid var(--line);padding-left:14px}
+  .foot b{color:var(--ink)} .foot ul{margin:8px 0 0;padding-left:18px} .foot li{margin-bottom:5px}
+  .ask{border-left-color:var(--gold);background:#fdfaf3;padding:12px 14px;border-radius:0 7px 7px 0}
+  .hide{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Temps declarat i gest d'acabar</h1>
+  <p class="sub">Dues peces noves del cicle de tasca. Tokens, tipografia i llenguatge de les maquetes aprovades.</p>
+
+  <!-- ═══ 1 · CRONO ═══ -->
+  <h2><span class="n">1</span>Crono de temps declarat · tasques externes</h2>
+  <p class="cap">«Iniciar» d'una tasca externa no navega enlloc: obre aquest crono. El temps és <b>declarat</b>, no mesurat — ningú escriu al sistema mentre dibuixa a Polipattern.</p>
+
+  <div class="row">
+    <!-- 1a · corrent -->
+    <div class="card w" id="cRun">
+      <div class="tkhead">
+        <div>
+          <div class="tkname">Patró CAD</div>
+          <div class="tkmeta">BRW-SS26-0002 · Bomber Jacket · Montse</div>
+        </div>
+        <span class="pill">EXTERNA</span>
+      </div>
+      <div class="clock run" id="clk">00:14:32</div>
+      <div class="live"><span class="bl"></span>El crono corre</div>
+      <div class="acts">
+        <button class="btn gh" onclick="show('cDesc')">Descartar</button>
+        <button class="btn pri" onclick="show('cStop')">Aturar</button>
+      </div>
+      <div class="persist">Viu al servidor: sobreviu a recarregar, canviar de pestanya i tancar el navegador.<br>El guard d'inactivitat no el toca.</div>
+    </div>
+
+    <!-- 1b · aturat -->
+    <div class="card w hide" id="cStop">
+      <div class="tkhead">
+        <div>
+          <div class="tkname">Patró CAD</div>
+          <div class="tkmeta">Aturat · 5 ago 2026, 10:14 → 10:29</div>
+        </div>
+        <span class="pill">EXTERNA</span>
+      </div>
+      <div class="clock stop">00:14:32</div>
+      <div class="live" style="color:var(--ink-faint)">Confirma el temps abans de desar</div>
+      <div class="acts" style="margin-bottom:4px">
+        <button class="btn gh" onclick="show('cDesc')">Descartar</button>
+        <button class="btn" onclick="show('cMan')">Corregir a mà</button>
+        <button class="btn pri" onclick="show('cOk')">Acceptar la mesura</button>
+      </div>
+      <div class="persist">Descartar esborra el tram: no queda temps registrat.</div>
+    </div>
+
+    <!-- 1c · manual -->
+    <div class="card w hide" id="cMan">
+      <div class="tkhead">
+        <div><div class="tkname">Patró CAD</div><div class="tkmeta">Corregir el temps a mà</div></div>
+        <span class="pill">EXTERNA</span>
+      </div>
+      <div class="modes">
+        <button class="on" onclick="mode(this,'mDur')">Durada</button>
+        <button onclick="mode(this,'mRang')">Dia i hora</button>
+      </div>
+      <div id="mDur">
+        <div class="fld"><span class="lbl">Temps dedicat</span>
+          <div class="grp"><input class="in sm" value="0"><span style="font-size:11px;color:var(--ink-soft)">h</span>
+            <input class="in sm" value="15"><span style="font-size:11px;color:var(--ink-soft)">min</span></div>
+        </div>
+        <p class="xor">O bé el rang de dia i hora — una cosa o l'altra, mai les dues.</p>
+      </div>
+      <div id="mRang" class="hide">
+        <div class="fld"><span class="lbl">Inici</span>
+          <div class="grp"><input class="in dt" value="05/08/2026"><input class="in hr" value="10:14"></div></div>
+        <div class="fld"><span class="lbl">Fi</span>
+          <div class="grp"><input class="in dt" value="05/08/2026"><input class="in hr" value="10:29"></div></div>
+        <p class="xor">O bé la durada directa — una cosa o l'altra, mai les dues.</p>
+      </div>
+      <div class="acts">
+        <button class="btn gh" onclick="show('cStop')">Enrere</button>
+        <button class="btn pri" onclick="show('cOk')">Desar</button>
+      </div>
+    </div>
+
+    <!-- 1d · desat -->
+    <div class="card w hide" id="cOk">
+      <div class="tkhead">
+        <div><div class="tkname">Patró CAD</div><div class="tkmeta">Temps desat · declarat</div></div>
+        <span class="pill" style="background:var(--ok-bg);color:var(--ok)">DESAT</span>
+      </div>
+      <div class="clock" style="color:var(--ok)">00:15:00</div>
+      <div class="live" style="color:var(--ink-faint)">Registrat com a temps declarat · 5 ago, 10:14 → 10:29</div>
+      <div class="acts"><button class="btn" onclick="show('cRun')">Tornar a l'inici de la demo</button></div>
+      <div class="persist">La tasca segueix oberta: desar temps no la tanca. Acabar-la és el gest de sortida.</div>
+    </div>
+
+    <!-- 1e · descartat -->
+    <div class="card w hide" id="cDesc">
+      <div class="tkhead">
+        <div><div class="tkname">Patró CAD</div><div class="tkmeta">Vols descartar aquest temps?</div></div>
+        <span class="pill" style="background:var(--rej-bg);color:var(--rej)">DESCARTAR</span>
+      </div>
+      <p class="cap" style="margin:6px 0 14px">El tram s'esborra i no queda cap temps registrat per aquesta sessió. La tasca no es tanca.</p>
+      <div class="acts">
+        <button class="btn" onclick="show('cRun')">No, seguir</button>
+        <button class="btn pri" style="background:var(--rej);border-color:var(--rej)" onclick="show('cRun')">Sí, descartar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ 2 · INDICADOR ═══ -->
+  <h2><span class="n">2</span>Indicador de sessió · es queda, sense el botó d'acabar</h2>
+  <p class="cap">Diu què corre i des de quan. Ja no tanca res: el gest d'acabar viu a la sortida.</p>
+  <div class="ind"><span class="d"></span>Definició POM <span class="r">BRW-SS26-0002 · 42 min</span></div>
+
+  <!-- ═══ 3 · MODAL ═══ -->
+  <h2><span class="n">3</span>Modal d'acabar o pausar · en desar i sortir</h2>
+  <p class="cap">Central, intrusiu i conscient. Apareix en sortir d'una superfície de treball, no mentre s'hi treballa.</p>
+
+  <div class="stage">
+    <div class="ghost">
+      Taula de mesures · BRW-SS26-0002 · Bomber Jacket<br>
+      CH · CHEST WIDTH · 53,0 · 53,2<br>
+      B · WAIST WIDTH · 50,0 · 50,2<br>
+      BT · WAIST POSITION FROM HPS · 36,0 · 36,0<br>
+      D · BOTTOM WIDTH · 53,8 · 53,9<br>
+      E2 · ACROSS FRONT WIDTH · 35,5 · 35,6
+    </div>
+    <div class="veil">
+      <div class="modal">
+        <h3>Has acabat Definició POM?</h3>
+        <p class="ctx">Els canvis ja estan desats. El que decideixes ara és l'estat de la tasca.</p>
+
+        <div class="opt sel" onclick="pick(this)">
+          <span class="k">✓</span>
+          <span><span class="t">L'he acabat</span>
+            <span class="d">La tasca passa a feta i queda disponible per a l'albarà. Si després cal tocar-hi, s'obrirà una tasca nova.</span></span>
+        </div>
+        <div class="opt" onclick="pick(this)">
+          <span class="k">⏸</span>
+          <span><span class="t">La pauso, hi seguiré</span>
+            <span class="d">La tasca queda oberta i el rellotge s'atura. Torna al panell de tasques del model.</span></span>
+        </div>
+
+        <div class="mfoot">
+          <span class="tot">Aquesta sessió: <b>42 min</b> · total de la tasca: <b>3 h 18 min</b></span>
+          <span style="display:flex;gap:8px">
+            <button class="btn gh sm">Enrere</button>
+            <button class="btn pri sm">Confirmar</button>
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <b>Què fixen aquestes dues peces</b>
+    <ul>
+      <li><b>El crono viu al servidor.</b> Engegar-lo obre un tram real amb <code>origen='declarat'</code>. Sobreviu a F5, a canviar de pestanya i a tancar el navegador. Res a <code>localStorage</code>.</li>
+      <li><b>Sempre declarat</b>, també quan ve del crono: no hi ha batec d'escriptura darrere, i el corpus estadístic no es pot contaminar amb temps sense evidència d'activitat.</li>
+      <li><b>El guard d'inactivitat no toca els trams declarats.</b> No tenen batec per definició i la cron els mataria a mitja feina.</li>
+      <li><b>Engegar el crono merita el model</b>, igual que el primer batec d'escriptura ho fa a les internes. Un model que comença per una tasca externa també merita.</li>
+      <li><b>Desar temps no tanca la tasca.</b> Cap acció de desar tanca res: acabar és un gest propi.</li>
+      <li><b>El modal és central i té dues sortides reals</b>, cap d'elles per defecte silenciós. La conseqüència de cada opció està escrita a l'opció mateixa.</li>
+      <li><b>Es reposiciona al panell de tasques del model.</b> El Kanban no existeix i queda aparcat.</li>
+    </ul>
+  </div>
+
+  <div class="foot ask">
+    <b>Quatre coses que he decidit jo i que has de confirmar</b>
+    <ul>
+      <li><b>«Acabat» ve preseleccionat.</b> És el cas majoritari en sortir. Si prefereixes que no n'hi hagi cap de premarcat i obligui a triar, es treu.</li>
+      <li><b>El modal surt sempre en desar i sortir</b>, també si la sessió ha durat dos minuts. Alternativa: no sortir per sessions molt curtes — però llavors hi ha sortides sense decisió.</li>
+      <li><b>«Descartar» esborra el tram</b> i no deixa rastre. Si vols traça del descartat (qui i quan), cal desar-lo marcat en lloc d'esborrar-lo.</li>
+      <li><b>El crono no es pot pausar</b>, només aturar. Pausar-lo i reprendre'l voldria dir diversos trams per a una mateixa sessió declarada: es pot fer, però complica el que ara és una fila.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+const ids=['cRun','cStop','cMan','cOk','cDesc'];
+function show(id){ids.forEach(x=>document.getElementById(x).classList.toggle('hide',x!==id));}
+function mode(b,id){
+  b.parentNode.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');
+  document.getElementById('mDur').classList.toggle('hide',id!=='mDur');
+  document.getElementById('mRang').classList.toggle('hide',id!=='mRang');
+}
+function pick(el){el.parentNode.querySelectorAll('.opt').forEach(o=>o.classList.remove('sel'));el.classList.add('sel');}
+let s=872;
+setInterval(()=>{const c=document.getElementById('clk');
+  if(document.getElementById('cRun').classList.contains('hide'))return;
+  s++;const h=String(Math.floor(s/3600)).padStart(2,'0'),m=String(Math.floor(s%3600/60)).padStart(2,'0'),g=String(s%60).padStart(2,'0');
+  c.textContent=`${h}:${m}:${g}`;},1000);
+</script>
+</body>
+</html>

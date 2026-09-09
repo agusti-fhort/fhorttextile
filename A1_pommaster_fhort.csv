@@ -1,0 +1,397 @@
+schema,pk,codi_client,nom_client,pom_global_codi,pom_global_nom_en,pom_global_categoria,categoria_codi,categoria_nom_ca,categoria_body_area,actiu,pendent_revisio,origen_import,tolerancia_default_minus,tolerancia_default_plus,notes,n_POMEstadisticaTenant,n_CustomerPOMAlias,n_GarmentPOMMap,n_GarmentTypePOMMap,n_GarmentGroupPOMMap,n_ItemBaseMeasurement,n_GradingRule,n_ClientMesuraPerfil,n_BaseMeasurement,n_MeasurementChangeLog,n_ModelGradingOverride,n_ModelGradingRule,n_POMPlacement,n_POMAlert,n_GradedSpec,n_PatternPOM,ORFE_sense_alias
+fhort,506,0,Back opening length,,,,CAT-UB,Part superior del cos,UPPER,True,True,030e788a-53e3-41ac-94f0-0102bf949332,0.60,0.60,"Creat automàticament per import, fitxa 030e788a-53e3-41ac-94f0-0102bf949332",0,0,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,383,1-M76,Lining Length at Center Back,,,,,,,True,False,Olivia Dress (REPRIS-26-SS-0001),0.60,0.60,Creat automàticament des d'importació. Codi original: 1. Requereix revisió.,0,0,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,515,A,FRONT WIDTH LOCATION,LOSPOM-515,FRONT WIDTH LOCATION,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,2,0,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,False
+fhort,419,A.1,FRONT WIDTH,,,,CAT-UB,Part superior del cos,UPPER,False,True,d4f50ff5-286a-4017-bfd8-5d43de67b301,0.60,0.60,"Creat automàticament per import, fitxa d4f50ff5-286a-4017-bfd8-5d43de67b301",0,0,0,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,True
+fhort,466,A1,Underbust width,,,,,,,True,True,diccionari:BRW:2026-07-13,0.60,0.60,Creat des del diccionari del client BRW (2026-07-13).,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,420,A.2,Across back width (11cm from HPS),,,,CAT-UB,Part superior del cos,UPPER,True,True,d4f50ff5-286a-4017-bfd8-5d43de67b301,0.60,0.60,"Creat automàticament per import, fitxa d4f50ff5-286a-4017-bfd8-5d43de67b301",0,1,0,ERR,ERR,0,5,0,0,0,0,0,0,0,0,0,False
+fhort,517,A2,BACK WIDTH,,,,,,,False,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,0,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,516,A3,BACK WIDTH LOCATION,LOSPOM-516,BACK WIDTH LOCATION,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,584,AB,CONTOUR COLLAR TOTAL,LOSPOM-584,CONTOUR COLLAR TOTAL,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,2,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,280,AC BK,Across back,POM-008,Across back,Upper body,Upper body,Part superior del cos,,True,False,,0.60,0.60,,0,1,28,ERR,ERR,1,17,0,0,0,0,0,0,0,0,0,False
+fhort,404,AC BK STR,Across back (stretched),POM-141,Across back (stretched),Upper body,Upper body,Part superior del cos,,True,False,,0.60,0.60,,0,0,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,279,AC FR,Across front,POM-007,Across front,Upper body,Upper body,Part superior del cos,,True,False,,0.60,0.60,,0,1,27,ERR,ERR,1,19,0,0,0,0,0,0,0,0,0,False
+fhort,403,AC FR STR,Across front (stretched),POM-140,Across front (stretched),Upper body,Upper body,Part superior del cos,,True,False,,0.60,0.60,,0,0,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,278,AC SH,Across shoulder (back),POM-006,Across shoulder (back),Upper body,Upper body,Part superior del cos,,True,False,,0.60,0.60,,0,2,31,ERR,ERR,1,14,0,0,0,0,0,0,0,0,0,False
+fhort,317,AG,Ankle girth,POM-049,Ankle girth,Lower body,Lower body,Part inferior del cos,,True,False,,0.60,0.60,Add: ISO §5.3.26. Ankle trousers/boots.,0,0,0,ERR,ERR,0,7,0,0,0,0,0,0,0,0,0,True
+fhort,285,AH CIRC,Armhole circumference,POM-013,Armhole circumference,Upper body,Upper body,Part superior del cos,,True,False,,0.60,0.60,,0,0,31,ERR,ERR,1,5,0,0,0,0,0,0,0,0,0,True
+fhort,284,AH DEP,Armhole depth,POM-012,Armhole depth,Upper body,Upper body,Part superior del cos,,True,False,,0.60,0.60,,0,3,31,ERR,ERR,1,24,0,0,0,0,0,1,0,0,0,False
+fhort,432,AW,ARTWORK POSITION,,,,CAT-UB,Part superior del cos,UPPER,True,True,28fb6e93-6c16-46b9-8ac6-67772dfb9cbd,0.60,0.60,"Creat automàticament per import, fitxa 28fb6e93-6c16-46b9-8ac6-67772dfb9cbd",0,0,1,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,True
+fhort,518,B1,CHEST WIDTH RELAXED,,,,,,,False,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,0,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,519,B2,CHEST WIDTH EXTENDED,,,,,,,False,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,0,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,520,B3,FRONT CHEST WIDTH,LOSPOM-520,FRONT CHEST WIDTH,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,2,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,652,B4,BACK CHEST WIDTH,LOSPOM-652,BACK CHEST WIDTH,LOSAN,,,,True,True,LOS diccionari 4B-bis,0.60,0.60,,0,1,2,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,364,BELT HS,Belt hole spacing,POM-125,Belt hole spacing,Accessories,Accessories,Accessoris,,True,False,,0.60,0.60,Accessory belt. Standard spacing typically 2.5 cm.,0,0,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,362,BELT L,Belt length,POM-123,Belt length,Accessories,Accessories,Accessoris,,True,False,,0.60,0.60,Accessory belt. BELT group.,0,3,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,363,BELT W,Belt width,POM-124,Belt width,Accessories,Accessories,Accessoris,,True,False,,0.60,0.60,Accessory belt. BELT group.,0,2,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,377,BIB H,Bib height,POM-138,Bib height,Technical / Workwear,Technical / Workwear,Tècnic / Laboral,,True,False,,0.60,0.60,"Dungarees, workwear salopettes, bib overalls.",0,0,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,295,BIC,Sleeve width at bicep,POM-023,Sleeve width at bicep,Sleeve,Sleeve,Màniga,,True,False,,0.60,0.60,,0,3,34,ERR,ERR,1,27,0,0,0,0,0,0,0,0,0,False
+fhort,418,BJ,FRONT & BACK WIDTH LOCATION,,,,CAT-UB,Part superior del cos,UPPER,True,True,d4f50ff5-286a-4017-bfd8-5d43de67b301,0.60,0.60,"Creat automàticament per import, fitxa d4f50ff5-286a-4017-bfd8-5d43de67b301",0,1,0,ERR,ERR,0,3,0,0,0,0,0,0,0,0,0,False
+fhort,514,BJ,FRONT&BACK WIDTH LOCATION,LOSPOM-514,FRONT & BACK WIDTH LOCATION,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,11,ERR,ERR,0,12,0,0,0,0,0,0,0,0,0,False
+fhort,490,BL,Fold length,,,,,,,True,True,diccionari:BRW:2026-07-13,0.60,0.60,Creat des del diccionari del client BRW (2026-07-13).,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,282,BL CB,Body length (CB),POM-010,Body length (CB),Upper body,Upper body,Part superior del cos,,True,False,,0.60,0.60,,0,0,37,ERR,ERR,1,10,0,0,0,0,0,0,0,0,0,True
+fhort,281,BL HPS,Body length (HPS front),POM-009,Body length (HPS front),Upper body,Upper body,Part superior del cos,,True,False,,0.60,0.60,,0,0,37,ERR,ERR,1,18,0,0,0,0,0,0,0,0,0,True
+fhort,333,BL KN RLX,"Body length (knitwear, relaxed)",POM-082,"Body length (knitwear, relaxed)",Knitwear-specific,Knitwear-specific,Específic de punt,,True,False,,0.60,0.60,,0,0,4,ERR,ERR,0,3,0,0,0,0,0,0,0,0,0,True
+fhort,487,BR,FLY WIDTH,LOSPOM-487,FLY WIDTH,LOSAN,,,,True,True,diccionari:BRW:2026-07-13,0.60,0.60,Creat des del diccionari del client BRW (2026-07-13).,0,2,2,ERR,ERR,0,3,0,0,0,0,0,0,0,0,0,False
+fhort,488,BR1,Fly length,,,,,,,True,True,diccionari:BRW:2026-07-13,0.60,0.60,Creat des del diccionari del client BRW (2026-07-13).,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,467,BT,Waist position from HPS,,,,,,,True,True,diccionari:BRW:2026-07-13,0.60,0.60,Creat des del diccionari del client BRW (2026-07-13).,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,342,BTN SP,Button spacing,POM-091,Button spacing,Closure / Detail,Closure / Detail,Tancament / Detall,,True,False,,0.60,0.60,,0,1,15,ERR,ERR,1,1,0,0,0,0,0,0,0,0,0,False
+fhort,491,BW,Fold width,,,,,,,True,True,diccionari:BRW:2026-07-13,0.60,0.60,Creat des del diccionari del client BRW (2026-07-13).,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,686,C.1,WAIST WIDTH EXTENDED,,,,CAT-UB,Part superior del cos,UPPER,True,True,20de40e7-f86b-472f-a514-c0f7637509d0,0.60,0.60,"Creat automàticament per import, fitxa 20de40e7-f86b-472f-a514-c0f7637509d0",0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,471,C1,STRETCHED HIP WIDTH,,,,,,,True,True,diccionari:BRW:2026-07-13,0.60,0.60,Creat des del diccionari del client BRW (2026-07-13).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,524,C1,WAIST WIDTH EXTENDED,LOSPOM-524,WAIST WIDTH EXTENDED,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,5,ERR,ERR,0,4,0,0,0,0,0,0,0,0,0,False
+fhort,617,C12,INNER ELASTIC WAIST LOCATION,LOSPOM-617,INNER ELASTIC WAIST LOCATION,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,2,5,ERR,ERR,0,3,0,0,0,0,0,0,0,0,0,False
+fhort,669,C.13,BUTTONHOLE LOCATION,LOSPOM-669,BUTTONHOLE LOCATION,LOSAN,,,,True,True,LOS diccionari 4B-bis,0.60,0.60,,0,2,5,ERR,ERR,0,4,0,0,0,0,0,0,0,0,0,False
+fhort,385,C.14-M79,EYELET LOCATION,LOSPOM-385,EYELET LOCATION,LOSAN,,,,True,False,SS26 TROUSERS TWILL (14-26-SS-0002),0.60,0.60,Creat automàticament des d'importació. Codi original: C.14. Requereix revisió.,0,3,0,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,False
+fhort,525,C2,FRONT WAIST WIDTH RELAXED,LOSPOM-525,FRONT WAIST WIDTH RELAXED,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,521,C3,WAIST LOCATION,LOSPOM-521,WAIST LOCATION,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,False
+fhort,685,C.4,WAIST WIDTH RELAXED,,,,CAT-UB,Part superior del cos,UPPER,True,True,20de40e7-f86b-472f-a514-c0f7637509d0,0.60,0.60,"Creat automàticament per import, fitxa 20de40e7-f86b-472f-a514-c0f7637509d0",0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,523,C4,WAIST WIDTH RELAXED,LOSPOM-523,WAIST WIDTH RELAXED,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,5,ERR,ERR,0,4,0,0,0,0,0,0,0,0,0,False
+fhort,526,C5,BACK WAIST WIDTH RELAXED,LOSPOM-526,BACK WAIST WIDTH RELAXED,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,527,C6,BACK WAIST EXTENDED,LOSPOM-527,BACK WAIST EXTENDED,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,673,CB,FRONT CUT LOCATION,LOSPOM-673,FRONT CUT LOCATION,LOSAN,,,,True,True,LOS diccionari 4B-bis,0.60,0.60,,0,1,1,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,721,CB L TOT,Back center total length,,,,,,,True,True,BRW-CATALEG-v3,0.60,0.60,,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,720,CF L TOT,Front center total length,,,,,,,True,True,BRW-CATALEG-v3,0.60,0.60,,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,316,CG,Calf girth,POM-048,Calf girth,Lower body,Lower body,Part inferior del cos,,True,False,,0.60,0.60,Add: ISO §5.3.24. Boot-cut trousers.,0,0,0,ERR,ERR,0,10,0,0,0,0,0,0,0,0,0,True
+fhort,273,CH,Chest width,POM-001,Chest width,Upper body,Upper body,Part superior del cos,,True,False,,0.60,0.60,,0,5,36,ERR,ERR,1,36,6,0,0,0,0,0,0,0,0,False
+fhort,274,CH CIRC,Chest circumference,POM-002,Chest circumference,Upper body,Upper body,Part superior del cos,,True,False,,0.60,0.60,,0,0,4,ERR,ERR,0,5,0,0,0,0,0,0,0,0,0,True
+fhort,378,CH PKT CF,Chest patch pocket position (CF),POM-139,Chest patch pocket position (CF),Technical / Workwear,Technical / Workwear,Tècnic / Laboral,,True,False,,0.60,0.60,"Workwear shirts, polo workwear, technical tops.",0,0,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,354,CH PKT POS,Pocket position from side seam,POM-103,Chest pocket position,Jacket / Coat,Jacket / Coat,Jaqueta / Abric,,True,False,,0.60,0.60,,0,1,6,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,331,CH RLX,Chest width (relaxed),POM-080,Chest width (relaxed),Knitwear-specific,Knitwear-specific,Específic de punt,,True,False,,0.60,0.60,,0,1,4,ERR,ERR,0,6,0,0,0,0,0,0,0,0,0,False
+fhort,332,CH STR,Chest width (stretched),POM-081,Chest width (stretched),Knitwear-specific,Knitwear-specific,Específic de punt,,True,False,,0.60,0.60,,0,1,4,ERR,ERR,0,5,0,0,0,0,0,0,0,0,0,False
+fhort,522,CL,WAIST JOIN,LOSPOM-522,WAIST JOIN,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,1,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,305,COL H CB,Collar height (CB stand),POM-034,Collar height (CB stand),Collar / Neckline,Collar / Neckline,Coll / Escot,,True,False,,0.60,0.60,,0,0,10,ERR,ERR,1,7,1,0,0,0,0,0,0,0,0,True
+fhort,306,COL H CF,Collar height (CF),POM-035,Collar height (CF),Collar / Neckline,Collar / Neckline,Coll / Escot,,True,False,,0.60,0.60,,0,0,10,ERR,ERR,1,7,0,0,0,0,0,0,0,0,0,True
+fhort,304,COL L,Collar length,POM-033,Collar length,Collar / Neckline,Collar / Neckline,Coll / Escot,,True,False,,0.60,0.60,,0,0,10,ERR,ERR,1,7,0,0,0,0,0,0,0,0,0,True
+fhort,725,CR3,Crotch width placement,,,,,,,True,True,BRW-CATALEG-v3,0.60,0.60,,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,413,CR L,Crotch length,POM-150,Crotch length,Rise,Rise,Tiro,,True,False,,0.60,0.60,,0,2,4,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,False
+fhort,299,CUF H,Cuff height,POM-027,Cuff height,Sleeve,Sleeve,Màniga,,True,False,,0.60,0.60,,0,3,16,ERR,ERR,1,15,0,0,0,0,0,0,0,0,0,False
+fhort,335,CUP,Bust cup depth (calculated),POM-084,Bust cup depth (calculated),Upper body,Upper body,Part superior del cos,,True,False,,0.60,0.60,Add: ISO §5.7.7. Bra/swimwear development.,0,0,3,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,337,CUP H,Bikini top / Bra cup height,POM-086,Bikini top / Bra cup height,Swimwear-specific,Swimwear-specific,Específic de bany,,True,False,,0.60,0.60,,0,0,6,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,True
+fhort,336,CUP W,Bikini top / Bra cup width,POM-085,Bikini top / Bra cup width,Swimwear-specific,Swimwear-specific,Específic de bany,,True,False,,0.60,0.60,,0,0,6,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,True
+fhort,436,D,1/2 bottom width relaxed,,,,CAT-UB,Part superior del cos,UPPER,True,True,4e79eb3f-6840-46af-962d-ac84fcd34e47,0.60,0.60,"Creat automàticament per import, fitxa 4e79eb3f-6840-46af-962d-ac84fcd34e47",0,0,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,True
+fhort,528,D,HIP WIDTH,,,,,,,False,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,0,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,500,D1,1/2 bottom width extended,,,,CAT-UB,Part superior del cos,UPPER,True,True,030e788a-53e3-41ac-94f0-0102bf949332,0.60,0.60,"Creat automàticament per import, fitxa 030e788a-53e3-41ac-94f0-0102bf949332",0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,386,D.11-M79,HIP LOCATION,LOSPOM-386,HIP LOCATION,LOSAN,,,,True,False,SS26 TROUSERS TWILL (14-26-SS-0002),0.60,0.60,Creat automàticament des d'importació. Codi original: D.11. Requereix revisió.,0,2,7,ERR,ERR,0,9,0,0,0,0,0,0,0,0,0,False
+fhort,538,D18,FRONT CROTCH WIDTH LOCATION,LOSPOM-538,FRONT CROTCH WIDTH LOCATION,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,1,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,540,D19,BACK CROTCH WIDTH LOCATION,LOSPOM-540,BACK CROTCH WIDTH LOCATION,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,1,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,379,D1-M76,Waist Position,,,,,,,True,False,Olivia Dress (REPRIS-26-SS-0001),0.60,0.60,Creat automàticament des d'importació. Codi original: D1. Requereix revisió.,0,0,0,ERR,ERR,0,0,1,0,0,0,0,1,0,0,0,True
+fhort,529,D22,KNEE LOCATION,LOSPOM-529,KNEE LOCATION,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,2,5,ERR,ERR,0,6,0,0,0,0,0,0,0,0,0,False
+fhort,539,D6,FRONT CROTCH WIDTH,LOSPOM-539,FRONT CROTCH WIDTH,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,2,1,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,False
+fhort,541,D7,BACK CROTCH WIDTH,LOSPOM-541,BACK CROTCH WIDTH,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,2,1,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,False
+fhort,746,DL,Total dress lenght,,,,,,,True,True,model:BRW-SS26-0003,0.60,0.60,,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,325,DR L HPS,Dress length (HPS),POM-061,Dress length (HPS),Skirt / Dress,Skirt / Dress,Faldilla / Vestit,,True,False,,0.60,0.60,,0,0,10,ERR,ERR,0,7,0,0,0,0,0,0,0,0,0,True
+fhort,653,E.1,FRONT BOTTOM WIDTH,LOSPOM-653,FRONT BOTTOM WIDTH,LOSAN,,,,True,True,LOS diccionari 4B-bis,0.60,0.60,,0,1,2,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,454,E1,Shoulder seam,,,,CAT-UB,Part superior del cos,UPPER,True,True,6de5fe49-1f42-426e-a577-ba2916d82f42,0.60,0.60,"Creat automàticament per import, fitxa 6de5fe49-1f42-426e-a577-ba2916d82f42",0,0,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,380,E1-M76,Hip position,,,,,,,True,False,Olivia Dress (REPRIS-26-SS-0001),0.60,0.60,Creat automàticament des d'importació. Codi original: E1. Requereix revisió.,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,654,E.2,BACK BOTTOM WIDTH,LOSPOM-654,BACK BOTTOM WIDTH,LOSAN,,,,True,True,LOS diccionari 4B-bis,0.60,0.60,,0,1,2,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,465,E2,Across front width (11cm from HPS),,,,,,,True,True,diccionari:BRW:2026-07-13,0.60,0.60,Creat des del diccionari del client BRW (2026-07-13).,0,1,0,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,False
+fhort,534,E3,BOTTOM WIDTH RELAXED,LOSPOM-534,BOTTOM WIDTH RELAXED,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,455,E4,Shoulder forward,,,,CAT-UB,Part superior del cos,UPPER,True,True,6de5fe49-1f42-426e-a577-ba2916d82f42,0.60,0.60,"Creat automàticament per import, fitxa 6de5fe49-1f42-426e-a577-ba2916d82f42",0,1,0,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,False
+fhort,535,E4,BOTTOM WIDTH EXTENDED,LOSPOM-535,BOTTOM WIDTH EXTENDED,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,536,E5,FRONT BOTTOM WIDTH,LOSPOM-536,FRONT BOTTOM WIDTH,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,474,E6,Front collar panel height,,,,,,,True,True,diccionari:BRW:2026-07-13,0.60,0.60,Creat des del diccionari del client BRW (2026-07-13).,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,475,E7,Center collar panel height,,,,,,,True,True,diccionari:BRW:2026-07-13,0.60,0.60,Creat des del diccionari del client BRW (2026-07-13).,0,1,0,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,False
+fhort,537,E7,BOTTOM HEIGHT,LOSPOM-537,BOTTOM HEIGHT,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,430,E.8,BOTTOM DIFFERENCE,LOSPOM-430,BOTTOM DIFERENCE,LOSAN,CAT-UB,Part superior del cos,UPPER,True,True,28fb6e93-6c16-46b9-8ac6-67772dfb9cbd,0.60,0.60,"Creat automàticament per import, fitxa 28fb6e93-6c16-46b9-8ac6-67772dfb9cbd",0,1,4,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,False
+fhort,476,E8,Collar panel length,,,,,,,True,True,diccionari:BRW:2026-07-13,0.60,0.60,Creat des del diccionari del client BRW (2026-07-13).,0,1,0,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,False
+fhort,433,E.8-2,Difference Bottom,,,,CAT-UB,Part superior del cos,UPPER,True,True,fd5a41ee-dc32-499e-8716-fc669c7e34b5,0.60,0.60,"Creat automàticament per import, fitxa fd5a41ee-dc32-499e-8716-fc669c7e34b5",0,0,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,True
+fhort,477,E88,Collar join,,,,,,,True,True,diccionari:BRW:2026-07-13,0.60,0.60,Creat des del diccionari del client BRW (2026-07-13).,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,683,E.9,BOTTOM MOTIVE LOCATION,LOSPOM-683,BOTTOM MOTIVE LOCATION,LOSAN,,,,True,True,LOS màster delta v1,0.60,0.60,,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,290,EG,Elbow girth,POM-018,Elbow girth,Sleeve,Sleeve,Màniga,,True,False,,0.60,0.60,Add: ISO §5.3.17. Fitted jackets/sleeves.,0,0,0,ERR,ERR,0,5,0,0,0,0,0,0,0,0,0,True
+fhort,463,EK1,Front neck drop from HPS to seam,,,,,,,True,True,diccionari:BRW:2026-07-13,0.60,0.60,Creat des del diccionari del client BRW (2026-07-13).,0,1,0,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,False
+fhort,464,EK2,Back neck drop from HPS to seam,,,,,,,True,True,diccionari:BRW:2026-07-13,0.60,0.60,Creat des del diccionari del client BRW (2026-07-13).,0,1,0,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,False
+fhort,462,EKK,Back neckline width,,,,,,,True,True,diccionari:BRW:2026-07-13,0.60,0.60,Creat des del diccionari del client BRW (2026-07-13).,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,478,EL,FLAP WIDTH,,,,,,,True,True,diccionari:BRW:2026-07-13,0.60,0.60,Creat des del diccionari del client BRW (2026-07-13).,0,2,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,296,ELB,Sleeve width at elbow,POM-024,Sleeve width at elbow,Sleeve,Sleeve,Màniga,,True,False,,0.60,0.60,,0,3,31,ERR,ERR,1,6,0,0,0,0,0,0,0,0,0,False
+fhort,734,ELB PCH POS,Elbow patch placement,,,,,,,True,True,BRW-CATALEG-v3,0.60,0.60,,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,415,EL EXT,Elastic extended,POM-152,Elastic extended,Waistband,Waistband,Cinturó,,True,False,,0.60,0.60,,0,1,3,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,416,EL POS,Elastic placement,POM-153,Elastic location,Waistband,Waistband,Cinturó,,True,False,,0.60,0.60,,0,1,3,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,414,EL RLX,Elastic relaxed,POM-151,Elastic relaxed,Waistband,Waistband,Cinturó,,True,False,,0.60,0.60,,0,1,6,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,350,EL WA RLX,Elastic waist width (relaxed),POM-099,Elastic waist width (relaxed),Closure / Detail,Closure / Detail,Tancament / Detall,,True,False,,0.60,0.60,,0,0,18,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,408,EL WA STR,Elastic waist (stretched),POM-145,Elastic waist (stretched),Waistband,Waistband,Cinturó,,True,False,,0.60,0.60,,0,0,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,456,EP,Collar height at CB,,,,CAT-UB,Part superior del cos,UPPER,True,True,6de5fe49-1f42-426e-a577-ba2916d82f42,0.60,0.60,"Creat automàticament per import, fitxa 6de5fe49-1f42-426e-a577-ba2916d82f42",0,1,0,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,False
+fhort,674,EV,WAIST HEIGHT STITCHING,LOSPOM-674,WAIST HEIGHT STITCHING,LOSAN,,,,True,True,LOS diccionari 4B-bis,0.60,0.60,,0,1,1,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,437,F,Centre front length from HPS,,,,CAT-UB,Part superior del cos,UPPER,True,True,4e79eb3f-6840-46af-962d-ac84fcd34e47,0.60,0.60,"Creat automàticament per import, fitxa 4e79eb3f-6840-46af-962d-ac84fcd34e47",0,1,0,ERR,ERR,0,3,0,0,0,0,0,0,0,0,0,False
+fhort,530,F1,FRONT LEG OPENING,LOSPOM-530,FRONT LEG OPENING,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,384,F1-M76,Lining Bottom Width Along Hem,,,,,,,True,False,Olivia Dress (REPRIS-26-SS-0001),0.60,0.60,Creat automàticament des d'importació. Codi original: F1. Requereix revisió.,0,0,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,531,F2,BACK LEG OPENING,LOSPOM-531,BACK LEG OPENING,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,687,F.5,LEG OPENING RELAXED,,,,CAT-UB,Part superior del cos,UPPER,True,True,20de40e7-f86b-472f-a514-c0f7637509d0,0.60,0.60,"Creat automàticament per import, fitxa 20de40e7-f86b-472f-a514-c0f7637509d0",0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,532,F5,LEG OPENING RELAXED,LOSPOM-532,LEG OPENING RELAXED,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,3,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,688,F.6,LEG OPENING EXTENDED,,,,CAT-UB,Part superior del cos,UPPER,True,True,20de40e7-f86b-472f-a514-c0f7637509d0,0.60,0.60,"Creat automàticament per import, fitxa 20de40e7-f86b-472f-a514-c0f7637509d0",0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,533,F6,LEG OPENING EXTENDED,LOSPOM-533,LEG OPENING EXTENDED,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,3,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,438,FF,Centre back length from HPS,,,,CAT-UB,Part superior del cos,UPPER,True,True,4e79eb3f-6840-46af-962d-ac84fcd34e47,0.60,0.60,"Creat automàticament per import, fitxa 4e79eb3f-6840-46af-962d-ac84fcd34e47",0,1,0,ERR,ERR,0,3,0,0,0,0,0,0,0,0,0,False
+fhort,470,FJ,Wingspan length,,,,,,,True,True,diccionari:BRW:2026-07-13,0.60,0.60,Creat des del diccionari del client BRW (2026-07-13).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,401,FLO EXT,Flounce extended,POM-075,Flounce extended,Hem / Finish,Hem / Finish,Baix de peça / Acabat,,True,False,,0.60,0.60,,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,402,FLO POS,Flounce location,POM-076,Flounce location,Placement,Placement,Col·locació,,True,False,,0.60,0.60,,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,400,FLO W,Flounce width,POM-074,Flounce width,Hem / Finish,Hem / Finish,Baix de peça / Acabat,,True,False,,0.60,0.60,,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,509,FP,SHOULDER PIECE WIDTH,LOSPOM-509,SHOULDER PIECE WIDTH,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,472,FR,Knee position,,,,,,,True,True,diccionari:BRW:2026-07-13,0.60,0.60,Creat des del diccionari del client BRW (2026-07-13).,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,726,FS5,Lining length difference,,,,,,,True,True,BRW-CATALEG-v3,0.60,0.60,,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,745,FSEL,Side seam lenght,,,,,,,True,True,model:BRW-SS26-0003,0.60,0.60,,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,473,FT,Pants length (outseam),,,,,,,True,True,diccionari:BRW:2026-07-13,0.60,0.60,Creat des del diccionari del client BRW (2026-07-13).,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,409,FT FR L,Front foot length,POM-146,Front foot length,Lower body,Lower body,Part inferior del cos,,True,False,,0.60,0.60,,0,0,1,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,410,FT L,Foot length,POM-147,Foot length,Lower body,Lower body,Part inferior del cos,,True,False,,0.60,0.60,,0,0,1,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,411,FT W,Foot width,POM-148,Foot width,Lower body,Lower body,Part inferior del cos,,True,False,,0.60,0.60,,0,0,1,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,412,FT W POS,Foot width location,POM-149,Foot width location,Lower body,Lower body,Part inferior del cos,,True,False,,0.60,0.60,,0,0,1,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,453,G1,Bottom hem height,,,,CAT-UB,Part superior del cos,UPPER,True,True,6de5fe49-1f42-426e-a577-ba2916d82f42,0.60,0.60,"Creat automàticament per import, fitxa 6de5fe49-1f42-426e-a577-ba2916d82f42",0,1,0,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,False
+fhort,428,G1-M76,Front Body Length (from HPS),,,,,,,True,True,,0.60,0.60,,0,0,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,381,G2s-M76,Body length,,,,,,,True,False,Olivia Dress (REPRIS-26-SS-0001),0.60,0.60,Creat automàticament des d'importació. Codi original: G2s. Requereix revisió.,0,1,0,ERR,ERR,0,1,1,0,0,0,0,0,0,0,0,False
+fhort,680,G.3,SLEEVE SHORT LENGTH,LOSPOM-680,SLEEVE SHORT LENGTH,LOSAN,,,,True,True,LOS màster delta v1,0.60,0.60,,0,1,0,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,False
+fhort,552,G5,ELBOW LOCATION,LOSPOM-552,ELBOW LOCATION,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,550,GA,SLEEVE INSEAM LENGTH,LOSPOM-550,SLEEVE INSEAM LENGTH,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,2,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,374,GAITER H,Neck gaiter height,POM-135,Neck gaiter height,Technical / Workwear,Technical / Workwear,Tècnic / Laboral,,True,False,,0.60,0.60,Technical outerwear with integrated neck tube.,0,0,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,723,GD,Godet length at longest point,,,,,,,True,True,BRW-CATALEG-v3,0.60,0.60,,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,724,GD1,Godet length at the seams,,,,,,,True,True,BRW-CATALEG-v3,0.60,0.60,,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,558,GL,CUFF OPENING INNER,LOSPOM-558,CUFF OPENING INNER,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,560,GM,CUFF DIFFERENCE,LOSPOM-560,CUFF DIFFERENCE,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,559,GN,CUFF HEIGHT INNER,LOSPOM-559,CUFF HEIGHT INNER,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,353,GORGE,Gorge line position,POM-102,Gorge line position,Jacket / Coat,Jacket / Coat,Jaqueta / Abric,,True,False,,0.60,0.60,,0,0,2,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,423,H,SLEEVE MUSCLE (1/2),,,,CAT-UB,Part superior del cos,UPPER,False,True,d4f50ff5-286a-4017-bfd8-5d43de67b301,0.60,0.60,"Creat automàticament per import, fitxa d4f50ff5-286a-4017-bfd8-5d43de67b301",0,0,0,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,True
+fhort,551,H,SLEEVE MUSCLE,,,,,,,False,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,0,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,553,H11,SLEEVE OPENING,,,,,,,False,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,0,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,681,H.12,SLEEVE SHORT OPENING,LOSPOM-681,SLEEVE SHORT OPENING,LOSAN,,,,True,True,LOS màster delta v1,0.60,0.60,,0,2,0,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,False
+fhort,554,H14,SLEEVE OPENING EXTENDED,LOSPOM-554,SLEEVE OPENING EXTENDED,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,555,H15,WIDTH BEFORE CUFF EXTENDED,LOSPOM-555,WIDTH BEFORE CUFF EXTENDED,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,2,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,False
+fhort,556,H16,CUFF OPENING,LOSPOM-556,CUFF/LEG OPENING,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,3,ERR,ERR,0,4,0,0,0,0,0,0,0,0,0,False
+fhort,557,H17,CUFF LENGTH,LOSPOM-557,CUFF LENGTH,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,4,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,547,H7,ARMHOLE POINT LOCATION,LOSPOM-547,ARMHOLE POINT LOCATION,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,548,H8,FRONT ARMHOLE,LOSPOM-548,FRONT ARMHOLE,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,False
+fhort,549,H9,BACK ARMHOLE,LOSPOM-549,BACK ARMHOLE,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,358,HC,Head circumference,POM-113,Head circumference,Placement,Placement,Col·locació,,True,False,,0.60,0.60,"Add: ISO §5.3.1. Hats, hoods, childrenswear head openings.",0,0,0,ERR,ERR,0,3,0,0,0,0,0,0,0,0,0,True
+fhort,346,HD H,Hood height,POM-095,Hood height,Closure / Detail,Closure / Detail,Tancament / Detall,,True,False,,0.60,0.60,,0,0,5,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,True
+fhort,347,HD W,Hood width,POM-096,Hood width,Closure / Detail,Closure / Detail,Tancament / Detall,,True,False,,0.60,0.60,,0,2,7,ERR,ERR,0,6,0,0,0,0,0,0,0,0,0,False
+fhort,328,HEM ALL,Hem allowance,POM-071,Hem allowance,Hem / Finish,Hem / Finish,Baix de peça / Acabat,,True,False,,0.60,0.60,,0,0,41,ERR,ERR,1,7,0,0,0,0,0,0,0,0,0,True
+fhort,327,HEM W,Bottom hem width,POM-070,Bottom hem width,Hem / Finish,Hem / Finish,Baix de peça / Acabat,,True,False,,0.60,0.60,,0,0,41,ERR,ERR,1,14,0,0,0,0,0,0,0,0,0,True
+fhort,276,HI,Hip width,POM-004,Hip width (top),Upper body,Upper body,Part superior del cos,,True,False,,0.60,0.60,,0,1,31,ERR,ERR,1,18,1,0,0,0,0,0,0,0,0,False
+fhort,308,HI PA,Hip width (pants),POM-040,Hip width (pants),Lower body,Lower body,Part inferior del cos,,True,False,,0.60,0.60,,0,1,17,ERR,ERR,0,27,0,0,0,0,0,0,0,0,0,False
+fhort,405,HI RLX,Hip width (relaxed),POM-142,Hip width (relaxed),Lower body,Lower body,Part inferior del cos,,True,False,,0.60,0.60,,0,0,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,406,HI STR,Hip width (stretched),POM-143,Hip width (stretched),Lower body,Lower body,Part inferior del cos,,True,False,,0.60,0.60,,0,0,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,417,HM L,Half moon length,POM-154,Half moon length,Closure / Detail,Closure / Detail,Tancament / Detall,,True,False,,0.60,0.60,,0,1,3,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,False
+fhort,503,I,Sleeve length,,,,CAT-UB,Part superior del cos,UPPER,True,True,030e788a-53e3-41ac-94f0-0102bf949332,0.60,0.60,"Creat automàticament per import, fitxa 030e788a-53e3-41ac-94f0-0102bf949332",0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,469,I2,Sleeve hem width,,,,,,,True,True,diccionari:BRW:2026-07-13,0.60,0.60,Creat des del diccionari del client BRW (2026-07-13).,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,461,I3,Cuff slit,,,,CAT-UB,Part superior del cos,UPPER,True,True,6de5fe49-1f42-426e-a577-ba2916d82f42,0.60,0.60,"Creat automàticament per import, fitxa 6de5fe49-1f42-426e-a577-ba2916d82f42",0,2,0,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,False
+fhort,504,I4,Sleeve length from CB over shoulderpoint (incl cuff),,,,CAT-UB,Part superior del cos,UPPER,True,True,030e788a-53e3-41ac-94f0-0102bf949332,0.60,0.60,"Creat automàticament per import, fitxa 030e788a-53e3-41ac-94f0-0102bf949332",0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,495,IC,ELBOW POSITION,,,,,,,True,True,diccionari:BRW:2026-07-13,0.60,0.60,Creat des del diccionari del client BRW (2026-07-13).,0,0,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,496,IC1,Elbow patch width,,,,,,,True,True,diccionari:BRW:2026-07-13,0.60,0.60,Creat des del diccionari del client BRW (2026-07-13).,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,497,IC2,ELBOW LENGTH,LOSPOM-497,BOW LENGTH,LOSAN,,,,True,True,diccionari:BRW:2026-07-13,0.60,0.60,Creat des del diccionari del client BRW (2026-07-13).,0,3,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,312,INS,Inseam length,POM-044,Inseam length,Lower body,Lower body,Part inferior del cos,,True,False,,0.60,0.60,,0,1,15,ERR,ERR,0,17,0,0,0,0,0,0,0,0,0,False
+fhort,459,J,1/2 Bicep width,,,,CAT-UB,Part superior del cos,UPPER,True,True,6de5fe49-1f42-426e-a577-ba2916d82f42,0.60,0.60,"Creat automàticament per import, fitxa 6de5fe49-1f42-426e-a577-ba2916d82f42",0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,460,J1,Sleeve opening relaxed,LOSPOM-460,SLEEVE OPENING RELAXED,LOSAN,CAT-UB,Part superior del cos,UPPER,True,True,6de5fe49-1f42-426e-a577-ba2916d82f42,0.60,0.60,"Creat automàticament per import, fitxa 6de5fe49-1f42-426e-a577-ba2916d82f42",0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,507,J1,SHOULDER DROP LOCATION,LOSPOM-507,SHOULDER DROP LOCATION,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,508,J2,SHOULDER MOVE FORWARD,LOSPOM-508,SHOULDER MOVE FORWARD,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,4,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,False
+fhort,574,JC,TAPE WIDTH,LOSPOM-574,TAPE WIDTH,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,468,JJ,ELBOW WIDTH,,,,,,,False,True,diccionari:BRW:2026-07-13,0.60,0.60,Creat des del diccionari del client BRW (2026-07-13).,0,0,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,True
+fhort,351,JK L HPS,Jacket length (HPS front),POM-100,Jacket length (HPS front),Jacket / Coat,Jacket / Coat,Jaqueta / Abric,,True,False,,0.60,0.60,,0,0,7,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,True
+fhort,494,JTA,Sleeve strap,,,,,,,True,True,diccionari:BRW:2026-07-13,0.60,0.60,Creat des del diccionari del client BRW (2026-07-13).,0,2,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,431,K.2,SHOULDER TO SHOULDER,,,,CAT-UB,Part superior del cos,UPPER,False,True,28fb6e93-6c16-46b9-8ac6-67772dfb9cbd,0.60,0.60,"Creat automàticament per import, fitxa 28fb6e93-6c16-46b9-8ac6-67772dfb9cbd",0,1,0,ERR,ERR,0,3,0,0,0,0,0,0,0,0,0,False
+fhort,372,KANG W,Kangaroo pocket width,POM-133,Kangaroo pocket width,Technical / Workwear,Technical / Workwear,Tècnic / Laboral,,True,False,,0.60,0.60,"Hoodies, sweatshirts, sports tops.",0,0,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,731,KB,Button placement,,,,,,,True,True,BRW-CATALEG-v3,0.60,0.60,,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,315,KG,Knee girth,POM-047,Knee girth,Lower body,Lower body,Part inferior del cos,,True,False,,0.60,0.60,Add: ISO §5.3.22. Skinny trousers/leggings.,0,0,2,ERR,ERR,0,10,0,0,0,0,0,0,0,0,0,True
+fhort,310,KNE,Knee width,POM-042,Knee width,Lower body,Lower body,Part inferior del cos,,True,False,,0.60,0.60,,0,3,13,ERR,ERR,0,20,0,0,0,0,0,0,0,0,0,False
+fhort,484,L,Back yoke,,,,,,,True,True,diccionari:BRW:2026-07-13,0.60,0.60,Creat des del diccionari del client BRW (2026-07-13).,0,1,0,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,False
+fhort,505,L1,Back yoke side height from HPS,,,,CAT-UB,Part superior del cos,UPPER,True,True,030e788a-53e3-41ac-94f0-0102bf949332,0.60,0.60,"Creat automàticament per import, fitxa 030e788a-53e3-41ac-94f0-0102bf949332",0,0,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,510,L1,NECK TOTAL,LOSPOM-510,NECK TOTAL,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,4,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,422,L.4,FRONT NECK DROP,,,,CAT-UB,Part superior del cos,UPPER,False,True,d4f50ff5-286a-4017-bfd8-5d43de67b301,0.60,0.60,"Creat automàticament per import, fitxa d4f50ff5-286a-4017-bfd8-5d43de67b301",0,1,0,ERR,ERR,0,3,0,0,0,0,0,0,0,0,0,False
+fhort,421,L.5,BACK NECK DROP,,,,CAT-UB,Part superior del cos,UPPER,False,True,d4f50ff5-286a-4017-bfd8-5d43de67b301,0.60,0.60,"Creat automàticament per import, fitxa d4f50ff5-286a-4017-bfd8-5d43de67b301",0,1,0,ERR,ERR,0,3,0,0,0,0,0,0,0,0,0,False
+fhort,352,LAP W,Lapel width,POM-101,Lapel width,Jacket / Coat,Jacket / Coat,Jaqueta / Abric,,True,False,,0.60,0.60,,0,0,6,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,True
+fhort,355,LBL CF,Label placement (CF distance),POM-110,Label placement (CF distance),Placement,Placement,Col·locació,,True,False,,0.60,0.60,,0,0,44,ERR,ERR,1,5,0,0,0,0,0,0,0,0,0,True
+fhort,311,LEG OP,Leg opening,POM-043,Leg opening,Lower body,Lower body,Part inferior del cos,,True,False,,0.60,0.60,,0,2,15,ERR,ERR,0,22,0,0,0,0,0,0,0,0,0,False
+fhort,407,LEG OP STR,Leg opening (stretched),POM-144,Leg opening (stretched),Lower body,Lower body,Part inferior del cos,,True,False,,0.60,0.60,,0,0,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,429,LF-M76,Lining Length at Center Front,,,,,,,True,True,,0.60,0.60,,0,0,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,360,LOB,"Leg opening (bodysuit, relaxed)",POM-121,"Leg opening (bodysuit, relaxed)",Lower body,Lower body,Part inferior del cos,,True,False,,0.60,0.60,"Add: Baby/swimwear. Bodysuits, leotards.",0,0,1,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,True
+fhort,356,LOGO HPS,Logo / print placement (from HPS),POM-111,Logo / print placement (from HPS),Placement,Placement,Col·locació,,True,False,,0.60,0.60,,0,0,44,ERR,ERR,1,5,0,0,0,0,0,0,0,0,0,True
+fhort,443,LZ,Cord width,,,,CAT-UB,Part superior del cos,UPPER,True,True,4e79eb3f-6840-46af-962d-ac84fcd34e47,0.60,0.60,"Creat automàticament per import, fitxa 4e79eb3f-6840-46af-962d-ac84fcd34e47",0,0,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,655,M.1,FRONT LENGTH CENTER,LOSPOM-655,FRONT LENGTH CENTER,LOSAN,,,,True,True,LOS diccionari 4B-bis,0.60,0.60,,0,1,2,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,501,M1,Front piece width at the top (excl. Lace),,,,CAT-UB,Part superior del cos,UPPER,True,True,030e788a-53e3-41ac-94f0-0102bf949332,0.60,0.60,"Creat automàticament per import, fitxa 030e788a-53e3-41ac-94f0-0102bf949332",0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,544,M19,FRONT LENGTH,LOSPOM-544,FRONT LENGTH,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,3,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,False
+fhort,502,M2,Front piece width at the bottom (excl.lace),,,,CAT-UB,Part superior del cos,UPPER,True,True,030e788a-53e3-41ac-94f0-0102bf949332,0.60,0.60,"Creat automàticament per import, fitxa 030e788a-53e3-41ac-94f0-0102bf949332",0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,545,M20,BACK LENGTH,LOSPOM-545,BACK LENGTH,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,1,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,568,M4,CUT LOCATION,LOSPOM-568,CUT LOCATION,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,1,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,546,MF,SIDE SEAM MOVED FORWARD,LOSPOM-546,SIDE SEAM MOVED FORWARD,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,389,M-M79,TOTAL LENGTH,LOSPOM-389,TOTAL LENGTH,LOSAN,,,,True,False,SS26 TROUSERS TWILL (14-26-SS-0002),0.60,0.60,Creat automàticament des d'importació. Codi original: M. Requereix revisió.,0,1,16,ERR,ERR,0,21,0,0,0,0,0,0,0,0,0,False
+fhort,735,N,Motive placement,,,,,,,True,True,BRW-CATALEG-v3,0.60,0.60,,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,576,N4,SIDE OPENING,LOSPOM-576,SIDE OPENING,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,287,NC,Neck base girth,POM-015,Neck base girth,Collar / Neckline,Collar / Neckline,Coll / Escot,,True,False,,0.60,0.60,Add: ISO 8559-1 §5.3.3.,0,0,1,ERR,ERR,0,5,0,0,0,0,0,0,0,0,0,True
+fhort,736,NF,Motive width,,,,,,,True,True,BRW-CATALEG-v3,0.60,0.60,,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,307,NK CIRC RLX,Neckband circumference (relaxed),POM-036,Neckband circumference (relaxed),Collar / Neckline,Collar / Neckline,Coll / Escot,,True,False,,0.60,0.60,,0,0,31,ERR,ERR,1,12,0,0,0,0,0,0,0,0,0,True
+fhort,303,NK DR BK,Neck drop back,POM-032,Neck drop back,Collar / Neckline,Collar / Neckline,Coll / Escot,,True,False,,0.60,0.60,,0,1,31,ERR,ERR,1,17,0,0,0,0,0,0,0,0,0,False
+fhort,302,NK DR FR,Neck drop front,POM-031,Neck drop front,Collar / Neckline,Collar / Neckline,Coll / Escot,,True,False,,0.60,0.60,,0,1,34,ERR,ERR,1,22,0,0,0,0,0,0,0,0,0,False
+fhort,301,NK W,Neck width,POM-030,Neck width,Collar / Neckline,Collar / Neckline,Coll / Escot,,True,False,,0.60,0.60,,0,3,37,ERR,ERR,1,30,0,0,0,0,0,0,0,0,0,False
+fhort,737,NL,Motive height,,,,,,,True,True,BRW-CATALEG-v3,0.60,0.60,,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,586,O11,CHEST POCKET WIDTH,LOSPOM-586,CHEST POCKET WIDTH,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,587,O12,CHEST POCKET LENGTH,LOSPOM-587,CHEST POCKET LENGTH,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,588,O13,CHEST POCKET LENGTH W/FLAP,LOSPOM-588,CHEST POCKET LENGTH W/FLAP,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,589,O14,CHEST POCKET LOCATION,LOSPOM-589,CHEST POCKET LOCATION,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,590,O16,FRONT POCKET OPENING,LOSPOM-590,FRONT POCKET OPENING,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,6,ERR,ERR,0,4,0,0,0,0,0,0,0,0,0,False
+fhort,591,O17,FRONT POCKET FLAP HEIGHT,LOSPOM-591,FRONT POCKET FLAP HEIGHT,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,592,O18,FRONT POCKET FLAP WIDTH,LOSPOM-592,FRONT POCKET FLAP WIDTH,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,1,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,False
+fhort,593,O19,FRONT POCKET LENGTH W/FLAP,LOSPOM-593,FRONT POCKET WIDTH EXTENDED,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,2,1,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,594,O20,FRONT POCKET WIDTH,LOSPOM-594,FRONT POCKET WIDTH,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,3,ERR,ERR,0,3,0,0,0,0,0,0,0,0,0,False
+fhort,390,O.21-M79,FRONT POCKET LENGTH,LOSPOM-390,FRONT POCKET LENGTH,LOSAN,,,,True,False,SS26 TROUSERS TWILL (14-26-SS-0002),0.60,0.60,Creat automàticament des d'importació. Codi original: O.21. Requereix revisió.,0,4,3,ERR,ERR,0,6,0,0,0,0,0,0,0,0,0,False
+fhort,689,O.23,POCKET LOCATION,,,,CAT-UB,Part superior del cos,UPPER,True,True,628480d7-c683-4ee2-bda8-efffdc460e8b,0.60,0.60,"Creat automàticament per import, fitxa 628480d7-c683-4ee2-bda8-efffdc460e8b",0,2,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,595,O23,FRONT POCKET LOCATION,LOSPOM-595,FRONT POCKET LOCATION,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,3,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,False
+fhort,690,O.23-1,POCKET LOCATION (1),,,,CAT-UB,Part superior del cos,UPPER,True,True,628480d7-c683-4ee2-bda8-efffdc460e8b,0.60,0.60,"Creat automàticament per import, fitxa 628480d7-c683-4ee2-bda8-efffdc460e8b",0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,691,O.23-2,POCKET LOCATION (2),,,,CAT-UB,Part superior del cos,UPPER,True,True,628480d7-c683-4ee2-bda8-efffdc460e8b,0.60,0.60,"Creat automàticament per import, fitxa 628480d7-c683-4ee2-bda8-efffdc460e8b",0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,596,O25,FRONT LINING LENGTH,LOSPOM-596,FRONT POCKET LINING LENGTH,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,2,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,False
+fhort,391,O.25-M79,FRONT POCKET BACKGROUND INSIDE LENGTH,,,,,,,True,False,SS26 TROUSERS TWILL (14-26-SS-0002),0.60,0.60,Creat automàticament des d'importació. Codi original: O.25. Requereix revisió.,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,393,O.26-M79,BACK POCKET OPENING,LOSPOM-393,BACK POCKET OPENING,LOSAN,,,,True,False,SS26 TROUSERS TWILL (14-26-SS-0002),0.60,0.60,Creat automàticament des d'importació. Codi original: O.26. Requereix revisió.,0,2,1,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,394,O.27-M79,BACK POCKET FLAP HEIGHT,LOSPOM-394,BACK POCKET FLAP HEIGHT,LOSAN,,,,True,False,SS26 TROUSERS TWILL (14-26-SS-0002),0.60,0.60,Creat automàticament des d'importació. Codi original: O.27. Requereix revisió.,0,2,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,597,O28,BACK POCKET FLAP WIDTH,LOSPOM-597,BACK POCKET FLAP WIDTH,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,603,O29,BACK POCKET WIDTH,LOSPOM-603,BACK POCKET WIDTH,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,2,ERR,ERR,0,3,0,0,0,0,0,0,0,0,0,False
+fhort,604,O30,BACK POCKET LENGTH,LOSPOM-604,BACK POCKET LENGTH,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,2,ERR,ERR,0,3,0,0,0,0,0,0,0,0,0,False
+fhort,395,O.32-M79,BACK POCKET LOCATION,LOSPOM-395,BACK POCKET LOCATION,LOSAN,,,,True,False,SS26 TROUSERS TWILL (14-26-SS-0002),0.60,0.60,Creat automàticament des d'importació. Codi original: O.32. Requereix revisió.,0,1,2,ERR,ERR,0,4,0,0,0,0,0,0,0,0,0,False
+fhort,605,O33,COIN POCKET WIDTH,LOSPOM-605,COIN POCKET WIDTH,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,606,O34,COIN POCKET LENGTH,LOSPOM-606,COIN POCKET LENGTH,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,598,O36,SIDE POCKET FLAP HEIGHT,LOSPOM-598,SIDE POCKET FLAP HEIGHT,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,599,O38,SIDE POCKET WIDTH,LOSPOM-599,SIDE POCKET WIDTH,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,600,O39,SIDE POCKET LENGTH,LOSPOM-600,SIDE POCKET LENGTH,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,2,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,601,O40,SIDE POCKET W/FLAP,LOSPOM-601,SIDE POCKET W/FLAP,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,602,O41,SIDE POCKET LOCATION,LOSPOM-602,SIDE POCKET LOCATION,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,2,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,682,O.8,CHEST POCKET OPENING,LOSPOM-682,CHEST POCKET OPENING,LOSAN,,,,True,True,LOS màster delta v1,0.60,0.60,,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,585,O9,CHEST POCKET FLAP HEIGHT,LOSPOM-585,CHEST POCKET FLAP HEIGHT,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,313,OUTS,Outseam length,POM-045,Outseam length,Lower body,Lower body,Part inferior del cos,,True,False,,0.60,0.60,,0,0,13,ERR,ERR,0,16,0,0,0,0,0,0,0,0,0,True
+fhort,730,OVERLAP F,Front overlap,,,,,,,True,True,BRW-CATALEG-v3,0.60,0.60,,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,441,P,Chest piece height at side seam,,,,CAT-UB,Part superior del cos,UPPER,True,True,4e79eb3f-6840-46af-962d-ac84fcd34e47,0.60,0.60,"Creat automàticament per import, fitxa 4e79eb3f-6840-46af-962d-ac84fcd34e47",0,0,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,True
+fhort,442,P1,Chest piece height at center,,,,CAT-UB,Part superior del cos,UPPER,True,True,4e79eb3f-6840-46af-962d-ac84fcd34e47,0.60,0.60,"Creat automàticament per import, fitxa 4e79eb3f-6840-46af-962d-ac84fcd34e47",0,0,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,True
+fhort,479,PC,Neck pipe width,,,,,,,True,True,diccionari:BRW:2026-07-13,0.60,0.60,Creat des del diccionari del client BRW (2026-07-13).,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,348,PKT OP,Side pocket opening,POM-097,Side pocket opening,Closure / Detail,Closure / Detail,Tancament / Detall,,True,False,,0.60,0.60,,0,1,41,ERR,ERR,1,7,0,0,0,0,0,0,0,0,0,False
+fhort,349,PKT W,Pocket width,POM-098,Pocket width,Closure / Detail,Closure / Detail,Tancament / Detall,,True,False,,0.60,0.60,,0,5,41,ERR,ERR,1,9,0,0,0,0,0,0,0,0,0,False
+fhort,357,PKT WB,Pocket position from waistband,POM-112,Pocket placement from waistband,Placement,Placement,Col·locació,,True,False,,0.60,0.60,,0,1,22,ERR,ERR,0,8,0,0,0,0,0,0,0,0,0,False
+fhort,343,PLCK W,Placket width,POM-092,Placket width,Closure / Detail,Closure / Detail,Tancament / Detall,,True,False,,0.60,0.60,,0,1,11,ERR,ERR,1,2,0,0,0,0,0,0,0,0,0,False
+fhort,345,PLT DEP,Pleat depth,POM-094,Pleat depth,Closure / Detail,Closure / Detail,Tancament / Detall,,True,False,,0.60,0.60,,0,1,15,ERR,ERR,1,1,0,0,0,0,0,0,0,0,0,False
+fhort,732,QT,Pleat width,,,,,,,True,True,BRW-CATALEG-v3,0.60,0.60,,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,485,R,Pocket mouth width,,,,,,,True,True,diccionari:BRW:2026-07-13,0.60,0.60,Creat des del diccionari del client BRW (2026-07-13).,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,656,R.1,STRAP LENGTH,LOSPOM-656,STRAP LENGTH,LOSAN,,,,True,True,LOS diccionari 4B-bis,0.60,0.60,,0,1,2,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,486,R1,Pocket mouth length,,,,,,,True,True,diccionari:BRW:2026-07-13,0.60,0.60,Creat des del diccionari del client BRW (2026-07-13).,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,543,R10,FALSE FLY,LOSPOM-543,FALSE FLY,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,2,1,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,657,R.3,STRAP LOCATION,LOSPOM-657,STRAP LOCATION,LOSAN,,,,True,True,LOS diccionari 4B-bis,0.60,0.60,,0,1,2,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,542,R9,FLY OPENING,LOSPOM-542,FLY OPENING,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,2,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,False
+fhort,375,REFL W,Reflective band width,POM-136,Reflective band width,Technical / Workwear,Technical / Workwear,Tècnic / Laboral,,True,False,,0.60,0.60,"Workwear, sportswear, EN ISO 20471 hi-vis.",0,0,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,330,RHS,Rib hem width (stretched),POM-073,Rib hem width (stretched),Hem / Finish,Hem / Finish,Baix de peça / Acabat,,True,False,,0.60,0.60,Add: Knitwear/elasticated hem. Verifies stretch recovery.,0,0,0,ERR,ERR,0,3,0,0,0,0,0,0,0,0,0,True
+fhort,300,RIB CUF,Rib cuff height,POM-028,Rib cuff height,Sleeve,Sleeve,Màniga,,True,False,,0.60,0.60,,0,0,14,ERR,ERR,0,3,0,0,0,0,0,0,0,0,0,True
+fhort,722,RIB H,Rib height,,,,,,,True,True,BRW-CATALEG-v3,0.60,0.60,,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,329,RIB HEM H,Rib hem height,POM-072,Rib hem height,Hem / Finish,Hem / Finish,Baix de peça / Acabat,,True,False,,0.60,0.60,,0,0,14,ERR,ERR,0,3,0,0,0,0,0,0,0,0,0,True
+fhort,322,RI BK,Rise (back),POM-056,Rise (back),Rise,Rise,Tiro,,True,False,,0.60,0.60,,0,3,17,ERR,ERR,0,25,0,0,0,0,0,0,0,0,0,False
+fhort,321,RI FR,Rise (front),POM-055,Rise (front),Rise,Rise,Tiro,,True,False,,0.60,0.60,,0,3,17,ERR,ERR,0,26,0,0,0,0,0,0,0,0,0,False
+fhort,323,RI TOT,Rise (total),POM-057,Rise (total),Rise,Rise,Tiro,,True,False,,0.60,0.60,,0,0,14,ERR,ERR,0,7,0,0,0,0,0,0,0,0,0,True
+fhort,457,S,Front armhole along seam,LOSPOM-457,FRONT MOTIVE LOCATION,LOSAN,CAT-UB,Part superior del cos,UPPER,True,True,6de5fe49-1f42-426e-a577-ba2916d82f42,0.60,0.60,"Creat automàticament per import, fitxa 6de5fe49-1f42-426e-a577-ba2916d82f42",0,3,1,ERR,ERR,0,3,0,0,0,0,0,0,0,0,0,False
+fhort,581,S,COLLAR HEIGHT ON TOP,LOSPOM-581,COLLAR HEIGHT ON TOP,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,425,S.10,HOOD LENGTH,LOSPOM-425,HOOD LENGTH,LOSAN,CAT-UB,Part superior del cos,UPPER,True,True,d4f50ff5-286a-4017-bfd8-5d43de67b301,0.60,0.60,"Creat automàticament per import, fitxa d4f50ff5-286a-4017-bfd8-5d43de67b301",0,2,3,ERR,ERR,0,5,0,0,0,0,0,0,0,0,0,False
+fhort,564,S13,BACK YOKE CENTER LENGTH,LOSPOM-564,BACK YOKE CENTER LENGTH,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,2,ERR,ERR,0,3,0,0,0,0,0,0,0,0,0,False
+fhort,648,S.19,FOOT LENGTH,LOSPOM-648,FOOT LENGTH,LOSAN,,,,True,True,LOS diccionari 4B-bis,0.60,0.60,,0,1,1,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,382,S1-M76,Collar Width (Neck Tie Length),LOSPOM-382,COLLAR WIDTH,LOSAN,,,,True,False,Olivia Dress (REPRIS-26-SS-0001),0.60,0.60,Creat automàticament des d'importació. Codi original: S1. Requereix revisió.,0,1,7,ERR,ERR,0,4,0,0,0,0,0,0,0,0,0,False
+fhort,458,S2,Back armhole along seam,,,,CAT-UB,Part superior del cos,UPPER,True,True,6de5fe49-1f42-426e-a577-ba2916d82f42,0.60,0.60,"Creat automàticament per import, fitxa 6de5fe49-1f42-426e-a577-ba2916d82f42",0,1,0,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,False
+fhort,583,S2,COLLAR BAND HEIGHT,LOSPOM-583,COLLAR BAND HEIGHT AT CENTER,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,4,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,649,S.20,FOOT WIDTH,LOSPOM-649,FOOT WIDTH,LOSAN,,,,True,True,LOS diccionari 4B-bis,0.60,0.60,,0,1,1,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,565,S25,SIDE YOKE LENGTH,LOSPOM-565,SIDE YOKE,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,2,ERR,ERR,0,3,0,0,0,0,0,0,0,0,0,False
+fhort,561,S27,FRONT YOKE CENTER LENGTH,LOSPOM-561,FRONT YOKE CENTER LENGTH,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,562,S28,FRONT YOKE LENGTH,LOSPOM-562,FRONT YOKE LENGTH,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,577,S3,PLACKET LENGTH,LOSPOM-577,PLACKET LENGTH,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,1,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,False
+fhort,563,S30,BACK YOKE LENGTH,LOSPOM-563,BACK YOKE LENGTH,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,573,S34,FRONT COVER WIDTH,LOSPOM-573,FRONT COVER WIDTH,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,668,S.35,COLLAR PIECE WIDTH,LOSPOM-668,COLLAR PIECE WIDTH,LOSAN,,,,True,True,LOS diccionari 4B-bis,0.60,0.60,,0,2,2,ERR,ERR,0,3,0,0,0,0,0,0,0,0,0,False
+fhort,692,S.37,COLLAR PEACK,,,,CAT-UB,Part superior del cos,UPPER,True,True,628480d7-c683-4ee2-bda8-efffdc460e8b,0.60,0.60,"Creat automàticament per import, fitxa 628480d7-c683-4ee2-bda8-efffdc460e8b",0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,582,S37,COLLAR PEAK,LOSPOM-582,COLLAR PEAK,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,2,4,ERR,ERR,0,3,0,0,0,0,0,0,0,0,0,False
+fhort,650,S.39,FOOT WIDTH LOCATION,LOSPOM-650,FOOT WIDTH LOCATION,LOSAN,,,,True,True,LOS diccionari 4B-bis,0.60,0.60,,0,1,1,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,651,S.40,FRONT FOOT LENGTH,LOSPOM-651,FRONT FOOT LENGTH,LOSAN,,,,True,True,LOS diccionari 4B-bis,0.60,0.60,,0,1,1,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,684,S.42,FRONT VENT WIDTH,LOSPOM-684,FRONT VENT WIDTH,LOSAN,,,,True,True,LOS màster delta v1,0.60,0.60,,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,575,S45,BACK OPENING,LOSPOM-575,BACK OPENING,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,614,S53,HOOD WIDTH LOCATION,LOSPOM-614,HOOD WIDTH LOCATION,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,2,3,ERR,ERR,0,3,0,0,0,0,0,0,0,0,0,False
+fhort,612,S54,HOOD LENGTH RELAXED,LOSPOM-612,HOOD LENGTH RELAXED,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,613,S55,HOOD LENGTH EXTENDED,LOSPOM-613,HOOD LENGTH EXTENDED,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,426,S.56,HOOD PIECE WIDTH,LOSPOM-426,HOOD PIECE WIDTH,LOSAN,CAT-UB,Part superior del cos,UPPER,True,True,d4f50ff5-286a-4017-bfd8-5d43de67b301,0.60,0.60,"Creat automàticament per import, fitxa d4f50ff5-286a-4017-bfd8-5d43de67b301",0,2,2,ERR,ERR,0,3,0,0,0,0,0,0,0,0,0,False
+fhort,511,S8,COLLAR OPENING EXTENDED,LOSPOM-511,COLLAR OPENING EXTENDED,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,277,SH,Shoulder width,POM-005,Shoulder width,Upper body,Upper body,Part superior del cos,,True,False,,0.60,0.60,,0,2,32,ERR,ERR,1,31,0,0,0,0,0,0,0,0,0,False
+fhort,286,SH DR,Shoulder drop,POM-014,Shoulder drop,Upper body,Upper body,Part superior del cos,,True,False,,0.60,0.60,,0,3,31,ERR,ERR,1,21,0,0,0,0,0,0,0,0,0,False
+fhort,718,SIDE CURV,Curve at side (difference between CB length and side seam),,,,,,,True,True,BRW-CATALEG-v3,0.60,0.60,,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,719,SIDE L TOT,Total side length,,,,,,,True,True,BRW-CATALEG-v3,0.60,0.60,,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,324,SK L,Skirt length,POM-060,Skirt length,Skirt / Dress,Skirt / Dress,Faldilla / Vestit,,True,False,,0.60,0.60,,0,1,2,ERR,ERR,0,6,1,0,0,0,0,0,0,0,0,False
+fhort,326,SK SW,Skirt sweep (bottom width),POM-062,Skirt sweep (bottom width),Skirt / Dress,Skirt / Dress,Faldilla / Vestit,,True,False,,0.60,0.60,,0,2,6,ERR,ERR,0,21,0,0,0,0,0,0,0,0,0,False
+fhort,292,SL,Sleeve length,POM-020,Sleeve length,Sleeve,Sleeve,Màniga,,True,False,,0.60,0.60,,0,1,36,ERR,ERR,1,26,0,0,0,0,0,0,0,0,0,False
+fhort,294,SL CB,Sleeve length (CB),POM-022,Sleeve length (CB),Sleeve,Sleeve,Màniga,,True,False,,0.60,0.60,,0,0,10,ERR,ERR,1,7,0,0,0,0,0,0,0,0,0,True
+fhort,297,SL OP,Sleeve opening / Cuff width,POM-025,Sleeve opening / Cuff width,Sleeve,Sleeve,Màniga,,True,False,,0.60,0.60,,0,3,33,ERR,ERR,1,25,0,0,0,0,0,0,0,0,0,False
+fhort,298,SL OP STR,Sleeve opening stretched,POM-026,Sleeve opening stretched,Sleeve,Sleeve,Màniga,,True,False,,0.60,0.60,,0,0,11,ERR,ERR,0,7,0,0,0,0,0,0,0,0,0,True
+fhort,733,SLT,Slit,,,,,,,True,True,BRW-CATALEG-v3,0.60,0.60,,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,293,SL UA,Sleeve length (underarm),POM-021,Sleeve length (underarm),Sleeve,Sleeve,Màniga,,True,False,,0.60,0.60,,0,0,31,ERR,ERR,1,5,0,0,0,0,0,0,0,0,0,True
+fhort,359,SNP,Snap / popper placement,POM-120,Snap / popper placement,Closure / Detail,Closure / Detail,Tancament / Detall,,True,False,,0.60,0.60,"Add: Baby/childrenswear. Bodysuits, rompers.",0,0,4,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,True
+fhort,361,SOW,Shoulder opening width,POM-122,Shoulder opening width,Closure / Detail,Closure / Detail,Tancament / Detall,,True,False,,0.60,0.60,Add: Baby/childrenswear envelope neck styles.,0,0,4,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,True
+fhort,660,SR10,Bow length,LOSPOM-660,BOW LENGTH,LOSAN,,,,True,True,LOS diccionari 4B-bis,0.60,0.60,,0,1,1,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,392,S.R1-M79,CORD LENGTH IN OUTSIDE,LOSPOM-392,CORD LENGTH IN OUTSIDE,LOSAN,,,,True,False,SS26 TROUSERS TWILL (14-26-SS-0002),0.60,0.60,Creat automàticament des d'importació. Codi original: S.R1. Requereix revisió.,0,2,4,ERR,ERR,0,4,0,0,0,0,0,0,0,0,0,False
+fhort,615,SR2,DRAWSTRING LENGTH MEASURED AT POINT WHERE TIES,LOSPOM-615,DRAWSTRING LENGTH AT TIE POINT,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,2,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,616,SR3,DRAWSTRING CHANNEL,LOSPOM-616,DRAWSTRING CHANNEL,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,2,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,670,S.R6,LOOP LENGTH,LOSPOM-670,LOOP LENGTH,LOSAN,,,,True,True,LOS diccionari 4B-bis,0.60,0.60,,0,1,2,ERR,ERR,0,3,0,0,0,0,0,0,0,0,0,False
+fhort,671,S.R7,LOOP WIDTH,LOSPOM-671,LOOP WIDTH,LOSAN,,,,True,True,LOS diccionari 4B-bis,0.60,0.60,,0,1,2,ERR,ERR,0,3,0,0,0,0,0,0,0,0,0,False
+fhort,659,SR9,BOW WIDTH,LOSPOM-659,BOW WIDTH,LOSAN,,,,True,True,LOS diccionari 4B-bis,0.60,0.60,,0,0,1,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,283,SS,Side seam length,POM-011,Side seam length,Upper body,Upper body,Part superior del cos,,True,False,,0.60,0.60,,0,1,34,ERR,ERR,1,7,4,0,0,0,0,0,0,0,0,False
+fhort,291,SS SLOPE,Shoulder slope / pitch,POM-019,Shoulder slope / pitch,Upper body,Upper body,Part superior del cos,,True,False,,0.60,0.60,Add: ISO §5.6.2. Critical for fit.,0,0,0,ERR,ERR,0,5,0,0,0,0,0,0,0,0,0,True
+fhort,366,STRAP LB,Strap length (back),POM-127,Strap length (back),Closure / Detail,Closure / Detail,Tancament / Detall,,True,False,,0.60,0.60,"Tirants per a vestits, bodysuits, salopetes.",0,0,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,True
+fhort,365,STRAP LF,Strap length (front),POM-126,Strap length (front),Closure / Detail,Closure / Detail,Tancament / Detall,,True,False,,0.60,0.60,"Tirants per a vestits, bodysuits, salopetes.",0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,369,STRAP SP BK,Strap spacing at back,POM-130,Strap spacing at back,Closure / Detail,Closure / Detail,Tancament / Detall,,True,False,,0.60,0.60,,0,0,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,368,STRAP SP NK,Strap spacing at neckline,POM-129,Strap spacing at neckline,Closure / Detail,Closure / Detail,Tancament / Detall,,True,False,,0.60,0.60,,0,0,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,367,STRAP W,Strap width (garment),POM-128,Strap width (garment),Closure / Detail,Closure / Detail,Tancament / Detall,,True,False,,0.60,0.60,Tirants generals (no swimwear).,0,0,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,True
+fhort,338,STRAP W SW,Strap width (swimwear),POM-087,Strap width (swimwear),Swimwear-specific,Swimwear-specific,Específic de bany,,True,False,,0.60,0.60,,0,1,8,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,False
+fhort,339,SW CROT W,Swimwear crotch width,POM-088,Swimwear crotch width,Swimwear-specific,Swimwear-specific,Específic de bany,,True,False,,0.60,0.60,,0,0,4,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,True
+fhort,340,SW LEG OP,Swimwear leg opening,POM-089,Swimwear leg opening,Swimwear-specific,Swimwear-specific,Específic de bany,,True,False,,0.60,0.60,,0,0,4,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,True
+fhort,480,T,Strap length,,,,,,,True,True,diccionari:BRW:2026-07-13,0.60,0.60,Creat des del diccionari del client BRW (2026-07-13).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,434,T.1,FRONT RISE,,,,CAT-UB,Part superior del cos,UPPER,False,True,98444d69-2d98-4a5b-ba77-6412341ba2bd,0.60,0.60,"Creat automàticament per import, fitxa 98444d69-2d98-4a5b-ba77-6412341ba2bd",0,0,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,True
+fhort,481,T1,Strap width,,,,,,,True,True,diccionari:BRW:2026-07-13,0.60,0.60,Creat des del diccionari del client BRW (2026-07-13).,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,693,T.11,FRONT RISE,,,,CAT-UB,Part superior del cos,UPPER,True,True,224f9778-d8bc-4491-9dc5-d8bd6fc4244c,0.60,0.60,"Creat des del pas 2 de l'import, fitxa 224f9778-d8bc-4491-9dc5-d8bd6fc4244c",0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,566,T13,PLEAT LOCATION,LOSPOM-566,PLEAT LOCATION,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,2,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,567,T14,PLEAT,LOSPOM-567,PLEAT,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,387,T.1-M79,FRONT RISE,,,,,,,False,True,SS26 TROUSERS TWILL (14-26-SS-0002),0.60,0.60,Creat automàticament des d'importació. Codi original: T.1. Requereix revisió.,0,0,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,435,T.2,BACK RISE,,,,CAT-UB,Part superior del cos,UPPER,False,True,98444d69-2d98-4a5b-ba77-6412341ba2bd,0.60,0.60,"Creat automàticament per import, fitxa 98444d69-2d98-4a5b-ba77-6412341ba2bd",0,0,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,True
+fhort,482,T2,Strap placement,,,,,,,True,True,diccionari:BRW:2026-07-13,0.60,0.60,Creat des del diccionari del client BRW (2026-07-13).,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,694,T.21,BACK RISE,,,,CAT-UB,Part superior del cos,UPPER,True,True,224f9778-d8bc-4491-9dc5-d8bd6fc4244c,0.60,0.60,"Creat des del pas 2 de l'import, fitxa 224f9778-d8bc-4491-9dc5-d8bd6fc4244c",0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,388,T.2-M79,BACK RISE,,,,,,,False,True,SS26 TROUSERS TWILL (14-26-SS-0002),0.60,0.60,Creat automàticament des d'importació. Codi original: T.2. Requereix revisió.,0,0,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,427,T.5,EARS MEASUREMENT,,,,CAT-UB,Part superior del cos,UPPER,True,True,d4f50ff5-286a-4017-bfd8-5d43de67b301,0.60,0.60,"Creat automàticament per import, fitxa d4f50ff5-286a-4017-bfd8-5d43de67b301",0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,314,TH,Thigh girth,POM-046,Thigh girth,Lower body,Lower body,Part inferior del cos,,True,False,,0.60,0.60,Add: ISO §5.3.20. Key for fitted trousers/leggings.,0,0,8,ERR,ERR,0,10,0,0,0,0,0,0,0,0,0,True
+fhort,309,THI,Thigh width,POM-041,Thigh width,Lower body,Lower body,Part inferior del cos,,True,False,,0.60,0.60,,0,3,14,ERR,ERR,0,21,0,0,0,0,0,0,0,0,0,False
+fhort,370,THUMB,Thumbhole size,POM-131,Thumbhole size,Technical / Workwear,Technical / Workwear,Tècnic / Laboral,,True,False,,0.60,0.60,Sportswear/outerwear. Prevents sleeve ride-up.,0,0,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,376,TOOL POS,Tool loop position,POM-137,Tool loop position,Technical / Workwear,Technical / Workwear,Tècnic / Laboral,,True,False,,0.60,0.60,Workwear trousers and shorts.,0,0,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,489,TR,Placket height,,,,,,,True,True,diccionari:BRW:2026-07-13,0.60,0.60,Creat des del diccionari del client BRW (2026-07-13).,0,2,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,439,U,Width sequins piece (CF),,,,CAT-UB,Part superior del cos,UPPER,True,True,4e79eb3f-6840-46af-962d-ac84fcd34e47,0.60,0.60,"Creat automàticament per import, fitxa 4e79eb3f-6840-46af-962d-ac84fcd34e47",0,0,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,True
+fhort,512,U,RIB WIDTH,LOSPOM-512,RIB WIDTH,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,2,ERR,ERR,0,3,0,0,0,0,0,0,0,0,0,False
+fhort,440,U1,Height sequins piece (CF),,,,CAT-UB,Part superior del cos,UPPER,True,True,4e79eb3f-6840-46af-962d-ac84fcd34e47,0.60,0.60,"Creat automàticament per import, fitxa 4e79eb3f-6840-46af-962d-ac84fcd34e47",0,0,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,True
+fhort,513,U1,JETTING WIDTH,LOSPOM-513,JETTING WIDTH,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,3,6,ERR,ERR,0,5,0,0,0,0,0,0,0,0,0,False
+fhort,498,U2,1st button,,,,CAT-UB,Part superior del cos,UPPER,True,True,696ce67e-1831-4b73-80bc-f16ee176a7fa,0.60,0.60,"Creat automàticament per import, fitxa 696ce67e-1831-4b73-80bc-f16ee176a7fa",0,1,0,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,False
+fhort,499,U3,Last button,,,,CAT-UB,Part superior del cos,UPPER,True,True,696ce67e-1831-4b73-80bc-f16ee176a7fa,0.60,0.60,"Creat automàticament per import, fitxa 696ce67e-1831-4b73-80bc-f16ee176a7fa",0,1,0,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,False
+fhort,578,U4,FLOUNCE HEIGHT,LOSPOM-578,FLOUNCE HEIGHT,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,2,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,579,U7,FRILL HEIGHT,LOSPOM-579,FRILL HEIGHT,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,288,UA,Upper arm girth,POM-016,Upper arm girth,Sleeve,Sleeve,Màniga,,True,False,,0.60,0.60,Add: ISO §5.3.16. Critical for fitted sleeves.,0,0,3,ERR,ERR,0,5,0,0,0,0,0,0,0,0,0,True
+fhort,334,UB,Underbust girth,POM-083,Underbust girth,Upper body,Upper body,Part superior del cos,,True,False,,0.60,0.60,Add: ISO §5.3.8. Essential for bra/swimwear.,0,0,6,ERR,ERR,0,6,0,0,0,0,0,0,0,0,0,True
+fhort,744,USQ CF,Heigth sequins piece at CF,,,,,,,True,True,model:BRW-SS26-0003,0.60,0.60,,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,483,UT1,Loops,,,,,,,True,True,diccionari:BRW:2026-07-13,0.60,0.60,Creat des del diccionari del client BRW (2026-07-13).,0,2,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,492,V,RUFFLE HEIGHT,LOSPOM-492,STITCHING WIDTH,LOSAN,,,,True,True,diccionari:BRW:2026-07-13,0.60,0.60,Creat des del diccionari del client BRW (2026-07-13).,0,6,1,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,False
+fhort,424,V.12,FOLDED,,,,CAT-UB,Part superior del cos,UPPER,True,True,d4f50ff5-286a-4017-bfd8-5d43de67b301,0.60,0.60,"Creat automàticament per import, fitxa d4f50ff5-286a-4017-bfd8-5d43de67b301",0,0,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,True
+fhort,580,V12,FOLD,LOSPOM-580,FOLD,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,2,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,False
+fhort,397,V.13-M79,DART LENGTH,LOSPOM-397,DART LENGTH,LOSAN,,,,True,False,SS26 TROUSERS TWILL (14-26-SS-0002),0.60,0.60,Creat automàticament des d'importació. Codi original: V.13. Requereix revisió.,0,3,0,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,False
+fhort,396,V.14-M79,DART LOCATION,LOSPOM-396,DART LOCATION,LOSAN,,,,True,False,SS26 TROUSERS TWILL (14-26-SS-0002),0.60,0.60,Creat automàticament des d'importació. Codi original: V.14. Requereix revisió.,0,3,0,ERR,ERR,0,2,0,0,0,0,0,0,0,0,0,False
+fhort,569,V4,PIECE WIDTH,LOSPOM-569,PIECE WIDTH,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,570,V5,PIECE WIDTH EXTENDED,LOSPOM-570,PIECE WIDTH EXTENDED,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,571,V6,PIECE LENGTH,LOSPOM-571,PIECE LENGTH,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,572,V7,PIECE LOCATION,LOSPOM-572,PIECE LOCATION,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,672,V.9,ELASTIC LOCATION,LOSPOM-672,ELASTIC LOCATION,LOSAN,,,,True,True,LOS diccionari 4B-bis,0.60,0.60,,0,1,1,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,371,VENT L,Ventilation opening length,POM-132,Ventilation opening length,Technical / Workwear,Technical / Workwear,Tècnic / Laboral,,True,False,,0.60,0.60,Sportswear/outerwear underarm or side vents.,0,0,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,373,VISOR L,Hood visor length,POM-134,Hood visor length,Technical / Workwear,Technical / Workwear,Tècnic / Laboral,,True,False,,0.60,0.60,Outdoor/technical hoods with peak.,0,0,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,344,VNT L,Vent length,POM-093,Vent length,Closure / Detail,Closure / Detail,Tancament / Detall,,True,False,,0.60,0.60,,0,0,12,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,493,VR,Ruffle length,,,,,,,True,True,diccionari:BRW:2026-07-13,0.60,0.60,Creat des del diccionari del client BRW (2026-07-13).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,738,W,Elastic width,,,,,,,True,True,BRW-CATALEG-v3,0.60,0.60,,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,607,W4,INNER POCKET OPENING,LOSPOM-607,INNER POCKET OPENING,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,608,W5,INNER POCKET FLAP HEIGHT,LOSPOM-608,INNER POCKET FLAP HEIGHT,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,609,W6,INNER POCKET WIDTH,LOSPOM-609,INNER POCKET WIDTH,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,610,W7,INNER POCKET LENGTH,LOSPOM-610,INNER POCKET LENGTH,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,611,W9,INNER POCKET LOCATION,LOSPOM-611,INNER POCKET LOCATION,LOSAN,,,,True,True,diccionari:LOS:2026-07-18,0.60,0.60,Creat des del diccionari del client LOS (2026-07-18).,0,1,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,275,WA,Waist width,POM-003,Waist width,Upper body,Upper body,Part superior del cos,,True,False,,0.60,0.60,,0,7,31,ERR,ERR,1,29,5,0,0,0,0,0,0,0,0,False
+fhort,320,WB H,Waistband height,POM-052,Waistband height,Waistband,Waistband,Cinturó,,True,False,,0.60,0.60,,0,3,21,ERR,ERR,0,20,0,0,0,0,0,0,0,0,0,False
+fhort,318,WB RLX,Waistband width (relaxed),POM-050,Waistband width (relaxed),Waistband,Waistband,Cinturó,,True,False,,0.60,0.60,,0,0,19,ERR,ERR,0,17,0,0,0,0,0,0,0,0,0,True
+fhort,319,WB STR,Waistband width (stretched),POM-051,Waistband width (stretched),Waistband,Waistband,Cinturó,,True,False,,0.60,0.60,,0,0,19,ERR,ERR,0,11,0,0,0,0,0,0,0,0,0,True
+fhort,289,WG,Wrist girth,POM-017,Wrist girth,Sleeve,Sleeve,Màniga,,True,False,,0.60,0.60,Add: ISO §5.3.19. For cuff fit.,0,0,0,ERR,ERR,0,5,0,0,0,0,0,0,0,0,0,True
+fhort,739,X,Stitching width,,,,,,,True,True,BRW-CATALEG-v3,0.60,0.60,,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,740,XP,Stitching placement,,,,,,,True,True,BRW-CATALEG-v3,0.60,0.60,,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,727,YK H CB,Center back yoke height,,,,,,,True,True,BRW-CATALEG-v3,0.60,0.60,,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,729,YK H CF,Center front yoke height,,,,,,,True,True,BRW-CATALEG-v3,0.60,0.60,,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,728,YK H SIDE,Side yoke height,,,,,,,True,True,BRW-CATALEG-v3,0.60,0.60,,0,1,0,ERR,ERR,0,1,0,0,0,0,0,0,0,0,0,False
+fhort,399,YK L,Front yoke length (center),POM-029,Front yoke length (center),Upper body,Upper body,Part superior del cos,,True,False,,0.60,0.60,,0,0,0,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,True
+fhort,658,Z,FRILL LENGTH,LOSPOM-658,FRILL LENGTH,LOSAN,,,,True,True,LOS diccionari 4B-bis,0.60,0.60,,0,1,1,ERR,ERR,0,0,0,0,0,0,0,0,0,0,0,False
+fhort,341,ZIP L,Zipper length,POM-090,Zipper length,Closure / Detail,Closure / Detail,Tancament / Detall,,True,False,,0.60,0.60,,0,2,45,ERR,ERR,1,1,0,0,0,0,0,0,0,0,0,False

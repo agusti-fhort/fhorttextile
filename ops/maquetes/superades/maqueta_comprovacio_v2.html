@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maqueta · Comprovació</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#fbf8f3;--panel:#fff;--ink:#3a3530;--ink-soft:#8a8279;--ink-faint:#a9a199;
+    --line:#e8e0d3;--line-soft:#f0eae0;--head:#f5efe4;--gold:#a8752c;--gold-soft:#c9a227;
+    --chip:#d4a437;--btn:#9a5f22;--danger:#b4483a;--sel:#f2e6cf;--lining:#fbf6ee;
+    --stop:#b4483a;--warn:#c08a2e;--ok:#6f8f52;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:28px 20px 90px;background:var(--bg);color:var(--ink);
+       font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:13px}
+  .wrap{max-width:1060px;margin:0 auto}
+  .crumb{display:flex;align-items:center;gap:10px;color:var(--ink-soft);font-size:12px;margin-bottom:18px}
+  .crumb b{color:var(--ink);font-weight:600}
+  .chip-st{background:var(--chip);color:#fff;border-radius:999px;padding:3px 12px;font-size:11px}
+  .tabs{display:flex;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:22px}
+  .tab{border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:6px 14px;font-size:12px;color:var(--ink-soft)}
+  .tab.on{background:var(--btn);border-color:var(--btn);color:#fff}
+  .sub2{display:flex;gap:8px;margin-bottom:22px}
+  .st{border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:6px 14px;font-size:12px;color:var(--ink-soft)}
+  .st.on{background:var(--head);border-color:var(--gold);color:var(--gold);font-weight:500}
+
+  h1{font-size:19px;font-weight:600;margin:0 0 4px}
+  .sub{color:var(--ink-soft);font-size:12px;margin:0 0 20px}
+
+  /* ---- veredicte ---- */
+  .verdict{display:flex;align-items:center;gap:14px;background:var(--panel);border:1px solid var(--line);
+           border-left:3px solid var(--stop);border-radius:9px;padding:15px 18px;margin-bottom:22px}
+  .vico{font-size:20px;line-height:1;color:var(--stop)}
+  .vtxt b{font-size:13.5px;display:block;margin-bottom:3px}
+  .vtxt span{font-size:11.5px;color:var(--ink-soft)}
+  .vcount{margin-left:auto;display:flex;gap:18px;text-align:right}
+  .vcount div{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft)}
+  .vcount b{display:block;font-size:17px;font-weight:600;color:var(--ink);margin-bottom:2px}
+  .vcount .s b{color:var(--stop)} .vcount .w b{color:var(--warn)}
+
+  /* ---- seccions ---- */
+  .sec{background:var(--panel);border:1px solid var(--line);border-radius:9px;margin-bottom:14px;overflow:hidden}
+  .shead{display:flex;align-items:center;gap:10px;padding:11px 16px;background:var(--head);
+         border-bottom:1px solid var(--line);cursor:pointer;user-select:none}
+  .shead:focus-visible{outline:2px solid var(--gold);outline-offset:-2px}
+  .sbadge{width:8px;height:8px;border-radius:50%;flex:none}
+  .sbadge.stop{background:var(--stop)}.sbadge.warn{background:var(--warn)}.sbadge.ok{background:var(--ok)}
+  .stitle{font-size:12.5px;font-weight:500}
+  .sn{font-size:11px;color:var(--ink-soft);margin-left:auto}
+  .caret{color:var(--ink-faint);font-size:10px;transition:transform .15s}
+  .sec.closed .caret{transform:rotate(-90deg)}
+  .sec.closed .sbody{display:none}
+  .sbody{padding:4px 16px 14px}
+
+  table{border-collapse:collapse;width:100%}
+  th{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);
+     font-weight:500;text-align:left;padding:9px 10px 7px;white-space:nowrap}
+  th.n{text-align:right}
+  td{padding:8px 10px;border-top:1px solid var(--line-soft);vertical-align:middle}
+  td.n{text-align:right;font-weight:500;white-space:nowrap}
+  .code{color:var(--gold);font-weight:600;white-space:nowrap}
+  .why{font-size:11px;color:var(--ink-soft)}
+  .xip{background:var(--sel);color:var(--gold);border:1px solid #e3d2ae;border-radius:999px;
+       padding:2px 8px;font-size:10.5px;margin-right:3px;white-space:nowrap;display:inline-block}
+  .xip.none{background:transparent;border-color:var(--line);color:var(--ink-faint)}
+  .goto{color:var(--gold);font-size:10.5px;text-decoration:none;white-space:nowrap;opacity:.75}
+  .goto:hover{opacity:1;text-decoration:underline}
+  .bad{color:var(--stop);font-weight:600}
+  .strike{text-decoration:line-through;color:var(--ink-faint)}
+  tr.lin td{background:var(--lining)}
+  tr.gap td{background:repeating-linear-gradient(45deg,#fdfbf7,#fdfbf7 6px,#faf6ee 6px,#faf6ee 12px)}
+  .absent{color:var(--ink-faint);font-style:italic;font-size:11.5px}
+
+  /* ---- famílies ---- */
+  .fam{border:1px solid var(--line-soft);border-radius:7px;margin:10px 0;overflow:hidden}
+  .fh{display:flex;align-items:center;gap:11px;padding:9px 12px;background:#fdfcf9;border-bottom:1px solid var(--line-soft)}
+  .fkind{font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);
+         border:1px solid var(--line);border-radius:4px;padding:1px 7px;background:var(--panel)}
+  .fmeta{margin-left:auto;font-size:11px;color:var(--ink-soft)}
+  .fmeta b{color:var(--ink)}
+  .fam table{margin:0}
+  .fam td,.fam th{padding-left:12px}
+  .fnote{padding:8px 12px 10px;font-size:10.5px;color:var(--ink-faint);line-height:1.55;
+         border-top:1px solid var(--line-soft);background:#fdfcf9}
+
+  .empty{padding:12px 10px;font-size:11.5px;color:var(--ink-faint)}
+  .foot{margin-top:22px;padding:16px 18px;border:1px dashed var(--line);border-radius:8px;
+        background:#fdfcf9;color:var(--ink-soft);font-size:11.5px;line-height:1.75}
+  .foot b{color:var(--ink);font-weight:600}
+  .foot ul{margin:8px 0 0;padding-left:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="crumb">
+    <span>← Models</span><span>›</span><span>BRW-FW27-0044</span><span>·</span>
+    <b>Top asimètric</b><span class="chip-st">Desenvolupament</span>
+  </div>
+  <div class="tabs">
+    <span class="tab">Dashboard</span><span class="tab">Resum</span><span class="tab on">Mesures</span>
+    <span class="tab">Escalat</span><span class="tab">Patró</span><span class="tab">Fitxa tècnica</span>
+    <span class="tab">Fitxers</span><span class="tab">Registre d'activitat</span><span class="tab">Tasques</span>
+  </div>
+  <div class="sub2">
+    <span class="st">Taula de mesures</span>
+    <span class="st">Repàs de fittings</span>
+    <span class="st on">Comprovació</span>
+  </div>
+
+  <h1>Comprovació</h1>
+  <p class="sub">Què falta i què s'ha de mirar abans que la fitxa surti cap al fabricant. Aquesta pantalla no escriu res.</p>
+
+  <div class="verdict">
+    <span class="vico">⊘</span>
+    <div class="vtxt">
+      <b>La fitxa encara no pot sortir</b>
+      <span>2 punts bloquegen l'enviament · 5 demanen una mirada</span>
+    </div>
+    <div class="vcount">
+      <div class="s"><b>2</b>bloquegen</div>
+      <div class="w"><b>5</b>a revisar</div>
+      <div><b>18</b>correctes</div>
+    </div>
+  </div>
+
+  <div id="host"></div>
+
+  <div class="foot">
+    <b>Criteris d'aquesta pantalla</b>
+    <ul>
+      <li><b>Consulta pura.</b> No hi ha cap botó que escrigui: els enllaços porten a la fila de la taula, on es treballa. Comprovar i entrar són dos moments diferents, i barrejar-los és el que ens ha portat problemes.</li>
+      <li><b>Neix útil avui.</b> Les tres primeres seccions funcionen amb el sistema actual. La de famílies només tindrà contingut quan un POM pugui tenir més d'una cara.</li>
+      <li><b>Ordenada pel que costa més de descobrir sol.</b> Un valor que falta el veus a la taula; una mesura que va quedar enrere quan la base es va moure, no.</li>
+      <li><b>Les famílies desiguals no són errors.</b> Es diu per què, amb paraules, i no compten com a punt a resoldre.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+const SECS = [
+  { id:'block', badge:'stop', title:'Bloquegen l\'enviament', n:'2 punts',
+    cols:['POM','','Què passa',''],
+    rows:[
+      ['A','CHEST WIDTH','El folre existeix i no té valor a la talla base','veure →'],
+      ['T.2','RISE (BACK)','Sense regla de graduació: no s\'emetrà cap talla per a aquest POM','veure →']
+    ]},
+
+  { id:'stale', badge:'warn', title:'Van quedar enrere quan la base es va moure', n:'2 punts',
+    cols:['POM','Mesurat','Base d\'ara','Quan'],
+    rows:[
+      ['D.11','HIP LOCATION','20,5','<span class="bad">21,4</span>','La base es va moure 9 dies després de la darrera presa'],
+      ['C.1','WAIST WIDTH','44,0','<span class="bad">44,8</span>','La base es va moure 3 dies després']
+    ], kind:'stale'},
+
+  { id:'disc', badge:'warn', title:'Preses descartades · pendents de reclamar al fabricant', n:'1 punt',
+    cols:['POM','Va arribar','Vigent','Sessió'],
+    rows:[
+      ['F','LEG OPENING','<span class="strike">19,8</span>','17,0','Fitting 2 · 18/07 — fora de tolerància, descartada']
+    ], kind:'disc'},
+
+  { id:'tol', badge:'warn', title:'Fora de tolerància al darrer fitting', n:'2 punts',
+    cols:['POM','Teòric','Real','Desviació'],
+    rows:[
+      ['S2','BACK ARMHOLE','24,0','24,9','+0,9 · tolerància ±0,6'],
+      ['M','TOTAL LENGTH','100,0','98,8','−1,2 · tolerància ±0,6']
+    ], kind:'tol'},
+
+  { id:'fam', badge:'ok', title:'Famílies de mesura', n:'5 famílies · 1 amb buit', kind:'fam' }
+];
+
+const FAMS = [
+  { code:'D', name:'BOTTOM WIDTH', kind:'Dimensió', meta:'Folgança <b>2,0 cm</b>',
+    rows:[
+      {capa:'Exterior', inst:[], val:'54,0', org:'Fitting · 18/07'},
+      {capa:'Lining', inst:[], val:'52,0', org:'Derivat de l\'exterior · 18/07', lin:true}],
+    note:'Completa. La folgança és la resta entre les dues germanes — si l\'exterior es mou, el folre el segueix.' },
+
+  { code:'S', name:'ARMHOLE', kind:'Dimensió', meta:'Asimetria declarada',
+    rows:[
+      {capa:'Exterior', inst:['Right'], val:'23,0', org:'Manual · 17/07'},
+      {gap:true, capa:'Exterior', inst:['Left'],
+       why:'La germana es va proposar i es va treure: el coll passa sota l\'aixella esquerra.'}],
+    note:'No és un buit: és el disseny de la peça. No compta com a punt a resoldre.' },
+
+  { code:'O.20', name:'POCKET WIDTH', kind:'Dimensió', meta:'3 de 4 cares',
+    rows:[
+      {capa:'Exterior', inst:['Side'], val:'13,5', org:'Manual · 17/07'},
+      {capa:'Exterior', inst:['Back'], val:'12,0', org:'Manual · 17/07'},
+      {capa:'Lining', inst:['Side'], val:'13,0', org:'Derivat · 17/07', lin:true},
+      {gap:true, capa:'Lining', inst:['Back'], why:'La butxaca de darrere no porta folre.'}],
+    note:'La posició és una ADREÇA: no genera parell. S\'informa la cara que existeix.' },
+
+  { code:'O.31', name:'EMBROIDERY PLACEMENT', kind:'Col·locació', meta:'Va sola',
+    rows:[{capa:'Exterior', inst:['Upper','Left'], val:'8,5', org:'Manual · 17/07'}],
+    note:'POM de col·locació: mesura ON va un element aplicat. No se n\'espera cap germana.' },
+
+  { code:'A', name:'CHEST WIDTH', kind:'Dimensió', meta:'<span style="color:var(--stop)">Sense valor al folre</span>',
+    rows:[
+      {capa:'Exterior', inst:[], val:'46,0', org:'Manual · 17/07'},
+      {capa:'Lining', inst:[], val:'—', org:'Sembrat de l\'item · sense valor', lin:true}],
+    note:'Aquest sí que és un buit real: la fila existeix i ningú l\'ha mesurada. Surt també a dalt, entre els bloquejants.' }
+];
+
+const famCard = f => `
+  <div class="fam">
+    <div class="fh"><span class="code">${f.code}</span><span>${f.name}</span>
+      <span class="fkind">${f.kind}</span><span class="fmeta">${f.meta}</span></div>
+    <table><thead><tr><th>Capa</th><th>Instància</th><th class="n">Talla base · S</th><th>Origen</th></tr></thead>
+    <tbody>${f.rows.map(r => r.gap
+      ? `<tr class="gap"><td>${r.capa}</td><td>${r.inst.map(i=>`<span class="xip none">${i}</span>`).join('')}</td>
+           <td class="n absent">no informada</td><td class="why">${r.why}</td></tr>`
+      : `<tr class="${r.lin?'lin':''}"><td>${r.capa}</td>
+           <td>${r.inst.map(i=>`<span class="xip">${i}</span>`).join('')||'<span class="xip none">—</span>'}</td>
+           <td class="n">${r.val}</td><td class="why">${r.org}</td></tr>`).join('')}</tbody></table>
+    <div class="fnote">${f.note}</div>
+  </div>`;
+
+document.getElementById('host').innerHTML = SECS.map(s => {
+  let body;
+  if (s.kind === 'fam') body = FAMS.map(famCard).join('');
+  else body = `<table><thead><tr>${s.cols.map((c,i)=>
+      `<th class="${i>=2&&s.kind?'n':''}">${c}</th>`).join('')}</tr></thead><tbody>${
+      s.rows.map(r => `<tr>
+        <td class="code">${r[0]}</td><td>${r[1]}</td>
+        ${s.kind ? `<td class="n">${r[2]}</td><td class="n">${r[3]}</td><td class="why">${r[4]}</td>`
+                 : `<td class="why">${r[2]}</td><td style="text-align:right"><a class="goto" href="#">${r[3]}</a></td>`}
+      </tr>`).join('')}</tbody></table>`;
+  return `<div class="sec"><div class="shead" tabindex="0" role="button" aria-expanded="true">
+      <span class="sbadge ${s.badge}"></span><span class="stitle">${s.title}</span>
+      <span class="sn">${s.n}</span><span class="caret">▼</span></div>
+    <div class="sbody">${body}</div></div>`;
+}).join('');
+
+document.querySelectorAll('.shead').forEach(h => {
+  const t = () => { const s = h.parentElement; s.classList.toggle('closed');
+    h.setAttribute('aria-expanded', !s.classList.contains('closed')); };
+  h.onclick = t;
+  h.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); t(); } };
+});
+</script>
+</body>
+</html>

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import Badge from '../ui/Badge'
@@ -31,7 +32,15 @@ const CARD = {
 // `.tbtn`: 20×20 amb filet `--line` i radi de control. El deshabilitat baixa el FONS i conserva
 // la tinta (§5.7): l'`opacity` apagaria també la icona i la deixaria per sota d'AA — i el que diu
 // un botó apagat és justament el que ara no es pot fer.
-function TransportMini({ icon, active, title, onClick }) {
+// `destructiu` NO és un matís de color: és el que separa aquest botó dels tres del costat.
+// §8 dona QUATRE tintes i la destructiva és `--err`; §8e ho concreta per a aquest cas exacte
+// («Paperera per fila: icona destructiva 14, hover --err-bg»). Sense això la paperera sortia
+// amb la MATEIXA pell que Play/Pause/Stop —`--text-soft` a 11px— a la mateixa línia: la
+// posició la separava, però el que la fa reconeixible és el color, i un gest irreversible no
+// es pot distingir d'un de reversible només per on cau.
+function TransportMini({ icon, active, title, onClick, destructiu = false }) {
+  const [sobre, setSobre] = useState(false)
+  const tinta = destructiu ? 'var(--err)' : 'var(--text-soft)'
   return (
     <button type="button" title={title} disabled={!active}
       onClick={e => {
@@ -39,15 +48,21 @@ function TransportMini({ icon, active, title, onClick }) {
         e.stopPropagation()
         if (active) onClick?.(e)
       }}
+      onMouseEnter={() => setSobre(true)}
+      onMouseLeave={() => setSobre(false)}
       style={{
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         width: 20, height: 20, minHeight: 20, padding: 0,
         borderRadius: 'var(--r-ctrl)',
-        borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)',
-        background: active ? 'var(--panel)' : 'var(--bg-page)',
-        color: active ? 'var(--text-soft)' : 'var(--text-faint)',
+        borderWidth: 1, borderStyle: 'solid',
+        borderColor: destructiu && sobre ? 'var(--err)' : 'var(--line)',
+        background: (destructiu && sobre && active) ? 'var(--err-bg)'
+          : (active ? 'var(--panel)' : 'var(--bg-page)'),
+        color: active ? tinta : 'var(--text-faint)',
         cursor: active ? 'pointer' : 'not-allowed',
-        fontSize: 11,
+        // §8: l'escala d'icona és 14/16/20. Els tres del transport es queden a 11 (són de la
+        // maqueta `.tbtn` i van en bloc); la destructiva puja a 14, que és el que §8e demana.
+        fontSize: destructiu ? 14 : 11,
       }}>
       <i className={`ti ${icon}`} aria-hidden="true"
          style={{ fontSize: 'inherit', color: 'currentColor' }} />
@@ -56,7 +71,7 @@ function TransportMini({ icon, active, title, onClick }) {
 }
 
 export default function TaskCardCompacta({
-  task, mine, hasToolRoute, segellada = false, onPlay, onPause, onStop, onDeclarar,
+  task, mine, hasToolRoute, segellada = false, onPlay, onPause, onStop, onDeclarar, onTreure,
 }) {
   const { t } = useTranslation()
   const { transport, playActive, otherTech, out, icon, variant } =
@@ -134,9 +149,26 @@ export default function TaskCardCompacta({
             )}
           </>)}
         </div>
-        <Badge variant={variant}>
-          {t(`model_sheet.dashboard.task_status.${task.status}`, { defaultValue: task.status })}
-        </Badge>
+        {/* Grup DRET: estat + paperera. Van junts perquè el peu segueixi sent un
+            `space-between` de DOS blocs; solta, la paperera cauria al mig i desquadraria la
+            línia. I va a l'extrem OPOSAT del transport a posta: és l'únic gest destructiu de la
+            targeta i no ha de compartir veïnatge amb el Play. */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Badge variant={variant}>
+            {t(`model_sheet.dashboard.task_status.${task.status}`, { defaultValue: task.status })}
+          </Badge>
+          {/* LA PAPERERA · NOMÉS sobre `Pending`, i no com a botó apagat sinó ABSENT.
+              El backend ja refusa la resta amb un 409 («una tasca iniciada, pausada o feta
+              conserva la seva història»), i oferir el gest per després negar-lo seria prometre
+              una cosa que la llei no permet. A la volta segellada tampoc hi és, com el transport.
+              El que passa en prémer-la depèn de si la tasca té ENCÀRREC, i això ho decideix
+              `WorkPlan` amb el FK: aquí només es demana. Tabler outline, tinta per token. */}
+          {!segellada && task.status === 'Pending' && onTreure && (
+            <TransportMini icon="ti-trash" active destructiu
+              title={task.encarrec ? t('paperera.titol_lligada') : t('paperera.titol_lliure')}
+              onClick={() => onTreure(task)} />
+          )}
+        </div>
       </div>
     </div>
   )

@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maqueta v8.1 · Instàncies per grups · estil alineat amb el fitting</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#fbf8f3;--panel:#fff;--ink:#3a3530;--ink-soft:#8a8279;--ink-faint:#a9a199;
+    --line:#e8e0d3;--line-soft:#f0eae0;--head:#f5efe4;--gold:#a8752c;--gold-soft:#c9a227;
+    --chip:#d4a437;--btn:#9a5f22;--danger:#b4483a;--sel:#f2e6cf;--lining:#fbf6ee;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:26px 20px 110px;background:var(--bg);color:var(--ink);
+       font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:13px}
+  .wrap{max-width:1220px;margin:0 auto}
+  .crumb{display:flex;align-items:center;gap:10px;color:var(--ink-soft);font-size:12px;margin-bottom:14px}
+  .crumb b{color:var(--ink);font-weight:600}
+  .chip-st{background:var(--chip);color:#fff;border-radius:999px;padding:3px 12px;font-size:11px}
+  h1{font-size:19px;font-weight:600;margin:0 0 4px}
+  .sub{color:var(--ink-soft);font-size:12px;margin:0 0 8px}
+  .kbd-hint{font-size:11px;color:var(--ink-soft);margin-bottom:16px;line-height:1.8}
+  kbd{background:var(--head);border:1px solid var(--line);border-radius:4px;padding:1px 6px;
+      font-family:inherit;font-size:10.5px;color:var(--ink)}
+  .hot{color:var(--gold);font-weight:600}
+
+  .scroll{border:1px solid var(--line);border-radius:8px;background:var(--panel);overflow:visible}
+  table{border-collapse:collapse;width:100%}
+  thead th{background:var(--head);border-bottom:1px solid var(--line);font-weight:500;font-size:9.5px;
+           text-transform:uppercase;letter-spacing:.05em;
+           color:var(--ink-soft);text-align:left;padding:7px 10px;white-space:nowrap;vertical-align:bottom}
+  thead th.grp{text-align:center;border-left:1px solid var(--line);border-bottom:none;padding-bottom:2px;
+               background:var(--sel);color:var(--gold);font-weight:600}
+  thead tr.r2 th{font-size:9.5px;padding:2px 12px 8px;text-align:center;border-left:1px solid var(--line-soft);
+                 text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint)}
+  thead tr.r2 th:first-child{border-left:1px solid var(--line)}
+  th.baseh{text-align:right;border-left:1px solid var(--line);border-right:1px solid var(--line);
+           background:var(--sel);color:var(--gold)}
+  th.baseh .lbl{display:block;font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;
+                margin-bottom:1px;font-weight:600;color:var(--gold)}
+  th.baseh .sz{display:block;font-size:15px;font-weight:600;color:var(--ink);line-height:1.1}
+  tbody td{border-bottom:1px solid var(--line-soft);padding:4px 10px;vertical-align:middle;white-space:nowrap}
+  tbody tr.cur td{background:#fdf8ee}
+  tbody tr.lin td{background:var(--lining)}
+  tbody tr.lin.cur td{background:#f7efdf}
+  tbody tr.void td .pomwrap{opacity:.45}
+  tbody tr.void .pomname::after{content:'  · es descartarà';font-size:10px;color:var(--ink-faint);font-style:italic}
+  tbody tr.born td{animation:born 1s ease-out}
+  @keyframes born{0%{background:#fdf2da}100%{background:transparent}}
+  @media (prefers-reduced-motion:reduce){tbody tr.born td{animation:none}}
+  .hnd{color:var(--ink-faint);cursor:grab;width:20px}
+  .num{color:var(--ink-soft);width:26px;font-size:11px}
+
+  .laywrap{display:flex;align-items:center;gap:4px}
+  select.cell{font-family:inherit;font-size:11.5px;color:var(--ink);background:var(--panel);
+              border:1px solid var(--line);border-radius:5px;padding:2px 6px;min-width:90px}
+  select.cell.def{color:var(--ink-faint)}
+  input.nomen{font-family:inherit;font-size:12.5px;font-weight:600;color:var(--gold);background:transparent;
+         border:1px solid transparent;border-radius:5px;padding:2px 6px;width:76px}
+  input.nomen:hover{border-color:var(--line)}
+  input.nomen:focus{border-color:var(--gold);outline:none;background:#fffdf8}
+  .pomwrap{display:flex;align-items:center;gap:7px}
+  .pomname{font-size:12.5px}
+  .pomext{color:var(--gold);font-weight:500}
+  .info{flex:none;color:var(--ink-faint);font-size:11px;line-height:1;cursor:help;
+        position:relative;font-style:normal}
+  .info:hover{border-color:var(--gold);color:var(--gold)}
+  .info::after{content:attr(data-t);position:absolute;left:50%;transform:translateX(-50%);
+    bottom:calc(100% + 6px);white-space:nowrap;background:var(--ink);color:#fff;font-style:normal;
+    font-size:10.5px;padding:4px 8px;border-radius:5px;opacity:0;pointer-events:none;transition:opacity .12s;z-index:20}
+  .info:hover::after{opacity:1}
+
+  /* grups d'instància: paraules senceres */
+  td.dimcell{border-left:1px solid var(--line-soft);text-align:center;padding:4px 8px}
+  .qw{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:2px 10px;
+      font-family:inherit;font-size:10.5px;color:var(--ink-faint);cursor:pointer;position:relative;margin:0 2px}
+  tr:hover .qw,tr.cur .qw{color:var(--ink-soft)}
+  .qw:hover:not(:disabled){border-color:var(--gold-soft);color:var(--gold)}
+  .qw:focus-visible{outline:2px solid var(--gold);outline-offset:1px}
+  .qw.on{background:var(--sel);border-color:#e3d2ae;color:var(--gold);font-weight:600}
+  .qw:disabled:not(.on){opacity:.4;cursor:default}
+  .qw::after{content:attr(data-tip);position:absolute;left:50%;transform:translateX(-50%);
+    bottom:calc(100% + 6px);white-space:nowrap;background:var(--ink);color:#fff;font-size:10.5px;
+    padding:4px 9px;border-radius:5px;opacity:0;pointer-events:none;transition:opacity .12s;z-index:30;font-weight:400}
+  .qw:hover::after{opacity:1}
+  .qmore{background:none;border:1px dashed var(--line);border-radius:999px;padding:3px 9px;
+         font-family:inherit;font-size:10.5px;color:var(--ink-faint);cursor:pointer;position:relative}
+  .qmore:hover{border-color:var(--gold-soft);color:var(--gold)}
+  .qmore::after{content:attr(data-tip);position:absolute;left:50%;transform:translateX(-50%);
+    bottom:calc(100% + 6px);white-space:nowrap;background:var(--ink);color:#fff;font-size:10.5px;
+    padding:4px 9px;border-radius:5px;opacity:0;pointer-events:none;transition:opacity .12s;z-index:30}
+  .qmore:hover::after{opacity:1}
+
+  .g{background:none;border:1px solid transparent;border-radius:5px;padding:3px;line-height:0;
+     color:var(--ink-faint);cursor:pointer;position:relative;display:inline-flex}
+  tr:hover .g,tr.cur .g{color:var(--ink-soft)}
+  .g:hover{color:var(--gold);border-color:var(--line)}
+  .g:focus-visible{outline:2px solid var(--gold);outline-offset:1px}
+  .g svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.5;
+         stroke-linecap:round;stroke-linejoin:round}
+  .g::after{content:attr(data-tip);position:absolute;left:0;bottom:calc(100% + 6px);
+    white-space:nowrap;background:var(--ink);color:#fff;font-size:10.5px;padding:4px 9px;
+    border-radius:5px;opacity:0;pointer-events:none;transition:opacity .12s;z-index:30}
+  .g:hover::after{opacity:1}
+  .del{color:var(--ink-faint)}
+  .del:hover{color:var(--danger);border-color:#eddcd8}
+
+  td.valcell{border-left:1px solid var(--line);border-right:1px solid var(--line);
+             background:var(--sel);text-align:right;width:100px}
+  input.val{font-family:inherit;font-size:12.5px;font-weight:600;text-align:right;color:var(--ink);
+            font-variant-numeric:tabular-nums;
+            border:1px solid var(--line);border-radius:5px;background:var(--panel);padding:3px 8px;width:78px}
+  tr.cur input.val{border-color:var(--gold);background:#fffdf8}
+  input.val:focus{outline:none;background:#fffdf8;border-color:var(--gold)}
+  input.val.bad{border-color:var(--danger);background:#fdf3f1}
+
+  tr.newrow td{background:#fdfcf9;padding:6px 10px}
+  .finder{position:relative;display:flex;align-items:center;gap:10px}
+  input.search{font-family:inherit;font-size:12.5px;color:var(--ink);border:1px solid var(--gold);
+               border-radius:5px;background:var(--panel);padding:6px 10px;width:320px}
+  input.search:focus{outline:none;background:#fffdf8}
+  input.search::placeholder{color:var(--ink-faint);font-size:11.5px}
+  .fhint{font-size:10.5px;color:var(--ink-faint)}
+  .drop{position:absolute;bottom:calc(100% + 4px);left:0;z-index:40;background:var(--panel);
+        border:1px solid var(--line);border-radius:7px;box-shadow:0 -8px 24px rgba(58,53,48,.12);
+        min-width:410px;max-height:290px;overflow:auto}
+  .grp2{font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-faint);
+       padding:7px 12px 3px;border-top:1px solid var(--line-soft)}
+  .grp2:first-child{border-top:none}
+  .opt{display:flex;align-items:center;gap:10px;padding:6px 12px;cursor:pointer;font-size:12px}
+  .opt .c{color:var(--gold);font-weight:600;min-width:56px}
+  .opt .lv{margin-left:auto;font-size:9.5px;color:var(--ink-faint)}
+  .opt.on{background:var(--sel)}
+  .opt.new{font-style:italic;color:var(--ink-soft)}
+  .opt.new .c{color:var(--ink-faint)}
+  .xip{background:var(--sel);color:var(--gold);border:1px solid #e3d2ae;border-radius:999px;
+       padding:1px 8px;font-size:10.5px;white-space:nowrap}
+
+  .statusbar{position:fixed;bottom:0;left:0;right:0;background:var(--panel);
+             border-top:1px solid var(--line);padding:10px 24px;display:flex;gap:22px;
+             align-items:center;font-size:11.5px;color:var(--ink-soft)}
+  .statusbar b{color:var(--ink)}
+  .statusbar .save{margin-left:auto;color:var(--gold)}
+  .foot{margin-top:18px;padding:14px 18px;border:1px dashed var(--line);border-radius:8px;
+        background:#fdfcf9;color:var(--ink-soft);font-size:11.5px;line-height:1.75}
+  .foot b{color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="crumb">
+    <span>← Models</span><span>›</span><span>BRW-FW27-0051</span><span>·</span>
+    <b>Jersei coll rodó</b><span class="chip-st">Desenvolupament</span>
+  </div>
+  <h1>Definició de POMs i talla base — v8</h1>
+  <p class="sub">Instàncies per grups amb paraules senceres. La tria allarga el nom del POM.</p>
+  <p class="kbd-hint">
+    <kbd>↓</kbd>/<kbd>Enter</kbd> següent · <kbd>↑</kbd> anterior ·
+    <span class="hot"><kbd>L</kbd></span> germana de capa ·
+    <span class="hot"><kbd>I</kbd></span> focus als grups d'instància ·
+    <kbd>N</kbd> nomenclatura · última fila <kbd>↓</kbd> = cercador · buit = es descarta
+  </p>
+
+  <div class="scroll">
+  <table>
+    <thead>
+      <tr>
+        <th rowspan="2" class="hnd"></th><th rowspan="2" class="num">#</th>
+        <th rowspan="2" style="width:126px">LAYER</th>
+        <th rowspan="2" style="width:74px"></th>
+        <th rowspan="2">POM NAME</th>
+        <th colspan="3" class="grp">INSTANCE</th>
+        <th rowspan="2" class="baseh"><span class="lbl">Talla base</span><span class="sz">S</span></th>
+        <th rowspan="2" style="width:34px"></th>
+      </tr>
+      <tr class="r2">
+        <th style="width:132px">Laterality</th>
+        <th style="width:152px">State</th>
+        <th style="width:52px">més</th>
+      </tr>
+    </thead>
+    <tbody id="tb"></tbody>
+  </table>
+  </div>
+
+  <div class="foot">
+    <b>Prova-ho:</b> clica <b>Left</b> a la fila de <b>S · FRONT ARMHOLE</b>. Neixen SL i SR amb els valors
+    heretats, i el nom s'allarga: <b>FRONT ARMHOLE <span style="color:var(--gold)">· Left</span></b>. La
+    paraula queda marcada a la seva columna, i la parella de la germana també. Sobre una fila ja partida,
+    encara pots partir per <b>State</b> (Left · Relaxed / Left · Extended). El <b>＋</b> obre el modal
+    complet per a posicions. Amb teclat: <kbd>I</kbd> des del valor i les fletxes recorren els grups.
+  </div>
+</div>
+
+<div class="statusbar">
+  <span><b id="nfull">0</b> informats</span>
+  <span><b id="nvoid">0</b> en blanc → es descartaran</span>
+  <span class="save" id="save">desat</span>
+</div>
+
+<script>
+const T={'CHEST WIDTH':'Ample de pit','WAIST WIDTH':'Ample de cintura','BOTTOM WIDTH':'Ample baix',
+'FRONT ARMHOLE':'Sisa davant','TOTAL SIDE LENGTH':'Llarg total lateral','CUFF WIDTH':'Ample de puny',
+'TOTAL LENGTH':'Llargada total','POCKET WIDTH':'Ample de butxaca','WAISTBAND HEIGHT':'Alçada de cinturó',
+'THORAX BACK WIDTH':'Ample de tòrax esquena'};
+const CAT=[
+ {c:'A',n:'CHEST WIDTH',lv:'item'},{c:'C',n:'WAIST WIDTH',lv:'item'},{c:'D',n:'BOTTOM WIDTH',lv:'item'},
+ {c:'F1',n:'TOTAL SIDE LENGTH',lv:'item'},{c:'S',n:'FRONT ARMHOLE',lv:'item'},
+ {c:'J1',n:'CUFF WIDTH',lv:'type'},{c:'E3',n:'THORAX BACK WIDTH',lv:'type'},{c:'M',n:'TOTAL LENGTH',lv:'type'},
+ {c:'O.20',n:'POCKET WIDTH',lv:'catàleg'},{c:'C.11',n:'WAISTBAND HEIGHT',lv:'catàleg'}];
+const LAYERS=['Exterior','Lining','Interlining','Padding'];
+const SUF={Left:'L',Right:'R',Relaxed:'RE',Extended:'EX'};
+const COMP={Left:'Right',Right:'Left',Relaxed:'Extended',Extended:'Relaxed'};
+const DIMS=[{key:'lat',opts:['Left','Right']},{key:'st',opts:['Relaxed','Extended']}];
+const dimOf=v=>DIMS.find(d=>d.opts.includes(v))?.key;
+const ICO={
+ layer:'<svg viewBox="0 0 24 24"><path d="M12 4l8 4-8 4-8-4 8-4z"/><path d="M4 12l8 4 8-4"/><path d="M4 16l8 4 8-4"/></svg>',
+ trash:'<svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"/></svg>'};
+
+/* inst = array de valors, un per dimensió com a màxim */
+let rows=[
+ {c:'A',n:'CHEST WIDTH',layer:'Exterior',inst:[],val:'46'},
+ {c:'C',n:'WAIST WIDTH',layer:'Exterior',inst:[],val:'44'},
+ {c:'D',n:'BOTTOM WIDTH',layer:'Exterior',inst:[],val:''},
+ {c:'S',n:'FRONT ARMHOLE',layer:'Exterior',inst:[],val:''}
+];
+const tb=document.getElementById('tb');
+let fitems=[],fsel=0;
+
+const instTxt=inst=>inst.join(' · ');
+const codeOf=(base,inst)=>base+inst.map(v=>SUF[v]).join('');
+
+/* per fila: per cada dimensió, quina opció té ELLA i quines té la FAMÍLIA */
+function dimState(i,dim){
+  const r=rows[i];
+  const mine=r.inst.find(v=>dimOf(v)===dim);
+  const famVals=new Set();
+  rows.forEach(x=>{if(x.n===r.n&&x.layer===r.layer)
+    x.inst.forEach(v=>{if(dimOf(v)===dim)famVals.add(v);});});
+  return {mine,taken:famVals.size>0};
+}
+
+function render(focus,toFinder,born){
+  tb.innerHTML=rows.map((r,i)=>{
+    const cells=DIMS.map(d=>{
+      const st=dimState(i,d.key);
+      return `<td class="dimcell">${d.opts.map(o=>{
+        const on=st.mine===o;
+        const dis=st.taken&&!on;
+        return `<button class="qw ${on?'on':''}" data-o="${o}" data-i="${i}"
+          data-tip="${on?o+' — aquesta fila':dis?'Repartida — la germana és '+o:o+' — parteix el POM (valors heretats)'}"
+          ${st.taken?'disabled':''}>${o}</button>`;}).join('')}</td>`;
+    }).join('');
+    const ext=r.inst.length?` <span class="pomext">· ${instTxt(r.inst)}</span>`:'';
+    return `
+   <tr data-i="${i}" class="${r.val.trim()===''?'void ':''}${r.layer!=='Exterior'?'lin ':''}${i===born?'born':''}">
+    <td class="hnd">⠿</td><td class="num">${i+1}</td>
+    <td><div class="laywrap">
+      <select class="cell ${r.layer==='Exterior'?'def':''}" data-i="${i}" tabindex="-1">
+        ${LAYERS.map(l=>`<option ${l===r.layer?'selected':''}>${l}</option>`).join('')}</select>
+      <button class="g" data-act="layer" data-i="${i}" data-tip="Germana de capa · tecla L" tabindex="-1">${ICO.layer}</button>
+    </div></td>
+    <td><input class="nomen" data-i="${i}" value="${r.c}"></td>
+    <td><div class="pomwrap"><span class="pomname">${r.n}${ext}</span>
+      <span class="info" data-t="${T[r.n]||''}">i</span></div></td>
+    ${cells}
+    <td class="dimcell"><button class="qmore" data-full="${i}" data-tip="Posició i combinacions — modal complet">＋</button></td>
+    <td class="valcell"><input class="val" data-i="${i}" value="${r.val}" inputmode="decimal"></td>
+    <td><button class="g del" data-act="del" data-i="${i}" data-tip="Treu el POM" tabindex="-1">${ICO.trash}</button></td>
+   </tr>`;}).join('')
+   +`<tr class="newrow"><td class="hnd">＋</td><td colspan="9">
+      <div class="finder">
+        <input class="search" id="finder" placeholder="codi o nom…  «C.f» folre · «S.l» left · ↓ des de l'última fila">
+        <span class="fhint">Enter confirma · Esc torna al carril</span>
+        <div class="drop" id="drop" style="display:none"></div>
+      </div></td></tr>`;
+  bind();
+  if(toFinder)document.getElementById('finder').focus();
+  else if(focus!=null){const inp=tb.querySelector(`input.val[data-i="${focus}"]`);
+    if(inp){inp.focus();inp.select();markCur(focus);}}
+  refreshBar();
+}
+function markCur(i){tb.querySelectorAll('tr').forEach(t=>t.classList.remove('cur'));
+  const tr=tb.querySelector(`tr[data-i="${i}"]`);if(tr)tr.classList.add('cur');}
+function refreshBar(){const f=rows.filter(r=>r.val.trim()!=='').length;
+  document.getElementById('nfull').textContent=f;
+  document.getElementById('nvoid').textContent=rows.length-f;}
+let saveT;
+function flashSave(){const s=document.getElementById('save');s.textContent='desant…';
+  clearTimeout(saveT);saveT=setTimeout(()=>s.textContent='desat',450);}
+function commit(i,inp){let v=inp.value.replace(',','.').trim();
+  if(v!==''&&isNaN(parseFloat(v))){inp.classList.add('bad');return false;}
+  inp.classList.remove('bad');rows[i].val=v;
+  inp.closest('tr').classList.toggle('void',v==='');
+  flashSave();refreshBar();return true;}
+
+function mkLayerSibling(i){
+  const src=rows[i];
+  const next=LAYERS[Math.min(LAYERS.indexOf(src.layer)+1,LAYERS.length-1)];
+  if(next===src.layer)return;
+  if(rows.some(r=>r.c===src.c&&r.layer===next&&instTxt(r.inst)===instTxt(src.inst)))return;
+  rows.splice(i+1,0,{...src,inst:[...src.inst],layer:next,val:src.val});
+  render(i+1,false,i+1);flashSave();
+}
+function splitPair(i,opt){
+  const src=rows[i],d=dimOf(opt);
+  const base=src.c.replace(new RegExp((src.inst.map(v=>SUF[v]).join(''))+'$'),'')||src.c;
+  /* base = codi sense sufixos actuals; simplificació de maqueta */
+  const instA=[...src.inst.filter(v=>dimOf(v)!==d),opt];
+  const instB=[...src.inst.filter(v=>dimOf(v)!==d),COMP[opt]];
+  const ord=x=>DIMS.findIndex(dd=>dd.opts.includes(x));
+  instA.sort((a,b)=>ord(a)-ord(b));instB.sort((a,b)=>ord(a)-ord(b));
+  const rootCode=src.inst.length? base : src.c;
+  const a={...src,inst:instA,c:codeOf(rootCode,instA),val:src.val};
+  const b={...src,inst:instB,c:codeOf(rootCode,instB),val:src.val};
+  rows.splice(i,1,a,b);
+  render(i,false,i);flashSave();
+}
+
+function bind(){
+  tb.querySelectorAll('input.val').forEach(inp=>{
+    const i=+inp.dataset.i;
+    inp.addEventListener('focus',()=>{inp.select();markCur(i);});
+    inp.addEventListener('blur',()=>commit(i,inp));
+    inp.addEventListener('keydown',e=>{
+      const k=e.key.toLowerCase();
+      if(e.key==='ArrowDown'||e.key==='Enter'){e.preventDefault();commit(i,inp);
+        if(i<rows.length-1)tb.querySelector(`input.val[data-i="${i+1}"]`).focus();
+        else document.getElementById('finder').focus();}
+      else if(e.key==='ArrowUp'){e.preventDefault();commit(i,inp);
+        if(i>0)tb.querySelector(`input.val[data-i="${i-1}"]`).focus();}
+      else if(e.key==='Escape'){inp.value=rows[i].val;inp.select();}
+      else if(k==='l'&&!e.ctrlKey&&!e.metaKey){e.preventDefault();commit(i,inp);mkLayerSibling(i);}
+      else if(k==='i'&&!e.ctrlKey&&!e.metaKey){e.preventDefault();commit(i,inp);
+        const b=tb.querySelector(`tr[data-i="${i}"] .qw:not(:disabled)`);if(b)b.focus();}
+      else if(k==='n'&&!e.ctrlKey&&!e.metaKey){e.preventDefault();commit(i,inp);
+        const nm=tb.querySelector(`input.nomen[data-i="${i}"]`);nm.focus();nm.select();}
+    });
+  });
+  tb.querySelectorAll('.qw').forEach(b=>{
+    if(b.disabled)return;
+    b.onclick=()=>splitPair(+b.dataset.i,b.dataset.o);
+    b.addEventListener('keydown',e=>{
+      const i=+b.dataset.i,k=e.key.toLowerCase();
+      if(k==='l'){e.preventDefault();splitPair(i,'Left');}
+      else if(k==='r'){e.preventDefault();splitPair(i,'Right');}
+      else if(k==='e'){e.preventDefault();splitPair(i,'Relaxed');}
+      else if(k==='x'){e.preventDefault();splitPair(i,'Extended');}
+      else if(e.key==='ArrowRight'){e.preventDefault();
+        const all=[...b.closest('tr').querySelectorAll('.qw:not(:disabled)')];
+        const ix=all.indexOf(b);if(ix<all.length-1)all[ix+1].focus();}
+      else if(e.key==='ArrowLeft'){e.preventDefault();
+        const all=[...b.closest('tr').querySelectorAll('.qw:not(:disabled)')];
+        const ix=all.indexOf(b);if(ix>0)all[ix-1].focus();}
+      else if(e.key==='Escape'||e.key==='Enter'&&b.classList.contains('on')){e.preventDefault();
+        tb.querySelector(`input.val[data-i="${i}"]`).focus();}
+      else if(e.key==='Enter'){e.preventDefault();splitPair(i,b.dataset.o);}
+    });
+  });
+  tb.querySelectorAll('.qmore').forEach(b=>{
+    b.onclick=()=>alert('Maqueta: modal complet aprovat (posició, combinacions, complementària desmarcable).');
+  });
+  tb.querySelectorAll('input.nomen').forEach(nm=>{
+    const i=+nm.dataset.i;
+    nm.addEventListener('keydown',e=>{
+      if(e.key==='Enter'||e.key==='Escape'){e.preventDefault();
+        if(e.key==='Enter'){rows[i].c=nm.value;flashSave();}
+        else nm.value=rows[i].c;
+        tb.querySelector(`input.val[data-i="${i}"]`).focus();}
+    });
+    nm.addEventListener('blur',()=>{rows[i].c=nm.value;flashSave();});
+  });
+  tb.querySelectorAll('select.cell').forEach(s=>{
+    s.addEventListener('change',()=>{rows[+s.dataset.i].layer=s.value;render(+s.dataset.i);flashSave();});
+  });
+  tb.querySelectorAll('.g').forEach(b=>{
+    b.onclick=()=>{const i=+b.dataset.i;
+      if(b.dataset.act==='layer')mkLayerSibling(i);
+      else if(b.dataset.act==='del'){rows.splice(i,1);render(Math.min(i,rows.length-1));flashSave();}};
+  });
+
+  const f=document.getElementById('finder');
+  f.addEventListener('input',()=>filter(f.value));
+  f.addEventListener('keydown',e=>{
+    if(e.key==='ArrowDown'){e.preventDefault();if(fitems.length){fsel=Math.min(fsel+1,fitems.length-1);paint();}}
+    else if(e.key==='ArrowUp'){e.preventDefault();
+      if(fsel===0||document.getElementById('drop').style.display==='none'){
+        closeF();const l=rows.length-1;
+        if(l>=0)tb.querySelector(`input.val[data-i="${l}"]`).focus();}
+      else{fsel--;paint();}}
+    else if(e.key==='Enter'){e.preventDefault();if(fitems[fsel])pick(fitems[fsel]);}
+    else if(e.key==='Escape'){e.preventDefault();f.value='';closeF();
+      const l=rows.length-1;if(l>=0)tb.querySelector(`input.val[data-i="${l}"]`).focus();}
+  });
+}
+function closeF(){document.getElementById('drop').style.display='none';}
+function filter(q){
+  const drop=document.getElementById('drop');q=q.trim();
+  if(!q){drop.style.display='none';return;}
+  let layer='Exterior',inst=[],base=q;
+  const m=q.match(/^(.*?)\.(f|l|r|re|ex)$/i);
+  if(m){base=m[1];const s=m[2].toLowerCase();
+    if(s==='f')layer='Lining';else if(s==='l')inst=['Left'];else if(s==='r')inst=['Right'];
+    else if(s==='re')inst=['Relaxed'];else if(s==='ex')inst=['Extended'];}
+  const ql=base.toLowerCase();
+  const hit=CAT.filter(p=>p.c.toLowerCase().startsWith(ql)||p.n.toLowerCase().includes(ql));
+  const order={item:0,type:1,'catàleg':2};
+  hit.sort((a,b)=>order[a.lv]-order[b.lv]||a.c.localeCompare(b.c));
+  fitems=hit.slice(0,8).map(p=>({...p,layer,inst}));fsel=0;
+  fitems.push({newPom:true,q:base});
+  paint();drop.style.display='block';
+}
+function paint(){
+  const drop=document.getElementById('drop');let html='',last=null;
+  fitems.forEach((p,k)=>{
+    if(p.newPom){html+=`<div class="grp2">no és al catàleg</div>
+      <div class="opt new ${k===fsel?'on':''}" data-k="${k}"><span class="c">＋</span>
+      crear «${p.q.toUpperCase()}» — acte conscient, demana confirmació</div>`;}
+    else{if(p.lv!==last){html+=`<div class="grp2">${p.lv==='item'?"de l'item":p.lv==='type'?'del type':'del catàleg del client'}</div>`;last=p.lv;}
+      const ex=(p.layer!=='Exterior'?p.layer:'')+(p.inst.length?(p.layer!=='Exterior'?' · ':'')+p.inst.join(' · '):'');
+      html+=`<div class="opt ${k===fsel?'on':''}" data-k="${k}"><span class="c">${p.c}</span>${p.n}
+        ${ex?`<span class="xip">${ex}</span>`:''}<span class="lv">${p.lv}</span></div>`;}
+  });
+  drop.innerHTML=html;
+  drop.querySelectorAll('.opt').forEach(o=>o.onclick=()=>pick(fitems[+o.dataset.k]));
+}
+function pick(p){
+  if(p.newPom){alert('Maqueta: porta de creació conscient. Mai per defecte.');return;}
+  rows.push({c:codeOf(p.c,p.inst),n:p.n,layer:p.layer,inst:[...p.inst],val:''});
+  document.getElementById('finder').value='';closeF();
+  render(rows.length-1,false,rows.length-1);flashSave();
+}
+render(0);
+</script>
+</body>
+</html>

@@ -9,7 +9,7 @@ serializers de fora d'aquest fitxer (TenantConfig, Customer). El motiu de podar 
 de tallar amb 403: hi ha pantalles TÈCNIQUES que depenen d'aquests endpoints i no pinten
 cap import — vegeu el docstring del mixin.
 """
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from rest_framework import serializers
 
@@ -404,6 +404,16 @@ class WorkOrderSerializer(PodaEconomicaMixin, serializers.ModelSerializer):
     CAMPS_ECONOMICS = ('price_snapshot',)
     customer_nom = serializers.CharField(source='customer.nom', read_only=True)
     model_codi = serializers.CharField(source='model.codi_intern', read_only=True, default=None)
+    # LLEI DEL NOM — el nom del model és l'identificador més visible, i el codi el secundari.
+    # Fins ara aquest serializer servia NOMÉS `model_codi`, i per això la llista i el detall
+    # d'encàrrecs no podien pintar el nom encara que volguessin (el coll d'ampolla era el
+    # payload, no la taula). Els dos germans d'aquesta mateixa app ja el servien —
+    # `work-orders/orphaned/` (views.py:462) i `order-lines/{id}/allocation/` (views.py:350) —:
+    # el principal era l'únic que no el portava. `collection` l'acompanya perquè el PDF d'albarà
+    # ja identifica el model amb el parell nom + col·lecció (pdf_service.py:585-597).
+    # `default=None` a `model_nom` per als COLLECTOR, que per constraint no tenen model.
+    model_nom = serializers.CharField(source='model.nom_prenda', read_only=True, default=None)
+    model_collection = serializers.CharField(source='model.collection', read_only=True, default=None)
     # v2 albarà — traçabilitat de la cadena comanda→WO→albarà (números de document, read-only).
     order_number = serializers.CharField(source='order_line.order.document_number', read_only=True, default=None)
     delivery_note_number = serializers.CharField(source='delivery_note.document_number', read_only=True, default=None)
@@ -414,7 +424,8 @@ class WorkOrderSerializer(PodaEconomicaMixin, serializers.ModelSerializer):
     class Meta:
         model = WorkOrder
         fields = ['id', 'number', 'kind', 'origin', 'status', 'customer', 'customer_nom',
-                  'model', 'model_codi', 'order_line', 'order_number', 'period', 'delivery_note',
+                  'model', 'model_codi', 'model_nom', 'model_collection',
+                  'order_line', 'order_number', 'period', 'delivery_note',
                   'delivery_note_number', 'price_snapshot', 'recipe_snapshot',
                   'closed_at', 'closed_by', 'created_at', 'n_tasks', 'tasks', 'adjustments']
 
@@ -479,7 +490,7 @@ class DeliveryNoteLineSerializer(PodaEconomicaMixin, serializers.ModelSerializer
     tarifa/hora. Es podava sola quan `hourly_rate` era `null`; el dia que s'omplís a PROD,
     hauria començat a viatjar de debò (diagnosi 2026-08-14 §3.2). `internal_minutes` NO es
     poda: són minuts de feina, no diner, i són patrimoni del tècnic que els ha fet."""
-    CAMPS_ECONOMICS = ('unit_price', 'line_total', 'internal_cost')
+    CAMPS_ECONOMICS = ('unit_price', 'line_total', 'internal_cost', 'internal_rate')
     product_code = serializers.CharField(source='product.code', read_only=True, default=None)
     product_name = serializers.CharField(source='product.name', read_only=True, default=None)
     # v2 — capçalera de bloc-model (agrupació al detall/PDF); read-only, per compondre els blocs.
@@ -498,6 +509,30 @@ class DeliveryNoteLineSerializer(PodaEconomicaMixin, serializers.ModelSerializer
     # de la tasca i cost = minuts interns × tarifa/hora (TenantConfig). Derivats; null sense minuts.
     internal_tecnic = serializers.SerializerMethodField()
     internal_cost = serializers.SerializerMethodField()
+    # A3 — la tarifa que s'ha aplicat de debò (override de la tasca o la del tenant). És dada
+    # ECONÒMICA i es poda com el cost: qui no veu diner tampoc no veu la tarifa.
+    internal_rate = serializers.SerializerMethodField()
+    # BLOC A · A7 — LES VOLTES QUE LA LÍNIA COBREIX, i dins de cadascuna les seves TASQUES.
+    # És el que la pantalla desplega («Ronda N · lliurada dd/mm/aaaa» → taula de tasques) i el
+    # que el document imprimeix a la línia de la ronda. Va aquí i no a un endpoint a part perquè
+    # és la MATEIXA lectura: si fossin dues portes, podrien dir coses diferents del mateix albarà.
+    rondes_detall = serializers.SerializerMethodField()
+    # EL PACTE que va proposar el preu, tal com la targeta i el document l'han de dir. Surt de
+    # `linia_comanda` (congelada a la línia) i no de tornar a resoldre el pivot: un model
+    # desassignat després d'emetre ha de seguir dient de quina venda venia.
+    # `pacte_consum` és la cartera de la LÍNIA DE VENDA (imputat/total), que és el «3/20» de la
+    # maqueta; no té res a veure amb el numeral de voltes, que és `pacte_rounds`.
+    pacte_oferta = serializers.CharField(source='linia_comanda.order.document_number',
+                                         read_only=True, default=None)
+    # L'ID de la comanda, per poder-hi ANAR. El `document_number` és per llegir-lo i no serveix
+    # per navegar: la ruta `/comercial/comandes/:id` va per pk. Ho demana la sortida «Anar a la
+    # comanda» del refús per contradicció de pacte, que ha de portar exactament a on es corregeix
+    # el numeral que ha provocat el refús.
+    pacte_oferta_id = serializers.IntegerField(source='linia_comanda.order_id',
+                                               read_only=True, default=None)
+    pacte_rounds = serializers.IntegerField(source='linia_comanda.rounds_included',
+                                            read_only=True, default=None)
+    pacte_consum = serializers.SerializerMethodField()
 
     def _hourly_rate(self):
         # Memoitzat al serializer fill (compartit per totes les línies del many=True): 1 sola lectura.
@@ -518,8 +553,85 @@ class DeliveryNoteLineSerializer(PodaEconomicaMixin, serializers.ModelSerializer
                .annotate(m=Sum('minuts')).order_by('-m').first())
         return (row or {}).get('tecnic__nom_complet')
 
+    def get_pacte_consum(self, obj):
+        l = obj.linia_comanda
+        if l is None:
+            return None
+        # Sense decimals: és un recompte d'unitats de cartera, no un import.
+        return f'{Decimal(l.qty_allocated or 0):.0f}/{Decimal(l.quantity or 0):.0f}'
+
+    def get_rondes_detall(self, obj):
+        from django.db.models import Sum
+        from fhort.tasks.models import TimerEntrada
+        from fhort.tasks.services_i import TRAMS_SANS
+        from .services import cost_hora_efectiu
+        rate_tenant = self._hourly_rate()
+        # 🚨 ELS MINUTS, EN UNA SOLA QUERY PER LÍNIA. Abans hi havia un agregat de timers PER
+        # TASCA: una nota de 8 línies × 2 voltes × 6 tasques feia més de 100 consultes per
+        # document, i aquest serializer el serveix també `?model=` a la pestanya Producció, que
+        # obre qualsevol tècnic. El cost es calcula igual; el que canvia és quantes vegades es
+        # pregunta a la BD.
+        ids = [t.id for r in obj.rondes.all() for t in r.tasques.all()]
+        minuts_per_tasca = {row['model_task_id']: row['m'] for row in (
+            TimerEntrada.objects.filter(TRAMS_SANS, model_task_id__in=ids)
+            .values('model_task_id').annotate(m=Sum('minuts')))}
+        # `pot_veure_diner` ja el resol el mixin de poda per als camps econòmics; aquí es
+        # replica per al que va NIAT, que la poda de camps de primer nivell no arriba a mirar.
+        diner = self._pot_veure_diner()
+        files = []
+        for r in obj.rondes.select_related('entrega').order_by('seq'):
+            e = getattr(r, 'entrega', None)
+            tasques = []
+            for t in r.tasques.select_related('task_type', 'assignee').order_by(
+                    'task_type__default_order', 'task_type__code'):
+                minuts = minuts_per_tasca.get(t.id) or 0
+                rate = cost_hora_efectiu(t, rate_tenant)
+                cost = (Decimal(minuts) / Decimal(60) * Decimal(rate)).quantize(
+                    Decimal('0.01'), rounding=ROUND_HALF_UP) if rate is not None else None
+                tasques.append({
+                    'id': t.id,
+                    'code': t.task_type.code,
+                    'nom': t.task_type.name,
+                    'tecnic': t.assignee.nom_complet if t.assignee_id else None,
+                    'minuts': int(minuts),
+                    # 🔒 A3: la tarifa i el cost són COST INTERN i no viatgen mai al client.
+                    'cost_hora': (str(rate) if rate is not None else None) if diner else None,
+                    'cost': (str(cost) if cost is not None else None) if diner else None,
+                    'feta': t.status == 'Done',
+                })
+            files.append({
+                'id': r.id, 'seq': r.seq,
+                'data_lliurament': e.data.isoformat() if e is not None else None,
+                'data_ok': e.data_ok.isoformat() if (e is not None and e.data_ok) else None,
+                'fora_de_comanda': r.fora_de_comanda,
+                'tasques': tasques,
+            })
+        return files
+
+    def _pot_veure_diner(self):
+        """Mateix criteri que `PodaEconomicaMixin`, escapatòria INCLOSA.
+
+        El mixin respecta `context={'diner': True}` per a les crides que no són HTTP (PDF,
+        informes, càlculs interns). Mirar només el `request` deixava un serializer instanciat
+        fora d'una petició amb `unit_price` visible i `cost_hora` a `None` alhora — una resposta
+        incoherent amb ella mateixa.
+        """
+        from fhort.accounts.capabilities import pot_veure_diner
+        if self.context.get('diner') is True:
+            return True
+        return pot_veure_diner(self.context.get('request'))
+
+    def get_internal_rate(self, obj):
+        from .services import cost_hora_efectiu
+        rate = cost_hora_efectiu(obj.model_task, self._hourly_rate())
+        return str(rate) if rate is not None else None
+
     def get_internal_cost(self, obj):
-        rate = self._hourly_rate()
+        # A3 — la tarifa de la TASCA mana sobre la del tenant. El resolutor viu a `services`
+        # (punt únic) perquè la pantalla d'albarà i el càlcul de la línia no en puguin tenir
+        # dos de diferents.
+        from .services import cost_hora_efectiu
+        rate = cost_hora_efectiu(obj.model_task, self._hourly_rate())
         if rate is None or obj.internal_minutes is None:
             return None
         from decimal import Decimal, ROUND_HALF_UP
@@ -534,13 +646,22 @@ class DeliveryNoteLineSerializer(PodaEconomicaMixin, serializers.ModelSerializer
                   'description', 'quantity', 'unit_price', 'line_total', 'position', 'visible',
                   'model', 'model_intern', 'model_codi_client', 'model_nom', 'model_collection',
                   'model_temporada', 'model_any', 'internal_minutes', 'internal_tecnic',
-                  'internal_cost', 'task_finished_at',
+                  'internal_cost', 'internal_rate', 'task_finished_at',
+                  'encarrec_directe', 'linia_comanda', 'rondes_detall',
+                  'pacte_oferta', 'pacte_oferta_id', 'pacte_rounds', 'pacte_consum',
                   'work_order', 'model_task', 'expense', 'adjustment']
         # v2 — editables en DRAFT: description, quantity, unit_price, visible. La resta (traçabilitat,
         # model, internal_minutes, line_total) read-only: es fixen en compondre la línia.
         read_only_fields = ['delivery_note', 'line_kind', 'product', 'line_total', 'position',
                             'model', 'internal_minutes',
-                            'work_order', 'model_task', 'expense', 'adjustment']
+                            'work_order', 'model_task', 'expense', 'adjustment',
+                            # 🚨 ESCRIVIBLES PER DESCUIT, i era una FUITA. `linia_comanda` és una
+                            # FK sense validació de client: un `PATCH {"linia_comanda": <línia
+                            # d'un ALTRE client>}` contestava 200, i a partir d'aquí el document
+                            # imprimia «Pressupost OF-…» d'aquell tercer i `pacte_consum` n'ensenyava
+                            # la cartera. Els dos els escriu `add_lines_to_draft` des de la safata,
+                            # que és qui sap de quin client parla; el client HTTP no els ha de tocar.
+                            'linia_comanda', 'encarrec_directe']
 
     def validate(self, data):
         dn = getattr(self.instance, 'delivery_note', None)

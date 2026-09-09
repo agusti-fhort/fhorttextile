@@ -407,6 +407,12 @@ class SalesOrderLineViewSet(mixins.RetrieveModelMixin, mixins.ListModelMixin,
                         status=status.HTTP_201_CREATED)
 
 
+# Sostre del tancament en lot. La llista en serveix 25 per pàgina; el sostre no és per a ella
+# sinó per a la PORTA, que és pública al gate DEFINE_TASKS: cada encàrrec és una transacció
+# pròpia i una petició de 5.000 ids seria feina de minuts servida en un sol request.
+MAX_TANCAMENT_EN_LOT = 200
+
+
 class WorkOrderViewSet(mixins.RetrieveModelMixin, mixins.ListModelMixin, viewsets.GenericViewSet):
     """Encàrrecs / ordres de treball (B4a). No es crea per POST: els ORDER neixen del wizard
     (B4b) i els COLLECTOR del hook lazy. Llista filtrable per kind/status/customer/period.
@@ -419,6 +425,11 @@ class WorkOrderViewSet(mixins.RetrieveModelMixin, mixins.ListModelMixin, viewset
         .prefetch_related('adjustments', 'tasks__task_type').all()
     serializer_class = WorkOrderSerializer
     filterset_fields = ['kind', 'status', 'customer', 'period', 'model']
+    # El cercador de la llista d'encàrrecs busca per NOM del model primer (llei del nom), i
+    # després pel codi i pel client — els tres camps amb què algú anomena un encàrrec en veu
+    # alta. `number` hi entra perquè és el que es copia d'un correu. `period` NO: és un filtre
+    # (any-mes), no una cosa que es cerqui escrivint.
+    search_fields = ['model__nom_prenda', 'model__codi_intern', 'customer__nom', 'number']
 
     def get_permissions(self):
         if self.action in ('list', 'retrieve'):
@@ -466,6 +477,86 @@ class WorkOrderViewSet(mixins.RetrieveModelMixin, mixins.ListModelMixin, viewset
                           'quantity': str(line.quantity)} if line else None),
             })
         return Response({'orphaned': out})
+
+    @action(detail=False, methods=['post'], url_path='close-bulk')
+    def close_bulk(self, request):
+        """POST commerce/work-orders/close-bulk/ — tanca N encàrrecs. Gate DEFINE_TASKS (cau al
+        defecte de `get_permissions`, el MATEIX que `close`: un tancament en lot no pot demanar
+        menys permís que un de sol, ni més).
+
+        Body: {ids:[...], cancel_pending: bool}.
+
+        🔑 **NO ÉS UN TANCAMENT NOU: ÉS EL TANCAMENT INDIVIDUAL, N VEGADES.** Es crida
+        `close_work_order` un cop per encàrrec, amb els mateixos guards i el mateix
+        `cancel_pending`. Aquí no es reimplementa cap política —ni quins estats bloquegen, ni
+        què es dedueix—: si el lot i el gest solt poguessin divergir, tancar deu encàrrecs
+        d'un cop faria una cosa que ningú no ha decidit.
+
+        ⚠️ **EL LOT SERÀ SEMPRE PARCIAL, i la resposta ho ha de dir per ítem.** Un WO amb feina
+        InProgress/Paused no es tanca, i el motiu (`blockers`) és seu, no del lot. Per això la
+        resposta és una llista de resultats i no un booleà: qui la llegeix ha de poder dir a
+        l'usuari QUINS han quedat fora i PER QUÈ.
+
+        CAP TRANSACCIÓ QUE ELS EMBOLIQUI TOTS, a posta: `close_work_order` ja n'obre una de
+        pròpia per encàrrec. Una d'exterior faria que un sol error desfés els tancaments bons,
+        que és exactament el contrari del que un lot parcial ha de fer.
+        """
+        from .services import close_work_order
+        ids = request.data.get('ids')
+        # Mateixa validació que el germà `assign_models` (:388-396), i no per simetria: sense
+        # coacció a int, `{"ids": ["12"]}` troba el WO 12 al queryset però `trobats.get("12")`
+        # falla —les claus són int— i la resposta diria `not_found` d'un encàrrec que el mateix
+        # request acaba de llegir: una mentida amb 200 OK. I un escalar petava amb un 500.
+        if not isinstance(ids, list) or not ids:
+            return Response({'detail': 'ids (llista no buida) requerit.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if len(ids) > MAX_TANCAMENT_EN_LOT:
+            return Response({'detail': f'Màxim {MAX_TANCAMENT_EN_LOT} encàrrecs per lot.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        try:
+            ids = [int(x) for x in ids]
+        except (TypeError, ValueError):
+            return Response({'detail': "ids ha de ser una llista d'enters."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        cancel_pending = bool(request.data.get('cancel_pending'))
+        profile = getattr(request.user, 'profile', None)
+
+        trobats = {wo.pk: wo for wo in WorkOrder.objects.filter(pk__in=ids)}
+        resultats, tancats, bloquejats, errors = [], [], [], []
+        # S'itera sobre `ids` i no sobre el queryset perquè la resposta segueixi l'ordre que el
+        # client va demanar i perquè els ids inexistents es puguin dir en veu alta.
+        for wid in ids:
+            wo = trobats.get(wid)
+            if wo is None:
+                resultats.append({'id': wid, 'number': None, 'ok': False, 'motiu': 'not_found'})
+                errors.append(wid)
+                continue
+            # Es compta ABANS de tancar: `close_work_order` torna `pending_proposals` BUIT quan
+            # ha tancat de debò (les propostes són el motiu de NO tancar), o sigui que llegir-lo
+            # després diria sempre 0 i el lot mentiria sobre el que acaba de deduir.
+            a_deduir = (wo.tasks.filter(status='Pending').count()
+                        if cancel_pending and wo.status != 'CLOSED' else 0)
+            try:
+                r = close_work_order(wo, user=profile, cancel_pending=cancel_pending)
+            except Exception as e:                                    # noqa: BLE001
+                # Un encàrrec que peta no pot endur-se els altres. L'error es DIU, no s'empassa.
+                resultats.append({'id': wo.pk, 'number': wo.number, 'ok': False,
+                                  'motiu': 'error', 'error': str(e)})
+                errors.append(wo.pk)
+                continue
+            if r['closed']:
+                resultats.append({'id': wo.pk, 'number': wo.number, 'ok': True,
+                                  'ja_tancat': bool(r.get('already_closed')),
+                                  'deduides': a_deduir})
+                tancats.append(wo.pk)
+            else:
+                resultats.append({'id': wo.pk, 'number': wo.number, 'ok': False,
+                                  'motiu': 'blocked' if r['blockers'] else 'pending',
+                                  'blockers': r['blockers'],
+                                  'pending_proposals': r['pending_proposals']})
+                bloquejats.append(wo.pk)
+        return Response({'resultats': resultats, 'tancats': tancats,
+                         'bloquejats': bloquejats, 'errors': errors})
 
     @action(detail=True, methods=['post'])
     def review(self, request, pk=None):
@@ -573,12 +664,18 @@ class ExpenseViewSet(_ComercialMixin, viewsets.ModelViewSet):
 class DeliveryNoteViewSet(_ComercialMixin, mixins.RetrieveModelMixin, mixins.ListModelMixin,
                           mixins.UpdateModelMixin, mixins.DestroyModelMixin,
                           viewsets.GenericViewSet):
-    """Albarans (B4c). Lectura oberta; `generate`/`issue`/`destroy` gated CONFIGURE; `pdf`
-    lectura. NO es crea per POST directe: neix de `generate/` (agrega 1..N WorkOrder CLOSED del
-    mateix customer). `destroy` només en DRAFT (allibera els WO via SET_NULL). L'UPDATE del
-    header serveix per editar `notes` en DRAFT (el status es mou només per `issue`)."""
+    """Albarans (B4c). Lectura oberta; `issue`/`destroy` gated CONFIGURE; `pdf` lectura. NO es
+    crea per POST directe: neix de `draft/` (v2, un DRAFT buit per client) + `add-lines/` (línies
+    proposades per la safata `billable/`). `destroy` només en DRAFT (allibera els WO via
+    SET_NULL). L'UPDATE del header serveix per editar `notes` en DRAFT (el status es mou només
+    per `issue`)."""
     queryset = DeliveryNote.objects.select_related('customer', 'issued_by', 'created_by') \
-        .prefetch_related('lines__product', 'delivery_notes_included').all()
+        .prefetch_related('lines__product', 'delivery_notes_included',
+                          # Mateixa raó que a la vista de línies: `rondes_detall` i `pacte_*`
+                          # baixen a voltes → tasques i travessen la línia de comanda.
+                          'lines__linia_comanda__order', 'lines__rondes__entrega',
+                          'lines__rondes__tasques__task_type',
+                          'lines__rondes__tasques__assignee').all()
     serializer_class = DeliveryNoteSerializer
     filterset_fields = ['status', 'customer']
 
@@ -602,27 +699,6 @@ class DeliveryNoteViewSet(_ComercialMixin, mixins.RetrieveModelMixin, mixins.Lis
         return Response({'customer': customer.id, 'groups': get_billable_items(customer)})
 
     @action(detail=False, methods=['post'])
-    def generate(self, request):
-        """POST commerce/delivery-notes/generate/ — genera un albarà DRAFT amb línies proposades
-        a partir de {work_order_ids}. Gate CONFIGURE. Retorna el DRAFT creat (201) o els errors
-        del guard junts (400 amb `detail` i `errors`, p.ex. extres pendents de revisió)."""
-        ids = request.data.get('work_order_ids') or []
-        wos = list(WorkOrder.objects.select_related('order_line__product', 'customer')
-                   .filter(pk__in=ids))
-        missing = set(ids) - {w.pk for w in wos}
-        if missing:
-            return Response({'detail': f'Encàrrecs no trobats: {sorted(missing)}.'},
-                            status=status.HTTP_404_NOT_FOUND)
-        from django.core.exceptions import ValidationError as DjangoValidationError
-        from .services import generate_delivery_note
-        try:
-            dn = generate_delivery_note(wos, user=getattr(request.user, 'profile', None))
-        except DjangoValidationError as e:
-            return Response({'detail': '; '.join(e.messages), 'errors': e.messages},
-                            status=status.HTTP_400_BAD_REQUEST)
-        return Response(self.get_serializer(dn).data, status=status.HTTP_201_CREATED)
-
-    @action(detail=False, methods=['post'])
     def draft(self, request):
         """POST commerce/delivery-notes/draft/ — retorna el DRAFT obert del client o en crea un de
         nou (un per client alhora). Gate CONFIGURE. Body: {customer}."""
@@ -637,9 +713,14 @@ class DeliveryNoteViewSet(_ComercialMixin, mixins.RetrieveModelMixin, mixins.Lis
 
     @action(detail=True, methods=['post'], url_path='add-lines')
     def add_lines(self, request, pk=None):
-        """POST commerce/delivery-notes/{id}/add-lines/ — afegeix línies al DRAFT a partir dels
-        ítems seleccionats de la safata. Gate CONFIGURE. Body: {items:[{kind, model_task_id|
-        adjustment_id|expense_id}]}. Els ítems ja albaranats s'ometen (idempotent)."""
+        """POST commerce/delivery-notes/{id}/add-lines/ — afegeix línies al DRAFT des de la safata.
+
+        Gate CONFIGURE. Body: `{items:[{model_id, clau}]}`, on `clau` és `'pacte'` o
+        `'directe-<ronda_id>'` — exactament les claus que la safata emet (BLOC A · A1: una línia
+        per MODEL). Un bloc les voltes del qual ja tinguin línia s'omet: idempotent.
+
+        ⚠️ El contracte VELL (`{kind, model_task_id|adjustment_id|expense_id}`) ja no s'accepta:
+        la safata no emet ítems de tasca des del bloc A."""
         dn = self.get_object()
         from django.core.exceptions import ValidationError as DjangoValidationError
         from .services import add_lines_to_draft
@@ -654,12 +735,29 @@ class DeliveryNoteViewSet(_ComercialMixin, mixins.RetrieveModelMixin, mixins.Lis
     @action(detail=True, methods=['post'])
     def issue(self, request, pk=None):
         """POST commerce/delivery-notes/{id}/issue/ — emet el DRAFT (→ISSUED, congela línies).
-        Gate CONFIGURE. Guard: almenys 1 línia."""
+        Gate CONFIGURE. Guard: almenys 1 línia.
+
+        **409 · CONTRADICCIÓ DE PACTE.** Si algú ha mogut `rounds_included` després que la línia
+        es compongués, el document diria del pacte una cosa que ja no és certa. Es contesta amb
+        `{detail, contradiccions: [{model, ronda, numeral_vigent, ara, …}]}` i **no s'emet res**.
+        409 i no 400 a posta: no és una petició mal formada, és un CONFLICTE amb un estat que ha
+        canviat sota els peus —el mateix codi que ja fan servir el `destroy` del document i el de
+        la línia—, i el que demana és un gest, no una correcció del cos.
+
+        No es converteix res automàticament: el preu d'una volta directa és LLIURE i triar-li'n
+        un de nou sense preguntar seria decidir per l'humà que ha compost el document.
+        """
         dn = self.get_object()
         from django.core.exceptions import ValidationError as DjangoValidationError
-        from .services import issue_delivery_note
+        from .services import ContradiccioDePacte, issue_delivery_note
         try:
             issue_delivery_note(dn, user=getattr(request.user, 'profile', None))
+        except ContradiccioDePacte as e:
+            return Response(
+                {'detail': "El numeral de la comanda ha canviat: aquest albarà diria del pacte "
+                           "una cosa que ja no és certa.",
+                 'contradiccions': e.contradiccions},
+                status=status.HTTP_409_CONFLICT)
         except DjangoValidationError as e:
             return Response({'detail': '; '.join(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(self.get_serializer(dn).data)
@@ -720,13 +818,20 @@ class DeliveryNoteLineViewSet(_ComercialMixin, mixins.RetrieveModelMixin,
     """Línies d'albarà (edició filtrada per ?delivery_note=). PATCH de preu/descripció/qty/visible
     en DRAFT (guard replicat al serializer per a un 400 net); FK de traçabilitat read-only. `create`
     crea una línia MANUAL (comentari lliure) en un DRAFT; `destroy` treu una línia del DRAFT. Les
-    línies proposades neixen de `add-lines/` (v2) o `generate/` (v1).
+    línies proposades neixen de `add-lines/`, des de la safata `billable/`.
 
     ⚠️ LECTURA OBERTA A POSTA: `ProductionTab.jsx:76` demana aquestes línies per `?model=` des
     de la fitxa del model i només en pinta `dn_number`/`dn_status`. És el cas que va obrir la
     peça — hi viatjaven `unit_price`, `line_total` i `internal_cost` (diagnosi §3.2) — i el
     serializer els poda. L'escriptura (preu de la línia en DRAFT) sí que és comercial."""
-    queryset = DeliveryNoteLine.objects.select_related('delivery_note', 'product', 'model').all()
+    # `rondes_detall` baixa a voltes → tasques → tipus/tècnic, i `pacte_*` travessa
+    # `linia_comanda__order`. Sense això, cada línia era una cascada de consultes — i aquesta
+    # vista la serveix també `?model=` a la pestanya Producció, que obre qualsevol tècnic.
+    queryset = (DeliveryNoteLine.objects
+                .select_related('delivery_note', 'product', 'model', 'linia_comanda__order')
+                .prefetch_related('rondes__entrega', 'rondes__tasques__task_type',
+                                  'rondes__tasques__assignee')
+                .all())
     serializer_class = DeliveryNoteLineSerializer
     filterset_fields = ['delivery_note', 'line_kind', 'model']
 
@@ -734,6 +839,24 @@ class DeliveryNoteLineViewSet(_ComercialMixin, mixins.RetrieveModelMixin,
         if self.action in ('list', 'retrieve'):
             return [IsAuthenticated()]
         return super().get_permissions()
+
+    def destroy(self, request, *args, **kwargs):
+        """Treure una línia NOMÉS en esborrany. 409 amb el motiu, no un 500.
+
+        🚨 El guard ja hi era —`DeliveryNoteLine.delete()` crida `_assert_editable()`— però
+        llançava `ValidationError` de Django SENSE que ningú la recollís, i DRF no la mapeja: la
+        porta contestava **500 amb una pàgina d'error HTML** allà on havia de dir «això no es pot
+        fer perquè el document ja és emès». Un refús correcte disfressat de crash: la UI no en pot
+        treure cap missatge i qui ho llegeixi als logs buscarà un error que no existeix. Mateixa
+        forma que el `destroy` del document (:804).
+        """
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        line = self.get_object()
+        try:
+            line.delete()
+        except DjangoValidationError as e:
+            return Response({'detail': '; '.join(e.messages)}, status=status.HTTP_409_CONFLICT)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     def create(self, request, *args, **kwargs):
         """POST commerce/delivery-note-lines/ — crea una línia MANUAL (comentari/lliure) en un DRAFT.

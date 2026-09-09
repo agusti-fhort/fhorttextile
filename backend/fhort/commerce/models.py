@@ -552,8 +552,10 @@ class WorkOrder(models.Model):
                               help_text="'YYYY-MM' — només per COLLECTOR (mes de recollida).")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='OPEN')
     # B4c — marca "aquest WO ja està albaranat". SET_NULL: esborrar un albarà DRAFT allibera els
-    # WO (delete de DeliveryNote posa aquest camp a NULL). Guard d'inclusió única a
-    # generate_delivery_note: un WO amb delivery_note assignat NO pot entrar a un segon albarà.
+    # WO (delete de DeliveryNote posa aquest camp a NULL). 🚩 LLEGAT: l'única escriptora era
+    # `generate_delivery_note` (retirada); la safata v2 factura per MODEL+VOLTES i mai l'escriu.
+    # Es llegeix encara a `WorkOrderDetail.jsx` per enllaçar a l'albarà d'un WO ja albaranat pel
+    # camí vell.
     delivery_note = models.ForeignKey('commerce.DeliveryNote', on_delete=models.SET_NULL,
                                       null=True, blank=True, related_name='delivery_notes_included')
     # Congelats en crear des d'order_line; buits al col·lector (no hi ha recepta a comparar).
@@ -687,10 +689,11 @@ class Expense(models.Model):
 # ═══════════════════════════════════════════════════════════════════════════════════════
 
 class DeliveryNote(AbstractDocument):
-    """Albarà tenant→client (B4c). Neix DRAFT amb línies PROPOSADES pel sistema
-    (generate_delivery_note): tasques acabades + extres facturables − deduccions per recepta no
-    executada. En DRAFT el comercial edita preu/descripció de les línies (guard patró Quote);
-    ISSUED = congelat (les línies queden bloquejades).
+    """Albarà tenant→client (B4c). Neix DRAFT buit (`create_or_get_draft`) i el comercial hi
+    afegeix línies una a una des de la safata `billable/` (`add_lines_to_draft`): voltes
+    entregades, extres facturables, deduccions i despeses. En DRAFT el comercial edita
+    preu/descripció de les línies (guard patró Quote); ISSUED = congelat (les línies queden
+    bloquejades).
 
     Decisions Agus 2026-07-08: albarà SENSE venciments → recalculate_totals NO crida
     generate_due_dates i cap DocumentDueDate s'hi enganxa (no es reobre el XOR dual-FK de B3b).
@@ -786,6 +789,38 @@ class DeliveryNoteLine(AbstractDocumentLine):
     # cadena de FK (una tasca pot tenir work_order=NULL). S'omple del model_task o manualment.
     model = models.ForeignKey('models_app.Model', on_delete=models.SET_NULL, null=True, blank=True,
                               related_name='delivery_note_lines')
+
+    # ── BLOC A · LA LÍNIA ÉS UN MODEL, I COBREIX RONDES ─────────────────────────────────────
+    #
+    # 🔑 **PER QUÈ M2M I NO UNA FK.** L'A7 demana dues formes alhora: «1 línia = N rondes del
+    # mateix pacte» (les voltes incloses al numeral van juntes a la mateixa targeta, amb el preu
+    # de la línia de comanda) i «1 línia = 1 ronda fora de pacte» (cada volta desbordada és una
+    # targeta pròpia, a preu lliure). Una FK `ronda` a la línia només serveix la segona; una FK
+    # `linia` a la Ronda serviria les dues però posaria una dada de DOCUMENT dins del domini de
+    # tasques —i una ronda ha de poder existir sense saber res de cap albarà. La relació M2M és
+    # la mínima que serveix els dos casos sense que cap dels dos costats hagi de saber de l'altre.
+    #
+    # Fins avui la traça ronda↔albarà anava per `model_task.ronda`, i això era prou mentre la
+    # línia era una TASCA. Amb la línia = MODEL, aquell camí es trenca: una línia que cobreix
+    # tres voltes no té UNA tasca de la qual deduir-les.
+    rondes = models.ManyToManyField('tasks.Ronda', blank=True,
+                                    related_name='delivery_note_lines',
+                                    help_text='Voltes que aquesta línia cobreix. Buida a les '
+                                              'línies llegades (per tasca) i a les manuals.')
+    # A7 — la volta fora de pacte no és una línia més: és una targeta PRÒPIA amb el seu badge i
+    # el seu preu lliure. El booleà és la MARCA declarada i no una deducció de `rondes`: una
+    # línia directa amb la seva ronda esborrada seguiria sent un encàrrec directe, i el document
+    # ja emès ha de poder-ho seguir dient.
+    encarrec_directe = models.BooleanField(
+        default=False,
+        help_text='A7: volta fora del pacte — targeta pròpia, preu lliure, sense pressupost.')
+    # D'ON SURT EL PREU. `unit_price` és el valor viu i editable; això diu quina línia de comanda
+    # el va proposar, perquè el document pugui dir «Pressupost OF-…» sense tornar a resoldre el
+    # pivot (que pot haver canviat: un model es pot desassignar). SET_NULL: esborrar la línia de
+    # venda no pot esborrar la història de l'albarà.
+    linia_comanda = models.ForeignKey('commerce.SalesOrderLine', on_delete=models.SET_NULL,
+                                      null=True, blank=True, related_name='delivery_note_lines',
+                                      help_text="Línia de comanda que va proposar el preu.")
 
     class Meta:
         ordering = ['delivery_note', 'position', 'id']

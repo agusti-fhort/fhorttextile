@@ -24,19 +24,55 @@ export default function ProposalsPanel({
   propostes, descartats, unit = 'CM',
   sel = null, onAlterna = null,
   onConfirma, onRebutja, onRessalta,
+  // F4.3 · les expectatives de NUCLI que aquest model encara no té cosides, i el gest
+  // d'acceptar-ne unes quantes de cop.
+  absents = [], onConfirmaBloc = null, confirmantBloc = false,
 }) {
   const { t } = useTranslation()
 
+  // 🚨 El checklist es pinta ENCARA QUE no hi hagi cap proposta: són dues preguntes
+  // diferents —«què et proposo» i «què esperaria el catàleg»— i la segona és justament la
+  // que val en un patró que ningú no ha cosit encara. Amagar-la amb la primera buida seria
+  // callar el que més ajuda.
   if (!propostes.length) {
     return (
-      <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', margin: 0 }}>
-        {t('pattern.taller.proposals_empty')}
-      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', margin: 0 }}>
+          {t('pattern.taller.proposals_empty')}
+        </p>
+        <Absents t={t} absents={absents} />
+      </div>
     )
   }
 
+  const forts = propostes.filter(p => p.confianca >= 0.60)
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      {/* PROPOSA EL COSIT SENCER: acceptar en bloc les que van bé de debò. El llindar de
+          bloc (0,60) NO és el de proposar (0,40): oferir-les a la llista i acceptar-les
+          totes de cop sense mirar-les una a una són dos gestos amb dos riscos diferents, i
+          el segon ha de ser més exigent. Les altres segueixen a la llista, una a una. */}
+      {onConfirmaBloc && forts.length > 1 && (
+        <button
+          onClick={() => onConfirmaBloc(forts)}
+          disabled={confirmantBloc}
+          style={{
+            alignSelf: 'flex-start', cursor: confirmantBloc ? 'progress' : 'pointer',
+            background: 'var(--panel)', color: 'var(--text-main)',
+            border: '1px solid var(--line)', borderRadius: 'var(--r-ctrl)',
+            padding: '0.3rem 0.6rem', fontSize: 'var(--fs-caption)',
+            display: 'flex', alignItems: 'center', gap: '0.35rem', minHeight: 24,
+          }}
+          title={t('pattern.taller.proposals_all_t')}
+        >
+          <i className="ti ti-needle-thread" aria-hidden="true" />
+          {confirmantBloc
+            ? t('pattern.taller.proposals_all_running')
+            : t('pattern.taller.proposals_all', { count: forts.length })}
+        </button>
+      )}
+
       {propostes.map(p => (
         <Proposta
           key={p.clau.join('-')} t={t} p={p} unit={unit}
@@ -65,6 +101,50 @@ export default function ProposalsPanel({
           })}
         </p>
       )}
+
+      <Absents t={t} absents={absents} />
+    </div>
+  )
+}
+
+
+/**
+ * A2b · EL CHECKLIST: què esperaria el catàleg i aquest model encara no té cosit.
+ *
+ * 🚨 **Informació, MAI un error.** Un vestit pot no portar una costura que el corpus
+ * considera de nucli, i dir-li «falta» amb to de defecte ensenyaria el patronista a no
+ * llegir la llista — el mateix mal que un llindar de proposta massa baix. Va en gris, amb
+ * icona de llista i no d'avís, i la frase diu «n'esperaria», no «te'n falta».
+ */
+function Absents({ t, absents }) {
+  if (!absents || !absents.length) return null
+  return (
+    <div style={{
+      marginTop: '0.35rem', paddingTop: '0.35rem', borderTop: '1px solid var(--line)',
+      display: 'flex', flexDirection: 'column', gap: 2,
+    }}>
+      <p style={{
+        margin: 0, fontSize: 'var(--fs-caption)', color: 'var(--text-soft)',
+        display: 'flex', alignItems: 'center', gap: '0.3rem',
+      }}>
+        <i className="ti ti-list-check" aria-hidden="true" />
+        {t('pattern.taller.expected_title', { count: absents.length })}
+      </p>
+      {absents.map((a, i) => (
+        <p
+          key={`${a.a.piece_role}-${a.a.edge_role}-${a.b.piece_role}-${a.b.edge_role}-${i}`}
+          title={a.detall}
+          style={{
+            margin: 0, paddingLeft: '1.1rem',
+            fontSize: 'var(--fs-caption)', color: 'var(--text-soft)',
+          }}
+        >
+          {t('pattern.taller.expected_row', {
+            a: `${a.a.piece_role}·${a.a.edge_role}`,
+            b: `${a.b.piece_role}·${a.b.edge_role}`,
+          })}
+        </p>
+      ))}
     </div>
   )
 }
@@ -227,7 +307,11 @@ function Proposta({ t, p, unit, marcat, onMarca, onConfirma, onRebutja, onRessal
  * català pla): el gate demana ca/en/es. El `detall` es guarda per al `title`.
  */
 function Senyal({ t, senyal, unit }) {
+  const { i18n } = useTranslation()
   const d = senyal.dades || {}
+  // Els milers, en l'idioma de la pantalla. `toLocaleString()` sol agafa el del NAVEGADOR i
+  // escrivia «436,842» enmig d'una frase en català, que és la mateixa xifra dita malament.
+  const mil = (n) => (n ?? 0).toLocaleString(i18n.language || 'ca')
   const contra = senyal.punts < 0
   const nul = senyal.punts === 0
 
@@ -266,6 +350,25 @@ function Senyal({ t, senyal, unit }) {
         return t('pattern.taller.sig_pref_against', { peces: (d.contra || []).join(', ') })
       }
       return t('pattern.taller.sig_pref_ok', { peces: (d.confirmats || []).join(', ') })
+    }
+    // F4.3 · L'EXPECTATIVA DEL CATÀLEG. Els números són els de la plantilla, crus: «espera
+    // aquesta parella» sense xifres seria un adjectiu, i el que fa discutible un senyal és
+    // poder mirar sobre quants patrons s'ha mesurat.
+    if (senyal.mena === 'cataleg') {
+      if (d.veto) {
+        return t('pattern.taller.sig_cat_never', {
+          seams: mil(d.observed_seams), den: mil(d.observed_den),
+        })
+      }
+      return t(`pattern.taller.sig_cat_${d.grau || 'rare'}`, {
+        seams: mil(d.observed_seams), den: mil(d.observed_den),
+      })
+    }
+    // F4.3 · EL PRECEDENT DEL TALLER: no el corpus, sinó aquesta casa.
+    if (senyal.mena === 'precedent') {
+      return t(d.vegades > 1 ? 'pattern.taller.sig_prec_many' : 'pattern.taller.sig_prec_one', {
+        model: d.model_nom, mes: (d.vegades || 1) - 1,
+      })
     }
     if (senyal.mena === 'noms') {
       // El motiu és un codi del domini, i cada codi té la seva frase.

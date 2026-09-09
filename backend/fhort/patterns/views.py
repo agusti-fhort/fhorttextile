@@ -41,6 +41,9 @@ from .engine.aama_reader import AAMAReader, unfold_piece
 from .engine.errors import PatternParseError
 from .engine.rul_reader import RULReader, coherencia_dxf_rul
 from .export import PERFILS_DISPONIBLES, ExportBlocked, build_export
+from .landmark_service import derive_landmarks
+from .recognition.edge_service import (EdgeConfirmationRejected, confirm_edge_roles,
+                                       edge_vocabulary, propose_edge_roles)
 from .recognition.service import recognize_pattern_file
 from .models import (ExportAcknowledgement, PatternFile, PatternPOM,
                      PieceIdentityAcknowledgement)
@@ -571,6 +574,102 @@ class PatternFileViewSet(mixins.CreateModelMixin,
                 status=409,
             )
         return anterior, None
+
+    # ── F4.2 · Els rols de VORA i els punts que se'n deriven ─────────────────
+    @action(detail=True, methods=['get'], url_path='edge-roles')
+    def edge_roles(self, request, pk=None):
+        """Per a cada peça IDENTIFICADA: els seus trams, la proposta i els landmarks.
+
+        **Una sola crida per a la pantalla sencera**, i per la mateixa raó que
+        `identificar` és en bloc: qui mira els trams d'un davanter els mira contra
+        l'esquena que té al costat, i el vocabulari permès és per peça, no global.
+
+        Read-only de cap a peus. La proposta no és a la BD i no hi va: es calcula per a la
+        pantalla que la demana i es llença si ningú no l'accepta
+        (`recognition.edge_service`, capçalera). El que la fila diu és el `edge_role`
+        CONFIRMAT, i aquest només l'escriu una persona per `confirm-edge-roles`.
+        """
+        fp = self.get_object()
+        peces = (fp.pieces.select_related('piece_role')
+                 .prefetch_related('points', 'segments__edge_role').order_by('id'))
+        files = []
+        for peca in peces:
+            proposta = propose_edge_roles(peca)
+            rol = proposta['piece_role']
+            confirmats = {s.pk: (s.edge_role.slug if s.edge_role_id else None)
+                          for s in peca.segments.all()}
+            landmarks = None
+            if rol and any(confirmats.values()):
+                landmarks = derive_landmarks(peca)
+            files.append({
+                'piece_id': peca.pk,
+                'nom_block': peca.nom_block,
+                'nom': peca.nom,
+                'piece_role': rol,
+                'face': peca.face,
+                # Buit vol dir que el catàleg no dona cap paraula de vora a aquest rol de
+                # peça: la UI no ha d'oferir un desplegable que no pot respondre res.
+                'vocabulary': proposta.get('vocabulary') or [],
+                'origin': proposta.get('origin'),
+                'silent_because': proposta.get('silent_because'),
+                'proposals': proposta['proposals'],
+                'confirmed': confirmats,
+                'landmarks': (landmarks or {}).get('landmarks') or [],
+                'landmarks_skipped': (landmarks or {}).get('skipped') or [],
+            })
+        return Response({
+            'pattern_file': fp.pk,
+            'model': fp.model_id,
+            'versio': fp.versio,
+            'results': files,
+        })
+
+    @action(detail=True, methods=['post'], url_path='confirm-edge-roles')
+    def confirm_edge_roles_view(self, request, pk=None):
+        """POST … — UNA PERSONA bateja els trams d'una peça.
+
+        `{piece_id, trams: [{segment_id, edge_role_slug|null}]}`
+
+        En bloc per peça: acceptar una proposta sencera és un sol gest, i dotze crides
+        soltes podrien fallar a la novena i deixar mig contorn dit. El servei valida cada
+        slug contra el vocabulari del rol de la peça abans d'escriure res —el guard de
+        `needs_piece_role` (D3) val igual per al selector manual que per a la proposta.
+        """
+        fp = self.get_object()
+        peca = fp.pieces.filter(pk=request.data.get('piece_id')).first()
+        if peca is None:
+            return Response({'error': 'Cal un `piece_id` d\'aquest patró.'}, status=400)
+        trams = request.data.get('trams')
+        if not isinstance(trams, list):
+            return Response({'error': 'Cal una llista `trams`.'}, status=400)
+        try:
+            tocats = confirm_edge_roles(piece=peca, rows=trams)
+        except EdgeConfirmationRejected as e:
+            return Response({'error': str(e)}, status=400)
+        return Response({'trams_actualitzats': len(tocats),
+                         'landmarks': derive_landmarks(peca)})
+
+    @action(detail=True, methods=['get'], url_path='edge-vocabulary')
+    def edge_vocabulary_view(self, request, pk=None):
+        """El vocabulari de vora d'un rol de peça (`?piece_role=front`), amb els noms.
+
+        Serveix el desplegable manual de C1. Els noms venen del catàleg als tres idiomes i
+        la tria la fa el navegador: el mateix camí que la resta del vocabulari de sistema,
+        i no una quarta manera de traduir un slug.
+        """
+        from fhort.pom.models import EdgeRole
+
+        rol = request.query_params.get('piece_role') or ''
+        if not rol:
+            return Response({'error': 'Cal `piece_role`.'}, status=400)
+        fp = self.get_object()
+        gti = getattr(getattr(fp, 'model', None), 'garment_type_item_id', None)
+        slugs = edge_vocabulary(rol, request.query_params.get('face') or '', gti)
+        files = {r.slug: r for r in EdgeRole.objects.filter(slug__in=slugs)}
+        return Response([
+            {'slug': s, 'nom_en': files[s].nom_en, 'nom_ca': files[s].nom_ca,
+             'nom_es': files[s].nom_es, 'zone': files[s].zone, 'kind': files[s].kind}
+            for s in slugs if s in files])
 
     # ── El visor ─────────────────────────────────────────────────────────────
     @action(detail=True, methods=['get'])

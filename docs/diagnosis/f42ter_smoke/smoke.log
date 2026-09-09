@@ -1,0 +1,10 @@
+càmera abans:  {"zoom":0.5638,"x":-362.3,"y":1215.3}
+files del DELANTERO: {"n":16,"mides":["131.6 cm— sens","21.7 cm— sense","357.1 cm— sens","422.4 cm— sens","57.6 cm— sense","611.1 cm— sens","717.2 cm— sens","82.6 cm— sense","917.2 cm— sens","1011.0 cm— sen","117.7 cm— sens","1222.4 cm— sen","1357.1 cm— sen","141.7 cm— sens","1531.6 cm— sen","1662.7 cm— sen"]}
+camera despres de PASSAR-HI PER SOBRE: {"zoom":0.5638,"x":-362.3,"y":1215.3}  -> NO SHA MOGUT OK
+càmera després de CLICAR el tram de 1,7 cm: {"zoom":5.7956,"x":-6532.4,"y":4860.1}
+càmera després de CLICAR la vora de 62,7 cm: {"zoom":1.0707,"x":-372.7,"y":1547.2}
+re-clic sobre el que JA ES VEU: {"zoom":1.0707,"x":-372.7,"y":1547.2}
+trams declarats: secció trobada
+clic sobre un tram declarat: clicada
+càmera: {"zoom":1.0707,"x":-372.7,"y":1547.2} → {"zoom":2.9838,"x":-6858.7,"y":4852.8}  ENQUADRAT OK
+sostre respectat? zoom del tram petit (5.7956) <= zoom que cabria la TAPETA

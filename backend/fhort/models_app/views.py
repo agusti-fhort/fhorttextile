@@ -4580,7 +4580,10 @@ def model_dashboard_view(request, model_id):
 
     pla_tasks = (_ModelTask.objects
                  .filter(model_id=model.id)
-                 .select_related('task_type', 'assignee', 'ronda')
+                 .select_related('task_type', 'assignee', 'ronda',
+                                 # El vincle COMERCIAL de la tasca (v. `encarrec` més avall):
+                                 # dues FK més per fila, resoltes aquí i no una per tasca.
+                                 'work_order__order_line__order')
                  .order_by('task_type__default_order', 'task_type__code'))
     # Temps consumit per tasca amb la regla d'higiene (== helper canònic _real_minutes). 1 query.
     from fhort.tasks.services_i import minuts_per_model_task
@@ -4591,6 +4594,8 @@ def model_dashboard_view(request, model_id):
         TaskTransition.objects.filter(model_task__model_id=model.id, to_status='InProgress')
         .values('model_task_id').annotate(c=Count('id')))}
 
+    from fhort.accounts.capabilities import pot_veure_diner
+    _diner = pot_veure_diner(request)
     tasques = [{
         'id': t.id,
         'task_type': t.task_type.name if t.task_type_id else None,
@@ -4616,6 +4621,32 @@ def model_dashboard_view(request, model_id):
         # entre voltes: mateix contracte que `ModelTaskSerializer.ronda_seq`.
         'ronda': t.ronda_id,
         'ronda_seq': t.ronda.seq if t.ronda_id else None,
+        # ── EL VINCLE COMERCIAL, perquè la paperera del contenidor de ronda pugui decidir ──
+        #
+        # Una tasca LLIURE s'esborra; una tasca LLIGADA A UN ENCÀRREC no s'esborra mai —surt de
+        # la volta i es queda `Pending`, perquè el tancament de l'encàrrec la dedueixi
+        # (`close_work_order(cancel_pending=True)` li escriu un DEDUCTION i la deslliga).
+        # Esborrar i deduir són DUES operacions i no s'han de fondre: la segona conserva la
+        # història i el vincle per valorar-la a l'albarà.
+        #
+        # 🔑 LA DISTINCIÓ ÉS DE DADES, NO HEURÍSTICA: `encarrec` és el FK `work_order`, i prou.
+        # Qualsevol tasca amb encàrrec entra a `cancel_pending`, sigui de comanda o de
+        # col·lector — per això la porta és el FK i no `kind`, ni el preu, ni el nom.
+        # `comanda` és el document de venda quan n'hi ha (un col·lector no en té, i un WO orfe
+        # tampoc): serveix NOMÉS per anomenar-la a l'avís, mai per decidir.
+        #
+        # 🔒 I ES PODA. Aquest compositor és `IsAuthenticated` i el llegeix qualsevol tècnic que
+        # obri la fitxa d'un model; el `document_number` d'una venda és dada COMERCIAL. La llei
+        # de la casa per a aquest cas és PODAR EL CAMP, no tancar la porta («el forat era el
+        # PAYLOAD, no el menú»). Sense COMERCIAL arriba `None` i l'avís de la paperera cau a la
+        # seva variant sense comanda, que diu el mateix FET —la tasca està lligada a un
+        # encàrrec— sense anomenar la venda.
+        # `encarrec` NO es poda: és l'id intern del contenidor de feina, no un import ni un
+        # document de venda, i és el que la cara necessita per decidir el camí del gest.
+        'encarrec': t.work_order_id,
+        'comanda': (t.work_order.order_line.order.document_number
+                    if _diner and t.work_order_id and t.work_order.order_line_id
+                    else None),
     } for t in pla_tasks]
 
     # --- Q3: atenció tècnica — alertes POM PENDENTS de resoldre ---

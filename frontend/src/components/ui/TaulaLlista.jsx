@@ -92,9 +92,10 @@ function Capcalera({ col, ordre, onOrdenar }) {
   )
 }
 
-function Fila({ cols, fila, triada, onObrir, hover, setHover }) {
+function Fila({ cols, fila, triada, onObrir, hover, setHover, titol }) {
   return (
     <tr
+      title={titol}
       onClick={onObrir}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
@@ -139,7 +140,7 @@ function Fila({ cols, fila, triada, onObrir, hover, setHover }) {
  * @param {Function} onObrir  fila → void
  */
 export default function TaulaLlista({ cols, files, clau, ordre = null, onOrdenar = null,
-  triada = () => false, onObrir = null }) {
+  triada = () => false, onObrir = null, titolFila = null }) {
   const [hoverId, setHoverId] = useState(null)
   return (
     <div style={{
@@ -168,6 +169,7 @@ export default function TaulaLlista({ cols, files, clau, ordre = null, onOrdenar
             const id = clau(fila)
             return (
               <Fila key={id} cols={cols} fila={fila} triada={triada(fila)}
+                titol={titolFila ? titolFila(fila) : undefined}
                 onObrir={onObrir ? () => onObrir(fila) : null}
                 hover={hoverId === id} setHover={(v) => setHoverId(v ? id : null)} />
             )

@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maqueta v2 · Grading Rules</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#fbf8f3;--panel:#fff;--ink:#3a3530;--ink-soft:#8a8279;--ink-faint:#a9a199;
+    --line:#e8e0d3;--line-soft:#f0eae0;--head:#f5efe4;--gold:#a8752c;--gold-soft:#c9a227;
+    --btn:#9a5f22;--sel:#f2e6cf;--dec:#f7f5f1;--white:#fff;
+    --ok:#5f8a3f;--ok-bg:#eef4e6;--adj:#c47f1a;--adj-bg:#fcf2e3;--rej:#b4483a;--rej-bg:#faeae7;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:18px 16px 60px;background:var(--bg);color:var(--ink);
+       font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:13px}
+  .wrap{max-width:1420px;margin:0 auto}
+  .crumb{color:var(--ink-soft);font-size:12px;margin-bottom:8px}
+  .crumb b{color:var(--ink)} .crumb a{color:var(--gold);cursor:pointer}
+  h1{font-size:17px;font-weight:600;margin:0 0 3px}
+  .sub{color:var(--ink-soft);font-size:12px;margin:0 0 14px;line-height:1.6}
+
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .bhead{padding:10px 14px;background:var(--head);border-bottom:1px solid var(--line);
+         display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .bhead input{flex:1;min-width:150px;font-family:inherit;font-size:11.5px;border:1px solid var(--line);
+    border-radius:5px;padding:5px 9px;background:var(--panel);color:var(--ink)}
+  .bhead input::placeholder{color:var(--ink-faint);font-style:italic}
+  .n{font-size:11px;color:var(--ink-faint);white-space:nowrap}
+  .btn{border:1px solid var(--line);background:var(--white);color:var(--ink);border-radius:6px;
+       padding:6px 12px;font-family:inherit;font-size:11.5px;cursor:pointer;white-space:nowrap}
+  .btn:hover{background:var(--head)}
+  .btn.pri{background:var(--btn);border-color:var(--btn);color:#fff;font-weight:600}
+  .btn.sm{padding:4px 11px;font-size:10.5px}
+  .btn.dang{color:var(--rej);border-color:#e5bcb4}
+  .btn:disabled{opacity:.45;cursor:default}
+
+  /* llista */
+  .lhead,.lrow{display:grid;grid-template-columns:1fr 132px 128px 92px 168px 96px;gap:12px;align-items:center}
+  .lhead{padding:7px 14px;background:var(--head);border-bottom:1px solid var(--line)}
+  .lhead span{font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-soft)}
+  .lrow{padding:11px 14px;border-bottom:1px solid var(--line-soft)}
+  .lrow:hover{background:#fdfcf9}
+  .lrow.off{opacity:.55}
+  .lrow .nm{font-size:13px;font-weight:600}
+  .lrow .cd{font-size:9.5px;color:var(--ink-faint);letter-spacing:.04em;margin-top:2px}
+  .v{font-size:12px}
+  .bg{font-size:9px;letter-spacing:.04em;padding:2px 8px;border-radius:999px;display:inline-block}
+  .bg.can{background:var(--ok-bg);color:var(--ok)}
+  .bg.cli{background:var(--sel);color:var(--gold)}
+  .bg.imp{background:var(--adj-bg);color:var(--adj)}
+  .bg.off{background:var(--dec);color:var(--ink-soft)}
+  .bg.bad{background:var(--rej-bg);color:var(--rej)}
+  .rel{font-size:10.5px;color:var(--ink-soft);line-height:1.5}
+  .rel.cap{color:var(--ink-faint);font-style:italic}
+
+  /* pantalla */
+  .shead{padding:11px 14px;background:var(--head);border-bottom:1px solid var(--line);
+         display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .shead .t{font-size:13.5px;font-weight:600}
+  .shead .c{font-size:10.5px;color:var(--ink-soft)}
+  .tabs{display:flex;gap:6px;margin-left:auto}
+  .tab{border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:5px 15px;
+       font-family:inherit;font-size:11.5px;color:var(--ink-soft);cursor:pointer}
+  .tab.on{background:var(--sel);color:var(--gold);border-color:var(--gold);font-weight:600}
+  .badges{display:flex;gap:6px;flex-wrap:wrap}
+  .b{font-size:9px;letter-spacing:.04em;padding:2px 8px;border-radius:999px}
+  .b.act{background:var(--ok-bg);color:var(--ok)}
+  .b.off{background:var(--dec);color:var(--ink-soft)}
+  .b.sys{background:var(--sel);color:var(--gold)}
+  .b.warn{background:var(--adj-bg);color:var(--adj)}
+  .b.bad{background:var(--rej-bg);color:var(--rej)}
+
+  .szbar{padding:11px 14px;border-bottom:1px solid var(--line);background:#fdfcf9;
+         display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  .lb{font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);display:block;margin-bottom:4px}
+  .szl{display:flex;gap:5px;flex-wrap:wrap}
+  .sz{border:1px solid var(--line);border-radius:6px;padding:4px 12px;font-size:11.5px;background:var(--panel);
+      cursor:pointer;font-variant-numeric:tabular-nums}
+  .sz:hover{background:var(--head)}
+  .sz.brk{background:var(--sel);border-color:var(--gold);color:var(--gold);font-weight:600;
+          box-shadow:0 0 0 2px rgba(168,117,44,.13)}
+  .hint{font-size:10.5px;color:var(--ink-faint);margin-left:auto;max-width:380px;line-height:1.5;text-align:right}
+
+  table{border-collapse:separate;border-spacing:0;width:100%;font-size:12.5px;table-layout:fixed}
+  th{font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-soft);font-weight:500;
+     padding:7px 11px;background:var(--head);border-bottom:1px solid var(--line);text-align:left}
+  th.r,td.r{text-align:right}
+  td{padding:4px 11px;border-bottom:1px solid var(--line-soft);vertical-align:middle}
+  .code{color:var(--gold);font-weight:600}
+  .selr{font-family:inherit;font-size:11.5px;border:1px solid var(--line);border-radius:5px;
+        padding:3px 7px;background:var(--panel);color:var(--ink);width:100%}
+  .val{width:76px;text-align:right;font-family:inherit;font-size:12.5px;font-weight:600;
+       border:1px solid var(--line);border-radius:5px;padding:3px 8px;background:var(--panel);
+       font-variant-numeric:tabular-nums;color:var(--ink)}
+  .val:focus{outline:none;border-color:var(--gold);background:#fffdf8}
+  .val::placeholder{color:var(--ink-faint);font-weight:400}
+  .rmv{color:var(--ink-faint);cursor:pointer}
+  .rmv:hover{color:var(--rej)}
+
+  /* relacions */
+  .rels{padding:16px}
+  .rblk{margin-bottom:18px}
+  .rblk .h{font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--gold);
+           padding-bottom:6px;border-bottom:1px solid var(--line-soft);margin-bottom:10px;
+           display:flex;justify-content:space-between;align-items:baseline}
+  .rblk .h em{font-style:normal;color:var(--ink-faint);letter-spacing:0;text-transform:none;font-size:10px}
+  .tags{display:flex;gap:6px;flex-wrap:wrap}
+  .tg{font-size:11.5px;border:1px solid var(--line);border-radius:6px;padding:4px 12px;
+      background:var(--panel);cursor:pointer;color:var(--ink)}
+  .tg:hover{background:var(--head)}
+  .tg.on{background:var(--sel);border-color:var(--gold);color:var(--gold);font-weight:600}
+  .avis{padding:10px 12px;border-radius:7px;font-size:11.5px;line-height:1.6;margin-bottom:16px}
+  .avis.g{background:var(--ok-bg);border:1px solid #c6dab0;color:var(--ok)}
+  .avis.w{background:var(--adj-bg);border:1px solid #e9d3a6;color:#8a6a1f}
+  .prev{margin-top:6px;padding:11px 13px;border:1px solid var(--line);border-radius:8px;background:#fdfcf9}
+  .prev .t{font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:7px}
+  .prev .l{font-size:12px;line-height:1.9}
+  .prev .l b{color:var(--gold)}
+
+  .sfoot{padding:11px 14px;border-top:1px solid var(--line);background:#fdfcf9;
+         display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .note{font-size:10.5px;color:var(--ink-faint);flex:1;line-height:1.5}
+  .hide{display:none}
+  .foot{margin-top:22px;font-size:11.5px;color:var(--ink-soft);line-height:1.75;
+        border-left:2px solid var(--line);padding-left:14px}
+  .foot b{color:var(--ink)} .foot ul{margin:8px 0 0;padding-left:18px} .foot li{margin-bottom:5px}
+  .ask{border-left-color:var(--gold);background:#fdfaf3;padding:12px 14px;border-radius:0 7px 7px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ══ LLISTA ══ -->
+<div id="vList">
+  <div class="crumb">Configuració tècnica › <b>Grading Rules</b></div>
+  <h1>Jocs de regles</h1>
+  <p class="sub">Com creix cada mesura d'una talla a la següent. <b>Un joc no depèn de cap run</b>: les regles ancoren per <b>etiqueta de talla</b> i el motor la resol contra el run del model.</p>
+
+  <div class="box">
+    <div class="bhead">
+      <input placeholder="cerca per codi, nom o client…">
+      <span class="n" id="cnt">—</span>
+      <button class="btn sm">↑ Importar d'una fitxa</button>
+      <button class="btn sm pri">＋ Nou joc</button>
+    </div>
+    <div class="lhead">
+      <span>Joc de regles</span><span>Client</span><span>Origen</span><span>Regles</span>
+      <span>Es proposa a</span><span></span>
+    </div>
+    <div id="lst"></div>
+  </div>
+
+  <div class="foot">
+    <b>Què canvia respecte de la v1</b>
+    <ul>
+      <li><b>La llista és una llista</b>, no mitja pantalla: hi caben totes les columnes que importen i es comparen d'un cop d'ull.</li>
+      <li><b>«Editar» obre una pantalla pròpia amb dos tabs</b> — <b>Talles i regles</b> · <b>Relacions</b>. Mateix patró que l'item del catàleg de peces.</li>
+      <li><b>La columna «Es proposa a» resumeix les relacions</b>: qui no en té, val per a tothom.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ══ PANTALLA DEL JOC ══ -->
+<div id="vSet" class="hide">
+  <div class="crumb"><a onclick="tanca()">← Jocs de regles</a> › <b id="bc">—</b></div>
+
+  <div class="box">
+    <div class="shead">
+      <span><span class="t" id="sT">—</span> <span class="c" id="sC">—</span></span>
+      <span class="badges" id="sB"></span>
+      <span class="tabs">
+        <button class="tab on" onclick="tab(this,'tR')">Talles i regles</button>
+        <button class="tab" onclick="tab(this,'tX')">Relacions</button>
+      </span>
+    </div>
+
+    <!-- Tab 1 -->
+    <div id="tR">
+      <div class="szbar">
+        <span><span class="lb">Talles que cobreix</span><span class="szl" id="szl"></span></span>
+        <span class="hint">Clica una talla per marcar-hi el <b>trencament</b>. Les regles ancoren per <b>etiqueta</b>: aquest joc no apunta a cap run i val igual per a un model amb Alpha EU que per a un amb Alpha agrupat.</span>
+      </div>
+      <table>
+        <colgroup><col style="width:44px"><col style="width:86px"><col><col style="width:158px">
+          <col style="width:104px"><col style="width:112px"><col style="width:104px"><col style="width:44px"></colgroup>
+        <thead><tr><th>#</th><th>POM</th><th>Nom</th><th>Règim</th>
+          <th class="r">Δ</th><th class="r">Δ break</th><th class="r">Talla break</th><th></th></tr></thead>
+        <tbody id="rb"></tbody>
+      </table>
+      <div class="sfoot">
+        <button class="btn">＋ Afegir POM</button>
+        <button class="btn">↑ Importar d'una fitxa</button>
+        <span class="note" id="rn"></span>
+        <span style="display:flex;gap:8px">
+          <button class="btn" onclick="tanca()">Tornar</button>
+          <button class="btn pri">Gravar regles</button></span>
+      </div>
+    </div>
+
+    <!-- Tab 2 -->
+    <div id="tX" class="hide">
+      <div class="rels">
+        <div class="avis g">Les relacions <b>ordenen la proposta, mai amaguen res</b>. Un joc sense cap relació marcada <b>val per a tothom</b> i simplement no es proposa el primer.</div>
+        <div class="rblk"><div class="h">Target <em>per a qui és la peça</em></div><div class="tags" id="rT"></div></div>
+        <div class="rblk"><div class="h">Construcció <em>tipus de teixit</em></div><div class="tags" id="rC"></div></div>
+        <div class="rblk"><div class="h">Fit <em>caiguda de la peça</em></div><div class="tags" id="rF"></div></div>
+        <div class="rblk"><div class="h">Grup de peça <em>del catàleg de la marca</em></div><div class="tags" id="rG"></div></div>
+        <div class="prev">
+          <div class="t">Com es llegirà</div>
+          <div class="l" id="prev"></div>
+        </div>
+      </div>
+      <div class="sfoot">
+        <span class="note">Les relacions no toquen cap regla: només decideixen quan aquest joc surt primer a la llista.</span>
+        <span style="display:flex;gap:8px">
+          <button class="btn" onclick="tanca()">Tornar</button>
+          <button class="btn pri">Gravar relacions</button></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="ask foot">
+    <b>Tres coses que he decidit jo</b>
+    <ul>
+      <li><b>El trencament es marca clicant la talla</b>, no en un desplegable per fila: és una propietat del joc, i tenir-la a dalt evita repetir-la vint vegades.</li>
+      <li><b>«Es proposa a» és el nom de les relacions a la llista</b> — no «restriccions»: cap d'aquestes caselles impedeix res.</li>
+      <li><b>La previsualització de la pestanya de relacions</b> ensenya la frase que el sistema farà servir. Si el que hi diu no és el que volies, la casella està malament.</li>
+    </ul>
+  </div>
+</div>
+</div>
+
+<script>
+const N={A:'1/2 chest width',B:'Waist width',C:'Hip width',E:'Shoulder to shoulder',
+E1:'Shoulder width at true shoulder',E3:'Across back width',EK:'Neck width seam to seam',
+S:'Front armhole along seam',S2:'Back armhole along seam',SF:'Armhole depth from HPS',
+F:'Centre front length',FF:'Centre back length',FB:'Body length',FS:'Skirt length',
+D:'Bottom width (leg opening)',G1:'Rib height',I:'Sleeve length',J:'1/2 Bicep width',
+J1:'Sleeve opening relaxed',U1:'Button spacing',E5:'Shoulder drop',EK2:'Back neck drop'};
+const R=(c,r,d,db)=>({c,r,d,db});
+const SETS=[
+ {c:'BRW-CATALEG-v4',n:'Brownie · catàleg canònic v4',cli:'BRW',org:'CLIENT_RUN',act:true,nou:true,
+  sz:['XXS','XS','S','M','L'],brk:'XS',
+  cap:{t:['Dona'],c:[],f:[],g:[]},
+  rules:[R('A','LINEAR+BREAK',2,3),R('B','LINEAR+BREAK',2,3),R('C','LINEAR+BREAK',1.5,2),
+    R('E','LINEAR+BREAK',1,1.5),R('E1','LINEAR+BREAK',0.25,0.4),R('E3','LINEAR+BREAK',1,1.5),
+    R('EK','LINEAR+BREAK',0.5,0.75),R('S','LINEAR+BREAK',0.7,1),R('S2','LINEAR+BREAK',0.7,1),
+    R('SF','LINEAR+BREAK',0.7,1),R('F','LINEAR+BREAK',1,1.5),R('FF','LINEAR+BREAK',1,1.5),
+    R('FB','LINEAR+BREAK',1,1.5),R('FS','LINEAR+BREAK',0.5,1),R('D','LINEAR+BREAK',2,3),
+    R('I','LINEAR',0.7,null),R('J','LINEAR+BREAK',0.6,0.8),R('J1','LINEAR+BREAK',0.3,0.5),
+    R('G1','FIXED',0,null),R('U1','FIXED',0,null),R('E5','FIXED',0,null),R('EK2','FIXED',0,null)],
+  us:{models:0,items:12}},
+ {c:'BRW-KNIT-v1',n:'Brownie · punt agrupat',cli:'BRW',org:'CLIENT_RUN',act:true,
+  sz:['XS-S','S-M','M-L'],brk:null,
+  cap:{t:['Dona'],c:['Punt','Punt elàstic'],f:[],g:['Vestits','Punt i jerseis','Tops']},
+  rules:[R('A','LINEAR',3,null),R('B','LINEAR',3,null),R('C','LINEAR',3,null),
+    R('FB','LINEAR',2,null),R('G1','FIXED',0,null)],
+  us:{models:0,items:6}},
+ {c:'ISO-ALPHA-W',n:'ISO alpha — Women',cli:null,org:'CANONICAL',act:true,
+  sz:['XS','S','M','L','XL'],brk:null,cap:{t:['Dona'],c:[],f:[],g:[]},
+  rules:[R('A','LINEAR',2.5,null),R('B','LINEAR',2.5,null),R('C','LINEAR',2.5,null),
+    R('E','LINEAR',1,null),R('FB','LINEAR',1.5,null)],
+  us:{models:0,items:3}},
+ {c:'LOS-NB-KNIT',n:'Losan · New Born punt',cli:'LOS',org:'IMPORT',act:true,
+  sz:['00/01','01/03','03/06','06/09','09/12'],brk:'03/06',
+  cap:{t:['Nadó nena','Nadó nen'],c:['Punt'],f:[],g:['Newborn']},
+  rules:[R('A','STEP',null,null),R('FB','STEP',null,null),R('I','LINEAR',0.9,null)],
+  us:{models:0,items:6}},
+ {c:'BRW-CATALEG-v3',n:'Brownie · catàleg v3',cli:'BRW',org:'CLIENT_RUN',act:false,
+  sz:['XXS','XS','S','M','L'],brk:'XS',cap:{t:['Dona'],c:[],f:[],g:[]},
+  rules:[R('A','LINEAR+BREAK',2,3),R('B','LINEAR+BREAK',2,3),R('C','LINEAR+BREAK',1.5,2)],
+  us:{models:0,items:0}},
+ {c:'MANGO-TEST',n:'Mango (prova)',cli:null,org:null,act:true,
+  sz:['S','M','L'],brk:null,cap:{t:[],c:[],f:[],g:[]},rules:[],us:{models:0,items:0}}
+];
+const ORG={CANONICAL:['canònic','can'],CLIENT_RUN:['de client','cli'],IMPORT:['importat','imp']};
+const TARGETS=['Dona','Home','Unisex adult','Nadó nena','Nadó nen','Nadó unisex','Baby nena','Baby nen','Nena','Nen','Adolescent nena','Adolescent nen','Maternitat'];
+const CONSTR=['Teixit pla','Punt','Punt elàstic','Tècnic'];
+const FITS=['Regular','Slim','Relaxed','Oversized','Flared','Tapered','Straight','Bodycon','Athletic','Custom'];
+const GRUPS=['Tops','Vestits','Parts inferiors','Punt i jerseis','Jaquetes','Bany','Roba interior','Complements'];
+const REGIMS=['LINEAR','LINEAR+BREAK','STEP','FIXED'];
+let sel=0;
+const el=id=>document.getElementById(id);
+
+function llista(){
+  el('cnt').textContent=SETS.length+' jocs';
+  el('lst').innerHTML=SETS.map((s,i)=>{
+    const o=s.org?ORG[s.org]:null;
+    const rl=[...s.cap.t,...s.cap.c,...s.cap.f,...s.cap.g];
+    return `<div class="lrow ${s.act?'':'off'}">
+      <span><span class="nm">${s.n}</span><span class="cd">${s.c}</span></span>
+      <span class="v">${s.cli||'<span style="color:var(--ink-faint)">de la casa</span>'}</span>
+      <span>${o?`<span class="bg ${o[1]}">${o[0]}</span>`:'<span class="bg bad">sense origen</span>'}</span>
+      <span class="v">${s.rules.length}</span>
+      <span class="rel ${rl.length?'':'cap'}">${rl.length?rl.slice(0,4).join(' · ')+(rl.length>4?` +${rl.length-4}`:''):'tothom'}</span>
+      <span style="text-align:right">${s.act?`<button class="btn sm" onclick="obre(${i})">Editar</button>`
+        :'<span class="bg off">jubilat</span>'}</span>
+    </div>`;
+  }).join('');
+}
+function obre(i){
+  sel=i; const s=SETS[i], o=s.org?ORG[s.org]:null;
+  el('bc').textContent=s.n;
+  el('sT').textContent=s.n; el('sC').textContent=s.c;
+  el('sB').innerHTML=`<span class="b ${s.act?'act':'off'}">${s.act?'ACTIU':'JUBILAT'}</span>
+    ${o?`<span class="b sys">${o[0].toUpperCase()}</span>`:'<span class="b bad">SENSE ORIGEN CLASSIFICAT</span>'}
+    ${s.nou?'<span class="b warn">EN CONSTRUCCIÓ</span>':''}
+    ${!s.rules.length?'<span class="b warn">SENSE REGLES</span>':''}`;
+  talles(); regles(); relacions();
+  el('vList').classList.add('hide'); el('vSet').classList.remove('hide');
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function tanca(){el('vSet').classList.add('hide');el('vList').classList.remove('hide');window.scrollTo({top:0});}
+function talles(){
+  const s=SETS[sel];
+  el('szl').innerHTML=s.sz.map(x=>`<button class="sz ${x===s.brk?'brk':''}" onclick="SETS[${sel}].brk=(SETS[${sel}].brk==='${x}'?null:'${x}');talles();regles()">${x}</button>`).join('');
+}
+function regles(){
+  const s=SETS[sel];
+  el('rb').innerHTML=s.rules.length?s.rules.map((r,i)=>`<tr>
+    <td style="color:var(--ink-faint)">${i+1}</td>
+    <td class="code">${r.c}</td><td>${N[r.c]||''}</td>
+    <td><select class="selr">${REGIMS.map(x=>`<option ${x===r.r?'selected':''}>${x}</option>`).join('')}</select></td>
+    <td class="r"><input class="val" value="${r.d==null?'':r.d}" placeholder="—"></td>
+    <td class="r"><input class="val" value="${r.db==null?'':r.db}" placeholder="—" ${s.brk?'':'disabled'}></td>
+    <td class="r" style="color:var(--ink-soft)">${r.r==='LINEAR+BREAK'&&s.brk?s.brk:'—'}</td>
+    <td class="rmv" title="treure">✕</td></tr>`).join('')
+    :`<tr><td colspan="8" style="padding:26px;text-align:center;color:var(--ink-faint);line-height:1.9">
+       <b style="color:var(--ink-soft);display:block;font-size:13px">Encara no té cap regla</b>
+       Un joc buit no es pot assignar a cap model. Afegeix-hi POMs o importa'ls d'una fitxa.</td></tr>`;
+  el('rn').textContent=s.brk?`Trencament a ${s.brk}: la columna Δ break s'aplica a partir d'aquesta talla.`
+    :'Sense trencament: l\'increment és constant a tot el run.';
+}
+function tg(id,list,all,key){
+  el(id).innerHTML=all.map(x=>`<span class="tg ${list.includes(x)?'on':''}" onclick="toggle('${key}','${x}')">${x}</span>`).join('');
+}
+function toggle(key,val){
+  const c=SETS[sel].cap; const i=c[key].indexOf(val);
+  i<0?c[key].push(val):c[key].splice(i,1);
+  relacions(); llista();
+}
+function relacions(){
+  const c=SETS[sel].cap;
+  tg('rT',c.t,TARGETS,'t'); tg('rC',c.c,CONSTR,'c'); tg('rF',c.f,FITS,'f'); tg('rG',c.g,GRUPS,'g');
+  const parts=[];
+  if(c.t.length)parts.push(`per a <b>${c.t.join(' · ')}</b>`);
+  if(c.c.length)parts.push(`en <b>${c.c.join(' · ')}</b>`);
+  if(c.f.length)parts.push(`amb fit <b>${c.f.join(' · ')}</b>`);
+  if(c.g.length)parts.push(`dels grups <b>${c.g.join(' · ')}</b>`);
+  el('prev').innerHTML=parts.length
+    ? `Aquest joc es proposarà primer ${parts.join(', ')}. A la resta de casos hi serà igualment, més avall a la llista.`
+    : `Aquest joc <b>no té cap relació marcada</b>: val per a tothom i no es proposa el primer enlloc.`;
+}
+llista();
+</script>
+</body>
+</html>

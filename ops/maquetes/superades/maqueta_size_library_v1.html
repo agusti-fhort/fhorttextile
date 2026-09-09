@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maqueta v1 · Size Library</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#fbf8f3;--panel:#fff;--ink:#3a3530;--ink-soft:#8a8279;--ink-faint:#a9a199;
+    --line:#e8e0d3;--line-soft:#f0eae0;--head:#f5efe4;--gold:#a8752c;--gold-soft:#c9a227;
+    --btn:#9a5f22;--sel:#f2e6cf;--dec:#f7f5f1;--white:#fff;
+    --ok:#5f8a3f;--ok-bg:#eef4e6;--adj:#c47f1a;--adj-bg:#fcf2e3;--rej:#b4483a;--rej-bg:#faeae7;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:18px 16px 60px;background:var(--bg);color:var(--ink);
+       font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:13px}
+  .wrap{max-width:1520px;margin:0 auto}
+  .crumb{color:var(--ink-soft);font-size:12px;margin-bottom:8px}
+  .crumb b{color:var(--ink)}
+  h1{font-size:17px;font-weight:600;margin:0 0 3px}
+  .sub{color:var(--ink-soft);font-size:12px;margin:0 0 14px;line-height:1.6}
+
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:13px;align-items:start}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .bhead{padding:10px 14px;background:var(--head);border-bottom:1px solid var(--line);
+         display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .bhead input{flex:1;min-width:150px;font-family:inherit;font-size:11.5px;border:1px solid var(--line);
+    border-radius:5px;padding:5px 9px;background:var(--panel);color:var(--ink)}
+  .bhead input::placeholder{color:var(--ink-faint);font-style:italic}
+  .n{font-size:11px;color:var(--ink-faint);white-space:nowrap}
+  .btn{border:1px solid var(--line);background:var(--white);color:var(--ink);border-radius:6px;
+       padding:6px 12px;font-family:inherit;font-size:11.5px;cursor:pointer;white-space:nowrap}
+  .btn:hover{background:var(--head)}
+  .btn.pri{background:var(--btn);border-color:var(--btn);color:#fff;font-weight:600}
+  .btn.sm{padding:4px 10px;font-size:10.5px}
+  .btn.dang{color:var(--rej);border-color:#e5bcb4}
+  .btn:disabled{opacity:.45;cursor:default}
+
+  .list{max-height:660px;overflow-y:auto}
+  .cat{padding:8px 14px 5px;font-size:9px;letter-spacing:.06em;text-transform:uppercase;
+       color:var(--gold);background:#fdfcf9;border-bottom:1px solid var(--line-soft);
+       position:sticky;top:0;z-index:2}
+  .cat span{color:var(--ink-faint);letter-spacing:0}
+  .run{padding:9px 14px;border-bottom:1px solid var(--line-soft);cursor:pointer;display:flex;
+       align-items:center;gap:10px}
+  .run:hover{background:#fdfcf9}
+  .run.on{background:var(--sel);box-shadow:inset 3px 0 0 var(--gold)}
+  .run .nm{flex:1;line-height:1.35}
+  .run .t1{font-size:12.5px}
+  .run .cd{font-size:9.5px;color:var(--ink-faint);letter-spacing:.04em;margin-top:2px}
+  .run .rt{text-align:right;flex:none;white-space:nowrap}
+  .run .ct{font-size:10.5px;color:var(--ink-soft);font-variant-numeric:tabular-nums}
+  .run .bg{font-size:9px;letter-spacing:.04em;padding:1px 7px;border-radius:999px;margin-top:3px;display:inline-block}
+  .bg.can{background:var(--ok-bg);color:var(--ok)}
+  .bg.cli{background:var(--sel);color:var(--gold)}
+  .bg.off{background:var(--dec);color:var(--ink-soft)}
+  .run.off{opacity:.5}
+
+  .fhead{padding:13px 16px;border-bottom:1px solid var(--line)}
+  .fhead .c{font-size:10.5px;color:var(--ink-faint);letter-spacing:.04em}
+  .fhead .t{font-size:15px;font-weight:600;margin-top:3px}
+  .badges{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+  .b{font-size:9px;letter-spacing:.04em;padding:2px 8px;border-radius:999px}
+  .b.act{background:var(--ok-bg);color:var(--ok)}
+  .b.off{background:var(--dec);color:var(--ink-soft)}
+  .b.sys{background:var(--sel);color:var(--gold)}
+  .b.warn{background:var(--adj-bg);color:var(--adj)}
+  .fbody{padding:0 16px 14px;max-height:560px;overflow-y:auto}
+  .sec{margin-top:14px}
+  .sec .h{font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--gold);
+          padding-bottom:5px;border-bottom:1px solid var(--line-soft);margin-bottom:9px;
+          display:flex;justify-content:space-between;align-items:baseline}
+  .sec .h em{font-style:normal;color:var(--ink-faint);letter-spacing:0;text-transform:none;font-size:10px}
+  .kv{display:grid;grid-template-columns:130px 1fr;gap:8px;padding:3px 0;font-size:12px;align-items:baseline}
+  .kv .k{font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-soft)}
+  .kv .v{line-height:1.45}
+  .kv .v.buit{color:var(--ink-faint);font-style:italic}
+  .tags{display:flex;gap:5px;flex-wrap:wrap}
+  .tg{font-size:10.5px;border:1px solid var(--line);border-radius:5px;padding:2px 8px;
+      background:var(--panel);cursor:pointer}
+  .tg:hover{background:var(--head)}
+  .tg.on{background:var(--sel);border-color:var(--gold);color:var(--gold);font-weight:600}
+  .tg.no{color:var(--ink-faint);border-style:dashed}
+  .szl{display:flex;gap:5px;flex-wrap:wrap}
+  .sz{border:1px solid var(--line);border-radius:6px;padding:3px 11px;font-size:11.5px;background:var(--panel);
+      font-variant-numeric:tabular-nums}
+  .sz i{font-style:normal;font-size:9px;color:var(--ink-faint);margin-right:5px}
+  .us{display:flex;gap:16px;flex-wrap:wrap;font-size:12px}
+  .us b{font-size:15px;color:var(--gold)}
+  .us span{display:block;font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-soft)}
+  .us .alerta b{color:var(--rej)}
+  .avis{margin-top:9px;padding:9px 11px;border-radius:7px;background:var(--rej-bg);border:1px solid #e5bcb4;
+        font-size:11px;color:var(--rej);line-height:1.55}
+  .avis b{color:var(--rej)}
+  .ffoot{padding:11px 16px;border-top:1px solid var(--line);background:#fdfcf9;
+         display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .note{font-size:10.5px;color:var(--ink-faint);flex:1;line-height:1.5}
+
+  .foot{margin-top:22px;font-size:11.5px;color:var(--ink-soft);line-height:1.75;
+        border-left:2px solid var(--line);padding-left:14px}
+  .foot b{color:var(--ink)} .foot ul{margin:8px 0 0;padding-left:18px} .foot li{margin-bottom:5px}
+  .ask{border-left-color:var(--gold);background:#fdfaf3;padding:12px 14px;border-radius:0 7px 7px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="crumb">Configuració tècnica › <b>Size Library</b></div>
+  <h1>Runs de talles</h1>
+  <p class="sub">Escales pures. Un run diu <b>quines talles hi ha i en quin ordre</b> — res més. La graduació viu als jocs de regles; les restriccions <b>ordenen</b> la proposta al wizard, mai amaguen.</p>
+
+  <div class="split">
+    <div class="box">
+      <div class="bhead">
+        <input placeholder="cerca per codi, nom o client…">
+        <span class="n" id="cnt">—</span>
+        <button class="btn sm pri">＋ Nou run</button>
+      </div>
+      <div class="list" id="lst"></div>
+    </div>
+    <div class="box" id="fx"></div>
+  </div>
+
+  <div class="foot">
+    <b>Què fixa aquesta versió</b>
+    <ul>
+      <li><b>Mateix patró que el catàleg de POMs</b>: llista a l'esquerra, fitxa a la dreta, mateixes accions. Un sol llenguatge per a tota la Configuració tècnica.</li>
+      <li><b>Els presets amb graduació dins han desaparegut.</b> Un run és una escala; els increments de POM viuen als jocs de regles. Aquí no hi ha ni un delta.</li>
+      <li><b>Les quatre capes de restricció s'editen a la fitxa</b> (target · construcció · fit · grup), multi-selecció. <b>Cap seleccionada = serveix a tothom.</b></li>
+      <li><b>«On s'usa» compta també les regles ancorades a les SEVES TALLES</b>, no només el que apunta al run. És la lliçó del 07/08: un run amb «0 usos» era l'àncora de talla base de 350 regles de deu jocs que eren d'altres runs.</li>
+      <li><b>Amb ús, no s'esborra: es desactiva.</b> El botó ho diu i el motiu també.</li>
+    </ul>
+  </div>
+
+  <div class="ask foot">
+    <b>Tres coses que he decidit jo</b>
+    <ul>
+      <li><b>Les talles es veuen amb el seu ordre explícit</b> (1, 2, 3…). Dos runs es llegien desordenats perquè l'ordre estava duplicat, i <b>un run desordenat és un grading incorrecte</b>: si es veu, no torna a passar.</li>
+      <li><b>«Clonar» es queda</b> — és com neix un run de client a partir d'un canònic sense tocar l'original.</li>
+      <li><b>El tipus d'escala es mostra, no s'edita a mà</b>: el dedueix el sistema de les etiquetes. Si el que hi ha escrit contradiu les etiquetes, la fitxa ho avisa en comptes de deixar-ho passar.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+const RUNS=[
+ {esc:'ALPHA',c:'ALPHA_EU_W',n:'Alpha EU — Women',cli:null,sys:true,act:true,
+  sz:['XXS','XS','S','M','L','XL','XXL','3XL'],
+  cap:{target:['Dona'],constr:[],fit:[],grup:[]},
+  us:{items:14,models:0,rules:6,anchor:0}},
+ {esc:'ALPHA',c:'ALPHA_EU_M',n:'Alpha EU — Men',cli:null,sys:true,act:true,
+  sz:['XS','S','M','L','XL','XXL','3XL'],
+  cap:{target:['Home'],constr:[],fit:[],grup:[]},
+  us:{items:0,models:0,rules:1,anchor:0}},
+ {esc:'ALPHA',c:'ALPHA_GRP_W',n:'Alpha agrupat — Women',cli:'BRW',sys:false,act:true,
+  sz:['XS-S','S-M','M-L'],
+  cap:{target:['Dona'],constr:['Punt','Punt elàstic'],fit:[],grup:['Vestits','Punt i jerseis','Tops']},
+  us:{items:6,models:0,rules:2,anchor:0}},
+ {esc:'ALPHA',c:'TGIRL-EU-HEIGHT',n:'Alpha EU — Grading Reference',cli:null,sys:true,act:true,
+  sz:['XXS','XS','S','M','L'],
+  cap:{target:[],constr:[],fit:[],grup:[]},
+  us:{items:0,models:0,rules:0,anchor:350},
+  avis:'Aquest run no l\'usa ningú directament, però <b>350 regles de 10 jocs hi ancoren la seva talla base</b> — i aquells jocs són d\'altres runs. Esborrar-lo trencaria la graduació de tots ells. Fins que les regles ancorin per etiqueta i no per fila, aquest run no es toca.'},
+ {esc:'NUM',c:'NUMERIC_EU_W',n:'Numeric EU — Women',cli:null,sys:true,act:true,
+  sz:['32','34','36','38','40','42','44'],
+  cap:{target:['Dona'],constr:[],fit:[],grup:['Parts inferiors']},
+  us:{items:5,models:0,rules:4,anchor:0}},
+ {esc:'NUM',c:'MEN-SHIRT-NUM',n:'Men shirt numeric',cli:null,sys:false,act:false,
+  sz:[],cap:{target:[],constr:[],fit:[],grup:[]},
+  us:{items:0,models:0,rules:0,anchor:0}},
+ {esc:'MESOS',c:'BABY_MONTHS_COM',n:'Baby Months — Commercial',cli:'LOS',sys:true,act:true,
+  sz:['0M-1M','1M-3M','3M-6M','6M-9M','9M-12M'],
+  cap:{target:['Nadó nena','Nadó nen','Nadó unisex'],constr:[],fit:[],grup:['Newborn']},
+  us:{items:8,models:0,rules:5,anchor:0}},
+ {esc:'MESOS',c:'LOS_NB_0_24',n:'LOS New Born 0-24M',cli:'LOS',sys:false,act:true,
+  sz:['00/01','01/03','03/06','06/09','09/12','12/18','18/24'],
+  cap:{target:['Nadó nena','Nadó nen'],constr:['Punt'],fit:[],grup:['Newborn']},
+  us:{items:11,models:0,rules:9,anchor:0}},
+ {esc:'ALTURA',c:'BABY_EU_CM',n:'Baby EU — cm height',cli:null,sys:true,act:true,
+  sz:['50','56','62','68','74','80','86','92'],
+  cap:{target:['Nadó unisex'],constr:[],fit:[],grup:[]},
+  us:{items:3,models:0,rules:2,anchor:0}},
+ {esc:'ALTURA',c:'TODDLER_EU',n:'Toddler EU — cm height',cli:null,sys:true,act:true,
+  sz:['86','92','98','104','110','116'],
+  cap:{target:['Nena','Nen'],constr:[],fit:[],grup:[]},
+  us:{items:2,models:0,rules:1,anchor:0},
+  ok:'Reparat el 07/08: l\'escala deia AGE_YEARS i les etiquetes són alçades en cm; l\'ordre estava duplicat a dues talles.'}
+];
+const TARGETS=['Dona','Home','Unisex adult','Nadó nena','Nadó nen','Nadó unisex','Baby nena','Baby nen','Nena','Nen','Adolescent nena','Adolescent nen','Maternitat'];
+const CONSTR=['Teixit pla','Punt','Punt elàstic','Tècnic'];
+const FITS=['Regular','Slim','Relaxed','Oversized','Flared','Tapered','Straight','Bodycon','Athletic','Custom'];
+const GRUPS=['Tops','Vestits','Parts inferiors','Punt i jerseis','Jaquetes','Bany','Roba interior','Complements'];
+const ESCN={ALPHA:'Alfabètica',NUM:'Numèrica',MESOS:'Per mesos',ALTURA:'Per alçada'};
+let sel=3;
+const el=id=>document.getElementById(id);
+
+function llista(){
+  let out='',esc=null;
+  const per={};RUNS.forEach(r=>{(per[r.esc]=per[r.esc]||[]).push(r)});
+  RUNS.forEach((r,i)=>{
+    if(r.esc!==esc){esc=r.esc;out+=`<div class="cat">${ESCN[esc]} <span>· ${per[esc].length}</span></div>`;}
+    const bg=r.sys?'<span class="bg can">canònic</span>':r.cli?`<span class="bg cli">${r.cli}</span>`:'';
+    out+=`<div class="run ${i===sel?'on':''} ${r.act?'':'off'}" onclick="sel=${i};llista();fitxa()">
+      <span class="nm"><span class="t1">${r.n}</span><span class="cd">${r.c}</span></span>
+      <span class="rt"><span class="ct">${r.sz.length?r.sz.length+' talles':'sense talles'}</span><br>
+        ${r.act?bg:'<span class="bg off">desactivat</span>'}</span></div>`;
+  });
+  el('lst').innerHTML=out;
+  el('cnt').textContent=RUNS.length+' runs';
+}
+function tg(sel_,all){return all.map(x=>`<span class="tg ${sel_.includes(x)?'on':''}">${x}</span>`).join('');}
+function fitxa(){
+  const r=RUNS[sel];
+  const usTot=r.us.items+r.us.models+r.us.rules+r.us.anchor;
+  const capBuides=!r.cap.target.length&&!r.cap.constr.length&&!r.cap.fit.length&&!r.cap.grup.length;
+  el('fx').innerHTML=`
+    <div class="fhead">
+      <div class="c">${r.c} · ${ESCN[r.esc]}</div>
+      <div class="t">${r.n}</div>
+      <div class="badges">
+        <span class="b ${r.act?'act':'off'}">${r.act?'ACTIU':'DESACTIVAT'}</span>
+        ${r.sys?'<span class="b sys">CANÒNIC DE LA CASA</span>':r.cli?`<span class="b sys">RUN DE ${r.cli}</span>`:''}
+        ${r.us.anchor?'<span class="b warn">ÀNCORA DE TALLA BASE</span>':''}
+        ${!r.sz.length?'<span class="b warn">SENSE TALLES</span>':''}
+      </div>
+    </div>
+    <div class="fbody">
+      <div class="sec"><div class="h">Identitat</div>
+        <div class="kv"><span class="k">Codi</span><span class="v">${r.c}</span></div>
+        <div class="kv"><span class="k">Nom</span><span class="v">${r.n}</span></div>
+        <div class="kv"><span class="k">Tipus d'escala</span><span class="v">${ESCN[r.esc]} <em style="color:var(--ink-faint);font-style:normal;font-size:10.5px">· deduït de les etiquetes</em></span></div>
+        <div class="kv"><span class="k">Client</span><span class="v ${r.cli?'':'buit'}">${r.cli||'cap — de la casa'}</span></div>
+      </div>
+
+      <div class="sec"><div class="h">Talles <em>${r.sz.length} · en ordre</em></div>
+        ${r.sz.length?`<div class="szl">${r.sz.map((s,k)=>`<span class="sz"><i>${k+1}</i>${s}</span>`).join('')}</div>`
+          :'<div class="kv"><span class="v buit">Aquest run no té cap talla definida.</span></div>'}
+        ${r.ok?`<div class="avis" style="background:var(--ok-bg);border-color:#c6dab0;color:var(--ok)">${r.ok}</div>`:''}
+      </div>
+
+      <div class="sec"><div class="h">Restriccions <em>${capBuides?'cap — serveix a tothom':'ordenen, mai amaguen'}</em></div>
+        <div class="kv"><span class="k">Target</span><span class="v tags">${tg(r.cap.target,TARGETS)}</span></div>
+        <div class="kv"><span class="k">Construcció</span><span class="v tags">${tg(r.cap.constr,CONSTR)}</span></div>
+        <div class="kv"><span class="k">Fit</span><span class="v tags">${tg(r.cap.fit,FITS)}</span></div>
+        <div class="kv"><span class="k">Grup de peça</span><span class="v tags">${tg(r.cap.grup,GRUPS)}</span></div>
+      </div>
+
+      <div class="sec"><div class="h">On s'usa</div>
+        <div class="us">
+          <span><b>${r.us.items}</b><span>items del catàleg</span></span>
+          <span><b>${r.us.models}</b><span>models vius</span></span>
+          <span><b>${r.us.rules}</b><span>jocs que l'usen</span></span>
+          <span class="${r.us.anchor?'alerta':''}"><b>${r.us.anchor}</b><span>regles ancorades a les seves talles</span></span>
+        </div>
+        ${r.avis?`<div class="avis">${r.avis}</div>`:''}
+      </div>
+    </div>
+
+    <div class="ffoot">
+      <button class="btn">✎ Editar</button>
+      <button class="btn">⧉ Clonar</button>
+      <button class="btn">${r.act?'Desactivar':'Reactivar'}</button>
+      <button class="btn dang" ${usTot||r.sys?'disabled':''}>Esborrar</button>
+      <span class="note">${
+        r.us.anchor ? `Àncora de ${r.us.anchor} regles: no es pot esborrar ni desactivar sense trencar-les.`
+        : r.sys ? 'Run canònic de la casa: es pot desactivar, però no esborrar.'
+        : usTot ? `Té ${usTot} usos: es pot desactivar, no esborrar.`
+        : 'Sense cap ús: es pot esborrar.'}</span>
+    </div>`;
+}
+llista();fitxa();
+</script>
+</body>
+</html>

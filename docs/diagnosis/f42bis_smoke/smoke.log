@@ -1,0 +1,9 @@
+pantalla: TALLER
+tria de peça 837.CUELLO: clicada
+panell: {"teTitol":true,"files":2,"opcions":[["— sense rol —","Unió de coll","Costura lateral del coll","Costura del centre del coll"],["— sense rol —","Unió de coll","Costura lateral del coll","Costura del centre del coll"]],"seleccionat":["collar_attach",""]}
+canvas: {"x":374,"y":125,"w":1212,"h":839}
+captura: /tmp/claude-0/-var-www/73d9d192-aca1-4077-9ee4-088e632fd07a/scratchpad/smoke_taller_vora_illuminada.png
+accepta-tots: sense botó accepta
+grava: BOTÓ DESACTIVAT (res per gravar)
+després de gravar: {"resum":"1 dits ·","teLandmarks":false}
+captura 2: /tmp/claude-0/-var-www/73d9d192-aca1-4077-9ee4-088e632fd07a/scratchpad/smoke_taller_despres_de_gravar.png

@@ -179,3 +179,28 @@ amb la sembra del corpus.
 
 **El que sí que es pot fer avui sense decidir res**: corregir el motiu escrit al botó, que avui
 amaga la paret que de debò mana. Un gest, si el vols.
+
+
+---
+
+## Decisions d'Agus (09/08) — el Tram 0 queda tancat
+
+| Punt | Decisió |
+|---|---|
+| **Banc (1319)** | **Acceptat com està.** Fase `Pending`, cap rellotge, i les dues tasques `Paused` són **cicatriu documentada, no brutícia** — marcar-les `Done` seria mentir al llibre. No bloquegen la part B. |
+| **«＋ Afegir POM»** | **VIA C** (FK `talla_base` nullable = **pas (b) de CAT2.1**), **però NO ara**: va al paquet del **catàleg nou**, on la sembra del corpus i la migració es fan juntes. El que mana és l'argument no-tècnic: **amb 46 de 47 jocs buits, obrir el botó és obrir una porta a una sala buida**. Fer la migració solta, fora del seu tram i amb el brief dient «sense migració», seria precipitar una peça del refactor de BD. |
+| **El motiu del botó** | **Corregit** (commit 198). |
+
+### El motiu, abans i ara
+
+- **Abans**: «l'API no deixa dir a quin joc va la regla nova» — *mitja veritat*: aquell
+  `read_only` es treu amb una línia.
+- **Ara**: «**Requereix una talla base que el motor no llegeix mai (metadata del seed). S'obre
+  amb CAT2.1, al paquet del catàleg nou.**»
+
+I passa a ser **visible sempre**. Abans només sortia escrit quan el joc no tenia cap regla; amb
+regles se n'anava al `title`, i **un motiu que s'ha de descobrir amb el ratolí és mig amagat** —
+un control apagat sense motiu llegible no és un estat, és una avaria (§8c). La nota del
+trencament es queda al seu lloc: parla de les regles que hi ha, no del botó.
+
+Captura: `coda2_03_afegir_pom_motiu`.

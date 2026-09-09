@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maqueta v4 · Catàleg de peces</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#fbf8f3;--panel:#fff;--ink:#3a3530;--ink-soft:#8a8279;--ink-faint:#a9a199;
+    --line:#e8e0d3;--line-soft:#f0eae0;--head:#f5efe4;--gold:#a8752c;--gold-soft:#c9a227;
+    --btn:#9a5f22;--sel:#f2e6cf;--dec:#f7f5f1;--white:#fff;
+    --ok:#5f8a3f;--ok-bg:#eef4e6;--rej:#b4483a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:18px 16px 70px;background:var(--bg);color:var(--ink);
+       font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:13px}
+  .wrap{max-width:1600px;margin:0 auto}
+  .crumb{color:var(--ink-soft);font-size:12px;margin-bottom:8px}
+  .crumb b{color:var(--ink)} .crumb a{color:var(--gold);cursor:pointer;text-decoration:none}
+  h1{font-size:17px;font-weight:600;margin:0 0 3px}
+  .sub{color:var(--ink-soft);font-size:12px;margin:0 0 14px;line-height:1.65}
+  .chip{background:var(--gold-soft);color:#fff;border-radius:999px;padding:2px 11px;font-size:11px}
+
+  .grid{display:grid;grid-template-columns:222px 222px 1fr;gap:13px;align-items:start}
+  .col{background:var(--panel);border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .colhead{padding:9px 13px;background:var(--head);border-bottom:1px solid var(--line);
+           display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .colhead .t{font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);font-weight:500}
+  .colhead .n{font-size:10px;color:var(--ink-faint)}
+  .search{padding:8px 11px;border-bottom:1px solid var(--line-soft)}
+  .search input{width:100%;font-family:inherit;font-size:11.5px;border:1px solid var(--line);
+    border-radius:5px;padding:5px 8px;background:var(--panel);color:var(--ink)}
+  .search input::placeholder{color:var(--ink-faint);font-style:italic}
+  .list{max-height:520px;overflow-y:auto}
+  .row{padding:9px 13px;border-bottom:1px solid var(--line-soft);cursor:pointer;display:flex;
+       align-items:flex-start;justify-content:space-between;gap:8px}
+  .row:hover{background:#fdfcf9}
+  .row.on{background:var(--sel);box-shadow:inset 3px 0 0 var(--gold)}
+  .row .nm{font-size:12.5px;line-height:1.35}
+  .row .cd{font-size:9.5px;color:var(--ink-faint);letter-spacing:.04em;margin-top:2px}
+  .row .rt{text-align:right;white-space:nowrap;flex:none}
+  .row .ct{font-size:10.5px;color:var(--ink-soft);font-variant-numeric:tabular-nums}
+  .row .pm{font-size:9.5px;color:var(--gold);margin-top:2px}
+  .addrow{padding:9px 13px;border-top:1px solid var(--line);background:#fdfcf9}
+  .btn{border:1px solid var(--line);background:var(--white);color:var(--ink);border-radius:6px;
+       padding:6px 12px;font-family:inherit;font-size:11.5px;cursor:pointer;white-space:nowrap}
+  .btn:hover{background:var(--head)}
+  .btn.pri{background:var(--btn);border-color:var(--btn);color:#fff;font-weight:600}
+  .btn.sm{padding:4px 11px;font-size:10.5px}
+  .btn.full{width:100%;text-align:center}
+  .btn.dang{color:var(--rej);border-color:#e5bcb4}
+
+  /* ── ITEMS EN LÍNIES ── */
+  .irow{display:grid;grid-template-columns:1fr 190px 148px 96px 104px 92px;gap:12px;align-items:center;
+        padding:11px 14px;border-bottom:1px solid var(--line-soft)}
+  .irow:hover{background:#fdfcf9}
+  .irow .nm{font-size:13px;font-weight:600}
+  .irow .cd{font-size:9.5px;color:var(--ink-faint);letter-spacing:.04em;margin-top:2px}
+  .tagm{font-size:8.5px;letter-spacing:.05em;padding:2px 7px;border-radius:999px;
+        background:var(--sel);color:var(--gold);font-weight:600;margin-left:8px}
+  .lbl{font-size:8.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);display:block}
+  .acc{font-size:10.5px;color:var(--ink-soft);margin-top:2px}
+  .acc b{color:var(--ink)}
+  .acc .tot{color:var(--gold);font-weight:600;font-size:12px;margin-left:5px}
+  .bar{display:flex;height:5px;border-radius:3px;overflow:hidden;margin-top:5px;background:var(--line-soft)}
+  .bar i{display:block}
+  .bar .g{background:#d9c79a}.bar .f{background:var(--gold-soft)}.bar .i{background:var(--gold)}
+  .v{font-size:12px;font-weight:600;margin-top:2px}
+  .fx{font-size:11px;color:var(--ink-soft);margin-top:2px}
+  .fx b{color:var(--ink)}
+  .irowhead{display:grid;grid-template-columns:1fr 190px 148px 96px 104px 92px;gap:12px;
+            padding:7px 14px;background:var(--head);border-bottom:1px solid var(--line)}
+  .irowhead span{font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-soft)}
+
+  /* ── PANTALLA D'EDICIÓ ── */
+  .screen{background:var(--panel);border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .shead{padding:11px 14px;background:var(--head);border-bottom:1px solid var(--line);
+         display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .shead .t{font-size:13.5px;font-weight:600}
+  .shead .c{font-size:10.5px;color:var(--ink-soft)}
+  .tabs{display:flex;gap:6px;margin-left:auto}
+  .tab{border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:5px 15px;
+       font-family:inherit;font-size:11.5px;color:var(--ink-soft);cursor:pointer}
+  .tab.on{background:var(--sel);color:var(--gold);border-color:var(--gold);font-weight:600}
+
+  .runbar{padding:10px 14px;border-bottom:1px solid var(--line);background:#fdfcf9;
+          display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  .runbar select{font-family:inherit;font-size:12px;border:1px solid var(--line);border-radius:6px;
+    padding:5px 9px;background:var(--panel);color:var(--ink)}
+  .sizes{display:inline-flex;gap:5px;flex-wrap:wrap;margin-top:3px}
+  .sz{border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:4px 11px;
+      font-family:inherit;font-size:11.5px;cursor:pointer;color:var(--ink)}
+  .sz:hover{background:var(--head)}
+  .sz.base{background:var(--sel);border-color:var(--gold);color:var(--gold);font-weight:600;
+           box-shadow:0 0 0 2px rgba(168,117,44,.13)}
+  .hint{font-size:10.5px;color:var(--ink-faint);margin-left:auto}
+  .keys{padding:7px 14px;border-bottom:1px solid var(--line-soft);font-size:10.5px;color:var(--ink-soft)}
+  kbd{border:1px solid var(--line);border-radius:3px;padding:1px 5px;background:var(--panel);
+      font-family:inherit;font-size:10px}
+  .scroll{overflow-x:auto}
+  table{border-collapse:separate;border-spacing:0;font-size:12.5px;table-layout:fixed;min-width:1060px}
+  th{font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);font-weight:500;
+     padding:6px 10px;background:var(--head);border-bottom:1px solid var(--line);text-align:left;vertical-align:bottom}
+  th.ins{text-align:center;background:var(--sel);color:var(--gold);font-weight:600}
+  th.sb{font-size:8.5px;background:#fdfcf9;color:var(--ink-faint);text-align:center}
+  th.base{background:var(--sel);text-align:right;color:var(--gold);font-weight:600}
+  th.base b{display:block;font-size:14px}
+  td{padding:4px 10px;border-bottom:1px solid var(--line-soft);vertical-align:middle}
+  col.c1{width:44px}col.c2{width:104px}col.c3{width:40px}col.c4{width:86px}col.c5{width:236px}
+  col.c6{width:130px}col.c7{width:166px}col.c8{width:46px}col.c9{width:110px}col.c10{width:42px}
+  .lay select{font-family:inherit;font-size:11.5px;border:1px solid var(--line);border-radius:5px;
+    padding:3px 6px;background:var(--panel);width:100%;color:var(--ink)}
+  .code{font-size:12.5px;font-weight:600;color:var(--gold)}
+  .nm2{font-size:12.5px;line-height:1.4}
+  .i,.pen{color:var(--ink-faint);font-size:11px;margin-left:5px;cursor:pointer}
+  .pen:hover{color:var(--gold)}
+  .pind{display:inline-flex;gap:4px;justify-content:center;width:100%}
+  .p{border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:2px 9px;
+     font-family:inherit;font-size:10.5px;cursor:pointer;color:var(--ink)}
+  .p:hover{background:var(--head)}
+  .mes{background:var(--sel);text-align:right}
+  .val{width:92px;text-align:right;font-size:12.5px;font-weight:600;font-family:inherit;
+       border:1px solid var(--line);border-radius:5px;padding:3px 8px;background:var(--panel);
+       font-variant-numeric:tabular-nums;color:var(--ink)}
+  .val:focus{outline:none;border-color:var(--gold);background:#fffdf8}
+  .val::placeholder{color:var(--ink-faint);font-weight:400}
+  .finder{padding:8px 14px;border-top:1px solid var(--line-soft)}
+  .finder input{width:330px;font-family:inherit;font-size:11.5px;border:1px solid var(--gold);
+    border-radius:5px;padding:5px 9px;background:var(--panel)}
+  .sfoot{padding:10px 14px;border-top:1px solid var(--line);background:#fdfcf9;
+         display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+  .fwrap{display:grid;grid-template-columns:290px 1fr;min-height:320px}
+  .flist{border-right:1px solid var(--line)}
+  .frow{padding:9px 13px;border-bottom:1px solid var(--line-soft);cursor:pointer;display:flex;
+        align-items:center;gap:9px}
+  .frow:hover{background:#fdfcf9}
+  .frow.on{background:var(--sel);box-shadow:inset 3px 0 0 var(--gold)}
+  .ext{font-size:9px;font-weight:600;letter-spacing:.04em;border-radius:4px;padding:2px 6px;
+       background:var(--head);color:var(--gold);flex:none}
+  .frow .fn{font-size:11.5px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .frow .fs{font-size:9.5px;color:var(--ink-faint)}
+  .viewer{padding:14px;display:flex;flex-direction:column;gap:10px}
+  .canvas{flex:1;min-height:240px;border:1px solid var(--line);border-radius:8px;
+          background:repeating-linear-gradient(45deg,#faf7f1,#faf7f1 9px,#f4efe6 9px,#f4efe6 18px);
+          display:flex;align-items:center;justify-content:center;color:var(--ink-faint);font-size:11.5px}
+  .vmeta{display:flex;gap:14px;font-size:11px;color:var(--ink-soft);flex-wrap:wrap}
+  .vmeta b{color:var(--ink)}
+  .hide{display:none}
+  .foot{margin-top:22px;font-size:11.5px;color:var(--ink-soft);line-height:1.75;
+        border-left:2px solid var(--line);padding-left:14px}
+  .foot b{color:var(--ink)} .foot ul{margin:8px 0 0;padding-left:18px} .foot li{margin-bottom:5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ══ VISTA CATÀLEG ══ -->
+<div id="vCat">
+  <div class="crumb">Configuració tècnica › <b>Catàleg de peces</b></div>
+  <h1>Catàleg de peces <span class="chip">Brownie</span></h1>
+  <p class="sub">Estructura pròpia de la marca, definida al setup. El catàleg de POMs <b>s'acumula per nivell i proposa</b>: grup → família → item. <b>Els grups agrupen per com es MESURA, no per com es ven.</b></p>
+
+  <div class="grid">
+    <div class="col">
+      <div class="colhead"><span class="t">1 · Grup</span><span class="n" id="gn">8</span></div>
+      <div class="search"><input placeholder="cerca grup…"></div>
+      <div class="list" id="g"></div>
+      <div class="addrow"><button class="btn full">＋ Nou grup</button></div>
+    </div>
+    <div class="col">
+      <div class="colhead"><span class="t">2 · Família</span><span class="n" id="fn">—</span></div>
+      <div class="search"><input placeholder="cerca família…"></div>
+      <div class="list" id="f"></div>
+      <div class="addrow"><button class="btn full">＋ Nova família</button></div>
+    </div>
+    <div class="col">
+      <div class="colhead">
+        <span class="t">3 · Item <span style="text-transform:none;letter-spacing:0;color:var(--ink-faint)">· els temps de tasca s'ancoren aquí</span></span>
+        <span style="display:flex;gap:8px;align-items:center"><span class="n" id="itn">—</span>
+          <button class="btn sm">＋ Nou item</button></span>
+      </div>
+      <div class="irowhead">
+        <span>Item</span><span>Catàleg de POMs proposat</span><span>Run de talles</span>
+        <span>Talla base</span><span>Fitxers</span><span></span>
+      </div>
+      <div id="it"></div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <b>Què canvia respecte de la v3</b>
+    <ul>
+      <li><b>Els items són línies, no pastilles.</b> Una sota l'altra, amb les mateixes columnes sempre a la mateixa posició: es comparen d'un cop d'ull i n'hi caben molts sense fer scroll lateral.</li>
+      <li><b>Un sol botó: Editar.</b> Porta a la pantalla de l'item, amb dos tabs — <b>Talles i POMs</b> · <b>Fitxers</b>. Res més a la línia.</li>
+      <li>La pantalla d'edició és <b>una pantalla</b>, no un panell sota la llista: es torna al catàleg pel camí de sempre.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ══ PANTALLA DE L'ITEM ══ -->
+<div id="vItem" class="hide">
+  <div class="crumb"><a onclick="tanca()">← Catàleg de peces</a> › <b id="bcF">—</b> › <b id="bcI">—</b></div>
+
+  <div class="screen">
+    <div class="shead">
+      <span class="t" id="sT">—</span><span class="c" id="sC">—</span>
+      <span class="tabs">
+        <button class="tab on" onclick="tab(this,'tP')">Talles i POMs</button>
+        <button class="tab" onclick="tab(this,'tF')">Fitxers</button>
+      </span>
+    </div>
+
+    <div id="tP">
+      <div class="runbar">
+        <span><span class="lbl">Run de talles</span>
+          <select id="run" onchange="setRun()">
+            <option>Alpha EU — Women · XXS·XS·S·M·L</option>
+            <option>Alpha agrupat · XS-S · S-M · M-L</option>
+            <option>Numeric EU — Women · 32…42</option>
+          </select></span>
+        <span><span class="lbl">Talla base</span><span class="sizes" id="szs"></span></span>
+        <span class="hint">La talla base obre i informa la columna de mesures de partida.</span>
+      </div>
+      <div class="keys">
+        <kbd>↓</kbd>/<kbd>Enter</kbd> següent · <kbd>↑</kbd> anterior · <kbd>L</kbd> germana de capa ·
+        <kbd>I</kbd> grups d'instància · <kbd>N</kbd> nomenclatura · última fila <kbd>↓</kbd> = cercador
+      </div>
+      <div class="scroll">
+      <table>
+        <colgroup><col class="c1"><col class="c2"><col class="c3"><col class="c4"><col class="c5">
+          <col class="c6"><col class="c7"><col class="c8"><col class="c9"><col class="c10"></colgroup>
+        <thead>
+          <tr><th colspan="5"></th><th class="ins" colspan="3">Instància</th>
+              <th class="base" rowspan="2">Mesura de partida<b id="bs">—</b></th><th rowspan="2"></th></tr>
+          <tr><th>#</th><th>Capa</th><th></th><th>POM</th><th>Nom</th>
+              <th class="sb">Posició</th><th class="sb">Estat</th><th class="sb">Més</th></tr>
+        </thead>
+        <tbody id="pb"></tbody>
+      </table>
+      </div>
+      <div class="finder"><input placeholder="codi o nom…  «C.f» folre · «S.l» esquerra">
+        <span style="font-size:10.5px;color:var(--ink-soft);margin-left:9px">Enter confirma · Esc torna al carril</span></div>
+      <div class="sfoot">
+        <button class="btn">↑ Importar d'una fitxa</button>
+        <span style="font-size:11px;color:var(--ink-soft)">El que hi hagi aquí és el que se sembrarà al model. El que no hi sigui, no se sembra.</span>
+        <span style="margin-left:auto;display:flex;gap:8px">
+          <button class="btn" onclick="tanca()">Tornar</button>
+          <button class="btn pri">Gravar</button></span>
+      </div>
+    </div>
+
+    <div id="tF" class="hide">
+      <div class="fwrap">
+        <div class="flist" id="fl"></div>
+        <div class="viewer">
+          <div class="canvas" id="cv">previsualització</div>
+          <div class="vmeta" id="vm"></div>
+          <div style="display:flex;gap:8px">
+            <button class="btn">↑ Pujar fitxer</button><button class="btn">↓ Descarregar</button>
+            <button class="btn dang" style="margin-left:auto">Esborrar</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+const N={A:'1/2 chest width (armpit to armpit)',E:'Shoulder to shoulder',E1:'Shoulder width at true shoulder',
+E3:'Across back width (11cm from HPS)',EK:'Neck width seam to seam',EK1:'Front neck drop from HPS to seam',
+SF:'Armhole depth from HPS',S:'Front armhole along seam',S2:'Back armhole along seam',B:'Waist width',
+C:'Hip width',E4:'Shoulder forward',E5:'Shoulder drop',EK2:'Back neck drop from HPS to seam',
+F:'Centre front length from HPS',FF:'Centre back length from HPS',F2:'Total side length',
+F3:'Front center total length',F4:'Back center total length',FB:'Body length',G1:'Rib height',
+W:'Elastic width',WP:'Elastic placement',FS:'Skirt length',D:'Bottom width (leg opening)',SLT:'Slit',
+FD:'Dress length (HPS)',U:'Front overlap',U1:'Button spacing',U2:'1st button',U3:'Last button',
+K:'Buttonhole placement',KB:'Button placement',TR:'Placket height',E8:'Collar panel length',
+E88:'Collar join',EP:'Collar height at CB',I:'Sleeve length',J:'1/2 Bicep width',J1:'Sleeve opening relaxed',
+I2:'Sleeve hem width',E2:'Across front width (11cm from HPS)',Q:'Dart length',QP:'Dart placement',
+CR2:'Zipper',V:'Ruffle height',VR:'Ruffle length',T:'Strap length',T1:'Strap width',T2:'Strap placement',
+CT:'Thigh width',BF:'Waistband height',FC:'Waist to crotch',CR:'Crotch width',FR:'Rise front',RT:'Rise back',
+FI:'Inseam length',FT:'Total length',M:'Leg opening',D1:'Bottom hem height',R2:'Pocket width',R3:'Pocket length',
+PR1:'Pocket position from side seam',PR2:'Pocket position from waistband',BR:'Fly width',BR1:'Fly length',
+R:'Pocket mouth width',R1:'Pocket mouth length',X:'Stitching width',XP:'Stitching placement',KU:'Eyelet placement',
+GD:'Godet width',QT:'Pleat width',QTP:'Pleat placement',JJ:'Sleeve width at elbow',J3:'Cuff height',
+HL:'Hood length',HW:'Hood width',H1:'Hood width placement',HP:'Hood piece width',HZ:'Drawstring length',
+L:'Back yoke',P:'Center back yoke height',E6:'Lapel width',E7:'Lapel length',ZF:'Belt width',ZL:'Belt length',
+ZL1:'Bow length',NF:'Motive width',NL:'Motive height',A1:'Underbust width'};
+const COS=['A','E','E1','E3','EK','EK1','SF','S','S2','B','C','E4','E5','EK2'];
+const MID={A:'44.0',E:'36.5',E1:'12.0',E3:'34.5',EK:'17.0',EK1:'8.0',SF:'20.0',S:'21.0',S2:'21.0',
+B:'38.0',C:'47.0',F:'40.0',FF:'40.0',F2:'62.0',F3:'92.0',F4:'92.0',FB:'62.0',G1:'4.0',
+FS:'67.0',D:'128.0',FD:'104.0',I:'58.0',J:'16.0',J1:'11.0'};
+const DATA=[
+ {c:'TOPS',n:'Tops',p:[...COS,'F','FF','FB'],f:[
+   {c:'TOPS_WOVEN',n:'Tops de teixit pla',p:['E2','A1','Q','QP'],i:[
+     {c:'blouse',n:'Blusa',p:['U','U1','U2','U3','K','KB','TR','E8','EP','I','J','J1','I2'],base:'S',run:0,fx:[2,1,1,0]},
+     {c:'shirt_top',n:'Camisa',p:['U','U1','K','TR','E8','E88','EP','I','J','J1','J3'],base:'S',run:0,fx:[1,1,1,1]}]},
+   {c:'TOPS_KNIT',n:'Tops de punt',p:['G1','W','WP'],i:[
+     {c:'tshirt',n:'Samarreta',p:['I','J','I2','J1'],base:'M',run:1,fx:[1,0,0,0]},
+     {c:'top_sleeveless',n:'Top sense mànigues',p:['T','T1','T2'],base:'M',run:1,fx:[0,0,0,0]}]}]},
+ {c:'VESTITS',n:'Vestits',p:[...COS,'F','FF','F2','F3','F4'],f:[
+   {c:'DRESS_KNIT',n:'Vestits de punt',p:['G1','FB','W','WP'],i:[
+     {c:'dress_circle',n:'Vestit circular',p:['FS','D','SLT'],base:'XS-S',run:1,fx:[2,1,1,1],miley:true},
+     {c:'dress_knit_straight',n:'Vestit recte de punt',p:['FD','D'],base:'M-L',run:1,fx:[1,0,0,0]}]},
+   {c:'DRESS_WOVEN',n:'Vestits de teixit pla',p:['E2','Q','QP','CR2'],i:[
+     {c:'dress_shirt',n:'Vestit camiser',p:['U','U1','U2','U3','K','KB','TR','E8','E88','EP','FD','I','J','J1'],base:'S',run:0,fx:[1,1,0,0]},
+     {c:'dress_simple',n:'Vestit pla simple',p:['FD','D','V','VR'],base:'S',run:0,fx:[1,1,1,1]}]}]},
+ {c:'INFERIORS',n:'Parts inferiors',p:['B','C','CT','BF','FC','CR','FR','RT'],f:[
+   {c:'TROUSERS',n:'Pantalons',p:['FI','FT','M','D1','R2','R3','PR1','PR2'],i:[
+     {c:'trousers',n:'Pantaló',p:['BR','BR1','U1','K','Q','QP'],base:'38',run:2,fx:[1,1,1,1]},
+     {c:'jeans',n:'Texà',p:['BR','BR1','R','R1','X','XP','KU'],base:'38',run:2,fx:[2,1,1,1]}]},
+   {c:'SKIRTS',n:'Faldes',p:['FS','D1','GD'],i:[
+     {c:'skirt',n:'Faldilla',p:['CR2','QT','QTP','SLT'],base:'S',run:0,fx:[0,1,0,0]}]}]},
+ {c:'PUNT',n:'Punt i jerseis',p:[...COS,'F','FF','FB','G1'],f:[
+   {c:'KNITWEAR',n:'Jerseis',p:['I','J','JJ','I2','J1'],i:[
+     {c:'sweater',n:'Jersei',p:['G1','J3'],base:'M-L',run:1,fx:[1,0,0,0]},
+     {c:'cardigan',n:'Caçadora de punt',p:['U','U1','K','KB'],base:'M-L',run:1,fx:[0,0,0,0]}]},
+   {c:'HOODIES',n:'Sudaderes',p:['HL','HW','H1','HP','HZ'],i:[
+     {c:'hoodie',n:'Sudadera',p:['I','J','I2','W','WP'],base:'M-L',run:1,fx:[0,0,0,0]}]}]},
+ {c:'JAQUETES',n:'Jaquetes i abrics',p:[...COS,'F','FF','FB','E6','E7'],f:[
+   {c:'JACKETS',n:'Jaquetes',p:['I','J','JJ','J1','R2','R3','L','P'],i:[
+     {c:'jacket',n:'Jaqueta',p:['U','U1','U2','U3','K','KB','E8','EP','CR2'],base:'S',run:0,fx:[1,1,1,0]}]}]},
+ {c:'BANY',n:'Bany',p:['A','B','C','S','SF','T','T1'],f:[
+   {c:'SWIM',n:'Banyadors i biquinis',p:['W','WP','CR'],i:[
+     {c:'swimsuit',n:'Banyador',p:['T2','SLT'],base:'S',run:0,fx:[0,0,0,0]}]}]},
+ {c:'INTERIOR',n:'Roba interior',p:['B','C','CR','W','WP'],f:[
+   {c:'UNDERWEAR',n:'Interior',p:['D1','X','XP'],i:[{c:'brief',n:'Culotte',p:['CT'],base:'S',run:0,fx:[0,0,0,0]}]}]},
+ {c:'COMPLEMENTS',n:'Complements',p:['ZF','ZL'],f:[
+   {c:'ACC',n:'Complements',p:['ZL1'],i:[{c:'scarf',n:'Bufanda',p:['NF','NL'],base:'ÚNICA',run:0,fx:[0,0,0,0]}]}]}];
+const RUNS=[['XXS','XS','S','M','L'],['XS-S','S-M','M-L'],['32','34','36','38','40','42']];
+const RN=['Alpha EU','Alpha agrupat','Numeric EU'];
+const EXT=['JPG','AI','DXF','RUL'];
+const FILES=[['JPG','dress_circle_front.jpg','1,2 MB','imatge de referència · frontal'],
+ ['JPG','dress_circle_back.jpg','1,1 MB','imatge de referència · esquena'],
+ ['AI','dress_circle_flat.ai','4,8 MB','sketch pla amb cotes anotades'],
+ ['DXF','dress_circle_base.dxf','320 KB','patró base · R2000'],
+ ['RUL','dress_circle.rul','12 KB','joc de regles de graduació']];
+let gi=1, fi=0, ii=0, base=null, runIdx=1, fsel=3;
+const el=id=>document.getElementById(id);
+
+function grups(){
+  el('gn').textContent=DATA.length;
+  el('g').innerHTML=DATA.map((G,i)=>`<div class="row ${i===gi?'on':''}" onclick="selG(${i})">
+    <span><span class="nm">${G.n}</span><span class="cd">${G.c}</span></span>
+    <span class="rt"><span class="ct">${G.f.length} fam.</span><br><span class="pm">${G.p.length} POMs</span></span></div>`).join('');
+}
+function fams(){
+  const G=DATA[gi]; el('fn').textContent=G.f.length;
+  el('f').innerHTML=G.f.map((F,i)=>`<div class="row ${i===fi?'on':''}" onclick="selF(${i})">
+    <span><span class="nm">${F.n}</span><span class="cd">${F.c}</span></span>
+    <span class="rt"><span class="ct">${F.i.length} items</span><br><span class="pm">+${F.p.length} POMs</span></span></div>`).join('');
+}
+function items(){
+  const G=DATA[gi], F=G.f[fi]; el('itn').textContent=F.i.length+' items';
+  el('it').innerHTML=F.i.map((I,i)=>{
+    const g=G.p.length,f=F.p.length,p=I.p.length,tot=g+f+p,w=x=>Math.round(x/tot*100);
+    const nf=I.fx.reduce((a,b)=>a+b,0);
+    const fxs=EXT.map((e,k)=>I.fx[k]?e:null).filter(Boolean).join(' · ')||'—';
+    return `<div class="irow">
+      <span><span class="nm">${I.n}${I.miley?'<span class="tagm">EL CAS MILEY</span>':''}</span><span class="cd">${I.c}</span></span>
+      <span><span class="acc">grup <b>${g}</b> · fam <b>${f}</b> · item <b>${p}</b><span class="tot">${tot}</span></span>
+        <span class="bar"><i class="g" style="width:${w(g)}%"></i><i class="f" style="width:${w(f)}%"></i><i class="i" style="width:${w(p)}%"></i></span></span>
+      <span><span class="v">${RN[I.run]}</span></span>
+      <span><span class="v">${I.base}</span></span>
+      <span><span class="fx"><b>${nf}</b> · ${fxs}</span></span>
+      <span style="text-align:right"><button class="btn sm" onclick="obre(${i})">Editar</button></span>
+    </div>`;
+  }).join('');
+}
+function obre(i){
+  ii=i; const G=DATA[gi],F=G.f[fi],I=F.i[i];
+  el('sT').textContent=I.n; el('sC').textContent=I.c;
+  el('bcF').textContent=`${G.n} › ${F.n}`; el('bcI').textContent=I.n;
+  runIdx=I.run; el('run').selectedIndex=I.run; base=I.base;
+  sizes(); taula(); files();
+  el('vCat').classList.add('hide'); el('vItem').classList.remove('hide');
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function tanca(){el('vItem').classList.add('hide');el('vCat').classList.remove('hide');window.scrollTo({top:0});}
+function sizes(){
+  el('szs').innerHTML=RUNS[runIdx].map(s=>`<button class="sz ${s===base?'base':''}" onclick="base='${s}';sizes();taula()">${s}</button>`).join('');
+  el('bs').textContent=base||'—';
+}
+function setRun(){runIdx=el('run').selectedIndex;base=RUNS[runIdx][Math.min(2,RUNS[runIdx].length-1)];sizes();taula();}
+function taula(){
+  const G=DATA[gi],F=G.f[fi],I=F.i[ii];
+  const tot=[...G.p.map(c=>[c,'g']),...F.p.map(c=>[c,'f']),...I.p.map(c=>[c,'i'])];
+  const vist=new Set(), nets=tot.filter(([c])=>vist.has(c)?false:vist.add(c));
+  el('pb').innerHTML=nets.map(([c],i)=>`<tr>
+    <td style="color:var(--ink-faint)">${i+1}</td>
+    <td class="lay"><select><option>Exterior</option><option>Folre</option><option>Entretela</option></select></td>
+    <td style="color:var(--ink-faint);cursor:pointer" title="duplicar">⧉</td>
+    <td class="code">${c}</td>
+    <td class="nm2">${N[c]||''}<span class="i" title="nom en català">ⓘ</span><span class="pen" title="editar nom i nomenclatura">✎</span></td>
+    <td><span class="pind"><button class="p">Left</button><button class="p">Right</button></span></td>
+    <td><span class="pind"><button class="p">Relaxed</button><button class="p">Extended</button></span></td>
+    <td style="text-align:center"><button class="p">＋</button></td>
+    <td class="mes"><input class="val" value="${MID[c]||''}" placeholder="—"></td>
+    <td style="color:var(--ink-faint);cursor:pointer" title="treure">✕</td></tr>`).join('');
+}
+function files(){
+  el('fl').innerHTML=FILES.map((F,i)=>`<div class="frow ${i===fsel?'on':''}" onclick="fsel=${i};files()">
+    <span class="ext">${F[0]}</span><span class="fn">${F[1]}</span><span class="fs">${F[2]}</span></div>`).join('');
+  const F=FILES[fsel];
+  el('cv').textContent=F[0]==='DXF'?'previsualització del patró (DXF)':F[0]==='RUL'?'joc de regles (RUL) — lectura':'previsualització de '+F[1];
+  el('vm').innerHTML=`<span><b>${F[1]}</b></span><span>${F[0]} · ${F[2]}</span><span>${F[3]}</span>`;
+}
+function selG(i){gi=i;fi=0;ii=0;grups();fams();items();}
+function selF(i){fi=i;ii=0;fams();items();}
+function tab(b,id){b.parentNode.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));b.classList.add('on');
+  el('tP').classList.toggle('hide',id!=='tP');el('tF').classList.toggle('hide',id!=='tF');}
+grups();fams();items();
+</script>
+</body>
+</html>
