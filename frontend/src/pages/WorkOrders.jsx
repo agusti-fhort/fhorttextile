@@ -156,10 +156,18 @@ export default function WorkOrders() {
   // mateixa font que alimentava el desplegable que substitueixen, i els seus rètols són els
   // `workorders.status_*` que la casa ja té traduïts. L'única cosa que s'hi afegeix és la
   // safata «totes», que no és cap estat del domini sinó l'absència de filtre.
-  const tabs = useMemo(() => [
-    ...(estats || []).map(codi => ({ key: codi, label: `workorders.status_${codi}` })),
-    { key: '', label: 'workorders.tab_all' },
-  ], [estats])
+  //
+  // L'ORDRE SÍ QUE ES FIXA AQUÍ, i abans no: el `map` prenia l'ordre en què `/vocabulari/`
+  // tornés els codis, o sigui que la barra podia dir «Tancats · Oberts» sense que res fallés.
+  // Els codis segueixen sent del vocabulari; el que es declara és que la feina VIVA va primer.
+  const tabs = useMemo(() => {
+    const codis = [...(estats || [])]
+    codis.sort((a, b) => (a === 'OPEN' ? -1 : b === 'OPEN' ? 1 : 0))
+    return [
+      ...codis.map(codi => ({ key: codi, label: `workorders.status_${codi}` })),
+      { key: '', label: 'workorders.tab_all' },
+    ]
+  }, [estats])
 
   // ── TANCAR ELS SELECCIONATS ──────────────────────────────────────────────────────────────
   //
@@ -204,25 +212,28 @@ export default function WorkOrders() {
     {
       // CONTROL, no dada: va abans del número i no ordena. El `stopPropagation` és obligatori
       // —`TaulaLlista` posa l'`onClick` d'obrir a tot el `<tr>`— o triar una fila navegaria.
-      key: 'tria', label: '', min: 38, max: 38, align: 'center',
+      key: 'tria', label: '', min: 40, max: 40, align: 'center',
       // `renderCap` ja el preveu la graella canònica per a aquesta columna exacta (v. el
       // comentari de `Capcalera`): la pantalla hi posa el control de conjunt i el `th` conserva
       // la caixa de la norma.
       renderCap: () => (
         <input type="checkbox" checked={totsVisibles} onChange={commutaTots}
-          aria-label={t('workorders.select_all')} style={{ cursor: 'pointer' }} />
+          aria-label={t('workorders.select_all')}
+          style={{ cursor: 'pointer', accentColor: 'var(--gold)' }} />
       ),
       render: r => (
         <input type="checkbox" checked={triats.has(r.id)}
           onClick={e => e.stopPropagation()}
           onChange={() => commuta(r.id)}
           aria-label={t('workorders.select_one', { n: r.number })}
-          style={{ cursor: 'pointer' }} />
+          style={{ cursor: 'pointer', accentColor: 'var(--gold)' }} />
       ),
     },
     {
       key: 'number', label: t('workorders.col_number'), min: 130, max: 170, sort: 'number',
-      estil: { fontWeight: 600 }, titol: r => r.number,
+      // §8e — «la dada reina de cada llista porta el pes», i des d'aquest lot la dada reina és
+      // el NOM (columna següent), no el número. El pes hi baixa.
+      titol: r => r.number,
       render: r => r.number || '—',
     },
     {
@@ -239,7 +250,8 @@ export default function WorkOrders() {
         </span>
       ) : (
         <span style={{ display: 'block', minWidth: 0 }}>
-          <span style={{ display: 'block', color: 'var(--text-main)', overflow: 'hidden',
+          <span style={{ display: 'block', color: 'var(--text-main)', fontWeight: 600,
+                         overflow: 'hidden',
                          textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {r.model_nom || t('workorders.no_name')}
           </span>
@@ -300,7 +312,7 @@ export default function WorkOrders() {
           <span style={{ position: 'relative', flex: 1, minWidth: 200 }}>
             <i className="ti ti-search" aria-hidden="true"
                style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)',
-                        fontSize: 14, color: 'var(--text-soft)', pointerEvents: 'none' }} />
+                        fontSize: 16, color: 'var(--text-soft)', pointerEvents: 'none' }} />
             <input type="search" value={searchF}
               onChange={e => setParams({ search: e.target.value, page: undefined })}
               placeholder={t('workorders.search_placeholder')}
@@ -325,9 +337,14 @@ export default function WorkOrders() {
         {triats.size > 0 && (
           <div style={{
             display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
-            padding: '8px 12px', marginBottom: 10,
+            padding: '8px 12px', marginBottom: 12,
             background: 'var(--sel)', borderWidth: 1, borderStyle: 'solid',
-            borderColor: 'var(--gold-border)', borderRadius: 'var(--r-card)',
+            borderColor: 'var(--line)', borderRadius: 'var(--r-card)',
+            // §1 — la selecció és `--sel` MÉS filet d'or a l'esquerra. La vora daurada de la
+            // volta sencera és el llenguatge de PORTA/secundari, no el de selecció, i aquesta
+            // barra queda just sobre files que sí que porten el filet (`TaulaLlista:120`):
+            // havien de parlar igual.
+            boxShadow: 'inset 3px 0 0 var(--gold)',
           }}>
             <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)' }}>
               {t('workorders.selected_n', { count: triats.size })}
@@ -340,8 +357,7 @@ export default function WorkOrders() {
             </button>
             <button type="button" onClick={() => setTancant(true)} disabled={enviant}
               style={{ ...botoPri, marginLeft: 'auto' }}>
-              <i className="ti ti-lock" aria-hidden="true"
-                 style={{ fontSize: 14, marginRight: 6 }} />
+              <i className="ti ti-lock" aria-hidden="true" style={{ fontSize: 16 }} />
               {t('workorders.bulk_close_action')}
             </button>
           </div>

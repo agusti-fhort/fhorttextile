@@ -644,6 +644,9 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab, model
             : t('paperera.confirma_lliure')}
           cancelLabel={t('paperera.cancella')}
           confirmDisabled={traient}
+          // §5.5 · el vermell ple NOMÉS a la cara que destrueix. Treure de la volta una tasca
+          // lligada conserva la tasca sencera: no és destructiu i no s'ha de pintar com si ho fos.
+          confirmVariant={treient.encarrec ? 'pri' : 'destructiu'}
           onConfirm={confirmaTreure}
           onCancel={() => { if (!traient) setTreient(null) }}
         />
