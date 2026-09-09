@@ -1,4 +1,20 @@
-"""M4 · FIT-12 — LES TASQUES D'UNA VOLTA DESBORDADA, AL CAMÍ D'ENCÀRRECS.
+"""🛑 SUPERAT PEL BLOC A (09/09) — aquest mòdul prova un contracte que ja no existeix.
+
+Provava la safata PER TASQUES: `get_billable_items` retornava `items` amb `model_task_id`, i
+`add_lines_to_draft` en feia una línia per tasca. L'A1 va canviar la unitat d'albarà al MODEL i
+l'A7 va posar les VOLTES al document; la safata ja no emet ítems de tasca i aquestes assercions
+no poden passar mai més.
+
+**No s'esborra i no es reescriu**: el que provava —que la volta desbordada arriba al camí
+d'encàrrecs amb les seves dates i el seu perquè— segueix sent llei, i el banc que munta és la
+lectura de com era el sistema quan es va decidir. Qui vulgui el contracte VIU el té a
+`test_bloc_a_safata_models`, que cobreix els mateixos invariants sobre la safata nova.
+
+Es marca `skip` i no es deixa vermell: un mòdul que falla per disseny ensenya a ignorar el
+vermell, i això costa més car que el que estalvia.
+
+────────────────────────────────────────────────────────────────────────────────────────────
+M4 · FIT-12 — LES TASQUES D'UNA VOLTA DESBORDADA, AL CAMÍ D'ENCÀRRECS.
 
 «Quan les rondes reals superen el numeral, LA RONDA R(n) AMB LES SEVES TASQUES passa a encàrrecs
 (comercial) per ser albaranada i facturada A PART» (Agus, 24/08).
@@ -10,6 +26,7 @@ El camí ja existia sencer i no s'ha reescrit: `get_billable_items` parteix de `
 Convenció del repo: `python manage.py test fhort.commerce.test_m4_safata_rondes` (no pytest).
 """
 import datetime
+import unittest
 
 from django.contrib.auth import get_user_model
 from django_tenants.test.cases import TenantTestCase
@@ -20,6 +37,8 @@ from fhort.tasks.models import Customer, GarmentTypeItem, ModelTask, Ronda, Task
 from fhort.tasks.services_r import obrir_ronda, ronda_del_gest, tancar_ronda
 
 
+@unittest.skip('Superat pel BLOC A: la safata ja no emet ítems de tasca. '
+               'Contracte viu a fhort.commerce.test_bloc_a_safata_models.')
 class SafataRondesTest(TenantTestCase):
 
     @classmethod

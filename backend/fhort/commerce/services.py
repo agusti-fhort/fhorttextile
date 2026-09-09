@@ -746,126 +746,165 @@ def cost_hora_efectiu(model_task, rate_tenant):
     return rate_tenant
 
 
+def _ronda_albaranable(ronda, fora_efectiu):
+    """La volta tal com la safata l'ha de dir. SENSE tasques (A1: la unitat és el MODEL).
+
+    `entregada` i la data de lliurament surten de l'`Entrega`, que és el FET declarat; una volta
+    en curs hi entra amb `entregada=False` i data `None` — la safata l'ha d'ENSENYAR (perquè el
+    comercial vegi que existeix) i alhora no deixar-la marcar, i això només es pot fer si la
+    porta la serveix i la diu.
+    """
+    e = getattr(ronda, 'entrega', None)
+    return {
+        'id': ronda.id, 'seq': ronda.seq,
+        'entregada': e is not None,
+        'data_lliurament': e.data.isoformat() if e is not None else None,
+        'data_ok': e.data_ok.isoformat() if (e is not None and e.data_ok) else None,
+        'fora_de_comanda': fora_efectiu,
+        # El veredicte CONGELAT, al costat de l'efectiu. No serveix per decidir res: serveix
+        # perquè es pugui veure que un albarà emès va congelar una altra cosa (A4).
+        'fora_de_comanda_congelat': ronda.fora_de_comanda,
+        'numeral_vigent': ronda.numeral_vigent,
+    }
+
+
 def get_billable_items(customer):
-    """Safata d'albaranables d'un client (v2), agrupada per MODEL. Parteix de ModelTask (NO de
-    WorkOrder): així recull també la feina amb work_order=NULL que el flux v1 no podia veure (R2
-    de la diagnosi). Un ítem surt de la safata quan JA té una línia d'albarà (DRAFT o ISSUED):
-    `delivery_note_lines__isnull=True` evita el doble comptatge; esborrar el DRAFT (CASCADE de
-    línies) el retorna. NO filtra per `facturable` (descartat): "no cobrar" es decideix a la línia
-    (preu 0). Lectura pura, no persisteix res. Els ítems sense model resoluble van a un bloc
-    `model=None` (no es descarten silenciosament).
+    """SAFATA D'ALBARANABLES · BLOC A — la unitat és el MODEL i el que es cobra són RONDES.
 
-    M4 · FIT-12 — LA VOLTA VIATJA AMB L'ÍTEM. Cada ítem que penja d'una `ModelTask` porta la seva
-    `ronda` (`_ronda_header`), i cada bloc-model porta la llista ordenada `rondes` de les voltes
-    que hi surten. Això és el que fa que **una volta FORA DE COMANDA es pugui albaranar A PART**:
-    la safata la sap agrupar, dir-ne les dates i dir-ne el perquè, sense que calgui cap taula nova
-    ni cap FK de ronda a l'albarà —la traça ja hi és per `DeliveryNoteLine.model_task`.
+    ⚠️ **AIXÒ SUBSTITUEIX LA SAFATA PER TASQUES.** Abans un ítem era una `ModelTask` Done (més
+    extres, deduccions i despeses) i el bloc-model només agrupava. L'A1 diu que la unitat
+    d'albarà és el MODEL —una targeta per model, import únic, sense quantitat— i l'A7 que el que
+    el document ha de dir són les VOLTES. Una safata de tasques no ho pot compondre: el preu d'un
+    model no és la suma dels preus de les seves tasques, és el que diu la línia de comanda.
 
-    ⚠️ **NO ES TOCA CAP PREU.** El brief d'M4 ho prohibeix («cap càlcul de preu de ronda») i aquí
-    es respecta al peu de la lletra: una tasca d'una volta desbordada segueix proposant el preu
-    que li tocaria pel seu WorkOrder, exactament com abans. Qui decideix què val una volta que va
-    a part és el comercial, sobre el DRAFT. La safata només diu QUINA volta és i PER QUÈ va a
-    part; el diner segueix sent gest humà."""
-    from django.db.models import Sum
-    from fhort.tasks.models import ModelTask
-    from .models import WorkOrderAdjustment, Expense
+    QUÈ SURT, per model del client amb voltes candidates:
+      · la identitat (nom, ref nostra, ref del client, col·lecció, temporada) — llei del nom;
+      · el PACTE viu, si n'hi ha: oferta, concepte, preu unitari, numeral i consum;
+      · un BLOC per pacte amb les voltes que hi caben, i un bloc PROPI per cada volta que en
+        surt (A7: targeta pròpia, preu lliure, «encàrrec directe»).
 
-    groups = {}  # key (model_id o None) -> {'model': header, 'items': [...], 'rondes': [...]}
-    rondes_vistes = {}  # key de bloc -> {ronda_id: header} — dedup i ordre estable
+    Cada BLOC és el que es marca i el que després serà UNA línia d'albarà.
 
-    def _bucket(model):
-        key = model.id if model is not None else None
-        g = groups.get(key)
+    ── QUÈ ÉS CANDIDAT ────────────────────────────────────────────────────────────────────────
+    Voltes de models d'aquest client que **no estan cobertes per cap línia d'albarà**, ni DRAFT
+    ni ISSUED.
+
+    🚩 **DIVERGÈNCIA DECLARADA amb la lletra del brief**, que diu «no cobertes per cap línia
+    d'albarà EMÈS». Si una volta ja posada en un esborrany seguís sortint a la safata, es podria
+    afegir DOS COPS al mateix esborrany —i el guard d'`add_lines_to_draft` és per ORIGEN, no per
+    volta. La llei anti-doble-comptatge que ja hi havia (`delivery_note_lines__isnull=True`) es
+    manté, i esborrar l'esborrany les retorna soles (CASCADE de línies). L'«EMÈS» del brief
+    governa una ALTRA pregunta —el congelat de l'A4— i allà sí que s'aplica al peu de la lletra.
+
+    ── A4 · L'HÍBRID ──────────────────────────────────────────────────────────────────────────
+    `fora_de_comanda` es RECALCULA amb el numeral VIGENT per a tota volta que no estigui coberta
+    per una línia d'albarà EMÈS; les que sí que ho estan conserven el veredicte congelat. Això
+    és el que fa que pujar el numeral d'una comanda torni a dins les voltes que encara no s'han
+    facturat, i que no toqui ni una que ja ha sortit en un document. Els dos valors viatgen
+    (`fora_de_comanda` efectiu · `fora_de_comanda_congelat`) perquè la diferència es pugui veure.
+
+    Lectura pura: no persisteix res. En particular **NO reescriu `Ronda.fora_de_comanda`** —el
+    camp segueix sent la foto de l'obertura, i qui la congela de debò és l'emissió (commit 5).
+    """
+    from fhort.tasks.models import Ronda
+    from fhort.tasks.services_r import numeral_efectiu
+
+    # Voltes candidates: del client, sense cap línia d'albarà al darrere.
+    voltes = (Ronda.objects
+              .filter(model__customer=customer, delivery_note_lines__isnull=True)
+              .select_related('model', 'entrega', 'linia_comanda__order', 'linia_comanda__product')
+              .order_by('model__codi_intern', 'seq'))
+
+    # Voltes ja EMESES, per model: el que l'A4 no pot tornar a calcular.
+    emeses = set(Ronda.objects
+                 .filter(model__customer=customer,
+                         delivery_note_lines__delivery_note__status__in=('ISSUED', 'INVOICED'))
+                 .values_list('id', flat=True))
+
+    grups = {}
+    numerals = {}          # model_id -> (linia, numeral) — un sol pivot per model
+    for r in voltes:
+        m = r.model
+        if m.id not in numerals:
+            numerals[m.id] = numeral_efectiu(m)
+        linia, numeral = numerals[m.id]
+
+        # A4 · HÍBRID. Una volta ja emesa conserva el seu veredicte; la resta es tornen a pesar
+        # contra el numeral d'ARA. `numeral is None` = sense pacte o sense límit: mai desborda.
+        if r.id in emeses:
+            fora = r.fora_de_comanda
+        else:
+            fora = numeral is not None and r.seq > numeral
+
+        g = grups.get(m.id)
         if g is None:
-            g = {'model': _model_header(model), 'items': [], 'rondes': []}
-            groups[key] = g
-            rondes_vistes[key] = {}
-        return g
-
-    def _amb_ronda(model, ronda):
-        """Registra la volta al bloc del model i retorna la seva capçalera (o None)."""
-        cap = _ronda_header(ronda)
-        if cap is None:
-            return None
-        key = model.id if model is not None else None
-        vistes = rondes_vistes.setdefault(key, {})
-        vistes.setdefault(cap['id'], cap)
-        return cap
-
-    # TASK — ModelTask Done sense línia d'albarà (el model FK mai és null).
-    for t in (ModelTask.objects
-              .filter(model__customer=customer, status='Done', delivery_note_lines__isnull=True)
-              .select_related('task_type', 'model', 'work_order',
-                              'ronda', 'ronda__linia_comanda__order')):
-        wo = t.work_order
-        if wo is not None and wo.kind == 'ORDER':
-            price = Decimal(str((wo.price_snapshot or {}).get('unit_price') or '0')).quantize(_CENT)
+            g = grups[m.id] = {
+                'model': _model_header(m),
+                'pacte': _pacte_header(linia) if linia is not None else None,
+                'blocs': [],
+                '_pacte_rondes': [],
+            }
+        if fora:
+            # A7 — cada volta fora de pacte és un albaranable PROPI. Preu lliure: la comanda no
+            # el fixa (per definició, aquesta volta no hi és) i qui el posa és el comercial.
+            g['blocs'].append({
+                'clau': f'directe-{r.id}',
+                'encarrec_directe': True,
+                'linia_comanda': None,
+                'preu_proposat': '0.00',
+                'rondes': [_ronda_albaranable(r, True)],
+            })
         else:
-            price = Decimal('0.00')   # COLLECTOR o work_order=NULL: el Salva posa preu en DRAFT
-        minutes = t.timers.filter(TRAMS_SANS).aggregate(m=Sum('minuts'))['m'] or 0
-        _bucket(t.model)['items'].append({
-            'kind': 'TASK', 'ref': t.task_type.code,
-            'description': f"{t.task_type.name} · {t.model.codi_intern}",
-            'proposed_qty': str(Decimal('1.00')), 'proposed_unit': None,
-            'proposed_price': str(price), 'internal_minutes': str(Decimal(minutes)),
-            'source_dates': {'started_at': t.started_at.isoformat() if t.started_at else None,
-                             'finished_at': t.finished_at.isoformat() if t.finished_at else None},
-            'model_task_id': t.id, 'work_order_id': wo.id if wo else None,
-            'ronda': _amb_ronda(t.model, t.ronda),
-        })
+            g['_pacte_rondes'].append(_ronda_albaranable(r, False))
 
-    # EXTRA / DEDUCTION — WorkOrderAdjustment sense línia, via model_task.model o wo.model.
-    for adj in (WorkOrderAdjustment.objects
-                .filter(work_order__customer=customer, kind__in=['EXTRA_BILL', 'DEDUCTION'],
-                        delivery_note_lines__isnull=True)
-                .select_related('work_order__model', 'model_task__model',
-                                'model_task__ronda__linia_comanda__order')):
-        model = (adj.model_task.model if adj.model_task_id else None) or adj.work_order.model
-        if adj.kind == 'EXTRA_BILL':
-            kind, price = 'EXTRA', Decimal(adj.amount or 0).quantize(_CENT)
-        else:
-            kind, price = 'DEDUCTION', (-abs(Decimal(adj.amount or 0))).quantize(_CENT)
-        _bucket(model)['items'].append({
-            'kind': kind, 'ref': adj.kind,
-            'description': adj.description or ('Extra' if kind == 'EXTRA' else 'Deducció'),
-            'proposed_qty': str(Decimal('1.00')), 'proposed_unit': None,
-            'proposed_price': str(price), 'internal_minutes': None,
-            'source_dates': {'started_at': None,
-                             'finished_at': adj.resolved_at.isoformat() if adj.resolved_at else None},
-            'adjustment_id': adj.id, 'work_order_id': adj.work_order_id,
-            # L'extra/deducció hereta la volta de la tasca que resol. Una deducció de concepte
-            # lliure (`model_task` null) no en té cap i va al calaix «sense volta».
-            'ronda': _amb_ronda(model, adj.model_task.ronda if adj.model_task_id else None),
-        })
+    # 🔑 UN MODEL ENTRA A LA SAFATA SI TÉ ALGUNA VOLTA ENTREGADA, i prou. Un model amb totes les
+    # voltes en curs no té res per cobrar i seria soroll a la safata del comercial. Les voltes EN
+    # CURS del model que sí que hi entra s'hi queden i es diuen (`entregada: false`): la safata ha
+    # d'ensenyar que existeixen —perquè es vegi que la feina no s'ha acabat— i alhora la cara no
+    # les ha de deixar marcar. Amagar-les faria creure que el model ja està tancat.
+    grups = {k: g for k, g in grups.items()
+             if any(r['entregada'] for b in g['blocs'] for r in b['rondes'])
+             or any(r['entregada'] for r in g['_pacte_rondes'])}
 
-    # EXPENSE — Expense sense línia, via wo.model. Preu = sale_price, qty = quantity.
-    for exp in (Expense.objects
-                .filter(work_order__customer=customer, delivery_note_lines__isnull=True)
-                .select_related('work_order__model', 'product')):
-        _bucket(exp.work_order.model)['items'].append({
-            'kind': 'EXPENSE', 'ref': exp.product.code if exp.product_id else None,
-            'description': exp.description or (exp.product.name if exp.product_id else 'Despesa'),
-            'proposed_qty': str(Decimal(exp.quantity or 0).quantize(_CENT)), 'proposed_unit': None,
-            'proposed_price': str(Decimal(exp.sale_price or 0).quantize(_CENT)),
-            'internal_minutes': None,
-            'source_dates': {'started_at': None,
-                             'finished_at': exp.incurred_at.isoformat() if exp.incurred_at else None},
-            'expense_id': exp.id, 'work_order_id': exp.work_order_id,
-            # Una despesa no penja de cap tasca i per tant de cap volta: calaix «sense volta».
-            'ronda': None,
-        })
+    # El bloc del PACTE va PRIMER (A7: la volta directa ve «immediatament després del mateix
+    # model»), i només existeix si hi ha alguna volta que hi càpiga.
+    for g in grups.values():
+        rondes_pacte = g.pop('_pacte_rondes')
+        if rondes_pacte:
+            pacte = g['pacte'] or {}
+            g['blocs'].insert(0, {
+                'clau': 'pacte',
+                'encarrec_directe': False,
+                'linia_comanda': pacte.get('linia_id'),
+                # El preu el proposa la línia de comanda; sense pacte, 0 i el posa el comercial.
+                'preu_proposat': pacte.get('preu_unitari') or '0.00',
+                'rondes': rondes_pacte,
+            })
 
-    # M4 · FIT-12 — l'índex de voltes de cada bloc, en ordre de `seq`, i els ítems ordenats
-    # perquè els d'una mateixa volta quedin CONTIGUS. La cara agrupa per `ronda.id` i no depèn
-    # de l'ordre, però un ordre estable fa que la safata es llegeixi igual a cada obertura i que
-    # el calaix «sense volta» (seq efectiu 0) surti sempre primer, on sempre ha estat.
-    for key, g in groups.items():
-        g['rondes'] = sorted(rondes_vistes.get(key, {}).values(), key=lambda r: r['seq'])
-        g['items'].sort(key=lambda it: ((it.get('ronda') or {}).get('seq', 0),
-                                        it['kind'], it.get('model_task_id') or 0))
+    return sorted(grups.values(), key=lambda g: g['model']['codi_intern'] or '')
 
-    # Ordena per codi_intern (el bloc sense model, codi_intern='', queda primer).
-    return sorted(groups.values(), key=lambda g: g['model']['codi_intern'] or '')
+
+def _pacte_header(linia):
+    """EL PACTE que governa el model, tal com la safata i el document l'han de dir.
+
+    `consumit` són les voltes DINS del pacte que ja han sortit en un albarà emès: el que queda
+    per gastar del numeral. No compta les que hi ha a la safata sense marcar —encara no s'ha
+    decidit res— ni les que van fora de pacte, que per definició no en gasten.
+    """
+    from fhort.tasks.models import Ronda
+    consumit = (Ronda.objects
+                .filter(linia_comanda=linia, fora_de_comanda=False,
+                        delivery_note_lines__delivery_note__status__in=('ISSUED', 'INVOICED'))
+                .distinct().count())
+    return {
+        'linia_id': linia.id,
+        'oferta': linia.order.document_number if linia.order_id else None,
+        'oferta_id': linia.order_id,
+        'concepte': linia.description or (linia.product.name if linia.product_id else None),
+        'preu_unitari': str(Decimal(linia.unit_price or 0).quantize(_CENT)),
+        'rounds_included': linia.rounds_included,
+        'consumit': consumit,
+    }
 
 
 def create_or_get_draft(customer, user=None):
