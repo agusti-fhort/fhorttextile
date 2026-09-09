@@ -51,7 +51,7 @@ MODEL_LLIURE = 1496
 MODEL_LLIGAT = 1494
 #: Bancs del BLOC A: un albarà en esborrany (amb el [ + Afegir línia ] que obre la safata) i un
 #: d'emès (sense inputs, sense papereres, sense [ + ]).
-DN_ESBORRANY = 15
+DN_ESBORRANY = 16
 DN_EMES = 10
 
 #: (nom, ruta, senyal, gestos)
