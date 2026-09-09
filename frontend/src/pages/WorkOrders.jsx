@@ -33,6 +33,16 @@ import {
 // el nom. La columna barrejada se'n va: el període d'un col·lector ocupa la mateixa cel·la del
 // nom perquè és el que ANOMENA aquell encàrrec —un col·lector no té model i mai en tindrà—, i
 // això no és barrejar dues dades sinó dir el nom de cada mena amb la seva paraula.
+// La safata que s'obre en entrar (§8e) i el sentinella de l'absència de filtre.
+//
+// `ESTAT_PER_DEFECTE` és l'ÚNIC codi de domini escrit en aquest fitxer, i hi és perquè la
+// pregunta «quina d'aquestes safates és la feina viva?» no la respon el vocabulari: `/vocabulari/`
+// serveix els codis i les etiquetes, no quin d'ells s'obre primer. Serveix per a dues coses —el
+// filtre inicial i l'ordre dels tabs— i per això és una constant amb nom i no dos literals solts.
+// `TOTES` no és de domini: és una cadena qualsevol que NO sigui buida ni cap codi
+// d'`estats_encarrec`, i el que necessita és sobreviure a `setParams`, que esborra els buits.
+const ESTAT_PER_DEFECTE = 'OPEN'
+const TOTES = 'TOTES'
 const PAGE_SIZE = 25
 const ORDRE_DEFECTE = { camp: 'number', dir: 'desc' }
 
@@ -71,7 +81,15 @@ export default function WorkOrders() {
 
   const [sp, setSp] = useSearchParams()
   const kindF = sp.get('kind') || ''
-  const statusF = sp.get('status') || ''
+  // §8e — «els elements ACABATS no es llisten per defecte (embruten la cerca)». La safata que
+  // s'obre en entrar és la feina VIVA; els tancats es demanen. Un encàrrec tancat ja no admet
+  // cap gest d'aquesta pantalla —ni tancar-lo, ni triar-lo per al lot— i el seu lloc és a
+  // l'historial, no a la primera lectura.
+  //
+  // 🔑 «Totes» necessita un valor EXPLÍCIT (`TOTES`) i no la cadena buida: `setParams` esborra
+  // els paràmetres buits (v. més avall), o sigui que triar «Totes» amb `''` hauria esborrat el
+  // paràmetre i tornat al defecte. La safata s'hauria negat a obrir-se i no hauria fallat res.
+  const statusF = sp.get('status') || ESTAT_PER_DEFECTE
   const customerF = sp.get('customer') || ''
   // La cerca SÍ que va a la URL: un resultat de cerca es comparteix i es torna a obrir.
   const searchF = sp.get('search') || ''
@@ -110,7 +128,8 @@ export default function WorkOrders() {
     setLoading(true); setError(false)
     commerce.workOrders.list({
       ...(kindF ? { kind: kindF } : {}),
-      ...(statusF ? { status: statusF } : {}),
+      // `TOTES` és absència de filtre, no un estat: no viatja al backend.
+      ...(statusF && statusF !== TOTES ? { status: statusF } : {}),
       ...(customerF ? { customer: customerF } : {}),
       ...(searchF ? { search: searchF } : {}),
       ordering: aOrdering(ordre), page, page_size: PAGE_SIZE,
@@ -163,10 +182,10 @@ export default function WorkOrders() {
   // Els codis segueixen sent del vocabulari; el que es declara és que la feina VIVA va primer.
   const tabs = useMemo(() => {
     const codis = [...(estats || [])]
-    codis.sort((a, b) => (a === 'OPEN' ? -1 : b === 'OPEN' ? 1 : 0))
+    codis.sort((a, b) => (a === ESTAT_PER_DEFECTE ? -1 : b === ESTAT_PER_DEFECTE ? 1 : 0))
     return [
       ...codis.map(codi => ({ key: codi, label: `workorders.status_${codi}` })),
-      { key: '', label: 'workorders.tab_all' },
+      { key: TOTES, label: 'workorders.tab_all' },
     ]
   }, [estats])
 
