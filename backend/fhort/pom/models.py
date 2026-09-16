@@ -792,13 +792,41 @@ class CustomerPOMAlias(models.Model):
     #: sent d'IMPORT: l'origen diu D'ON VE, no qui l'ha tocat l'últim. Reescriure'l a MANUAL
     #: perdria la provinença, que és exactament el que la columna serveix per saber.
     editat_at = models.DateTimeField(null=True, blank=True, verbose_name="Editat el")
+    # MODEL D'ORIGEN (16/09, DECISIONS.md) — de QUIN model es va aprendre aquest àlies, per a
+    # dues coses: el suggeriment del matcher pot dir "après a <NOM MODEL>" (l'àlies segueix
+    # suggerint a TOT el client, però la persona vol saber d'on ve), i quan un mateix codi té
+    # ≥2 àlies de models diferents amb POMs DIFERENTS, el matcher els pot llistar per triar.
+    # NULLABLE + SET_NULL: els àlies existents no en saben res (origen desconegut, no fals);
+    # i un model esborrat no s'ha d'endur l'àlies que va ensenyar, només la seva referència.
+    # `db_constraint=False`: mateix creuament de schema que `customer` — `models_app` és
+    # TENANT-only i `pom` viu també a `public`, on `models_app.Model` no existeix.
+    model_origen = models.ForeignKey(
+        'models_app.Model', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='alies_apresos', db_constraint=False,
+        verbose_name='Model d\'origen',
+        help_text='Model des del qual es va aprendre aquest àlies (import o vinculació manual).')
 
     class Meta:
         verbose_name = 'Àlies POM de client'
         verbose_name_plural = 'Àlies POM de client'
         constraints = [
+            # 🚨 LA CLAU PASSA DE (customer, client_code) A (customer, client_code, pom)
+            # (16/09, Agus — aprovat explícitament per sobre de la barana d'«una migració»,
+            # DECISIONS.md). Amb la clau vella, un segon model que vinculava el MATEIX codi a
+            # un POM DIFERENT sobreescrivia la fila en silenci i s'enduia qui l'havia ensenyat
+            # primer. Ara les dues conviuen com a files DIFERENTS i és `find_pom_master` qui
+            # les detecta totes dues (≥2 `pom` diferents per al mateix codi) i ho envia a
+            # pendents ('alies_contradictoris') en comptes de deixar guanyar la que arriba
+            # després. ADDITIVA: cap fila viva té avui dos `pom` per al mateix (customer,
+            # client_code), així que la migració no en toca cap.
             models.UniqueConstraint(
-                fields=['customer', 'client_code'], name='uniq_customer_client_code'),
+                fields=['customer', 'client_code', 'pom'], name='uniq_customer_client_code_pom'),
+            # Postgres tracta cada NULL com a DISTINT dels altres, o sigui que la constraint de
+            # dalt per si sola deixaria clonar-se el «pendent de mapar» (`pom=None`, QA-S8-R1):
+            # aquest índex parcial el torna a limitar a UN per codi, com abans.
+            models.UniqueConstraint(
+                fields=['customer', 'client_code'], condition=models.Q(pom__isnull=True),
+                name='uniq_customer_client_code_pom_null'),
         ]
         indexes = [
             models.Index(fields=['customer', 'client_code'], name='idx_customer_client_code'),

@@ -158,12 +158,15 @@ def dictionary_commit_view(request, customer_id):
                     stats['skipped'] += 1
                     continue
 
-            # Idempotent: (customer, client_code). origen=DICCIONARI. 'quan' = actualitzat_at
+            # Idempotent: (customer, client_code, pom) — la clau real des de la migració 0088.
+            # 🚨 Un lookup NOMÉS per (customer, client_code) és més curt que la unique i, des
+            # que ≥2 POMs poden conviure sota el mateix codi (àlies contradictoris), petaria
+            # amb MultipleObjectsReturned si aquest codi ja n'arrossega un. `pom` hi entra a
+            # la CERCA i no només als `defaults`. origen=DICCIONARI. 'quan' = actualitzat_at
             # (auto). TODO: CustomerPOMAlias no té camp autor ('qui'); afegir-lo si cal traça.
             CustomerPOMAlias.objects.update_or_create(
-                customer=customer, client_code=code,
+                customer=customer, client_code=code, pom=pom,
                 defaults={
-                    'pom': pom,
                     'description_en': desc_en,
                     'description_local': desc_local,
                     'language': idioma,

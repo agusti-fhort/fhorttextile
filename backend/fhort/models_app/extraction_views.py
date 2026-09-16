@@ -1176,15 +1176,35 @@ def _nom_resolt(pom):
 def find_pom_master(code, description, customer=None):
     """
     Find the most suitable POMMaster.
-    Return (pom_master, match_type, confidence)
+    Return (pom_master, match_type, confidence, info)
     confidence: 'HIGH' | 'MEDIUM' | 'LOW' | 'NO_MATCH'
+    info: dict, sempre present. `info['motiu']` és `None` per a un match ferm o un NO_MATCH
+    mut; si no, diu PER QUÈ la fila ha de caure a pendents encara que hi hagi un suggeriment:
+      · 'alies_pom_retirat' — l'àlies d'aquest client reclama un POM que ja no és actiu.
+        `info['suggerit']` porta l'HEREU actiu amb el mateix `codi_client`, si n'hi ha (si no,
+        `None` i la fila queda «sense hereu»). El `pom` retornat JA és l'hereu (o `None`).
+      · 'alies_contradictoris' — aquest client té ≥2 àlies pel MATEIX codi amb POMs
+        DIFERENTS (migració 0088: la clau és (customer, client_code, pom), no sol el codi).
+        `info['candidats']` porta TOTS els `{pom_id, pom_codi, pom_nom, model_origen_id,
+        model_origen_nom}`, un per àlies. `pom` retornat és sempre `None`: cap auto-vincle.
+      · 'sense_coincidencia' — cap estratègia ha trobat res, ni fort ni feble.
 
-    ORDRE (DIAGNOSI_NOMENCLATURA_ALIES_2026-07-08, N3):
+    `info['suggerit_origen_id']`/`['suggerit_origen_nom']` (16/09, COMMIT 3+6): quan el
+    `pom`/suggeriment ve d'un ÀLIES concret ('alias_pendent_revisio' o 'alias_pom_retirat'),
+    de quin MODEL es va aprendre —perquè la UI ho pinti «X · après a <model>»—. `None` quan
+    el suggeriment no ve d'un àlies (o el seu `model_origen` és desconegut).
+
+    ORDRE (DIAGNOSI_NOMENCLATURA_ALIES_2026-07-08, N3; LLEIS DECISIONS.md 16/09):
       (a) ÀLIES exacte del `customer` (CustomerPOMAlias) → HIGH. Requereix `customer`; si és None
           (context sense client) se salta. El `client_code` d'un àlies pot ser un codi posicional
           (LOS 'H.6') O el text de la descripció del client (BRW 'front armhole curve') → es prova
           contra `code` I contra `description`.
           ⚠️ Un àlies amb `pendent_revisio=True` **NO auto-vincula** (v. sota, QA-S8-R1).
+          🚨 Un àlies que apunta a un POM RETIRAT (16/09) tampoc: abans se saltava en silenci i
+          la cerca queia a la descripció, que podia aterrar sobre QUALSEVOL altre POM actiu —
+          exactament com va passar amb 'BR' al model 1216. Ara es resol AQUÍ MATEIX, com a
+          pendent amb l'hereu (si n'hi ha) de suggeriment, i la cerca s'atura: la reclamació de
+          l'àlies és més forta que qualsevol heurística de descripció.
       (b) descripció + sinònims canònics → HIGH/MEDIUM (nom_client, POMGlobal.nom_en).
       (c) codi numèric + 'lining' → MEDIUM.
       (c-bis) l'àlies PENDENT DE REVISIÓ, com a darrer suggeriment → LOW (mai auto-vincle).
@@ -1192,6 +1212,12 @@ def find_pom_master(code, description, customer=None):
           matcher): `codi_client` exacte i root-prefix → LOW. Amb el llindar d'auto-vinculació
           (c2b19bd) un LOW NO auto-vincula: cau a pendents amb el suggeriment visible. Abans
           anaven PRIMER amb HIGH; ara són l'últim recurs, per sota de l'àlies i la descripció.
+
+    🚨 CAP ESTRATÈGIA DE NOM COMPARA UN NOM BUIT (16/09). 103 dels 144 POMs actius de `fhort`
+    tenen `nom_client=''` (23/08, «buit vol dir mana el canònic»): sense guard, `'' in desc_base`
+    és SEMPRE `True` i la (b)/(c) matchejaven QUALSEVOL descripció contra el primer POM buit que
+    trobessin — un POM a l'atzar amb confiança MEDIUM. I totes les consultes de candidats porten
+    ara `order_by('id')`: sense ordre explícit, «el primer que trobi Postgres» no és determinista.
     """
     from fhort.pom.models import POMMaster, CustomerPOMAlias
 
@@ -1214,6 +1240,8 @@ def find_pom_master(code, description, customer=None):
     # `pom__isnull=False` (QA-S8-R1): un àlies SENSE POM no és matchable — és vocabulari del
     # client pendent de mapar (CustomerPOMAlias.pom és nullable, migració 0037). No té destí,
     # així que no pot vincular res, i sense el filtre `alias.pom.actiu` petaria amb AttributeError.
+    _SENSE_MOTIU = {'motiu': None}
+
     alias_pendent = None
     if customer is not None:
         for key in (k for k in (code, desc_clean) if k):
@@ -1222,63 +1250,111 @@ def find_pom_master(code, description, customer=None):
             # (`noms_de`, F1) cada match d'àlies hi hauria comprat una query. La resta de
             # branques d'aquesta funció ja fan `select_related('pom_global')`; aquesta s'hi
             # posa al costat.
-            alias = (CustomerPOMAlias.objects
-                     .filter(customer=customer, client_code__iexact=key, pom__isnull=False)
-                     .select_related('pom', 'pom__pom_global').first())
-            if alias and alias.pom.actiu:
-                if alias.pendent_revisio:
-                    if alias_pendent is None:
-                        alias_pendent = alias.pom
-                    continue
-                return alias.pom, 'alias_match', 'HIGH'
+            alies = list(CustomerPOMAlias.objects
+                         .filter(customer=customer, client_code__iexact=key, pom__isnull=False)
+                         .select_related('pom', 'pom__pom_global', 'model_origen')
+                         .order_by('id'))
+            if not alies:
+                continue
+
+            # ÀLIES CONTRADICTORIS (16/09, migració 0088). Des que (customer, client_code,
+            # pom) és la clau —i no (customer, client_code) sol—, ≥2 models d'aquest client
+            # poden haver ensenyat POMs DIFERENTS per al MATEIX codi: cap dels dos guanya en
+            # silenci, la fila cau a pendents amb TOTS els candidats perquè una persona triï.
+            poms_diferents = {a.pom_id for a in alies}
+            if len(poms_diferents) >= 2:
+                candidats = [{
+                    'pom_id': a.pom_id,
+                    'pom_codi': a.pom.codi_client,
+                    'pom_nom': _nom_resolt(a.pom),
+                    'model_origen_id': a.model_origen_id,
+                    'model_origen_nom': a.model_origen.codi_intern if a.model_origen_id else None,
+                } for a in alies]
+                return None, 'alies_contradictoris', 'LOW', {
+                    'motiu': 'alies_contradictoris', 'candidats': candidats,
+                }
+
+            alias = alies[0]
+            if not alias.pom.actiu:
+                # L'ÀLIES RECLAMA UN POM QUE JA NO ÉS ACTIU (16/09). Abans això queia pel
+                # forat del `if alias and alias.pom.actiu:` sense deixar-ne rastre. Es
+                # resol AQUÍ i s'ATURA la cerca: l'hereu (si n'hi ha) és el suggeriment, mai
+                # el propi POM retirat.
+                #
+                # «El mateix codi» és el `pom_global_id`, NO el `codi_client`: aquest darrer
+                # és únic per tenant per constraint de BD (`uniq_pommaster_codi_client_ci`,
+                # sense excepció per als inactius), o sigui que dos `POMMaster` MAI el poden
+                # compartir. El que sí es comparteix quan un POM es retira i el substitueix un
+                # altre és el catàleg CANÒNIC. Un POM tenant-only (`pom_global=None`) no té
+                # cap clau per on trobar hereu → `None`, «sense hereu».
+                heir = None
+                if alias.pom.pom_global_id is not None:
+                    heir = (POMMaster.objects.select_related('pom_global')
+                            .filter(pom_global_id=alias.pom.pom_global_id, actiu=True)
+                            .exclude(pk=alias.pom_id).order_by('id').first())
+                return heir, 'alias_pom_retirat', 'LOW', {
+                    'motiu': 'alies_pom_retirat', 'suggerit': heir,
+                    # QUI VA ENSENYAR l'àlies RETIRAT (no l'hereu, que no en té — encara no
+                    # l'ha ensenyat ningú): la UI ho pinta com a «après a <model>» (COMMIT 6).
+                    'suggerit_origen_id': alias.model_origen_id,
+                    'suggerit_origen_nom': (alias.model_origen.codi_intern
+                                            if alias.model_origen_id else None),
+                }
+            if alias.pendent_revisio:
+                if alias_pendent is None:
+                    alias_pendent = alias
+                continue
+            return alias.pom, 'alias_match', 'HIGH', _SENSE_MOTIU
 
     if desc_clean:
         # Strategy 2 — explicit synonym (curated table).
         syn = _POM_SYNONYMS.get(desc_clean) or _POM_SYNONYMS.get(desc_base)
         if syn:
-            for pm in POMMaster.objects.select_related('pom_global').filter(actiu=True):
+            for pm in (POMMaster.objects.select_related('pom_global')
+                       .filter(actiu=True).order_by('id')):
                 nom = (pm.nom_client or '').lower()
-                if syn in nom or nom in syn:
-                    return pm, 'synonym_match', 'HIGH'
-            for pm in POMMaster.objects.select_related('pom_global').filter(
-                pom_global__isnull=False, actiu=True,
-            ):
+                # Nom buit ("mana el canònic", 23/08): no hi ha res a comparar aquí.
+                if nom and (syn in nom or nom in syn):
+                    return pm, 'synonym_match', 'HIGH', _SENSE_MOTIU
+            for pm in (POMMaster.objects.select_related('pom_global')
+                       .filter(pom_global__isnull=False, actiu=True).order_by('id')):
                 nom_en = (pm.pom_global.nom_en or '').lower()
-                if syn in nom_en or nom_en in syn:
-                    return pm, 'synonym_global_match', 'HIGH'
+                if nom_en and (syn in nom_en or nom_en in syn):
+                    return pm, 'synonym_global_match', 'HIGH', _SENSE_MOTIU
 
         # Strategy 3 — match by nom_client (exact=HIGH, contains=MEDIUM).
-        for pm in POMMaster.objects.select_related('pom_global').filter(actiu=True):
+        for pm in (POMMaster.objects.select_related('pom_global')
+                   .filter(actiu=True).order_by('id')):
             nom = (pm.nom_client or '').lower()
-            if desc_base and len(desc_base) > 3:
+            if nom and desc_base and len(desc_base) > 3:
                 if desc_base == nom:
-                    return pm, 'exact_description', 'HIGH'
+                    return pm, 'exact_description', 'HIGH', _SENSE_MOTIU
                 if desc_base in nom or nom in desc_base:
-                    return pm, 'description_match', 'MEDIUM'
+                    return pm, 'description_match', 'MEDIUM', _SENSE_MOTIU
 
         # Strategy 4 — match by POMGlobal nom_en / abbreviation.
-        for pm in POMMaster.objects.select_related('pom_global').filter(
-            pom_global__isnull=False, actiu=True,
-        ):
+        for pm in (POMMaster.objects.select_related('pom_global')
+                   .filter(pom_global__isnull=False, actiu=True).order_by('id')):
             pg = pm.pom_global
             nom_en = (pg.nom_en or '').lower()
             abbrev = (pg.abbreviation or '').lower()
-            if desc_base and len(desc_base) > 3:
+            if nom_en and desc_base and len(desc_base) > 3:
                 if desc_base == nom_en:
-                    return pm, 'global_exact', 'HIGH'
+                    return pm, 'global_exact', 'HIGH', _SENSE_MOTIU
                 if desc_base in nom_en or nom_en in desc_base:
-                    return pm, 'global_name_match', 'MEDIUM'
-            if code and code.lower() == abbrev:
-                return pm, 'abbreviation_match', 'HIGH'
+                    return pm, 'global_name_match', 'MEDIUM', _SENSE_MOTIU
+            if code and abbrev and code.lower() == abbrev:
+                return pm, 'abbreviation_match', 'HIGH', _SENSE_MOTIU
 
     # (c) Strategy — pure numeric codes → lining.
     if code and code.isdigit():
         desc_lower = (description or '').lower()
         if 'lining' in desc_lower:
-            for pm in POMMaster.objects.select_related('pom_global').filter(actiu=True):
+            for pm in (POMMaster.objects.select_related('pom_global')
+                       .filter(actiu=True).order_by('id')):
                 nom = (pm.nom_client or '').lower()
-                if 'lining' in nom:
-                    return pm, 'numeric_lining_match', 'MEDIUM'
+                if nom and 'lining' in nom:
+                    return pm, 'numeric_lining_match', 'MEDIUM', _SENSE_MOTIU
 
     # (c-bis) L'ÀLIES PENDENT DE REVISIÓ (QA-S8-R1). Cap altra estratègia no ha trobat res ferm,
     # així que ara sí que val la pena dir què reclamava aquell àlies del qual desconfiem — però
@@ -1286,15 +1362,20 @@ def find_pom_master(code, description, customer=None):
     # pendents amb el nom visible, i una persona decidirà. Va per damunt dels fallbacks de codi
     # (d) perquè un àlies el va declarar algú d'aquest client; un root-prefix no l'ha declarat ningú.
     if alias_pendent is not None:
-        return alias_pendent, 'alias_pendent_revisio', 'LOW'
+        return alias_pendent.pom, 'alias_pendent_revisio', 'LOW', {
+            'motiu': None,
+            'suggerit_origen_id': alias_pendent.model_origen_id,
+            'suggerit_origen_nom': (alias_pendent.model_origen.codi_intern
+                                    if alias_pendent.model_origen_id else None),
+        }
 
     # (d) FALLBACK TRANSITORI — `codi_client` exacte. Abans era la 1a estratègia amb HIGH; ara és
     # penúltim recurs amb LOW (deprecació): l'àlies i la descripció manen. Un exacte que arriba
     # aquí no ha resolt per àlies ni per descripció → suggeriment feble, no auto-vinculació.
     if code:
-        pm = POMMaster.objects.filter(codi_client__iexact=code, actiu=True).first()
+        pm = POMMaster.objects.filter(codi_client__iexact=code, actiu=True).order_by('id').first()
         if pm:
-            return pm, 'legacy_code_match', 'LOW'
+            return pm, 'legacy_code_match', 'LOW', _SENSE_MOTIU
 
     # (d) FALLBACK TRANSITORI (ÚLTIM RECURS) — root de lletres inicials per a codis posicionals
     # (D1, G2s → D, G). NO es rooteja la nomenclatura d'AGRUPACIÓ 'LLETRA.NÚMERO' (H.6, G.3, J.2):
@@ -1304,11 +1385,12 @@ def find_pom_master(code, description, customer=None):
         m = _re.match(r'^([A-Za-z]+)', code)
         if m and m.group(1) != code:
             root = m.group(1)
-            pm = POMMaster.objects.filter(codi_client__iexact=root, actiu=True).first()
+            pm = (POMMaster.objects.filter(codi_client__iexact=root, actiu=True)
+                  .order_by('id').first())
             if pm:
-                return pm, 'root_code_match', 'LOW'
+                return pm, 'root_code_match', 'LOW', _SENSE_MOTIU
 
-    return None, 'no_match', 'NO_MATCH'
+    return None, 'no_match', 'NO_MATCH', {'motiu': 'sense_coincidencia'}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1440,7 +1522,7 @@ def _match_rows(files, customer, model=None):
     for i, f in enumerate(files):
         codi = (f.get('codi_fitxa') or '').strip()
         descripcio = (f.get('descripcio') or '').strip()
-        pm, match_type, confidence = find_pom_master(codi, descripcio, customer=customer)
+        pm, match_type, confidence, info = find_pom_master(codi, descripcio, customer=customer)
 
         # Els comptadors es prenen del match CRU (abans del llindar): així l'avís continua
         # distingint "no s'ha trobat res" de "s'ha trobat però no és de fiar".
@@ -1476,6 +1558,15 @@ def _match_rows(files, customer, model=None):
             'weak_suggestion': _nom_resolt(suggeriment),
             'weak_suggestion_codi': suggeriment.codi_client if suggeriment else None,
             'many_to_one': False,
+            # MOTIU (16/09): per QUÈ la fila cau a pendents, quan és més que "confiança baixa"
+            # — un àlies a un POM retirat, cap coincidència en absolut, o àlies contradictoris.
+            # `None` vol dir que la UI ja ho explica amb el `match_type`/`weak_suggestion` de
+            # sempre. `motiu_candidats` només porta contingut per a 'alies_contradictoris'.
+            'motiu': info.get('motiu'),
+            'motiu_candidats': info.get('candidats'),
+            # ORIGEN DEL SUGGERIMENT (16/09, COMMIT 6): de quin model es va aprendre l'àlies
+            # que fa el suggeriment — la UI ho pinta «X · après a <model>».
+            'weak_suggestion_model_origen': info.get('suggerit_origen_nom'),
         })
 
     # L'ORDRE MANA: proposta (F2) → guard (F4). Vegeu el docstring.
@@ -3378,7 +3469,7 @@ def import_session_confirmar_view(request, token):
                 # vocabulari. El document ha anomenat aquest POM i això és realitat.
                 maybe_learn_customer_alias(
                     model.customer, p.get('codi_fitxa'), p.get('descripcio'), pm,
-                    origen='IMPORT', nomes_si_manual=False)
+                    origen='IMPORT', nomes_si_manual=False, model=model)
                 continue
             _defaults = {
                 'base_value_cm': base_val,
@@ -3456,7 +3547,7 @@ def import_session_confirmar_view(request, token):
             # pendent_revisio=True i find_pom_master no l'auto-vincula.
             maybe_learn_customer_alias(
                 model.customer, p.get('codi_fitxa'), p.get('descripcio'), pm,
-                origen='IMPORT', nomes_si_manual=False)
+                origen='IMPORT', nomes_si_manual=False, model=model)
 
         # ── 1b. PODA CONFIRMADA (B1). Els POMs vius que el document no menciona: el tècnic
         # ja ha triat al pre-flight. SOFT sempre (is_active=False) + MeasurementChangeLog;

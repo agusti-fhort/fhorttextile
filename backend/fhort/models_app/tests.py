@@ -286,7 +286,7 @@ class AprenentatgeAlaConfirmacioTest(_TenantBase):
     def test_saprèn_dun_vincle_que_el_matcher_ja_encertava_sol(self):
         """El cas que abans NO s'aprenia. El matcher resol 'A' per descripció (MEDIUM); el
         tècnic ho confirma. Això és nomenclatura del client i ha d'entrar al seu registre."""
-        pm, mtype, conf = find_pom_master('A', 'Chest width', customer=self.customer)
+        pm, mtype, conf, _info = find_pom_master('A', 'Chest width', customer=self.customer)
         self.assertEqual(pm.id, self.pom.id)
         self.assertIn(conf, ('HIGH', 'MEDIUM'))   # el matcher ho encerta sol
 

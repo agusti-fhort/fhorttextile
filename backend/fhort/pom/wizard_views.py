@@ -939,6 +939,7 @@ def create_model_pom_view(request, model_id):
             description_local=(request.data.get('descripcio_local') or '').strip(),
             origen='MODEL',
             pendent_revisio=True,
+            model_origen_id=model_id,
         )
 
     # Mateixa forma que un resultat de `poms/cerca/`: qui l'ha creat el vol afegir a la taula tot

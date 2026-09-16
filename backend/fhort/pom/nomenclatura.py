@@ -93,7 +93,7 @@ def alies_del_codi(customer_id, codi):
             .filter(customer_id=customer_id, client_code__iexact=str(codi).strip(),
                     pom__isnull=False)
             .select_related('pom', 'pom__pom_global')
-            .first())
+            .order_by('id').first())
 
 
 def pom_del_codi(customer_id, codi):

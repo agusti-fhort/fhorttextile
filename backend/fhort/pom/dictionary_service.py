@@ -144,7 +144,7 @@ def build_preview(customer, raw_rows):
         desc_local = (c.get('descripcio_local') or '').strip()
         idioma = (c.get('idioma') or '').strip().lower()[:2]
 
-        pm, mtype, conf = find_pom_master(code, desc_en or desc_local, customer=customer)
+        pm, mtype, conf, _info = find_pom_master(code, desc_en or desc_local, customer=customer)
         n_match = _count_candidates(desc_en or desc_local, poms_cache)
         ex = existing.get(code.lower())
         ex_payload = None

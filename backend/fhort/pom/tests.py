@@ -17,7 +17,9 @@ from fhort.pom.management.commands.seed_measurement_layers import CAPES
 from fhort.pom.management.commands.seed_measurement_layers import sembra as sembra_capes
 from fhort.pom.management.commands.seed_pattern_piece_roles import ROLS, sembra
 from fhort.pom.models import (CustomerPOMAlias, MeasurementLayer, PatternPieceRole,
-                              POMMaster)
+                              POMGlobal, POMMaster)
+from fhort.models_app.models import Model
+from fhort.pom.nomenclatura import colisio_de_codi
 from fhort.pom.serializers import CustomerPOMAliasSerializer
 from fhort.pom.services import maybe_learn_customer_alias
 from fhort.tasks.models import Customer
@@ -132,7 +134,8 @@ class AliasSensePomTest(_TenantBase):
             customer=self.customer, client_code='FF', pom=None,
             description_en='BACK TOTAL LENGTH', pendent_revisio=True, origen='DICCIONARI')
 
-        pm, match_type, _conf = find_pom_master('FF', 'BACK TOTAL LENGTH', customer=self.customer)
+        pm, match_type, _conf, _info = find_pom_master(
+            'FF', 'BACK TOTAL LENGTH', customer=self.customer)
 
         self.assertNotEqual(
             match_type, 'alias_match',
@@ -160,7 +163,7 @@ class AliasSensePomTest(_TenantBase):
         CustomerPOMAlias.objects.create(
             customer=self.customer, client_code='U2', pom=self.pom, origen='DICCIONARI')
 
-        pm, match_type, conf = find_pom_master('U2', '1st BUTTON', customer=self.customer)
+        pm, match_type, conf, _info = find_pom_master('U2', '1st BUTTON', customer=self.customer)
 
         self.assertEqual(match_type, 'alias_match')
         self.assertEqual(conf, 'HIGH')
@@ -279,3 +282,215 @@ class SembraCapesDeMesuraTest(_TenantBase):
         self.assertFalse(propia.is_system)
         self.assertTrue(propia.pendent_revisio)
         self.assertEqual(MeasurementLayer.objects.count(), len(CAPES) + 1)
+
+
+class MatcherAliesRetiratTest(_TenantBase):
+    """COMMIT 1 (16/09, DECISIONS.md): un àlies a un POM RETIRAT és un salt SILENCIÓS si el
+    matcher se'l salta i cau a una altra estratègia — el mode de fallada real del model 1216
+    ('BR'). Ara es resol dins `find_pom_master` mateix i s'atura la cerca."""
+
+    def setUp(self):
+        self.customer = Customer.objects.create(codi='BRW', nom='Brownie')
+        self.canonic = POMGlobal.objects.create(
+            codi='QA-CANONIC', nom_en='Back neck drop', nom_ca='Back neck drop',
+            categoria='QA')
+        self.pom_retirat = POMMaster.objects.create(
+            codi_client='BR', nom_client='Back neck drop OLD', actiu=False,
+            pom_global=self.canonic)
+        CustomerPOMAlias.objects.create(
+            customer=self.customer, client_code='BR', pom=self.pom_retirat,
+            description_en='Back neck drop from HPS to edge', origen='DICCIONARI')
+
+    def test_alies_a_pom_retirat_amb_hereu_suggereix_lhereu_mai_el_retirat(self):
+        hereu = POMMaster.objects.create(
+            codi_client='BR2', nom_client='Back neck drop from HPS to edge', actiu=True,
+            pom_global=self.canonic)
+
+        pm, match_type, conf, info = find_pom_master(
+            'BR', 'Back neck drop from HPS to edge', customer=self.customer)
+
+        self.assertEqual(match_type, 'alias_pom_retirat')
+        self.assertEqual(conf, 'LOW', 'un POM retirat mai auto-vincula, ni el seu hereu')
+        self.assertEqual(info['motiu'], 'alies_pom_retirat')
+        self.assertEqual(pm.id, hereu.id)
+        self.assertNotEqual(pm.id, self.pom_retirat.id)
+
+    def test_alies_a_pom_retirat_sense_hereu_queda_pendent_visible(self):
+        pm, match_type, conf, info = find_pom_master(
+            'BR', 'Back neck drop from HPS to edge', customer=self.customer)
+
+        self.assertEqual(match_type, 'alias_pom_retirat')
+        self.assertIsNone(pm, "sense hereu, no hi ha res a suggerir com a POM")
+        self.assertEqual(info['motiu'], 'alies_pom_retirat')
+        self.assertIsNone(info['suggerit'])
+
+    def test_alies_a_pom_retirat_no_cau_a_description_match(self):
+        """El mode de fallada real: sense aquest guard, la descripció trobava un ALTRE POM
+        actiu per estratègia 3 i hi vinculava en HIGH/MEDIUM — exactament com 'BR' al 1216."""
+        # Un POM actiu que la descripció també encertaria per continguda, si la cerca no
+        # s'hagués aturat abans.
+        POMMaster.objects.create(
+            codi_client='ALTRE', nom_client='back neck drop from hps to edge extra', actiu=True)
+
+        pm, match_type, _conf, _info = find_pom_master(
+            'BR', 'Back neck drop from HPS to edge', customer=self.customer)
+
+        self.assertEqual(match_type, 'alias_pom_retirat')
+        self.assertNotEqual(match_type, 'description_match')
+
+
+class MatcherNomBuitISenseCoincidenciaTest(_TenantBase):
+    """COMMIT 1 · `nom_client=''` ("mana el canònic", 23/08) no pot ser una cadena que
+    coincideix amb tot (`'' in qualsevol_cosa`), i un NO_MATCH real ha de dir per què."""
+
+    def setUp(self):
+        self.customer = Customer.objects.create(codi='BRW', nom='Brownie')
+
+    def test_pom_amb_nom_buit_no_atrapa_qualsevol_descripcio(self):
+        POMMaster.objects.create(codi_client='ZZ', nom_client='', actiu=True)
+
+        pm, match_type, conf, _info = find_pom_master(
+            '', 'una descripció qualsevol que no hauria de matchejar res', customer=None)
+
+        self.assertIsNone(pm)
+        self.assertEqual(match_type, 'no_match')
+        self.assertEqual(conf, 'NO_MATCH')
+
+    def test_sense_coincidencia_porta_motiu_explicit(self):
+        pm, match_type, conf, info = find_pom_master(
+            'INEXISTENT', 'descripció que no existeix enlloc del catàleg', customer=self.customer)
+
+        self.assertIsNone(pm)
+        self.assertEqual(match_type, 'no_match')
+        self.assertEqual(conf, 'NO_MATCH')
+        self.assertEqual(info['motiu'], 'sense_coincidencia')
+
+    def test_quatre_files_amb_alies_propis_no_col·lapsen_al_mateix_pom(self):
+        poms = [POMMaster.objects.create(codi_client=f'C{i}', nom_client=f'Mesura {i}',
+                                          actiu=True) for i in range(4)]
+        for i, p in enumerate(poms):
+            CustomerPOMAlias.objects.create(
+                customer=self.customer, client_code=f'C{i}', pom=p, origen='DICCIONARI')
+
+        resolts = [find_pom_master(f'C{i}', '', customer=self.customer)[0] for i in range(4)]
+
+        self.assertEqual(len({p.id for p in resolts if p}), 4)
+
+
+class MatcherAliesContradictorisTest(_TenantBase):
+    """COMMIT 3 (16/09, DECISIONS.md, migració 0088) — la unicitat passa de (customer,
+    client_code) a (customer, client_code, pom): dos models poden ensenyar POMs diferents
+    pel MATEIX codi sense que un s'endugui l'altre en silenci. `find_pom_master` és qui ho
+    detecta i ho envia a pendents amb tots els candidats."""
+
+    def setUp(self):
+        self.customer = Customer.objects.create(codi='BRW', nom='Brownie')
+        self.pom_x = POMMaster.objects.create(codi_client='X', nom_client='Mesura X')
+        self.pom_y = POMMaster.objects.create(codi_client='Y', nom_client='Mesura Y')
+        self.model_a = Model.objects.create(
+            customer=self.customer, codi_intern='MODEL-A', codi_client='MA', codi_tenant='QA',
+            any=2026, temporada='SS26', sequencial=1)
+        self.model_b = Model.objects.create(
+            customer=self.customer, codi_intern='MODEL-B', codi_client='MB', codi_tenant='QA',
+            any=2026, temporada='SS26', sequencial=2)
+
+    def test_un_segon_model_amb_pom_diferent_no_sobreescriu_el_primer(self):
+        alias_a = maybe_learn_customer_alias(
+            self.customer, 'EP', 'quelcom', self.pom_x, origen='IMPORT',
+            nomes_si_manual=False, model=self.model_a)
+        alias_b = maybe_learn_customer_alias(
+            self.customer, 'EP', 'quelcom', self.pom_y, origen='IMPORT',
+            nomes_si_manual=False, model=self.model_b)
+
+        self.assertNotEqual(alias_a.id, alias_b.id, "han de ser DUES files, no una sobreescrita")
+        alias_a.refresh_from_db()
+        self.assertEqual(alias_a.pom_id, self.pom_x.id, "el primer no es toca")
+        self.assertEqual(alias_a.model_origen_id, self.model_a.id)
+        self.assertEqual(alias_b.model_origen_id, self.model_b.id)
+
+    def test_un_tercer_import_del_mateix_codi_cau_a_pendent_amb_els_dos_candidats(self):
+        maybe_learn_customer_alias(
+            self.customer, 'EP', 'quelcom', self.pom_x, origen='IMPORT',
+            nomes_si_manual=False, model=self.model_a)
+        maybe_learn_customer_alias(
+            self.customer, 'EP', 'quelcom', self.pom_y, origen='IMPORT',
+            nomes_si_manual=False, model=self.model_b)
+
+        pm, match_type, conf, info = find_pom_master('EP', 'quelcom', customer=self.customer)
+
+        self.assertIsNone(pm, "cap auto-vincle davant d'una contradicció")
+        self.assertEqual(match_type, 'alies_contradictoris')
+        self.assertEqual(conf, 'LOW')
+        self.assertEqual(info['motiu'], 'alies_contradictoris')
+        candidats = info['candidats']
+        self.assertEqual(len(candidats), 2)
+        self.assertEqual({c['pom_id'] for c in candidats}, {self.pom_x.id, self.pom_y.id})
+        self.assertEqual({c['model_origen_nom'] for c in candidats},
+                         {'MODEL-A', 'MODEL-B'})
+
+    def test_reaprendre_exactament_el_mateix_parell_no_crea_una_tercera_fila(self):
+        a1 = maybe_learn_customer_alias(
+            self.customer, 'EP', 'quelcom', self.pom_x, origen='IMPORT',
+            nomes_si_manual=False, model=self.model_a)
+
+        a2 = maybe_learn_customer_alias(
+            self.customer, 'EP', 'quelcom', self.pom_x, origen='IMPORT',
+            nomes_si_manual=False, model=self.model_b)
+
+        self.assertEqual(a1.id, a2.id)
+        self.assertEqual(a2.model_origen_id, self.model_a.id, "l'origen no es toca")
+        self.assertEqual(
+            CustomerPOMAlias.objects.filter(customer=self.customer, client_code='EP').count(), 1)
+
+    def test_pom_propi_amb_codi_ja_reclamat_segueix_bloquejat_sense_la_constraint_vella(self):
+        """`colisio_de_codi` (wizard_views.py:862) és qui feia complir «no dos POMs pel
+        mateix codi» a nivell d'aplicació; la constraint vella de BD n'era la xarxa de
+        seguretat. Ara que la constraint és (customer, client_code, pom), aquesta funció ha
+        de seguir dient que el codi és ocupat."""
+        CustomerPOMAlias.objects.create(
+            customer=self.customer, client_code='EP', pom=self.pom_x, origen='MODEL')
+
+        xoc, etiqueta, _context = colisio_de_codi(self.customer.id, 'EP')
+
+        self.assertIsNotNone(xoc, "un codi amb àlies actiu ha de seguir sent una col·lisió")
+        self.assertEqual(xoc.id, self.pom_x.id)
+
+
+class MatcherSuggerimentPortaOrigenTest(_TenantBase):
+    """COMMIT 6 (16/09) — la UI pinta «X · après a <model>» per a un suggeriment d'àlies:
+    `find_pom_master` ha de portar `suggerit_origen_nom` quan el sap."""
+
+    def setUp(self):
+        self.customer = Customer.objects.create(codi='BRW', nom='Brownie')
+        self.model_a = Model.objects.create(
+            customer=self.customer, codi_intern='MODEL-ORIGEN-A', codi_client='MOA',
+            codi_tenant='QA', any=2026, temporada='SS26', sequencial=1)
+
+    def test_alies_pendent_de_revisio_porta_el_model_que_lensenya(self):
+        pom = POMMaster.objects.create(codi_client='PR1', nom_client='mesura')
+        maybe_learn_customer_alias(
+            self.customer, 'A1', 'quelcom', pom, origen='IMPORT', nomes_si_manual=False,
+            model=self.model_a)
+        # el SEGON codi cap al MATEIX pom és el que neix PENDENT_REVISIO (guard anti-col·lisió,
+        # com U2/U3 a GuardAprenentatgeAliasTest): el primer es queda net.
+        maybe_learn_customer_alias(
+            self.customer, 'A2', 'quelcom altre', pom, origen='IMPORT', nomes_si_manual=False,
+            model=self.model_a)
+
+        pm, match_type, conf, info = find_pom_master('A2', 'quelcom altre', customer=self.customer)
+
+        self.assertEqual(match_type, 'alias_pendent_revisio')
+        self.assertEqual(info['suggerit_origen_nom'], 'MODEL-ORIGEN-A')
+
+    def test_alies_a_pom_retirat_porta_qui_va_ensenyar_lalies_vell(self):
+        canonic = POMGlobal.objects.create(codi='CANORI', nom_en='c', nom_ca='c', categoria='Q')
+        retirat = POMMaster.objects.create(
+            codi_client='RETORI', nom_client='vell', actiu=False, pom_global=canonic)
+        CustomerPOMAlias.objects.create(
+            customer=self.customer, client_code='A3', pom=retirat, origen='IMPORT',
+            model_origen=self.model_a)
+
+        pm, match_type, conf, info = find_pom_master('A3', 'quelcom', customer=self.customer)
+
+        self.assertEqual(match_type, 'alias_pom_retirat')
+        self.assertEqual(info['suggerit_origen_nom'], 'MODEL-ORIGEN-A')
