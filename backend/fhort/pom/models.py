@@ -810,8 +810,23 @@ class CustomerPOMAlias(models.Model):
         verbose_name = 'Àlies POM de client'
         verbose_name_plural = 'Àlies POM de client'
         constraints = [
+            # 🚨 LA CLAU PASSA DE (customer, client_code) A (customer, client_code, pom)
+            # (16/09, Agus — aprovat explícitament per sobre de la barana d'«una migració»,
+            # DECISIONS.md). Amb la clau vella, un segon model que vinculava el MATEIX codi a
+            # un POM DIFERENT sobreescrivia la fila en silenci i s'enduia qui l'havia ensenyat
+            # primer. Ara les dues conviuen com a files DIFERENTS i és `find_pom_master` qui
+            # les detecta totes dues (≥2 `pom` diferents per al mateix codi) i ho envia a
+            # pendents ('alies_contradictoris') en comptes de deixar guanyar la que arriba
+            # després. ADDITIVA: cap fila viva té avui dos `pom` per al mateix (customer,
+            # client_code), així que la migració no en toca cap.
             models.UniqueConstraint(
-                fields=['customer', 'client_code'], name='uniq_customer_client_code'),
+                fields=['customer', 'client_code', 'pom'], name='uniq_customer_client_code_pom'),
+            # Postgres tracta cada NULL com a DISTINT dels altres, o sigui que la constraint de
+            # dalt per si sola deixaria clonar-se el «pendent de mapar» (`pom=None`, QA-S8-R1):
+            # aquest índex parcial el torna a limitar a UN per codi, com abans.
+            models.UniqueConstraint(
+                fields=['customer', 'client_code'], condition=models.Q(pom__isnull=True),
+                name='uniq_customer_client_code_pom_null'),
         ]
         indexes = [
             models.Index(fields=['customer', 'client_code'], name='idx_customer_client_code'),

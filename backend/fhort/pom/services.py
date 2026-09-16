@@ -714,7 +714,7 @@ def update_client_profile(
 # ─────────────────────────────────────────────────────────────────────────────
 
 def maybe_learn_customer_alias(customer, client_code, description, pom, origen='IMPORT',
-                               nomes_si_manual=True):
+                               nomes_si_manual=True, model=None):
     """Sembra (idempotent) un CustomerPOMAlias reutilitzable quan un HUMÀ ha resolt la
     vinculació codi-de-document → POM.
 
@@ -734,7 +734,11 @@ def maybe_learn_customer_alias(customer, client_code, description, pom, origen='
                 a cada importació. Un codi que el tècnic ha donat per bo és nomenclatura
                 d'aquell client, l'hagi encertat el matcher o no.
 
-    Retorna l'àlies creat/actualitzat o None.
+    `model` (16/09) — el model des d'on s'aprèn, si n'hi ha. Es desa a `model_origen` NOMÉS
+    en CREAR l'àlies: 🔑 L'ORIGEN NO ES TOCA (re-confirmar el mateix (codi, POM) des d'un
+    altre model no li canvia qui el va ensenyar primer).
+
+    Retorna l'àlies creat o l'existent (idempotent) o None.
     """
     from fhort.pom.models import CustomerPOMAlias
     from fhort.models_app.extraction_views import find_pom_master
@@ -759,22 +763,21 @@ def maybe_learn_customer_alias(customer, client_code, description, pom, origen='
                    .exclude(client_code__iexact=code)
                    .exists())
 
+    # (customer, client_code, pom) — LA CLAU REAL (16/09, migració 0088). `pom` hi entra a la
+    # CERCA, no només als `defaults`: abans un segon model que ensenyava el MATEIX codi cap a
+    # un POM DIFERENT trobava la fila vella per (customer, client_code) i la sobreescrivia en
+    # silenci — perdent qui l'havia ensenyat primer. Ara és una fila NOVA, i és
+    # `find_pom_master` qui detecta les ≥2 files pel mateix codi i ho envia a pendents
+    # ('alies_contradictoris') en comptes de deixar guanyar la que arriba després.
     alias, created = CustomerPOMAlias.objects.get_or_create(
-        customer=customer, client_code=code[:60],
+        customer=customer, client_code=code[:60], pom=pom,
         defaults={
-            'pom': pom,
             'client_description': (description or '')[:200],
             'origen': origen,
             'pendent_revisio': ja_reclamat,
+            'model_origen': model,
         },
     )
-    if not created and alias.pom_id != pom.id:
-        alias.pom = pom
-        alias.client_description = (description or '')[:200]
-        alias.origen = origen
-        alias.pendent_revisio = ja_reclamat
-        alias.save(update_fields=['pom', 'client_description', 'origen',
-                                  'pendent_revisio', 'actualitzat_at'])
     return alias
 
 

@@ -18,6 +18,8 @@ from fhort.pom.management.commands.seed_measurement_layers import sembra as semb
 from fhort.pom.management.commands.seed_pattern_piece_roles import ROLS, sembra
 from fhort.pom.models import (CustomerPOMAlias, MeasurementLayer, PatternPieceRole,
                               POMGlobal, POMMaster)
+from fhort.models_app.models import Model
+from fhort.pom.nomenclatura import colisio_de_codi
 from fhort.pom.serializers import CustomerPOMAliasSerializer
 from fhort.pom.services import maybe_learn_customer_alias
 from fhort.tasks.models import Customer
@@ -373,3 +375,82 @@ class MatcherNomBuitISenseCoincidenciaTest(_TenantBase):
         resolts = [find_pom_master(f'C{i}', '', customer=self.customer)[0] for i in range(4)]
 
         self.assertEqual(len({p.id for p in resolts if p}), 4)
+
+
+class MatcherAliesContradictorisTest(_TenantBase):
+    """COMMIT 3 (16/09, DECISIONS.md, migració 0088) — la unicitat passa de (customer,
+    client_code) a (customer, client_code, pom): dos models poden ensenyar POMs diferents
+    pel MATEIX codi sense que un s'endugui l'altre en silenci. `find_pom_master` és qui ho
+    detecta i ho envia a pendents amb tots els candidats."""
+
+    def setUp(self):
+        self.customer = Customer.objects.create(codi='BRW', nom='Brownie')
+        self.pom_x = POMMaster.objects.create(codi_client='X', nom_client='Mesura X')
+        self.pom_y = POMMaster.objects.create(codi_client='Y', nom_client='Mesura Y')
+        self.model_a = Model.objects.create(
+            customer=self.customer, codi_intern='MODEL-A', codi_client='MA', codi_tenant='QA',
+            any=2026, temporada='SS26', sequencial=1)
+        self.model_b = Model.objects.create(
+            customer=self.customer, codi_intern='MODEL-B', codi_client='MB', codi_tenant='QA',
+            any=2026, temporada='SS26', sequencial=2)
+
+    def test_un_segon_model_amb_pom_diferent_no_sobreescriu_el_primer(self):
+        alias_a = maybe_learn_customer_alias(
+            self.customer, 'EP', 'quelcom', self.pom_x, origen='IMPORT',
+            nomes_si_manual=False, model=self.model_a)
+        alias_b = maybe_learn_customer_alias(
+            self.customer, 'EP', 'quelcom', self.pom_y, origen='IMPORT',
+            nomes_si_manual=False, model=self.model_b)
+
+        self.assertNotEqual(alias_a.id, alias_b.id, "han de ser DUES files, no una sobreescrita")
+        alias_a.refresh_from_db()
+        self.assertEqual(alias_a.pom_id, self.pom_x.id, "el primer no es toca")
+        self.assertEqual(alias_a.model_origen_id, self.model_a.id)
+        self.assertEqual(alias_b.model_origen_id, self.model_b.id)
+
+    def test_un_tercer_import_del_mateix_codi_cau_a_pendent_amb_els_dos_candidats(self):
+        maybe_learn_customer_alias(
+            self.customer, 'EP', 'quelcom', self.pom_x, origen='IMPORT',
+            nomes_si_manual=False, model=self.model_a)
+        maybe_learn_customer_alias(
+            self.customer, 'EP', 'quelcom', self.pom_y, origen='IMPORT',
+            nomes_si_manual=False, model=self.model_b)
+
+        pm, match_type, conf, info = find_pom_master('EP', 'quelcom', customer=self.customer)
+
+        self.assertIsNone(pm, "cap auto-vincle davant d'una contradicció")
+        self.assertEqual(match_type, 'alies_contradictoris')
+        self.assertEqual(conf, 'LOW')
+        self.assertEqual(info['motiu'], 'alies_contradictoris')
+        candidats = info['candidats']
+        self.assertEqual(len(candidats), 2)
+        self.assertEqual({c['pom_id'] for c in candidats}, {self.pom_x.id, self.pom_y.id})
+        self.assertEqual({c['model_origen_nom'] for c in candidats},
+                         {'MODEL-A', 'MODEL-B'})
+
+    def test_reaprendre_exactament_el_mateix_parell_no_crea_una_tercera_fila(self):
+        a1 = maybe_learn_customer_alias(
+            self.customer, 'EP', 'quelcom', self.pom_x, origen='IMPORT',
+            nomes_si_manual=False, model=self.model_a)
+
+        a2 = maybe_learn_customer_alias(
+            self.customer, 'EP', 'quelcom', self.pom_x, origen='IMPORT',
+            nomes_si_manual=False, model=self.model_b)
+
+        self.assertEqual(a1.id, a2.id)
+        self.assertEqual(a2.model_origen_id, self.model_a.id, "l'origen no es toca")
+        self.assertEqual(
+            CustomerPOMAlias.objects.filter(customer=self.customer, client_code='EP').count(), 1)
+
+    def test_pom_propi_amb_codi_ja_reclamat_segueix_bloquejat_sense_la_constraint_vella(self):
+        """`colisio_de_codi` (wizard_views.py:862) és qui feia complir «no dos POMs pel
+        mateix codi» a nivell d'aplicació; la constraint vella de BD n'era la xarxa de
+        seguretat. Ara que la constraint és (customer, client_code, pom), aquesta funció ha
+        de seguir dient que el codi és ocupat."""
+        CustomerPOMAlias.objects.create(
+            customer=self.customer, client_code='EP', pom=self.pom_x, origen='MODEL')
+
+        xoc, etiqueta, _context = colisio_de_codi(self.customer.id, 'EP')
+
+        self.assertIsNotNone(xoc, "un codi amb àlies actiu ha de seguir sent una col·lisió")
+        self.assertEqual(xoc.id, self.pom_x.id)

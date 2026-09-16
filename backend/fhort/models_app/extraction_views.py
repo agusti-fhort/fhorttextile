@@ -1183,6 +1183,10 @@ def find_pom_master(code, description, customer=None):
       · 'alies_pom_retirat' — l'àlies d'aquest client reclama un POM que ja no és actiu.
         `info['suggerit']` porta l'HEREU actiu amb el mateix `codi_client`, si n'hi ha (si no,
         `None` i la fila queda «sense hereu»). El `pom` retornat JA és l'hereu (o `None`).
+      · 'alies_contradictoris' — aquest client té ≥2 àlies pel MATEIX codi amb POMs
+        DIFERENTS (migració 0088: la clau és (customer, client_code, pom), no sol el codi).
+        `info['candidats']` porta TOTS els `{pom_id, pom_codi, pom_nom, model_origen_id,
+        model_origen_nom}`, un per àlies. `pom` retornat és sempre `None`: cap auto-vincle.
       · 'sense_coincidencia' — cap estratègia ha trobat res, ni fort ni feble.
 
     ORDRE (DIAGNOSI_NOMENCLATURA_ALIES_2026-07-08, N3; LLEIS DECISIONS.md 16/09):
@@ -1241,11 +1245,31 @@ def find_pom_master(code, description, customer=None):
             # (`noms_de`, F1) cada match d'àlies hi hauria comprat una query. La resta de
             # branques d'aquesta funció ja fan `select_related('pom_global')`; aquesta s'hi
             # posa al costat.
-            alias = (CustomerPOMAlias.objects
-                     .filter(customer=customer, client_code__iexact=key, pom__isnull=False)
-                     .select_related('pom', 'pom__pom_global').order_by('id').first())
-            if not alias:
+            alies = list(CustomerPOMAlias.objects
+                         .filter(customer=customer, client_code__iexact=key, pom__isnull=False)
+                         .select_related('pom', 'pom__pom_global', 'model_origen')
+                         .order_by('id'))
+            if not alies:
                 continue
+
+            # ÀLIES CONTRADICTORIS (16/09, migració 0088). Des que (customer, client_code,
+            # pom) és la clau —i no (customer, client_code) sol—, ≥2 models d'aquest client
+            # poden haver ensenyat POMs DIFERENTS per al MATEIX codi: cap dels dos guanya en
+            # silenci, la fila cau a pendents amb TOTS els candidats perquè una persona triï.
+            poms_diferents = {a.pom_id for a in alies}
+            if len(poms_diferents) >= 2:
+                candidats = [{
+                    'pom_id': a.pom_id,
+                    'pom_codi': a.pom.codi_client,
+                    'pom_nom': _nom_resolt(a.pom),
+                    'model_origen_id': a.model_origen_id,
+                    'model_origen_nom': a.model_origen.codi_intern if a.model_origen_id else None,
+                } for a in alies]
+                return None, 'alies_contradictoris', 'LOW', {
+                    'motiu': 'alies_contradictoris', 'candidats': candidats,
+                }
+
+            alias = alies[0]
             if not alias.pom.actiu:
                 # L'ÀLIES RECLAMA UN POM QUE JA NO ÉS ACTIU (16/09). Abans això queia pel
                 # forat del `if alias and alias.pom.actiu:` sense deixar-ne rastre. Es
@@ -1520,9 +1544,11 @@ def _match_rows(files, customer, model=None):
             'weak_suggestion_codi': suggeriment.codi_client if suggeriment else None,
             'many_to_one': False,
             # MOTIU (16/09): per QUÈ la fila cau a pendents, quan és més que "confiança baixa"
-            # — un àlies a un POM retirat, o cap coincidència en absolut. `None` vol dir que la
-            # UI ja ho explica amb el `match_type`/`weak_suggestion` de sempre.
+            # — un àlies a un POM retirat, cap coincidència en absolut, o àlies contradictoris.
+            # `None` vol dir que la UI ja ho explica amb el `match_type`/`weak_suggestion` de
+            # sempre. `motiu_candidats` només porta contingut per a 'alies_contradictoris'.
             'motiu': info.get('motiu'),
+            'motiu_candidats': info.get('candidats'),
         })
 
     # L'ORDRE MANA: proposta (F2) → guard (F4). Vegeu el docstring.
@@ -3425,7 +3451,7 @@ def import_session_confirmar_view(request, token):
                 # vocabulari. El document ha anomenat aquest POM i això és realitat.
                 maybe_learn_customer_alias(
                     model.customer, p.get('codi_fitxa'), p.get('descripcio'), pm,
-                    origen='IMPORT', nomes_si_manual=False)
+                    origen='IMPORT', nomes_si_manual=False, model=model)
                 continue
             _defaults = {
                 'base_value_cm': base_val,
@@ -3503,7 +3529,7 @@ def import_session_confirmar_view(request, token):
             # pendent_revisio=True i find_pom_master no l'auto-vincula.
             maybe_learn_customer_alias(
                 model.customer, p.get('codi_fitxa'), p.get('descripcio'), pm,
-                origen='IMPORT', nomes_si_manual=False)
+                origen='IMPORT', nomes_si_manual=False, model=model)
 
         # ── 1b. PODA CONFIRMADA (B1). Els POMs vius que el document no menciona: el tècnic
         # ja ha triat al pre-flight. SOFT sempre (is_active=False) + MeasurementChangeLog;
