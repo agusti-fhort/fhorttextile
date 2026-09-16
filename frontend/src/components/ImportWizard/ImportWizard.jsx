@@ -1350,6 +1350,43 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
                                         ? t('import_wizard.many_to_one_hint', { codi: p.weak_suggestion_codi })
                                         : t('import_wizard.weak_hint')}
                                       {' '}<b>{p.weak_suggestion_codi}</b> · {p.weak_suggestion}
+                                      {/* «après a X» (16/09) — el suggeriment ve d'un àlies concret
+                                          i la Montse vol saber de quin model el va ensenyar. */}
+                                      {p.weak_suggestion_model_origen && (
+                                        <> · {t('import_wizard.apres_a_model', { model: p.weak_suggestion_model_origen })}</>
+                                      )}
+                                    </div>
+                                  )}
+                                  {/* MOTIU (16/09) — quan el backend diu PER QUÈ la fila és
+                                      pendent i no només "confiança baixa": un àlies que reclama
+                                      un POM retirat (amb hereu, encara dins del cas `pendent`). */}
+                                  {pendent && p.motiu === 'alies_pom_retirat' && (
+                                    <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)', marginTop: 2 }}>
+                                      {t('import_wizard.motiu_alies_pom_retirat_hereu')} <b>{p.weak_suggestion_codi}</b>
+                                    </div>
+                                  )}
+                                  {/* MOTIU al cas VERMELL (sense pendent: cap POM per sota, ni
+                                      feble): àlies a POM retirat SENSE hereu, cap coincidència
+                                      per descripció, o àlies contradictoris entre models. */}
+                                  {!pendent && p.motiu === 'alies_pom_retirat' && (
+                                    <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)', marginTop: 2 }}>
+                                      {t('import_wizard.motiu_alies_pom_retirat_sense_hereu')}
+                                    </div>
+                                  )}
+                                  {!pendent && p.motiu === 'sense_coincidencia' && (
+                                    <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)', marginTop: 2 }}>
+                                      {t('import_wizard.motiu_sense_coincidencia')}
+                                    </div>
+                                  )}
+                                  {!pendent && p.motiu === 'alies_contradictoris' && (
+                                    <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)', marginTop: 2 }}>
+                                      {t('import_wizard.motiu_alies_contradictoris')}{' '}
+                                      {(p.motiu_candidats || []).map((c, i) => (
+                                        <Fragment key={`${c.pom_id}-${i}`}>
+                                          {i > 0 && ' · '}
+                                          <b>{c.pom_codi}</b> ({c.model_origen_nom || t('import_wizard.motiu_origen_desconegut')})
+                                        </Fragment>
+                                      ))}
                                     </div>
                                   )}
                                   {/* «Afegir com a propi» passa per la MATEIXA via que la
