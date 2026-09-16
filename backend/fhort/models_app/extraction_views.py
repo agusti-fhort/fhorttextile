@@ -1189,6 +1189,11 @@ def find_pom_master(code, description, customer=None):
         model_origen_nom}`, un per àlies. `pom` retornat és sempre `None`: cap auto-vincle.
       · 'sense_coincidencia' — cap estratègia ha trobat res, ni fort ni feble.
 
+    `info['suggerit_origen_id']`/`['suggerit_origen_nom']` (16/09, COMMIT 3+6): quan el
+    `pom`/suggeriment ve d'un ÀLIES concret ('alias_pendent_revisio' o 'alias_pom_retirat'),
+    de quin MODEL es va aprendre —perquè la UI ho pinti «X · après a <model>»—. `None` quan
+    el suggeriment no ve d'un àlies (o el seu `model_origen` és desconegut).
+
     ORDRE (DIAGNOSI_NOMENCLATURA_ALIES_2026-07-08, N3; LLEIS DECISIONS.md 16/09):
       (a) ÀLIES exacte del `customer` (CustomerPOMAlias) → HIGH. Requereix `customer`; si és None
           (context sense client) se salta. El `client_code` d'un àlies pot ser un codi posicional
@@ -1289,10 +1294,15 @@ def find_pom_master(code, description, customer=None):
                             .exclude(pk=alias.pom_id).order_by('id').first())
                 return heir, 'alias_pom_retirat', 'LOW', {
                     'motiu': 'alies_pom_retirat', 'suggerit': heir,
+                    # QUI VA ENSENYAR l'àlies RETIRAT (no l'hereu, que no en té — encara no
+                    # l'ha ensenyat ningú): la UI ho pinta com a «après a <model>» (COMMIT 6).
+                    'suggerit_origen_id': alias.model_origen_id,
+                    'suggerit_origen_nom': (alias.model_origen.codi_intern
+                                            if alias.model_origen_id else None),
                 }
             if alias.pendent_revisio:
                 if alias_pendent is None:
-                    alias_pendent = alias.pom
+                    alias_pendent = alias
                 continue
             return alias.pom, 'alias_match', 'HIGH', _SENSE_MOTIU
 
@@ -1352,7 +1362,12 @@ def find_pom_master(code, description, customer=None):
     # pendents amb el nom visible, i una persona decidirà. Va per damunt dels fallbacks de codi
     # (d) perquè un àlies el va declarar algú d'aquest client; un root-prefix no l'ha declarat ningú.
     if alias_pendent is not None:
-        return alias_pendent, 'alias_pendent_revisio', 'LOW', _SENSE_MOTIU
+        return alias_pendent.pom, 'alias_pendent_revisio', 'LOW', {
+            'motiu': None,
+            'suggerit_origen_id': alias_pendent.model_origen_id,
+            'suggerit_origen_nom': (alias_pendent.model_origen.codi_intern
+                                    if alias_pendent.model_origen_id else None),
+        }
 
     # (d) FALLBACK TRANSITORI — `codi_client` exacte. Abans era la 1a estratègia amb HIGH; ara és
     # penúltim recurs amb LOW (deprecació): l'àlies i la descripció manen. Un exacte que arriba
@@ -1549,6 +1564,9 @@ def _match_rows(files, customer, model=None):
             # sempre. `motiu_candidats` només porta contingut per a 'alies_contradictoris'.
             'motiu': info.get('motiu'),
             'motiu_candidats': info.get('candidats'),
+            # ORIGEN DEL SUGGERIMENT (16/09, COMMIT 6): de quin model es va aprendre l'àlies
+            # que fa el suggeriment — la UI ho pinta «X · après a <model>».
+            'weak_suggestion_model_origen': info.get('suggerit_origen_nom'),
         })
 
     # L'ORDRE MANA: proposta (F2) → guard (F4). Vegeu el docstring.

@@ -454,3 +454,43 @@ class MatcherAliesContradictorisTest(_TenantBase):
 
         self.assertIsNotNone(xoc, "un codi amb àlies actiu ha de seguir sent una col·lisió")
         self.assertEqual(xoc.id, self.pom_x.id)
+
+
+class MatcherSuggerimentPortaOrigenTest(_TenantBase):
+    """COMMIT 6 (16/09) — la UI pinta «X · après a <model>» per a un suggeriment d'àlies:
+    `find_pom_master` ha de portar `suggerit_origen_nom` quan el sap."""
+
+    def setUp(self):
+        self.customer = Customer.objects.create(codi='BRW', nom='Brownie')
+        self.model_a = Model.objects.create(
+            customer=self.customer, codi_intern='MODEL-ORIGEN-A', codi_client='MOA',
+            codi_tenant='QA', any=2026, temporada='SS26', sequencial=1)
+
+    def test_alies_pendent_de_revisio_porta_el_model_que_lensenya(self):
+        pom = POMMaster.objects.create(codi_client='PR1', nom_client='mesura')
+        maybe_learn_customer_alias(
+            self.customer, 'A1', 'quelcom', pom, origen='IMPORT', nomes_si_manual=False,
+            model=self.model_a)
+        # el SEGON codi cap al MATEIX pom és el que neix PENDENT_REVISIO (guard anti-col·lisió,
+        # com U2/U3 a GuardAprenentatgeAliasTest): el primer es queda net.
+        maybe_learn_customer_alias(
+            self.customer, 'A2', 'quelcom altre', pom, origen='IMPORT', nomes_si_manual=False,
+            model=self.model_a)
+
+        pm, match_type, conf, info = find_pom_master('A2', 'quelcom altre', customer=self.customer)
+
+        self.assertEqual(match_type, 'alias_pendent_revisio')
+        self.assertEqual(info['suggerit_origen_nom'], 'MODEL-ORIGEN-A')
+
+    def test_alies_a_pom_retirat_porta_qui_va_ensenyar_lalies_vell(self):
+        canonic = POMGlobal.objects.create(codi='CANORI', nom_en='c', nom_ca='c', categoria='Q')
+        retirat = POMMaster.objects.create(
+            codi_client='RETORI', nom_client='vell', actiu=False, pom_global=canonic)
+        CustomerPOMAlias.objects.create(
+            customer=self.customer, client_code='A3', pom=retirat, origen='IMPORT',
+            model_origen=self.model_a)
+
+        pm, match_type, conf, info = find_pom_master('A3', 'quelcom', customer=self.customer)
+
+        self.assertEqual(match_type, 'alias_pom_retirat')
+        self.assertEqual(info['suggerit_origen_nom'], 'MODEL-ORIGEN-A')
