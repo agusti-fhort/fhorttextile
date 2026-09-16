@@ -19,13 +19,18 @@ de triar un model quins en són afectats.
 
 Dry-run per defecte; només escriu amb --apply.
 
-    venv/bin/python manage.py desvincula_description_match --pom BR
+`models_app` és TENANT-only (no viu a `public`): aquesta comanda s'ha d'invocar sempre
+amb el `tenant_command` de django-tenants i `--schema=<schema>` (p.ex. `fhort`), com
+qualsevol altra comanda d'aquesta app. Sense `--schema`, django-tenants no sap contra
+quin schema resoldre `Model`/`BaseMeasurement` i la comanda no troba res.
+
+    venv/bin/python manage.py tenant_command desvincula_description_match --schema=fhort --pom BR
         # CENS: quants models tenen files apuntant a BR (o a nom buit si no hi ha --pom)
 
-    venv/bin/python manage.py desvincula_description_match --model 1216 --pom BR
+    venv/bin/python manage.py tenant_command desvincula_description_match --schema=fhort --model 1216 --pom BR
         # dry-run: llista les files del model 1216 que apunten a BR
 
-    venv/bin/python manage.py desvincula_description_match --model 1216 --pom BR --apply
+    venv/bin/python manage.py tenant_command desvincula_description_match --schema=fhort --model 1216 --pom BR --apply
         # les desactiva (conservant nom_fitxa/notes), amb rastre a MeasurementChangeLog
 """
 import datetime
@@ -40,7 +45,9 @@ from fhort.pom.models import POMMaster
 
 class Command(BaseCommand):
     help = ('Desvincula (soft, sense esborrar) les BaseMeasurement enganxades per '
-            'description_match a un POM concret o a qualsevol POM amb nom buit.')
+            'description_match a un POM concret o a qualsevol POM amb nom buit. '
+            'Invocar sempre amb "manage.py tenant_command desvincula_description_match '
+            '--schema=<schema> [opcions]" — models_app és TENANT-only.')
 
     def add_arguments(self, parser):
         parser.add_argument('--model', type=int, default=None,
