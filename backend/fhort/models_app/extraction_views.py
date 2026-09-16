@@ -1281,17 +1281,15 @@ def find_pom_master(code, description, customer=None):
                 # resol AQUÍ i s'ATURA la cerca: l'hereu (si n'hi ha) és el suggeriment, mai
                 # el propi POM retirat.
                 #
-                # «El mateix codi» és el `pom_global_id`, NO el `codi_client`: aquest darrer
-                # és únic per tenant per constraint de BD (`uniq_pommaster_codi_client_ci`,
-                # sense excepció per als inactius), o sigui que dos `POMMaster` MAI el poden
-                # compartir. El que sí es comparteix quan un POM es retira i el substitueix un
-                # altre és el catàleg CANÒNIC. Un POM tenant-only (`pom_global=None`) no té
-                # cap clau per on trobar hereu → `None`, «sense hereu».
-                heir = None
-                if alias.pom.pom_global_id is not None:
-                    heir = (POMMaster.objects.select_related('pom_global')
-                            .filter(pom_global_id=alias.pom.pom_global_id, actiu=True)
-                            .exclude(pk=alias.pom_id).order_by('id').first())
+                # 🔄 CRITERI D'HEREU (16/09, revisió) — NO és el `pom_global` compartit: és el
+                # mateix criteri que `repunta_alies_retirats` i que el fallback (d) d'aquesta
+                # mateixa funció (`legacy_code_match`): un POM ACTIU amb `codi_client` IGUAL al
+                # `client_code` de L'ÀLIES (no al `codi_client` del POM retirat — aquest és únic
+                # per constraint de BD i mai el pot compartir cap altre POM). El nom de l'hereu
+                # pot ser buit ("mana el canònic", 23/08); no es filtra per `nom_client`.
+                heir = (POMMaster.objects
+                        .filter(codi_client__iexact=alias.client_code, actiu=True)
+                        .exclude(pk=alias.pom_id).order_by('id').first())
                 return heir, 'alias_pom_retirat', 'LOW', {
                     'motiu': 'alies_pom_retirat', 'suggerit': heir,
                     # QUI VA ENSENYAR l'àlies RETIRAT (no l'hereu, que no en té — encara no

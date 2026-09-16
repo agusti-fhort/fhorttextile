@@ -287,24 +287,24 @@ class SembraCapesDeMesuraTest(_TenantBase):
 class MatcherAliesRetiratTest(_TenantBase):
     """COMMIT 1 (16/09, DECISIONS.md): un àlies a un POM RETIRAT és un salt SILENCIÓS si el
     matcher se'l salta i cau a una altra estratègia — el mode de fallada real del model 1216
-    ('BR'). Ara es resol dins `find_pom_master` mateix i s'atura la cerca."""
+    ('BR'). Ara es resol dins `find_pom_master` mateix i s'atura la cerca.
+
+    🔄 CRITERI D'HEREU (revisió 16/09): un POM ACTIU amb `codi_client` IGUAL al
+    `client_code` de l'ÀLIES ('BR', el que diu el CLIENT), no al `codi_client` del POM
+    retirat ('RETIRAT-BR' aquí, a posta DIFERENT de 'BR' — dos `POMMaster` mai poden
+    compartir `codi_client`, actius o no, per constraint de BD)."""
 
     def setUp(self):
         self.customer = Customer.objects.create(codi='BRW', nom='Brownie')
-        self.canonic = POMGlobal.objects.create(
-            codi='QA-CANONIC', nom_en='Back neck drop', nom_ca='Back neck drop',
-            categoria='QA')
         self.pom_retirat = POMMaster.objects.create(
-            codi_client='BR', nom_client='Back neck drop OLD', actiu=False,
-            pom_global=self.canonic)
+            codi_client='RETIRAT-BR', nom_client='Back neck drop OLD', actiu=False)
         CustomerPOMAlias.objects.create(
             customer=self.customer, client_code='BR', pom=self.pom_retirat,
             description_en='Back neck drop from HPS to edge', origen='DICCIONARI')
 
     def test_alies_a_pom_retirat_amb_hereu_suggereix_lhereu_mai_el_retirat(self):
         hereu = POMMaster.objects.create(
-            codi_client='BR2', nom_client='Back neck drop from HPS to edge', actiu=True,
-            pom_global=self.canonic)
+            codi_client='BR', nom_client='Back neck drop from HPS to edge', actiu=True)
 
         pm, match_type, conf, info = find_pom_master(
             'BR', 'Back neck drop from HPS to edge', customer=self.customer)
@@ -314,6 +314,25 @@ class MatcherAliesRetiratTest(_TenantBase):
         self.assertEqual(info['motiu'], 'alies_pom_retirat')
         self.assertEqual(pm.id, hereu.id)
         self.assertNotEqual(pm.id, self.pom_retirat.id)
+
+    def test_alies_a_pom_retirat_hereu_amb_nom_buit_tambe_val(self):
+        """«nom pot ser buit» (16/09): l'hereu es troba pel `codi_client`, no pel nom."""
+        hereu = POMMaster.objects.create(codi_client='BR', nom_client='', actiu=True)
+
+        pm, match_type, conf, info = find_pom_master(
+            'BR', 'Back neck drop from HPS to edge', customer=self.customer)
+
+        self.assertEqual(pm.id, hereu.id)
+        self.assertEqual(info['motiu'], 'alies_pom_retirat')
+
+    def test_alies_a_pom_retirat_hereu_case_insensitive(self):
+        hereu = POMMaster.objects.create(
+            codi_client='br', nom_client='Back neck drop from HPS to edge', actiu=True)
+
+        pm, _mt, _conf, _info = find_pom_master(
+            'BR', 'Back neck drop from HPS to edge', customer=self.customer)
+
+        self.assertEqual(pm.id, hereu.id)
 
     def test_alies_a_pom_retirat_sense_hereu_queda_pendent_visible(self):
         pm, match_type, conf, info = find_pom_master(
