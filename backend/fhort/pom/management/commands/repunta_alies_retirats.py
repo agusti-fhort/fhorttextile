@@ -1,9 +1,15 @@
 """REPUNTA ELS ÀLIES QUE RECLAMEN UN POM RETIRAT (16/09, DECISIONS.md).
 
 `find_pom_master` (COMMIT 1) ja no salta en silenci un àlies que apunta a un POM inactiu:
-el deixa pendent amb l'hereu (mateix `pom_global`) com a suggeriment, si n'hi ha. Aquesta
-comanda és la neteja de FONS: per als àlies que JA tenen hereu clar, repunta'ls d'una
-vegada perquè deixin de caure a pendents a cada importació.
+el deixa pendent amb l'hereu com a suggeriment, si n'hi ha. Aquesta comanda és la neteja
+de FONS: per als àlies que JA tenen hereu clar, repunta'ls d'una vegada perquè deixin de
+caure a pendents a cada importació.
+
+🔄 CRITERI D'HEREU (revisió 16/09, el mateix que `find_pom_master`): un POM ACTIU amb
+`codi_client` IGUAL al `client_code` de l'ÀLIES (case-insensitive) — no al `codi_client`
+del POM retirat (que és únic per constraint de BD i mai el pot compartir cap altre POM,
+actiu o no), ni al `pom_global`. El nom de l'hereu pot ser buit ("mana el canònic",
+23/08): no es filtra per `nom_client`.
 
 Dry-run per defecte (LLISTA); només escriu amb --apply.
 
@@ -25,7 +31,7 @@ ORIGEN_REPUNT = 'REPUNT_v5'
 
 class Command(BaseCommand):
     help = ('Repunta els àlies d\'un client que reclamen un POM retirat cap al seu hereu '
-            '(mateix pom_global actiu). Dry-run per defecte.')
+            '(POM actiu amb codi_client == client_code de l\'àlies). Dry-run per defecte.')
 
     def add_arguments(self, parser):
         parser.add_argument('--customer', required=True,
@@ -43,16 +49,14 @@ class Command(BaseCommand):
 
         alies_retirats = (CustomerPOMAlias.objects
                           .filter(customer=customer, pom__isnull=False, pom__actiu=False)
-                          .select_related('pom', 'pom__pom_global')
+                          .select_related('pom')
                           .order_by('id'))
 
         files = []
         for a in alies_retirats:
-            hereu = None
-            if a.pom.pom_global_id is not None:
-                hereu = (POMMaster.objects
-                        .filter(pom_global_id=a.pom.pom_global_id, actiu=True)
-                        .exclude(pk=a.pom_id).order_by('id').first())
+            hereu = (POMMaster.objects
+                    .filter(codi_client__iexact=a.client_code, actiu=True)
+                    .exclude(pk=a.pom_id).order_by('id').first())
             if hereu is None:
                 accio = 'SENSE HEREU'
             elif CustomerPOMAlias.objects.filter(
