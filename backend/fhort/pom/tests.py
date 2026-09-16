@@ -17,7 +17,7 @@ from fhort.pom.management.commands.seed_measurement_layers import CAPES
 from fhort.pom.management.commands.seed_measurement_layers import sembra as sembra_capes
 from fhort.pom.management.commands.seed_pattern_piece_roles import ROLS, sembra
 from fhort.pom.models import (CustomerPOMAlias, MeasurementLayer, PatternPieceRole,
-                              POMMaster)
+                              POMGlobal, POMMaster)
 from fhort.pom.serializers import CustomerPOMAliasSerializer
 from fhort.pom.services import maybe_learn_customer_alias
 from fhort.tasks.models import Customer
@@ -132,7 +132,8 @@ class AliasSensePomTest(_TenantBase):
             customer=self.customer, client_code='FF', pom=None,
             description_en='BACK TOTAL LENGTH', pendent_revisio=True, origen='DICCIONARI')
 
-        pm, match_type, _conf = find_pom_master('FF', 'BACK TOTAL LENGTH', customer=self.customer)
+        pm, match_type, _conf, _info = find_pom_master(
+            'FF', 'BACK TOTAL LENGTH', customer=self.customer)
 
         self.assertNotEqual(
             match_type, 'alias_match',
@@ -160,7 +161,7 @@ class AliasSensePomTest(_TenantBase):
         CustomerPOMAlias.objects.create(
             customer=self.customer, client_code='U2', pom=self.pom, origen='DICCIONARI')
 
-        pm, match_type, conf = find_pom_master('U2', '1st BUTTON', customer=self.customer)
+        pm, match_type, conf, _info = find_pom_master('U2', '1st BUTTON', customer=self.customer)
 
         self.assertEqual(match_type, 'alias_match')
         self.assertEqual(conf, 'HIGH')
@@ -279,3 +280,96 @@ class SembraCapesDeMesuraTest(_TenantBase):
         self.assertFalse(propia.is_system)
         self.assertTrue(propia.pendent_revisio)
         self.assertEqual(MeasurementLayer.objects.count(), len(CAPES) + 1)
+
+
+class MatcherAliesRetiratTest(_TenantBase):
+    """COMMIT 1 (16/09, DECISIONS.md): un àlies a un POM RETIRAT és un salt SILENCIÓS si el
+    matcher se'l salta i cau a una altra estratègia — el mode de fallada real del model 1216
+    ('BR'). Ara es resol dins `find_pom_master` mateix i s'atura la cerca."""
+
+    def setUp(self):
+        self.customer = Customer.objects.create(codi='BRW', nom='Brownie')
+        self.canonic = POMGlobal.objects.create(
+            codi='QA-CANONIC', nom_en='Back neck drop', nom_ca='Back neck drop',
+            categoria='QA')
+        self.pom_retirat = POMMaster.objects.create(
+            codi_client='BR', nom_client='Back neck drop OLD', actiu=False,
+            pom_global=self.canonic)
+        CustomerPOMAlias.objects.create(
+            customer=self.customer, client_code='BR', pom=self.pom_retirat,
+            description_en='Back neck drop from HPS to edge', origen='DICCIONARI')
+
+    def test_alies_a_pom_retirat_amb_hereu_suggereix_lhereu_mai_el_retirat(self):
+        hereu = POMMaster.objects.create(
+            codi_client='BR2', nom_client='Back neck drop from HPS to edge', actiu=True,
+            pom_global=self.canonic)
+
+        pm, match_type, conf, info = find_pom_master(
+            'BR', 'Back neck drop from HPS to edge', customer=self.customer)
+
+        self.assertEqual(match_type, 'alias_pom_retirat')
+        self.assertEqual(conf, 'LOW', 'un POM retirat mai auto-vincula, ni el seu hereu')
+        self.assertEqual(info['motiu'], 'alies_pom_retirat')
+        self.assertEqual(pm.id, hereu.id)
+        self.assertNotEqual(pm.id, self.pom_retirat.id)
+
+    def test_alies_a_pom_retirat_sense_hereu_queda_pendent_visible(self):
+        pm, match_type, conf, info = find_pom_master(
+            'BR', 'Back neck drop from HPS to edge', customer=self.customer)
+
+        self.assertEqual(match_type, 'alias_pom_retirat')
+        self.assertIsNone(pm, "sense hereu, no hi ha res a suggerir com a POM")
+        self.assertEqual(info['motiu'], 'alies_pom_retirat')
+        self.assertIsNone(info['suggerit'])
+
+    def test_alies_a_pom_retirat_no_cau_a_description_match(self):
+        """El mode de fallada real: sense aquest guard, la descripció trobava un ALTRE POM
+        actiu per estratègia 3 i hi vinculava en HIGH/MEDIUM — exactament com 'BR' al 1216."""
+        # Un POM actiu que la descripció també encertaria per continguda, si la cerca no
+        # s'hagués aturat abans.
+        POMMaster.objects.create(
+            codi_client='ALTRE', nom_client='back neck drop from hps to edge extra', actiu=True)
+
+        pm, match_type, _conf, _info = find_pom_master(
+            'BR', 'Back neck drop from HPS to edge', customer=self.customer)
+
+        self.assertEqual(match_type, 'alias_pom_retirat')
+        self.assertNotEqual(match_type, 'description_match')
+
+
+class MatcherNomBuitISenseCoincidenciaTest(_TenantBase):
+    """COMMIT 1 · `nom_client=''` ("mana el canònic", 23/08) no pot ser una cadena que
+    coincideix amb tot (`'' in qualsevol_cosa`), i un NO_MATCH real ha de dir per què."""
+
+    def setUp(self):
+        self.customer = Customer.objects.create(codi='BRW', nom='Brownie')
+
+    def test_pom_amb_nom_buit_no_atrapa_qualsevol_descripcio(self):
+        POMMaster.objects.create(codi_client='ZZ', nom_client='', actiu=True)
+
+        pm, match_type, conf, _info = find_pom_master(
+            '', 'una descripció qualsevol que no hauria de matchejar res', customer=None)
+
+        self.assertIsNone(pm)
+        self.assertEqual(match_type, 'no_match')
+        self.assertEqual(conf, 'NO_MATCH')
+
+    def test_sense_coincidencia_porta_motiu_explicit(self):
+        pm, match_type, conf, info = find_pom_master(
+            'INEXISTENT', 'descripció que no existeix enlloc del catàleg', customer=self.customer)
+
+        self.assertIsNone(pm)
+        self.assertEqual(match_type, 'no_match')
+        self.assertEqual(conf, 'NO_MATCH')
+        self.assertEqual(info['motiu'], 'sense_coincidencia')
+
+    def test_quatre_files_amb_alies_propis_no_col·lapsen_al_mateix_pom(self):
+        poms = [POMMaster.objects.create(codi_client=f'C{i}', nom_client=f'Mesura {i}',
+                                          actiu=True) for i in range(4)]
+        for i, p in enumerate(poms):
+            CustomerPOMAlias.objects.create(
+                customer=self.customer, client_code=f'C{i}', pom=p, origen='DICCIONARI')
+
+        resolts = [find_pom_master(f'C{i}', '', customer=self.customer)[0] for i in range(4)]
+
+        self.assertEqual(len({p.id for p in resolts if p}), 4)

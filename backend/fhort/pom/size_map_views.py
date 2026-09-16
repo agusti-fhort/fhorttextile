@@ -309,7 +309,8 @@ def size_map_grading_preview_view(request):
                           for k, v in (row.get('valors') or {}).items()}
 
             # descripció si el paste la porta (avui no); el fitxer SÍ → match per nom.
-            pom, mtype, conf = find_pom_master(codi, row.get('descripcio') or '', customer=customer)
+            pom, mtype, conf, _info = find_pom_master(
+                codi, row.get('descripcio') or '', customer=customer)
             pom, weak_suggestion = _apply_match_threshold(pom, conf)
             warning = ''
             if pom is None and not weak_suggestion:
@@ -543,7 +544,7 @@ def size_map_grading_preview_file_view(request):
             logger.info("size_map reclau [K.1]: file=%s code=%r values_by_size=%r",
                         f.name, codi, values)
             try:
-                pom, mtype, conf = find_pom_master(codi, descripcio, customer=customer)
+                pom, mtype, conf, _info = find_pom_master(codi, descripcio, customer=customer)
             except Exception:
                 pom, mtype, conf = None, 'no_match', 'NO_MATCH'
             pom, weak_suggestion = _apply_match_threshold(pom, conf)

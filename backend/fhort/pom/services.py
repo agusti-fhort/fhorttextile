@@ -744,7 +744,7 @@ def maybe_learn_customer_alias(customer, client_code, description, pom, origen='
         return None
 
     if nomes_si_manual:
-        pm, _mtype, conf = find_pom_master(code, description or '', customer=customer)
+        pm, _mtype, conf, _info = find_pom_master(code, description or '', customer=customer)
         if pm is not None and pm.id == pom.id and conf in ('HIGH', 'MEDIUM'):
             return None  # el matcher ja ho encerta sol → automàtic, no sembrem
 

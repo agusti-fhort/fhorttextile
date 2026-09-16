@@ -110,8 +110,8 @@ class Command(BaseCommand):
                 # per fer quadrar un banc, que és exactament el contrari del que un banc és.
                 resoltes = []
                 for f in fitxa['files']:
-                    pm, _tipus, _conf = find_pom_master(f['codi'], f['descripcio'],
-                                                        customer=ref.customer)
+                    pm, _tipus, _conf, _info = find_pom_master(f['codi'], f['descripcio'],
+                                                               customer=ref.customer)
                     if pm is None:
                         no_resolts.setdefault(f['codi'], []).append(fitxa['num'])
                         continue
