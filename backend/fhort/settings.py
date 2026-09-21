@@ -424,3 +424,24 @@ STRIPE_PRICING_CATALOG = BASE_DIR / 'fhort' / 'backoffice' / 'pricing_catalog.ya
 
 # Cache del pricing servit per l'endpoint: 5 min (LocMemCache per defecte a staging).
 PRICING_CACHE_TTL = 60 * 5
+
+# ─────────────────────────────────────────────────────────────
+# Correu — P-LEADS L2 (avís per correu, adormit fins que hi hagi SMTP real).
+# NO es sobreescriu EMAIL_BACKEND aquí: absent EMAIL_HOST, Django cau al smtp.EmailBackend
+# per defecte de sempre (mateix comportament d'avui per a tot el projecte, discovery
+# inclòs — cap canvi de conducta global). backoffice/leads_service.py::notifica_lead
+# comprova EMAIL_HOST i LEADS_NOTIFY_EMAIL abans d'intentar res: sense credencials, no hi
+# ha enviament (best-effort real, no un intent que falla en silenci cap avall).
+# ─────────────────────────────────────────────────────────────
+EMAIL_HOST = os.environ.get('EMAIL_HOST', '')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True').lower() == 'true'
+EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT', 10))
+# Per defecte, el mateix 'webmaster@localhost' que Django ja triava implícitament quan
+# aquest setting no existia (era el cas fins ara): absent l'entorn, cap canvi de conducta
+# per als usos existents de send_mail(from_email=None) — discovery inclòs.
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'webmaster@localhost')
+# Bústia interna que rep l'avís de lead nou (no és el remitent).
+LEADS_NOTIFY_EMAIL = os.environ.get('LEADS_NOTIFY_EMAIL', '')

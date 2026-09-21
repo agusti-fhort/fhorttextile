@@ -1,13 +1,17 @@
 """Leads (P-LEADS) — formulari públic de la web de marketing.
 
 L1: model + porta pública (throttle, honeypot, guarda de muntatge a `public`).
-L2/L3 amplien aquest fitxer quan arriba la seva peça (avís per correu / API privada).
+L2: avís per correu (adormit fins que hi hagi SMTP real).
+L3 amplia aquest fitxer quan arriba la seva peça (API privada).
 
     cd backend && venv/bin/python manage.py test fhort.backoffice.tests_leads
 """
 import datetime
+from unittest import mock
 
+from django.core import mail
 from django.core.cache import cache
+from django.test import override_settings
 from django_tenants.test.cases import TenantTestCase
 from django_tenants.test.client import TenantClient
 from rest_framework.test import APIRequestFactory
@@ -164,3 +168,69 @@ class LeadPublicMuntatgeTest(TenantTestCase):
         from django.urls import Resolver404, resolve
         with self.assertRaises(Resolver404):
             resolve('/api/backoffice/v1/leads/public/', urlconf='fhort.urls')
+
+
+class LeadNotificationTest(TenantTestCase):
+    """L2: avís per correu best-effort, adormit fins que hi hagi SMTP real.
+
+    La view crida notifica_lead() via transaction.on_commit; TestCase envolta cada
+    test en una transacció que es desfà (mai es commiteja de veritat), així que cal
+    captureOnCommitCallbacks(execute=True) perquè el callback arribi a executar-se —
+    sense això, cap d'aquests tests veuria mai el correu (fals verd silenciós)."""
+
+    @classmethod
+    def setup_tenant(cls, tenant):
+        tenant.nom = 'Tenant Leads Notify'
+        tenant.tipologia = 'marca'
+        tenant.codi_tenant = 'TL3'
+        tenant.vat_number = 'X0000004X'
+        tenant.tipus_client = 'b2b'
+        tenant.gratis_fins = datetime.date(2030, 1, 1)
+        return tenant
+
+    def setUp(self):
+        cache.clear()
+        Lead.objects.all().delete()
+        mail.outbox = []
+
+    def _post(self, data, ip='198.51.100.20'):
+        req = APIRequestFactory().post(URL, data, format='json',
+                                       REMOTE_ADDR=ip, HTTP_X_FORWARDED_FOR=ip)
+        with self.captureOnCommitCallbacks(execute=True):
+            return lead_public_view(req)
+
+    @override_settings(EMAIL_HOST='', LEADS_NOTIFY_EMAIL='')
+    def test_sense_config_lead_desat_notificat_false_0_correus(self):
+        resp = self._post(VALID_PAYLOAD)
+        self.assertEqual(resp.status_code, 201)
+        lead = Lead.objects.get()
+        self.assertFalse(lead.notificat)
+        self.assertEqual(len(mail.outbox), 0)
+
+    @override_settings(
+        EMAIL_HOST='localhost', LEADS_NOTIFY_EMAIL='ops@fhort.test',
+        EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+    )
+    def test_amb_locmem_backend_1_correu_notificat_true(self):
+        resp = self._post(VALID_PAYLOAD)
+        self.assertEqual(resp.status_code, 201)
+        lead = Lead.objects.get()
+        self.assertTrue(lead.notificat)
+        self.assertEqual(len(mail.outbox), 1)
+        enviat = mail.outbox[0]
+        self.assertEqual(enviat.to, ['ops@fhort.test'])
+        self.assertEqual(enviat.reply_to, [VALID_PAYLOAD['email']])
+        self.assertIn(VALID_PAYLOAD['nom'], enviat.body)
+        self.assertIn(f'/leads/{lead.pk}', enviat.body)
+
+    @override_settings(
+        EMAIL_HOST='localhost', LEADS_NOTIFY_EMAIL='ops@fhort.test',
+        EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+    )
+    def test_smtp_que_peta_lead_desat_201_notificat_false(self):
+        with mock.patch('django.core.mail.EmailMessage.send', side_effect=Exception('boom')):
+            resp = self._post(VALID_PAYLOAD)
+        self.assertEqual(resp.status_code, 201)
+        lead = Lead.objects.get()
+        self.assertFalse(lead.notificat)
+        self.assertEqual(len(mail.outbox), 0)

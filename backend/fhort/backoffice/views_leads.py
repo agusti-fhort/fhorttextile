@@ -1,9 +1,11 @@
 # P-LEADS — porta pública del formulari de leads (ftt-web).
+from django.db import transaction
 from rest_framework import status, throttling
 from rest_framework.decorators import api_view, authentication_classes, permission_classes, throttle_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from .leads_service import notifica_lead
 from .legal_service import client_ip
 from .serializers_leads import LeadPublicSerializer
 
@@ -40,5 +42,6 @@ def lead_public_view(request):
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    serializer.save(ip=client_ip(request))
+    lead = serializer.save(ip=client_ip(request))
+    transaction.on_commit(lambda: notifica_lead(lead))
     return Response({'ok': True}, status=status.HTTP_201_CREATED)
