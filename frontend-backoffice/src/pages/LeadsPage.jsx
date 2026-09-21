@@ -1,13 +1,13 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { IconEye, IconRefresh, IconAlertTriangle, IconLoader2 } from '@tabler/icons-react'
-import { getLeads, MOCK_LEADS } from '../api/leads'
+import { getLeadCounts, getLeads, MOCK_LEADS } from '../api/leads'
 import { LEAD_ESTAT_ORDRE, leadEstatConfig } from '../config/leadEstats'
 
 const MONO = "'IBM Plex Mono', monospace"
 
 // Ordre demanat: Nous / Contactats / Tancats / Tots (obre a Nous) — diferent de
-// TenantsPage, on TOTS va primer. El recompte de Nous es mostra a la seva pestanya.
+// TenantsPage, on TOTS va primer. Totes porten el seu recompte (leads/counts/).
 const TABS = [...LEAD_ESTAT_ORDRE.map((k) => ({ key: k, label: leadEstatConfig(k).label })),
   { key: 'tots', label: 'TOTS' }]
 
@@ -41,7 +41,7 @@ export default function LeadsPage() {
 
   const [tab, setTab] = useState('nou')
   const [leads, setLeads] = useState([])
-  const [nousCount, setNousCount] = useState(null)
+  const [counts, setCounts] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [mock, setMock] = useState(false)
@@ -73,21 +73,26 @@ export default function LeadsPage() {
     }
   }, [])
 
-  // Recompte de "Nous" per a la pestanya, INDEPENDENT de la pestanya activa —
-  // ve del `count` de la paginació, no de la mida de la llista carregada.
-  const loadNousCount = useCallback(async () => {
+  // Recompte de CADA pestanya, font única (leads/counts/, una sola consulta agregada
+  // al backend) — independent de la pestanya activa i de la mida de la llista
+  // carregada. Si falla, les pestanyes es mostren sense número (no bloqueja la llista).
+  const loadCounts = useCallback(async () => {
     try {
-      const data = await getLeads({ estat: 'nou' })
-      setNousCount(Array.isArray(data) ? data.length : (data?.count ?? 0))
+      setCounts(await getLeadCounts())
     } catch {
-      setNousCount(import.meta.env.DEV ? MOCK_LEADS.filter((l) => l.estat === 'nou').length : null)
+      if (import.meta.env.DEV) {
+        const per = (estat) => MOCK_LEADS.filter((l) => l.estat === estat).length
+        setCounts({ nou: per('nou'), contactat: per('contactat'), tancat: per('tancat'), tots: MOCK_LEADS.length })
+      } else {
+        setCounts(null)
+      }
     }
   }, [])
 
   useEffect(() => { load(tab) }, [tab, load])
-  useEffect(() => { loadNousCount() }, [loadNousCount])
+  useEffect(() => { loadCounts() }, [loadCounts])
 
-  const refresca = () => { load(tab); loadNousCount() }
+  const refresca = () => { load(tab); loadCounts() }
 
   return (
     <div style={{ padding: '28px 32px', fontFamily: MONO, minHeight: '100vh' }}>
@@ -125,7 +130,7 @@ export default function LeadsPage() {
       <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 18 }}>
         {TABS.map((tb) => {
           const active = tab === tb.key
-          const comptador = tb.key === 'nou' && nousCount != null ? ` (${nousCount})` : ''
+          const comptador = counts != null ? ` (${counts[tb.key]})` : ''
           return (
             <button
               key={tb.key}

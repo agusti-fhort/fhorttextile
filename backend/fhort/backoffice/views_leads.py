@@ -1,5 +1,6 @@
 # P-LEADS — porta pública del formulari de leads (ftt-web) + API privada (ADMIN).
 from django.db import transaction
+from django.db.models import Count, Q
 from rest_framework import status, throttling, viewsets
 from rest_framework.decorators import api_view, authentication_classes, permission_classes, throttle_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -49,6 +50,21 @@ def lead_public_view(request):
     lead = serializer.save(ip=client_ip(request))
     transaction.on_commit(lambda: notifica_lead(lead))
     return Response({'ok': True}, status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET'])
+@permission_classes(ADMIN)
+def lead_counts_view(request):
+    """GET /api/backoffice/v1/leads/counts/ — recompte per estat + total, UNA sola
+    consulta agregada (Count condicional): les 4 pestanyes de LeadsPage el llegeixen
+    en lloc de refer-se al `count` de la paginació de cada pestanya per separat."""
+    agg = Lead.objects.aggregate(
+        nou=Count('pk', filter=Q(estat=Lead.ESTAT_NOU)),
+        contactat=Count('pk', filter=Q(estat=Lead.ESTAT_CONTACTAT)),
+        tancat=Count('pk', filter=Q(estat=Lead.ESTAT_TANCAT)),
+    )
+    agg['tots'] = agg['nou'] + agg['contactat'] + agg['tancat']
+    return Response(agg)
 
 
 class LeadViewSet(viewsets.ModelViewSet):

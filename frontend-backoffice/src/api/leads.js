@@ -18,6 +18,10 @@ export const updateLead = (id, data) =>
 export const deleteLead = (id) =>
   client.delete(`${BASE}/leads/${id}/`).then((r) => r.data)
 
+// {nou, contactat, tancat, tots} — font única del número a cada pestanya de LeadsPage.
+export const getLeadCounts = () =>
+  client.get(`${BASE}/leads/counts/`).then((r) => r.data)
+
 // ── Dades de mostra ───────────────────────────────────────────────────────
 // NOMÉS per a desenvolupament local (mateixa regla que api/tenants.js): a
 // staging/PROD un error d'API mostra un ERROR, mai dades inventades.

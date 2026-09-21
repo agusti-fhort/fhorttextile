@@ -2,7 +2,7 @@
 
 L1: model + porta pública (throttle, honeypot, guarda de muntatge a `public`).
 L2: avís per correu (adormit fins que hi hagi SMTP real).
-L3: API privada (ADMIN) — llista/detall/PATCH(estat+notes)/DELETE.
+L3: API privada (ADMIN) — llista/detall/PATCH(estat+notes)/DELETE/counts.
 
     cd backend && venv/bin/python manage.py test fhort.backoffice.tests_leads
 """
@@ -19,7 +19,7 @@ from django_tenants.utils import schema_context
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from fhort.backoffice.models import BackofficeUser, Lead
-from fhort.backoffice.views_leads import LeadViewSet, lead_public_view
+from fhort.backoffice.views_leads import LeadViewSet, lead_counts_view, lead_public_view
 
 URL = '/api/backoffice/v1/leads/public/'
 
@@ -323,3 +323,63 @@ class LeadAdminApiTest(TenantTestCase):
         resp = LeadViewSet.as_view({'delete': 'destroy'})(req, pk=self.lead.pk)
         self.assertEqual(resp.status_code, 204)
         self.assertEqual(Lead.objects.count(), 0)
+
+
+class LeadCountsApiTest(TenantTestCase):
+    """GET leads/counts/ — recompte per estat + tots, ADMIN, una sola consulta
+    agregada. Ruta estàtica: mai xoca amb leads/<pk>/ (vegeu resolve() a
+    LeadPublicMuntatgeTest per l'equivalent de leads/public/)."""
+
+    @classmethod
+    def setup_tenant(cls, tenant):
+        tenant.nom = 'Tenant Leads Counts'
+        tenant.tipologia = 'marca'
+        tenant.codi_tenant = 'TL5'
+        tenant.vat_number = 'X0000006X'
+        tenant.tipus_client = 'b2b'
+        tenant.gratis_fins = datetime.date(2030, 1, 1)
+        return tenant
+
+    def setUp(self):
+        Lead.objects.all().delete()
+        User = get_user_model()
+        with schema_context('public'):
+            self.admin_user = User.objects.create_user(
+                username='admin-counts@fhort.test', email='admin-counts@fhort.test',
+                password='pw123456')
+            BackofficeUser.objects.create(
+                usuari=self.admin_user, rol=BackofficeUser.Rol.ADMIN, actiu=True)
+            self.comercial_user = User.objects.create_user(
+                username='comercial-counts@fhort.test', email='comercial-counts@fhort.test',
+                password='pw123456')
+            BackofficeUser.objects.create(
+                usuari=self.comercial_user, rol=BackofficeUser.Rol.COMERCIAL, actiu=True)
+
+    def _get(self, user=None):
+        req = APIRequestFactory().get('/api/backoffice/v1/leads/counts/')
+        if user is not None:
+            force_authenticate(req, user=user)
+        return lead_counts_view(req)
+
+    def test_anonim_dona_401_o_403(self):
+        resp = self._get()
+        self.assertIn(resp.status_code, (401, 403))
+
+    def test_rol_no_admin_dona_403(self):
+        resp = self._get(user=self.comercial_user)
+        self.assertEqual(resp.status_code, 403)
+
+    def test_buit_dona_zeros(self):
+        resp = self._get(user=self.admin_user)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data, {'nou': 0, 'contactat': 0, 'tancat': 0, 'tots': 0})
+
+    def test_recomptes_correctes_amb_estats_diferents(self):
+        for estat, n in (('nou', 3), ('contactat', 2), ('tancat', 1)):
+            for i in range(n):
+                Lead.objects.create(
+                    nom=f'{estat}-{i}', email=f'{estat}{i}@example.com', missatge='Hi',
+                    idioma='ca', consentiment=True, privacy_version='v1', estat=estat)
+        resp = self._get(user=self.admin_user)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data, {'nou': 3, 'contactat': 2, 'tancat': 1, 'tots': 6})

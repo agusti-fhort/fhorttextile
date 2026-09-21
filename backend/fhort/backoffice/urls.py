@@ -17,7 +17,7 @@ from .views_seeding import SeedProfileViewSet
 from .views_legal import (
     LegalActionViewSet, LegalDocumentViewSet, LegalDocumentVersionViewSet,
 )
-from .views_leads import LeadViewSet, lead_public_view
+from .views_leads import LeadViewSet, lead_counts_view, lead_public_view
 
 router = DefaultRouter()
 router.register('tenants', ClientViewSet, basename='tenant')
@@ -38,6 +38,7 @@ urlpatterns = [
     path('health/', health_view, name='backoffice-health'),
     path('pricing/public/', pricing_public_view, name='backoffice-pricing-public'),
     path('leads/public/', lead_public_view, name='backoffice-leads-public'),
+    path('leads/counts/', lead_counts_view, name='backoffice-leads-counts'),
     path('pricing/for-client/<str:codi_tenant>/', pricing_for_client_view, name='backoffice-pricing-for-client'),
     path('pricing/', pricing_view, name='backoffice-pricing'),
     path('facturacio/generar/', generate_invoice_view),
