@@ -1,0 +1,1138 @@
+{
+  "font": "GUIA_ENTRADA_BRW_DENIM_EXTERIOR.xlsx (5 fulls, verificat 21/09)",
+  "customer_codi": "BRW",
+  "poms_nous": [
+    {
+      "codi": "B2",
+      "nom_en": "Width 10 cm below waist",
+      "nom_es_referencia": "Ancho a 10 cm de cintura",
+      "familia_referencia": "B",
+      "logica_referencia": "lineal amb pas propi a P",
+      "origen_referencia": "Denim Brownie (Marta confirma)",
+      "nota": "Codi lliure com a POM. L'àlies B2 de Brownie es repunta al full 2."
+    },
+    {
+      "codi": "I8",
+      "nom_en": "Underarm sleeve seam length",
+      "nom_es_referencia": "Largo costura de manga (bajo manga)",
+      "familia_referencia": "I",
+      "logica_referencia": "lineal",
+      "origen_referencia": "Exterior Brownie (Marta: mesura pròpia, ≠ I i ≠ I4)",
+      "nota": "I5 ocupat. I8 = primer lliure. PENDENT benedicció Montse."
+    }
+  ],
+  "alies": [
+    {
+      "codi_brw": "B2",
+      "avui_apunta_a_referencia": "T14 · PLEAT (retirat)",
+      "ha_dapuntar_a_referencia": "B2 · Width 10 cm below waist (POM nou)",
+      "accio": "REPUNTAR",
+      "motiu": "Marta confirma B2 = 10 cm sota cintura."
+    },
+    {
+      "codi_brw": "BF",
+      "avui_apunta_a_referencia": "Amplada de cintura (B)",
+      "ha_dapuntar_a_referencia": "BF · Waistband height",
+      "accio": "REPUNTAR",
+      "motiu": "BF = alt de cinturilla, no amplada."
+    },
+    {
+      "codi_brw": "BB",
+      "avui_apunta_a_referencia": "Amplada de cintura (B)",
+      "ha_dapuntar_a_referencia": "B en posició BOTTOM (waist width at seam / clavado)",
+      "accio": "REPUNTAR",
+      "motiu": "BB = costura de cinturilla (instància inferior de B)."
+    },
+    {
+      "codi_brw": "R5",
+      "avui_apunta_a_referencia": "— (no existeix)",
+      "ha_dapuntar_a_referencia": "R5 · Back pocket length (R3, 2a instància)",
+      "accio": "CREAR",
+      "motiu": "Marta confirma R4 = ample, R5 = llarg de butxaca darrere."
+    }
+  ],
+  "jocs": [
+    {
+      "nom": "BRW Exterior",
+      "sistema": "ALPHA_EU_W",
+      "sistema_crear_si_absent": false,
+      "ambit_garment_group": "OUTERWEAR",
+      "talla_base": "S",
+      "crear_si_absent": true,
+      "regles": [
+        {
+          "pom": "E",
+          "nom": "Shoulder to shoulder",
+          "deltes_per_pas": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "passos": [
+            "XXS→XS",
+            "XS→S",
+            "S→M",
+            "M→L"
+          ],
+          "tolerancia": null,
+          "nota": null
+        },
+        {
+          "pom": "E1",
+          "nom": "Shoulder width at true shoulder",
+          "deltes_per_pas": [
+            0.25,
+            0.25,
+            0.25,
+            0.25
+          ],
+          "passos": [
+            "XXS→XS",
+            "XS→S",
+            "S→M",
+            "M→L"
+          ],
+          "tolerancia": null,
+          "nota": null
+        },
+        {
+          "pom": "EK",
+          "nom": "Neck width seam to seam",
+          "deltes_per_pas": [
+            0.4,
+            0.4,
+            0.4,
+            0.4
+          ],
+          "passos": [
+            "XXS→XS",
+            "XS→S",
+            "S→M",
+            "M→L"
+          ],
+          "tolerancia": null,
+          "nota": null
+        },
+        {
+          "pom": "EK1",
+          "nom": "Front neck drop from HPS to seam",
+          "deltes_per_pas": [
+            0.2,
+            0.2,
+            0.2,
+            0.2
+          ],
+          "passos": [
+            "XXS→XS",
+            "XS→S",
+            "S→M",
+            "M→L"
+          ],
+          "tolerancia": null,
+          "nota": null
+        },
+        {
+          "pom": "E2",
+          "nom": "Across front width",
+          "deltes_per_pas": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "passos": [
+            "XXS→XS",
+            "XS→S",
+            "S→M",
+            "M→L"
+          ],
+          "tolerancia": null,
+          "nota": null
+        },
+        {
+          "pom": "E3",
+          "nom": "Across back width",
+          "deltes_per_pas": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "passos": [
+            "XXS→XS",
+            "XS→S",
+            "S→M",
+            "M→L"
+          ],
+          "tolerancia": null,
+          "nota": null
+        },
+        {
+          "pom": "A",
+          "nom": "1/2 chest width",
+          "deltes_per_pas": [
+            2,
+            2,
+            2,
+            2
+          ],
+          "passos": [
+            "XXS→XS",
+            "XS→S",
+            "S→M",
+            "M→L"
+          ],
+          "tolerancia": null,
+          "nota": null
+        },
+        {
+          "pom": "D",
+          "nom": "Bottom width",
+          "deltes_per_pas": [
+            2,
+            2,
+            2,
+            2
+          ],
+          "passos": [
+            "XXS→XS",
+            "XS→S",
+            "S→M",
+            "M→L"
+          ],
+          "tolerancia": null,
+          "nota": null
+        },
+        {
+          "pom": "FB",
+          "nom": "Body length",
+          "deltes_per_pas": [
+            1.5,
+            1.5,
+            1.5,
+            1.5
+          ],
+          "passos": [
+            "XXS→XS",
+            "XS→S",
+            "S→M",
+            "M→L"
+          ],
+          "tolerancia": null,
+          "nota": null
+        },
+        {
+          "pom": "FJ",
+          "nom": "Wingspan length",
+          "deltes_per_pas": [
+            1.5,
+            1.5,
+            1.5,
+            1.5
+          ],
+          "passos": [
+            "XXS→XS",
+            "XS→S",
+            "S→M",
+            "M→L"
+          ],
+          "tolerancia": null,
+          "nota": "FJ era PENDENT al v3: primer delta"
+        },
+        {
+          "pom": "I",
+          "nom": "Sleeve length",
+          "deltes_per_pas": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "passos": [
+            "XXS→XS",
+            "XS→S",
+            "S→M",
+            "M→L"
+          ],
+          "tolerancia": null,
+          "nota": null
+        },
+        {
+          "pom": "I8",
+          "nom": "Underarm sleeve seam length (NOU)",
+          "deltes_per_pas": [
+            0.5,
+            0.5,
+            0.5,
+            0.5
+          ],
+          "passos": [
+            "XXS→XS",
+            "XS→S",
+            "S→M",
+            "M→L"
+          ],
+          "tolerancia": null,
+          "nota": "POM nou I8"
+        },
+        {
+          "pom": "J",
+          "nom": "1/2 Bicep width",
+          "deltes_per_pas": [
+            0.7,
+            0.7,
+            0.7,
+            0.7
+          ],
+          "passos": [
+            "XXS→XS",
+            "XS→S",
+            "S→M",
+            "M→L"
+          ],
+          "tolerancia": null,
+          "nota": null
+        },
+        {
+          "pom": "J1",
+          "nom": "Sleeve opening",
+          "deltes_per_pas": [
+            0.5,
+            0.5,
+            0.5,
+            0.5
+          ],
+          "passos": [
+            "XXS→XS",
+            "XS→S",
+            "S→M",
+            "M→L"
+          ],
+          "tolerancia": null,
+          "nota": null
+        }
+      ]
+    },
+    {
+      "nom": "BRW Denim",
+      "sistema": "SYS_BRW_01",
+      "sistema_crear_si_absent": true,
+      "sistema_talles": [
+        "P",
+        "32",
+        "34",
+        "36",
+        "38",
+        "40",
+        "42"
+      ],
+      "ambit_garment_group": "BOTTOMS",
+      "talla_base": "34",
+      "crear_si_absent": true,
+      "regles": [
+        {
+          "pom": "B",
+          "nom": "Waist edge width",
+          "valor_34_referencia": 36.5,
+          "deltes_per_pas": [
+            1.5,
+            2,
+            2,
+            2.5,
+            2.5,
+            2.5
+          ],
+          "passos": [
+            "P→32",
+            "32→34",
+            "34→36",
+            "36→38",
+            "38→40",
+            "40→42"
+          ],
+          "tolerancia_referencia": {
+            "minus": 0.7,
+            "plus": 0.7
+          },
+          "nota": null
+        },
+        {
+          "pom": "BB",
+          "nom": "Seam waist width (B bottom)",
+          "valor_34_referencia": 38,
+          "deltes_per_pas": [
+            1.5,
+            2,
+            2,
+            2.5,
+            2.5,
+            2.5
+          ],
+          "passos": [
+            "P→32",
+            "32→34",
+            "34→36",
+            "36→38",
+            "38→40",
+            "40→42"
+          ],
+          "tolerancia_referencia": {
+            "minus": 0.7,
+            "plus": 0.7
+          },
+          "nota": null
+        },
+        {
+          "pom": "B2",
+          "nom": "Width 10 cm below waist (NOU)",
+          "valor_34_referencia": 42.5,
+          "deltes_per_pas": [
+            1.5,
+            2,
+            2,
+            2.5,
+            2.5,
+            2.5
+          ],
+          "passos": [
+            "P→32",
+            "32→34",
+            "34→36",
+            "36→38",
+            "38→40",
+            "40→42"
+          ],
+          "tolerancia_referencia": {
+            "minus": 0.7,
+            "plus": 0.7
+          },
+          "nota": "POM nou"
+        },
+        {
+          "pom": "BF",
+          "nom": "Waistband height",
+          "valor_34_referencia": 3.4,
+          "deltes_per_pas": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "passos": [
+            "P→32",
+            "32→34",
+            "34→36",
+            "36→38",
+            "38→40",
+            "40→42"
+          ],
+          "tolerancia_referencia": {
+            "minus": 0,
+            "plus": 0
+          },
+          "nota": "FIX"
+        },
+        {
+          "pom": "FC",
+          "nom": "Hip position",
+          "valor_34_referencia": 15.3,
+          "deltes_per_pas": [
+            1.4,
+            0.7,
+            0.7,
+            0.7,
+            0.7,
+            0.7
+          ],
+          "passos": [
+            "P→32",
+            "32→34",
+            "34→36",
+            "36→38",
+            "38→40",
+            "40→42"
+          ],
+          "tolerancia_referencia": {
+            "minus": 0,
+            "plus": 0
+          },
+          "nota": null
+        },
+        {
+          "pom": "C",
+          "nom": "Hip width",
+          "valor_34_referencia": 46,
+          "deltes_per_pas": [
+            3,
+            2,
+            2,
+            2.5,
+            2.5,
+            2.5
+          ],
+          "passos": [
+            "P→32",
+            "32→34",
+            "34→36",
+            "36→38",
+            "38→40",
+            "40→42"
+          ],
+          "tolerancia_referencia": {
+            "minus": 0.7,
+            "plus": 0.7
+          },
+          "nota": null
+        },
+        {
+          "pom": "CT",
+          "nom": "Thigh width",
+          "valor_34_referencia": 28.7,
+          "deltes_per_pas": [
+            1.3,
+            1.3,
+            1.3,
+            1.5,
+            1.5,
+            1.5
+          ],
+          "passos": [
+            "P→32",
+            "32→34",
+            "34→36",
+            "36→38",
+            "38→40",
+            "40→42"
+          ],
+          "tolerancia_referencia": {
+            "minus": 0.5,
+            "plus": 0.5
+          },
+          "nota": null
+        },
+        {
+          "pom": "FR",
+          "nom": "Knee position",
+          "valor_34_referencia": 31.85,
+          "deltes_per_pas": [
+            2.95,
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15
+          ],
+          "passos": [
+            "P→32",
+            "32→34",
+            "34→36",
+            "36→38",
+            "38→40",
+            "40→42"
+          ],
+          "tolerancia_referencia": {
+            "minus": 0,
+            "plus": 0
+          },
+          "nota": null
+        },
+        {
+          "pom": "RT",
+          "nom": "Knee width",
+          "valor_34_referencia": 25.35,
+          "deltes_per_pas": [
+            1.3,
+            0.65,
+            0.65,
+            0.65,
+            0.65,
+            0.65
+          ],
+          "passos": [
+            "P→32",
+            "32→34",
+            "34→36",
+            "36→38",
+            "38→40",
+            "40→42"
+          ],
+          "tolerancia_referencia": {
+            "minus": 0.3,
+            "plus": 0.3
+          },
+          "nota": null
+        },
+        {
+          "pom": "D",
+          "nom": "Bottom width",
+          "valor_34_referencia": 26,
+          "deltes_per_pas": [
+            1.3,
+            0.5,
+            0.5,
+            0.6,
+            0.6,
+            0.6
+          ],
+          "passos": [
+            "P→32",
+            "32→34",
+            "34→36",
+            "36→38",
+            "38→40",
+            "40→42"
+          ],
+          "tolerancia_referencia": {
+            "minus": 0.2,
+            "plus": 0.2
+          },
+          "nota": null
+        },
+        {
+          "pom": "FT",
+          "nom": "Pants length (outseam) — 'largo total'",
+          "valor_34_referencia": 99,
+          "deltes_per_pas": [
+            8,
+            1,
+            1,
+            1,
+            1,
+            1
+          ],
+          "passos": [
+            "P→32",
+            "32→34",
+            "34→36",
+            "36→38",
+            "38→40",
+            "40→42"
+          ],
+          "tolerancia_referencia": {
+            "minus": 0.5,
+            "plus": 0.5
+          },
+          "nota": "Marta: 'largo total' = FT (outseam)"
+        },
+        {
+          "pom": "FI",
+          "nom": "Inseam length",
+          "valor_34_referencia": 80,
+          "deltes_per_pas": [
+            5.9,
+            0.3,
+            0,
+            0,
+            0,
+            0
+          ],
+          "passos": [
+            "P→32",
+            "32→34",
+            "34→36",
+            "36→38",
+            "38→40",
+            "40→42"
+          ],
+          "tolerancia_referencia": {
+            "minus": 0.5,
+            "plus": 0.5
+          },
+          "nota": null
+        },
+        {
+          "pom": "FD",
+          "nom": "Front rise",
+          "valor_34_referencia": 21.5,
+          "deltes_per_pas": [
+            3,
+            1,
+            1,
+            1,
+            1,
+            1
+          ],
+          "passos": [
+            "P→32",
+            "32→34",
+            "34→36",
+            "36→38",
+            "38→40",
+            "40→42"
+          ],
+          "tolerancia_referencia": {
+            "minus": 0.3,
+            "plus": 0.3
+          },
+          "nota": "Marta: 1 cm per pas (no 0,7)"
+        },
+        {
+          "pom": "FE",
+          "nom": "Back rise — 'tiro detrás'",
+          "valor_34_referencia": 33,
+          "deltes_per_pas": [
+            "—",
+            "—",
+            "—",
+            "—",
+            "—",
+            "—"
+          ],
+          "passos": [
+            "P→32",
+            "32→34",
+            "34→36",
+            "36→38",
+            "38→40",
+            "40→42"
+          ],
+          "tolerancia_referencia": {
+            "minus": 0.5,
+            "plus": 0.5
+          },
+          "nota": "SENSE REGLA: només valor a la 34. Demanar a Marta."
+        },
+        {
+          "pom": "UT1",
+          "nom": "Loop width",
+          "valor_34_referencia": 1.2,
+          "deltes_per_pas": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "passos": [
+            "P→32",
+            "32→34",
+            "34→36",
+            "36→38",
+            "38→40",
+            "40→42"
+          ],
+          "tolerancia_referencia": {
+            "minus": 0,
+            "plus": 0
+          },
+          "nota": "FIX"
+        },
+        {
+          "pom": "UT2",
+          "nom": "Loop length",
+          "valor_34_referencia": 5.5,
+          "deltes_per_pas": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "passos": [
+            "P→32",
+            "32→34",
+            "34→36",
+            "36→38",
+            "38→40",
+            "40→42"
+          ],
+          "tolerancia_referencia": {
+            "minus": 0,
+            "plus": 0
+          },
+          "nota": "FIX"
+        },
+        {
+          "pom": "P",
+          "nom": "CB yoke height",
+          "valor_34_referencia": 4.1,
+          "deltes_per_pas": [
+            0.1,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2
+          ],
+          "passos": [
+            "P→32",
+            "32→34",
+            "34→36",
+            "36→38",
+            "38→40",
+            "40→42"
+          ],
+          "tolerancia_referencia": {
+            "minus": 0.1,
+            "plus": 0.1
+          },
+          "nota": null
+        },
+        {
+          "pom": "P1",
+          "nom": "Side yoke height",
+          "valor_34_referencia": 3,
+          "deltes_per_pas": [
+            0.4,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2
+          ],
+          "passos": [
+            "P→32",
+            "32→34",
+            "34→36",
+            "36→38",
+            "38→40",
+            "40→42"
+          ],
+          "tolerancia_referencia": {
+            "minus": 0.1,
+            "plus": 0.1
+          },
+          "nota": null
+        },
+        {
+          "pom": "R",
+          "nom": "Front pocket width",
+          "valor_34_referencia": 8.7,
+          "deltes_per_pas": [
+            0.2,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3
+          ],
+          "passos": [
+            "P→32",
+            "32→34",
+            "34→36",
+            "36→38",
+            "38→40",
+            "40→42"
+          ],
+          "tolerancia_referencia": {
+            "minus": 0.15,
+            "plus": 0.15
+          },
+          "nota": null
+        },
+        {
+          "pom": "R1",
+          "nom": "Front pocket length",
+          "valor_34_referencia": 6.5,
+          "deltes_per_pas": [
+            0.6,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3
+          ],
+          "passos": [
+            "P→32",
+            "32→34",
+            "34→36",
+            "36→38",
+            "38→40",
+            "40→42"
+          ],
+          "tolerancia_referencia": {
+            "minus": 0.15,
+            "plus": 0.15
+          },
+          "nota": null
+        },
+        {
+          "pom": "R2",
+          "nom": "Coin pocket width",
+          "valor_34_referencia": 6.5,
+          "deltes_per_pas": [
+            0.2,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3
+          ],
+          "passos": [
+            "P→32",
+            "32→34",
+            "34→36",
+            "36→38",
+            "38→40",
+            "40→42"
+          ],
+          "tolerancia_referencia": {
+            "minus": 0.15,
+            "plus": 0.15
+          },
+          "nota": null
+        },
+        {
+          "pom": "PR3",
+          "nom": "Back pocket position from centre",
+          "valor_34_referencia": 6.5,
+          "deltes_per_pas": [
+            0,
+            0.5,
+            0.5,
+            0,
+            0.5,
+            0
+          ],
+          "passos": [
+            "P→32",
+            "32→34",
+            "34→36",
+            "36→38",
+            "38→40",
+            "40→42"
+          ],
+          "tolerancia_referencia": {
+            "minus": 0.25,
+            "plus": 0.25
+          },
+          "nota": "Avança cada 2 talles: entrar els salts tal qual"
+        },
+        {
+          "pom": "PR4",
+          "nom": "Back pocket position (4a)",
+          "valor_34_referencia": 9.7,
+          "deltes_per_pas": [
+            0.2,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3
+          ],
+          "passos": [
+            "P→32",
+            "32→34",
+            "34→36",
+            "36→38",
+            "38→40",
+            "40→42"
+          ],
+          "tolerancia_referencia": {
+            "minus": 0.15,
+            "plus": 0.15
+          },
+          "nota": null
+        },
+        {
+          "pom": "PR5",
+          "nom": "Back pocket position (5a)",
+          "valor_34_referencia": 9.2,
+          "deltes_per_pas": [
+            0.5,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3
+          ],
+          "passos": [
+            "P→32",
+            "32→34",
+            "34→36",
+            "36→38",
+            "38→40",
+            "40→42"
+          ],
+          "tolerancia_referencia": {
+            "minus": 0.15,
+            "plus": 0.15
+          },
+          "nota": null
+        },
+        {
+          "pom": "R4",
+          "nom": "Back pocket width",
+          "valor_34_referencia": 13.7,
+          "deltes_per_pas": [
+            1.9,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3
+          ],
+          "passos": [
+            "P→32",
+            "32→34",
+            "34→36",
+            "36→38",
+            "38→40",
+            "40→42"
+          ],
+          "tolerancia_referencia": {
+            "minus": 0.15,
+            "plus": 0.15
+          },
+          "nota": null
+        },
+        {
+          "pom": "R5",
+          "nom": "Back pocket length (NOU àlies)",
+          "valor_34_referencia": 13.7,
+          "deltes_per_pas": [
+            1.9,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3
+          ],
+          "passos": [
+            "P→32",
+            "32→34",
+            "34→36",
+            "36→38",
+            "38→40",
+            "40→42"
+          ],
+          "tolerancia_referencia": {
+            "minus": 0.15,
+            "plus": 0.15
+          },
+          "nota": null
+        },
+        {
+          "pom": "BR",
+          "nom": "Fly width",
+          "valor_34_referencia": 3.7,
+          "deltes_per_pas": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "passos": [
+            "P→32",
+            "32→34",
+            "34→36",
+            "36→38",
+            "38→40",
+            "40→42"
+          ],
+          "tolerancia_referencia": {
+            "minus": 0,
+            "plus": 0
+          },
+          "nota": "FIX"
+        },
+        {
+          "pom": "BR1",
+          "nom": "Fly length (last zip stitch)",
+          "valor_34_referencia": 11,
+          "deltes_per_pas": [
+            0,
+            0,
+            1,
+            0,
+            1,
+            0
+          ],
+          "passos": [
+            "P→32",
+            "32→34",
+            "34→36",
+            "36→38",
+            "38→40",
+            "40→42"
+          ],
+          "tolerancia_referencia": {
+            "minus": 0.5,
+            "plus": 0.5
+          },
+          "nota": "Avança 1 cm cada 2 talles: entrar els salts tal qual"
+        },
+        {
+          "pom": "CR2",
+          "nom": "Zip opening",
+          "valor_34_referencia": 9,
+          "deltes_per_pas": [
+            0,
+            0,
+            1,
+            0,
+            1,
+            0
+          ],
+          "passos": [
+            "P→32",
+            "32→34",
+            "34→36",
+            "36→38",
+            "38→40",
+            "40→42"
+          ],
+          "tolerancia_referencia": {
+            "minus": 0.5,
+            "plus": 0.5
+          },
+          "nota": "Avança cada 2 talles"
+        }
+      ]
+    }
+  ],
+  "avisos_pas0": [
+    "El full 2 (ÀLIES) descriu l'estat 'AVUI APUNTA A' com estava a PROD el 17/09; a staging (verificat 21/09) NO coincideix: T14 no existeix com a POM, no hi ha cap àlies BRW amb client_code='B2', BF ja apunta a BF (no a B), BB ja apunta a B amb es_instancia=True. El command no assumeix cap estat de partida: només imposa l'estat final ('HA D'APUNTAR A'), que sí és inequívoc.",
+    "El full 0 (ORDRE) diu «FT queda sense regla»; el full 4 (font de dades) diu que és FE qui queda sense regla (fila amb '—' a les 6 columnes de delta i nota explícita 'SENSE REGLA... Demanar a Marta'). FT sí té regla completa i coincideix amb el POM de catàleg FT (id=959, 'Pants length (outseam)'). Es tracta com un error de transcripció del resum; la font de veritat és el full 4.",
+    "GradingRule NO té cap camp de tolerància (confirmat llegint el model sencer). Les columnes TOL-/TOL+ del full 4 es conserven aquí com a referència però el command NO les escriu enlloc (decisió CTO 21/09): ni a POMMaster.tolerancia_default_* (contaminaria el catàleg global compartit per tots els clients del tenant) ni a ItemBaseMeasurement (no hi ha Item/BaseSet en aquest sembra). Deute anotat.",
+    "VALOR 34 (columna de referència del full 4) no es desa enlloc: GradingRule ja no té camp de valor base (retirat, viu a BaseMeasurement/ItemBaseMeasurement del Model/Item, que no existeixen aquí). Es conserva només com a referència documental.",
+    "El joc DENIM no existeix a staging (ni buit): es crea amb --create-run, aparellat amb la creació de SYS_BRW_01, seguint el mateix flag que ja preveia el brief per al sistema de talles. A PROD (on ja hi és, segons diagnosi 17/09) --create-run el troba pel nom i mai en duplica un altre.",
+    "I8 queda marcat pendent_benediccio_montse=true: la guia diu explícitament que encara no té el vist-i-plau de la Montse. Es crea igualment a staging (territori de prova); l'ORDRE ha de portar aquest avís abans de tocar PROD.",
+    "CustomerPOMAlias.origen és CharField(max_length=10, choices=...); 'SEMBRA_BRW_0921' (15 caràcters) no hi cap ni és un choice vàlid. S'escurça a 'SEMBRA0921' (10 caràcters), seguint el precedent ja viu al codi (repunta_alies_retirats.py escriu 'REPUNT_v5', tampoc un choice enumerat — Django no ho valida a nivell de BD)."
+  ],
+  "pendents": [
+    {
+      "context": "denim_regla",
+      "pom": "FE",
+      "nom": "Back rise",
+      "motiu": "SENSE REGLA per disseny del full 4 (totes les cel·les delta són '—'): només porta el valor de referència a la talla 34 (33cm). Demanar a Marta abans de decidir si mai tindrà graduació pròpia."
+    },
+    {
+      "context": "denim_regla",
+      "pom": "RT",
+      "nom": "Knee width",
+      "motiu": "Cap POM de catàleg amb codi_client='RT' ni cap àlies BRW amb client_code='RT' a staging. Forat de catàleg: no hi ha on penjar la regla sense inventar-se un POM fora de l'abast declarat (només B2/I8 nous). Escalar a la Montse."
+    },
+    {
+      "context": "denim_regla",
+      "pom": "PR4",
+      "nom": "Back pocket position (4a)",
+      "motiu": "Cap POM de catàleg ni àlies BRW per a 'PR4'. GradingRule no té eix d'instància (unique_together=(rule_set,pom), sense capa/instancia per decisió de domini): encara que fos la 4a instància de PR (Pocket placement), el model no ho pot representar sense col·lidir amb la regla de PR/PR3. Escalar (decisió d'arquitectura)."
+    },
+    {
+      "context": "denim_regla",
+      "pom": "PR5",
+      "nom": "Back pocket position (5a)",
+      "motiu": "Mateix cas que PR4 (5a instància): cap POM/àlies i GradingRule sense eix d'instància. Escalar."
+    },
+    {
+      "context": "denim_regla",
+      "pom": "R4",
+      "nom": "Back pocket width",
+      "motiu": "Cap POM de catàleg amb codi_client='R4'. L'àlies BRW existent 'R4' apunta a POM R2 ('Pocket width' generic) — el MATEIX POM que la fila pròpia 'R2' (Coin pocket width) d'aquest mateix full ja reclama amb valors DIFERENTS. GradingRule no té eix d'instància: escriure totes dues regles per al mateix (rule_set, pom) és exactament el mode de fallada 'lookup curt segresta' (una guanyaria en silenci). S'exclou R4; es manté només la regla pròpia de R2. Escalar."
+    },
+    {
+      "context": "alies_denim_nota",
+      "pom": "BB",
+      "nom": "Seam waist width (B bottom)",
+      "motiu": "BB és instància de B (àlies existent, es_instancia=True) i els seus 6 deltes són IDÈNTICS als de la fila 'B'. GradingRule no té eix d'instància: no es crea cap regla pròpia per BB, la cobreix la regla de B. Sense conflicte (valors iguals)."
+    }
+  ]
+}
