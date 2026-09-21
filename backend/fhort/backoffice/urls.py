@@ -17,7 +17,7 @@ from .views_seeding import SeedProfileViewSet
 from .views_legal import (
     LegalActionViewSet, LegalDocumentViewSet, LegalDocumentVersionViewSet,
 )
-from .views_leads import lead_public_view
+from .views_leads import LeadViewSet, lead_public_view
 
 router = DefaultRouter()
 router.register('tenants', ClientViewSet, basename='tenant')
@@ -30,6 +30,7 @@ router.register('facturacio/tipus-iva', VATRateViewSet, basename='vat-rate')
 router.register('facturacio/factures', InvoiceViewSet, basename='invoice')
 router.register('legal/documents', LegalDocumentViewSet, basename='legal-document')
 router.register('legal/versions', LegalDocumentVersionViewSet, basename='legal-version')
+router.register('leads', LeadViewSet, basename='lead')
 
 urlpatterns = [
     path('auth/login/', BackofficeTokenObtainView.as_view(), name='backoffice-login'),

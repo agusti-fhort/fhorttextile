@@ -1,13 +1,17 @@
-# P-LEADS — porta pública del formulari de leads (ftt-web).
+# P-LEADS — porta pública del formulari de leads (ftt-web) + API privada (ADMIN).
 from django.db import transaction
-from rest_framework import status, throttling
+from rest_framework import status, throttling, viewsets
 from rest_framework.decorators import api_view, authentication_classes, permission_classes, throttle_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from .leads_service import notifica_lead
 from .legal_service import client_ip
-from .serializers_leads import LeadPublicSerializer
+from .models import Lead
+from .serializers_leads import LeadDetailSerializer, LeadListSerializer, LeadPublicSerializer
+from .views import HasBackofficeRole
+
+ADMIN = [IsAuthenticated, HasBackofficeRole(roles=['ADMIN'])]
 
 
 class LeadRateThrottle(throttling.SimpleRateThrottle):
@@ -45,3 +49,18 @@ def lead_public_view(request):
     lead = serializer.save(ip=client_ip(request))
     transaction.on_commit(lambda: notifica_lead(lead))
     return Response({'ok': True}, status=status.HTTP_201_CREATED)
+
+
+class LeadViewSet(viewsets.ModelViewSet):
+    """Llista/detall/PATCH(estat+notes)/DELETE de leads. Només ADMIN. Sense POST
+    (l'alta és la porta pública, leads/public/) ni PUT complet (només PATCH parcial,
+    vegeu LeadDetailSerializer: la resta de camps hi és read-only)."""
+    queryset = Lead.objects.all()
+    permission_classes = ADMIN
+    filterset_fields = ['estat']
+    http_method_names = ['get', 'patch', 'delete', 'head', 'options']
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return LeadListSerializer
+        return LeadDetailSerializer

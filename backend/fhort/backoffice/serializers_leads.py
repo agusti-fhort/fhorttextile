@@ -31,3 +31,27 @@ class LeadPublicSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data.pop('website', None)
         return Lead.objects.create(**validated_data)
+
+
+class LeadListSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Lead
+        fields = ['id', 'nom', 'empresa', 'email', 'idioma', 'estat', 'notificat', 'created_at']
+
+
+class LeadDetailSerializer(serializers.ModelSerializer):
+    """Detall + PATCH. NOMÉS `estat` i `notes` són escrivibles per l'API privada — la
+    resta (dades del formulari, ip, notificat) és read-only: qui les vulgui canviar
+    no és aquest endpoint."""
+
+    class Meta:
+        model = Lead
+        fields = [
+            'id', 'nom', 'empresa', 'email', 'missatge', 'idioma', 'pagina_origen',
+            'consentiment', 'privacy_version', 'ip', 'estat', 'notes', 'notificat',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = [
+            'nom', 'empresa', 'email', 'missatge', 'idioma', 'pagina_origen',
+            'consentiment', 'privacy_version', 'ip', 'notificat', 'created_at', 'updated_at',
+        ]

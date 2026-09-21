@@ -2,22 +2,24 @@
 
 L1: model + porta pública (throttle, honeypot, guarda de muntatge a `public`).
 L2: avís per correu (adormit fins que hi hagi SMTP real).
-L3 amplia aquest fitxer quan arriba la seva peça (API privada).
+L3: API privada (ADMIN) — llista/detall/PATCH(estat+notes)/DELETE.
 
     cd backend && venv/bin/python manage.py test fhort.backoffice.tests_leads
 """
 import datetime
 from unittest import mock
 
+from django.contrib.auth import get_user_model
 from django.core import mail
 from django.core.cache import cache
 from django.test import override_settings
 from django_tenants.test.cases import TenantTestCase
 from django_tenants.test.client import TenantClient
-from rest_framework.test import APIRequestFactory
+from django_tenants.utils import schema_context
+from rest_framework.test import APIRequestFactory, force_authenticate
 
-from fhort.backoffice.models import Lead
-from fhort.backoffice.views_leads import lead_public_view
+from fhort.backoffice.models import BackofficeUser, Lead
+from fhort.backoffice.views_leads import LeadViewSet, lead_public_view
 
 URL = '/api/backoffice/v1/leads/public/'
 
@@ -234,3 +236,90 @@ class LeadNotificationTest(TenantTestCase):
         lead = Lead.objects.get()
         self.assertFalse(lead.notificat)
         self.assertEqual(len(mail.outbox), 0)
+
+
+class LeadAdminApiTest(TenantTestCase):
+    """L3: API privada (ADMIN) — llista (filtre ?estat=)/detall/PATCH(estat+notes,
+    la resta read-only)/DELETE. BackofficeUser és SHARED/public-only (com Lead):
+    creat sota schema_context('public'), autenticat amb force_authenticate (evita
+    dependre de JWT/sessió per exercir només el permís)."""
+
+    @classmethod
+    def setup_tenant(cls, tenant):
+        tenant.nom = 'Tenant Leads Admin'
+        tenant.tipologia = 'marca'
+        tenant.codi_tenant = 'TL4'
+        tenant.vat_number = 'X0000005X'
+        tenant.tipus_client = 'b2b'
+        tenant.gratis_fins = datetime.date(2030, 1, 1)
+        return tenant
+
+    def setUp(self):
+        Lead.objects.all().delete()
+        User = get_user_model()
+        with schema_context('public'):
+            self.admin_user = User.objects.create_user(
+                username='admin@fhort.test', email='admin@fhort.test', password='pw123456')
+            BackofficeUser.objects.create(
+                usuari=self.admin_user, rol=BackofficeUser.Rol.ADMIN, actiu=True)
+            self.comercial_user = User.objects.create_user(
+                username='comercial@fhort.test', email='comercial@fhort.test', password='pw123456')
+            BackofficeUser.objects.create(
+                usuari=self.comercial_user, rol=BackofficeUser.Rol.COMERCIAL, actiu=True)
+        self.lead = Lead.objects.create(
+            nom='Joan Vidal', email='joan@example.com', missatge='Hola',
+            idioma='ca', consentiment=True, privacy_version='v1')
+
+    # ── anònim / rol equivocat ───────────────────────────────────────────────
+    def test_llista_anonim_dona_401_o_403(self):
+        req = APIRequestFactory().get('/api/backoffice/v1/leads/')
+        resp = LeadViewSet.as_view({'get': 'list'})(req)
+        self.assertIn(resp.status_code, (401, 403))
+
+    def test_llista_rol_no_admin_dona_403(self):
+        req = APIRequestFactory().get('/api/backoffice/v1/leads/')
+        force_authenticate(req, user=self.comercial_user)
+        resp = LeadViewSet.as_view({'get': 'list'})(req)
+        self.assertEqual(resp.status_code, 403)
+
+    # ── llista + filtre ──────────────────────────────────────────────────────
+    def test_llista_admin_ok_ordenada_per_created_at_desc(self):
+        req = APIRequestFactory().get('/api/backoffice/v1/leads/')
+        force_authenticate(req, user=self.admin_user)
+        resp = LeadViewSet.as_view({'get': 'list'})(req)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['count'], 1)
+        self.assertEqual(resp.data['results'][0]['id'], self.lead.pk)
+
+    def test_filtre_per_estat(self):
+        Lead.objects.create(nom='Altre', email='altre@example.com', missatge='Hi',
+                            idioma='es', consentiment=True, privacy_version='v1',
+                            estat=Lead.ESTAT_TANCAT)
+        req = APIRequestFactory().get('/api/backoffice/v1/leads/', {'estat': 'tancat'})
+        force_authenticate(req, user=self.admin_user)
+        resp = LeadViewSet.as_view({'get': 'list'})(req)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['count'], 1)
+        self.assertEqual(resp.data['results'][0]['estat'], 'tancat')
+
+    # ── PATCH: només estat i notes ───────────────────────────────────────────
+    def test_patch_estat_i_notes_ok_altres_camps_ignorats(self):
+        req = APIRequestFactory().patch(
+            f'/api/backoffice/v1/leads/{self.lead.pk}/',
+            {'estat': 'contactat', 'notes': 'Trucat el 21/09', 'email': 'hacked@x.com'},
+            format='json')
+        force_authenticate(req, user=self.admin_user)
+        resp = LeadViewSet.as_view({'patch': 'partial_update'})(req, pk=self.lead.pk)
+        self.assertEqual(resp.status_code, 200)
+        self.lead.refresh_from_db()
+        self.assertEqual(self.lead.estat, 'contactat')
+        self.assertEqual(self.lead.notes, 'Trucat el 21/09')
+        self.assertEqual(self.lead.email, 'joan@example.com')   # ignorat, no canvia
+
+    # ── DELETE ───────────────────────────────────────────────────────────────
+    def test_delete_esborra(self):
+        req = APIRequestFactory().delete(f'/api/backoffice/v1/leads/{self.lead.pk}/')
+        force_authenticate(req, user=self.admin_user)
+        resp = LeadViewSet.as_view({'delete': 'destroy'})(req, pk=self.lead.pk)
+        self.assertEqual(resp.status_code, 204)
+        self.assertEqual(Lead.objects.count(), 0)
