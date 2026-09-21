@@ -61,7 +61,7 @@
   ],
   "jocs": [
     {
-      "nom": "BRW Exterior",
+      "nom": "BRW ALPHA EU EXTERIOR",
       "sistema": "ALPHA_EU_W",
       "sistema_crear_si_absent": false,
       "ambit_garment_group": "OUTERWEAR",
@@ -323,7 +323,7 @@
       ]
     },
     {
-      "nom": "BRW Denim",
+      "nom": "BRW NUM EU DENIM",
       "sistema": "SYS_BRW_01",
       "sistema_crear_si_absent": true,
       "sistema_talles": [
