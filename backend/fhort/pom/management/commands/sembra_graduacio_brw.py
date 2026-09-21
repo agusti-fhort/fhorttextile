@@ -11,10 +11,11 @@ Sembra de DADES, no migració. Idempotent per clau natural a cada bloc:
   4. Joc 'BRW Denim' — per `nom`; amb --create-run crea SYS_BRW_01 (P·32·34·36·38·40·42, base 34)
      si absent — MAI a PROD, on el brief diu que ja hi és.
 
-Els 4 forats de catàleg del full DENIM (FE sense regla, RT/PR4/PR5 sense POM/àlies, R4
-col·lidint amb R2 perquè `GradingRule` no té eix d'instància) es reporten com PENDENTS i
-NO s'escriuen — decisió CTO 21/09, v. `avisos_pas0`/`pendents` del JSON. La tolerància
-(TOL-/TOL+) tampoc s'escriu: `GradingRule` no té cap camp de tolerància.
+Els forats de catàleg del full DENIM (RT/PR4/PR5 sense POM/àlies, R4 col·lidint amb R2
+perquè `GradingRule` no té eix d'instància) es reporten com PENDENTS i NO s'escriuen —
+decisió CTO 21/09, v. `avisos_pas0`/`pendents` del JSON. FE tenia el mateix tracte fins
+que la Marta el va rectificar el 21/09 (ara porta deltes reals, v. `CODIS_PENDENTS_DENIM`).
+La tolerància (TOL-/TOL+) tampoc s'escriu: `GradingRule` no té cap camp de tolerància.
 
 🔑 DRY-RUN ESCRIU DE DEBÒ, DINS DE LA TRANSACCIÓ, I FA ROLLBACK AL FINAL. Cada bloc depèn
 dels anteriors (les regles necessiten el POM que el bloc 1 acaba de crear): si el dry-run
@@ -49,7 +50,8 @@ ORIGEN_ALIES = 'SEMBRA0921'  # <=10 chars (CustomerPOMAlias.origen), no és un c
 # `pendents` al JSON per al motiu de cadascun). Font única d'exclusió: si el JSON canvia
 # de forma i deixa de marcar-los pendents, aquesta llista s'ha d'actualitzar a mà —a posta,
 # perquè excloure una fila és una decisió, no una inferència automàtica.
-CODIS_PENDENTS_DENIM = {'FE', 'RT', 'PR4', 'PR5', 'R4'}
+# FE en va sortir el 21/09 (rectificació de la Marta: ja porta deltes reals).
+CODIS_PENDENTS_DENIM = {'RT', 'PR4', 'PR5', 'R4'}
 
 
 def _camp_eq(a, b):
@@ -327,9 +329,9 @@ class Command(BaseCommand):
         for r in joc['regles']:
             codi = r['pom']
             if codi in CODIS_PENDENTS_DENIM:
-                continue  # ja reportat al bloc de pendents (FE/RT/PR4/PR5/R4)
+                continue  # ja reportat al bloc de pendents (RT/PR4/PR5/R4)
             if any(d == '—' for d in r['deltes_per_pas']):
-                continue  # FE, per si mai s'afegís una fila amb el mateix patró
+                continue  # guarda genèrica: cap fila amb '—' hauria d'arribar a escriure's
 
             pom = _resol_pom_denim(codi, customer)
             if pom is None:

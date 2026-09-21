@@ -628,10 +628,10 @@
         {
           "pom": "FI",
           "nom": "Inseam length",
-          "valor_34_referencia": 80,
+          "valor_34_referencia": 79.7,
           "deltes_per_pas": [
             5.9,
-            0.3,
+            0,
             0,
             0,
             0,
@@ -649,7 +649,7 @@
             "minus": 0.5,
             "plus": 0.5
           },
-          "nota": null
+          "nota": "Marta 21/09: congelat des de la 32"
         },
         {
           "pom": "FD",
@@ -682,12 +682,12 @@
           "nom": "Back rise — 'tiro detrás'",
           "valor_34_referencia": 33,
           "deltes_per_pas": [
-            "—",
-            "—",
-            "—",
-            "—",
-            "—",
-            "—"
+            2.1,
+            1.5,
+            1.5,
+            1.5,
+            1.5,
+            1.5
           ],
           "passos": [
             "P→32",
@@ -701,7 +701,7 @@
             "minus": 0.5,
             "plus": 0.5
           },
-          "nota": "SENSE REGLA: només valor a la 34. Demanar a Marta."
+          "nota": "Marta 21/09: P→32 2,1; després 1,5 per pas"
         },
         {
           "pom": "UT1",
@@ -1106,12 +1106,6 @@
     "CustomerPOMAlias.origen és CharField(max_length=10, choices=...); 'SEMBRA_BRW_0921' (15 caràcters) no hi cap ni és un choice vàlid. S'escurça a 'SEMBRA0921' (10 caràcters), seguint el precedent ja viu al codi (repunta_alies_retirats.py escriu 'REPUNT_v5', tampoc un choice enumerat — Django no ho valida a nivell de BD)."
   ],
   "pendents": [
-    {
-      "context": "denim_regla",
-      "pom": "FE",
-      "nom": "Back rise",
-      "motiu": "SENSE REGLA per disseny del full 4 (totes les cel·les delta són '—'): només porta el valor de referència a la talla 34 (33cm). Demanar a Marta abans de decidir si mai tindrà graduació pròpia."
-    },
     {
       "context": "denim_regla",
       "pom": "RT",
