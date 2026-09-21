@@ -31,6 +31,7 @@ from pathlib import Path
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
+from django.utils import timezone
 from django_tenants.utils import schema_context
 
 from fhort.pom.grading_regime import MAX_BREAKS, valida_breaks, normalitza_logica
@@ -232,7 +233,9 @@ class Command(BaseCommand):
                 existent.pom = pom_desti
                 existent.es_instancia = es_instancia
                 existent.origen = ORIGEN_ALIES
-                existent.save(update_fields=['pom', 'es_instancia', 'origen', 'actualitzat_at'])
+                existent.editat_at = timezone.now()
+                existent.save(update_fields=['pom', 'es_instancia', 'origen', 'editat_at',
+                                             'actualitzat_at'])
             self.stdout.write(f"  {a['codi_brw']:<6} → {pom_desti.codi_client:<6} accio={accio}")
 
     # ── BLOC 3 · Joc BRW Exterior ────────────────────────────────────────────────────────
