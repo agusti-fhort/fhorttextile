@@ -239,6 +239,19 @@ class LeadNotificationTest(TenantTestCase):
         self.assertEqual(resp.status_code, 201)
         lead = Lead.objects.get()
         self.assertTrue(lead.notificat)
+
+    # ── SSL directe (port 465, p.ex. Nominalia) ─────────────────────────────
+    @override_settings(
+        EMAIL_HOST='localhost', LEADS_NOTIFY_EMAIL='ops@fhort.test',
+        EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+        EMAIL_USE_SSL=True,
+    )
+    def test_amb_email_use_ssl_locmem_1_correu_notificat_true(self):
+        resp = self._post(VALID_PAYLOAD)
+        self.assertEqual(resp.status_code, 201)
+        lead = Lead.objects.get()
+        self.assertTrue(lead.notificat)
+        self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(len(mail.outbox), 1)
         enviat = mail.outbox[0]
         self.assertEqual(enviat.to, ['ops@fhort.test'])

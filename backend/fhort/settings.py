@@ -438,6 +438,12 @@ EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True').lower() == 'true'
+# SSL directe (port 465, p.ex. Nominalia authsmtp.securemail.pro) enlloc de STARTTLS
+# (587): Django peta en arrencar si els dos són True alhora, així que EMAIL_USE_SSL
+# força EMAIL_USE_TLS=False.
+EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', 'False').lower() == 'true'
+if EMAIL_USE_SSL:
+    EMAIL_USE_TLS = False
 EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT', 10))
 # Per defecte, el mateix 'webmaster@localhost' que Django ja triava implícitament quan
 # aquest setting no existia (era el cas fins ara): absent l'entorn, cap canvi de conducta
