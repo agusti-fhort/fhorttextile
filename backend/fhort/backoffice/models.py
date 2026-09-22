@@ -732,12 +732,22 @@ class Lead(models.Model):
         (ESTAT_NOU, 'Nou'), (ESTAT_CONTACTAT, 'Contactat'), (ESTAT_TANCAT, 'Tancat'),
     ]
 
+    INTERES_SAAS = 'saas'
+    INTERES_STUDIO = 'studio'
+    INTERES_EARLY = 'early'
+    INTERES_OTHER = 'other'
+    INTERES_CHOICES = [
+        (INTERES_SAAS, 'SaaS'), (INTERES_STUDIO, 'Studio'),
+        (INTERES_EARLY, 'Early'), (INTERES_OTHER, 'Other'),
+    ]
+
     nom = models.CharField(max_length=120)
     empresa = models.CharField(max_length=160, blank=True, default='')
     email = models.EmailField()
     missatge = models.TextField()
     idioma = models.CharField(max_length=2, choices=IDIOMA_CHOICES)
     pagina_origen = models.CharField(max_length=300, blank=True, default='')
+    interes = models.CharField(max_length=20, choices=INTERES_CHOICES, blank=True, default='')
     consentiment = models.BooleanField(default=False)
     privacy_version = models.CharField(max_length=40)
     ip = models.GenericIPAddressField(null=True, blank=True)

@@ -124,6 +124,27 @@ class LeadPublicViewTest(TenantTestCase):
         self.assertEqual(resp.status_code, 400)
         self.assertIn('idioma', resp.data)
 
+    # ── interès (origen comercial de la consulta) ───────────────────────────
+    def test_alta_amb_interes_el_desa(self):
+        payload = {**VALID_PAYLOAD, 'interes': Lead.INTERES_STUDIO}
+        resp = self._post(payload)
+        self.assertEqual(resp.status_code, 201)
+        lead = Lead.objects.get()
+        self.assertEqual(lead.interes, Lead.INTERES_STUDIO)
+
+    def test_alta_sense_interes_dona_buit(self):
+        resp = self._post(VALID_PAYLOAD)
+        self.assertEqual(resp.status_code, 201)
+        lead = Lead.objects.get()
+        self.assertEqual(lead.interes, '')
+
+    def test_interes_fora_de_choices_dona_400(self):
+        payload = {**VALID_PAYLOAD, 'interes': 'valor_inventat'}
+        resp = self._post(payload)
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('interes', resp.data)
+        self.assertEqual(Lead.objects.count(), 0)
+
     # ── throttle ─────────────────────────────────────────────────────────────
     def test_throttle_dona_429(self):
         # 5/hour → la 6a petició des de la mateixa IP és 429.
@@ -301,6 +322,17 @@ class LeadAdminApiTest(TenantTestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data['count'], 1)
         self.assertEqual(resp.data['results'][0]['estat'], 'tancat')
+
+    def test_filtre_per_interes(self):
+        Lead.objects.create(nom='Altre', email='altre@example.com', missatge='Hi',
+                            idioma='es', consentiment=True, privacy_version='v1',
+                            interes=Lead.INTERES_EARLY)
+        req = APIRequestFactory().get('/api/backoffice/v1/leads/', {'interes': 'early'})
+        force_authenticate(req, user=self.admin_user)
+        resp = LeadViewSet.as_view({'get': 'list'})(req)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['count'], 1)
+        self.assertEqual(resp.data['results'][0]['interes'], 'early')
 
     # ── PATCH: només estat i notes ───────────────────────────────────────────
     def test_patch_estat_i_notes_ok_altres_camps_ignorats(self):

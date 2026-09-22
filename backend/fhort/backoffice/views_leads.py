@@ -73,7 +73,7 @@ class LeadViewSet(viewsets.ModelViewSet):
     vegeu LeadDetailSerializer: la resta de camps hi és read-only)."""
     queryset = Lead.objects.all()
     permission_classes = ADMIN
-    filterset_fields = ['estat']
+    filterset_fields = ['estat', 'interes']
     http_method_names = ['get', 'patch', 'delete', 'head', 'options']
 
     def get_serializer_class(self):

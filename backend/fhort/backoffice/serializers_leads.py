@@ -15,7 +15,7 @@ class LeadPublicSerializer(serializers.ModelSerializer):
         model = Lead
         fields = [
             'nom', 'empresa', 'email', 'missatge', 'idioma', 'pagina_origen',
-            'consentiment', 'privacy_version', 'website',
+            'consentiment', 'privacy_version', 'interes', 'website',
         ]
 
     def validate_consentiment(self, value):
@@ -36,7 +36,7 @@ class LeadPublicSerializer(serializers.ModelSerializer):
 class LeadListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Lead
-        fields = ['id', 'nom', 'empresa', 'email', 'idioma', 'estat', 'notificat', 'created_at']
+        fields = ['id', 'nom', 'empresa', 'email', 'idioma', 'interes', 'estat', 'notificat', 'created_at']
 
 
 class LeadDetailSerializer(serializers.ModelSerializer):
@@ -48,10 +48,10 @@ class LeadDetailSerializer(serializers.ModelSerializer):
         model = Lead
         fields = [
             'id', 'nom', 'empresa', 'email', 'missatge', 'idioma', 'pagina_origen',
-            'consentiment', 'privacy_version', 'ip', 'estat', 'notes', 'notificat',
+            'consentiment', 'privacy_version', 'interes', 'ip', 'estat', 'notes', 'notificat',
             'created_at', 'updated_at',
         ]
         read_only_fields = [
             'nom', 'empresa', 'email', 'missatge', 'idioma', 'pagina_origen',
-            'consentiment', 'privacy_version', 'ip', 'notificat', 'created_at', 'updated_at',
+            'consentiment', 'privacy_version', 'interes', 'ip', 'notificat', 'created_at', 'updated_at',
         ]
