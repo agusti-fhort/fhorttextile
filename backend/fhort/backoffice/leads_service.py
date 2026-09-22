@@ -14,6 +14,7 @@ def _build_body(lead):
         f"Empresa: {lead.empresa or '—'}\n"
         f'Email: {lead.email}\n'
         f'Idioma: {lead.get_idioma_display()}\n'
+        f"Interès: {lead.get_interes_display() if lead.interes else '—'}\n"
         f"Pàgina: {lead.pagina_origen or '—'}\n\n"
         f'Missatge:\n{lead.missatge}\n\n'
         f'Detall: /leads/{lead.pk}\n'

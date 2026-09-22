@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { getLead, updateLead, deleteLead, MOCK_LEADS } from '../api/leads'
 import { LEAD_ESTAT_ORDRE, leadEstatConfig } from '../config/leadEstats'
+import { leadInteresLabel } from '../config/leadInteres'
 
 const MONO = "'IBM Plex Mono', monospace"
 
@@ -173,6 +174,7 @@ export default function LeadDetailPage() {
           <Field label="Empresa" value={lead.empresa} />
           <Field label="Email" value={lead.email} />
           <Field label="Idioma" value={(lead.idioma || '').toUpperCase()} />
+          <Field label="Interès" value={leadInteresLabel(lead.interes)} />
         </div>
 
         <div style={cardStyle}>

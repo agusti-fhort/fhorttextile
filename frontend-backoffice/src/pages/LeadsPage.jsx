@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { IconEye, IconRefresh, IconAlertTriangle, IconLoader2 } from '@tabler/icons-react'
 import { getLeadCounts, getLeads, MOCK_LEADS } from '../api/leads'
 import { LEAD_ESTAT_ORDRE, leadEstatConfig } from '../config/leadEstats'
+import { LEAD_INTERES_ORDRE, leadInteresLabel } from '../config/leadInteres'
 
 const MONO = "'IBM Plex Mono', monospace"
 
@@ -40,16 +41,19 @@ export default function LeadsPage() {
   const navigate = useNavigate()
 
   const [tab, setTab] = useState('nou')
+  const [interesFiltre, setInteresFiltre] = useState('')
   const [leads, setLeads] = useState([])
   const [counts, setCounts] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [mock, setMock] = useState(false)
 
-  const load = useCallback(async (estatKey) => {
+  const load = useCallback(async (estatKey, interes) => {
     setLoading(true)
     setError('')
-    const params = estatKey && estatKey !== 'tots' ? { estat: estatKey } : {}
+    const params = {}
+    if (estatKey && estatKey !== 'tots') params.estat = estatKey
+    if (interes) params.interes = interes
     try {
       const data = await getLeads(params)
       const list = Array.isArray(data) ? data : (data?.results ?? [])
@@ -58,9 +62,10 @@ export default function LeadsPage() {
     } catch {
       if (import.meta.env.DEV) {
         // Fallback NOMÉS en dev local: el backend pot no estar migrat encara.
-        const filtered = estatKey && estatKey !== 'tots'
+        let filtered = estatKey && estatKey !== 'tots'
           ? MOCK_LEADS.filter((l) => l.estat === estatKey)
           : MOCK_LEADS
+        if (interes) filtered = filtered.filter((l) => l.interes === interes)
         setLeads(filtered)
         setMock(true)
       } else {
@@ -89,10 +94,10 @@ export default function LeadsPage() {
     }
   }, [])
 
-  useEffect(() => { load(tab) }, [tab, load])
+  useEffect(() => { load(tab, interesFiltre) }, [tab, interesFiltre, load])
   useEffect(() => { loadCounts() }, [loadCounts])
 
-  const refresca = () => { load(tab); loadCounts() }
+  const refresca = () => { load(tab, interesFiltre); loadCounts() }
 
   return (
     <div style={{ padding: '28px 32px', fontFamily: MONO, minHeight: '100vh' }}>
@@ -126,29 +131,44 @@ export default function LeadsPage() {
         </div>
       )}
 
-      {/* Tabs de filtre */}
-      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 18 }}>
-        {TABS.map((tb) => {
-          const active = tab === tb.key
-          const comptador = counts != null ? ` (${counts[tb.key]})` : ''
-          return (
-            <button
-              key={tb.key}
-              type="button"
-              onClick={() => setTab(tb.key)}
-              style={{
-                fontFamily: MONO, fontSize: 12, fontWeight: 600, letterSpacing: '.04em',
-                padding: '8px 14px', borderRadius: 8, cursor: 'pointer',
-                border: '1px solid ' + (active ? 'var(--gold)' : 'var(--border)'),
-                background: active ? 'var(--gold)' : 'transparent',
-                color: active ? '#fff' : 'var(--text-muted)',
-                transition: 'all .15s',
-              }}
-            >
-              {tb.label}{comptador}
-            </button>
-          )
-        })}
+      {/* Tabs de filtre (per estat) + selector d'interès, combinables */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 18 }}>
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+          {TABS.map((tb) => {
+            const active = tab === tb.key
+            const comptador = counts != null ? ` (${counts[tb.key]})` : ''
+            return (
+              <button
+                key={tb.key}
+                type="button"
+                onClick={() => setTab(tb.key)}
+                style={{
+                  fontFamily: MONO, fontSize: 12, fontWeight: 600, letterSpacing: '.04em',
+                  padding: '8px 14px', borderRadius: 8, cursor: 'pointer',
+                  border: '1px solid ' + (active ? 'var(--gold)' : 'var(--border)'),
+                  background: active ? 'var(--gold)' : 'transparent',
+                  color: active ? '#fff' : 'var(--text-muted)',
+                  transition: 'all .15s',
+                }}
+              >
+                {tb.label}{comptador}
+              </button>
+            )
+          })}
+        </div>
+        <select
+          value={interesFiltre}
+          onChange={(e) => setInteresFiltre(e.target.value)}
+          style={{
+            fontFamily: MONO, fontSize: 12, color: 'var(--text-main)', background: 'var(--bg-card)',
+            border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', cursor: 'pointer',
+          }}
+        >
+          <option value="">Tots els interessos</option>
+          {LEAD_INTERES_ORDRE.map((k) => (
+            <option key={k} value={k}>{leadInteresLabel(k)}</option>
+          ))}
+        </select>
       </div>
 
       {/* Estats de càrrega / error / buit */}
@@ -175,6 +195,7 @@ export default function LeadsPage() {
                 <th style={thStyle}>Empresa</th>
                 <th style={thStyle}>Email</th>
                 <th style={thStyle}>Idioma</th>
+                <th style={thStyle}>Interès</th>
                 <th style={thStyle}>Estat</th>
                 <th style={{ ...thStyle, textAlign: 'right' }}>Accions</th>
               </tr>
@@ -187,6 +208,7 @@ export default function LeadsPage() {
                   <td style={tdStyle}>{l.empresa || '—'}</td>
                   <td style={tdStyle}>{l.email}</td>
                   <td style={tdStyle}>{(l.idioma || '—').toUpperCase()}</td>
+                  <td style={tdStyle}>{leadInteresLabel(l.interes)}</td>
                   <td style={tdStyle}><Badge estat={l.estat} /></td>
                   <td style={{ ...tdStyle, textAlign: 'right' }}>
                     <button
