@@ -12,6 +12,8 @@ import LegalDocsPage from './pages/LegalDocsPage'
 import ContractesPage from './pages/ContractesPage'
 import ContractFormPage from './pages/ContractFormPage'
 import ContractDetailPage from './pages/ContractDetailPage'
+import LeadsPage from './pages/LeadsPage'
+import LeadDetailPage from './pages/LeadDetailPage'
 
 export default function App() {
   return (
@@ -30,6 +32,8 @@ export default function App() {
           <Route path="/serveis" element={<ServeisPage />} />
           <Route path="/perfils-sembra" element={<SeedProfilesPage />} />
           <Route path="/documents-legals" element={<LegalDocsPage />} />
+          <Route path="/leads" element={<LeadsPage />} />
+          <Route path="/leads/:id" element={<LeadDetailPage />} />
           <Route path="/facturacio" element={<FacturacioPage />} />
           <Route path="/contractes" element={<ContractesPage />} />
           {/* Estàtica abans que dinàmica: /new no s'ha de capturar com a :id */}

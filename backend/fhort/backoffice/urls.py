@@ -17,6 +17,7 @@ from .views_seeding import SeedProfileViewSet
 from .views_legal import (
     LegalActionViewSet, LegalDocumentViewSet, LegalDocumentVersionViewSet,
 )
+from .views_leads import LeadViewSet, lead_counts_view, lead_public_view
 
 router = DefaultRouter()
 router.register('tenants', ClientViewSet, basename='tenant')
@@ -29,12 +30,15 @@ router.register('facturacio/tipus-iva', VATRateViewSet, basename='vat-rate')
 router.register('facturacio/factures', InvoiceViewSet, basename='invoice')
 router.register('legal/documents', LegalDocumentViewSet, basename='legal-document')
 router.register('legal/versions', LegalDocumentVersionViewSet, basename='legal-version')
+router.register('leads', LeadViewSet, basename='lead')
 
 urlpatterns = [
     path('auth/login/', BackofficeTokenObtainView.as_view(), name='backoffice-login'),
     path('auth/me/', BackofficeMeView.as_view(), name='backoffice-me'),
     path('health/', health_view, name='backoffice-health'),
     path('pricing/public/', pricing_public_view, name='backoffice-pricing-public'),
+    path('leads/public/', lead_public_view, name='backoffice-leads-public'),
+    path('leads/counts/', lead_counts_view, name='backoffice-leads-counts'),
     path('pricing/for-client/<str:codi_tenant>/', pricing_for_client_view, name='backoffice-pricing-for-client'),
     path('pricing/', pricing_view, name='backoffice-pricing'),
     path('facturacio/generar/', generate_invoice_view),

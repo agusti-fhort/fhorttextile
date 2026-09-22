@@ -710,3 +710,55 @@ class LegalAcceptance(models.Model):
     def delete(self, *args, **kwargs):
         # APPEND-ONLY: una prova d'acceptació no s'esborra mai.
         raise ValueError('LegalAcceptance és append-only: no es pot esborrar.')
+
+
+class Lead(models.Model):
+    """Lead captat pel formulari públic de la web de marketing (ftt-web). Viu a
+    'public' (backoffice és SHARED_APP): un lead de marketing no és d'un tenant
+    concret. Vegeu backoffice/views_leads.py (porta pública) i leads_service.py
+    (avís per correu)."""
+
+    IDIOMA_EN = 'en'
+    IDIOMA_ES = 'es'
+    IDIOMA_CA = 'ca'
+    IDIOMA_CHOICES = [
+        (IDIOMA_EN, 'English'), (IDIOMA_ES, 'Español'), (IDIOMA_CA, 'Català'),
+    ]
+
+    ESTAT_NOU = 'nou'
+    ESTAT_CONTACTAT = 'contactat'
+    ESTAT_TANCAT = 'tancat'
+    ESTAT_CHOICES = [
+        (ESTAT_NOU, 'Nou'), (ESTAT_CONTACTAT, 'Contactat'), (ESTAT_TANCAT, 'Tancat'),
+    ]
+
+    INTERES_SAAS = 'saas'
+    INTERES_STUDIO = 'studio'
+    INTERES_EARLY = 'early'
+    INTERES_OTHER = 'other'
+    INTERES_CHOICES = [
+        (INTERES_SAAS, 'SaaS'), (INTERES_STUDIO, 'Studio'),
+        (INTERES_EARLY, 'Early'), (INTERES_OTHER, 'Other'),
+    ]
+
+    nom = models.CharField(max_length=120)
+    empresa = models.CharField(max_length=160, blank=True, default='')
+    email = models.EmailField()
+    missatge = models.TextField()
+    idioma = models.CharField(max_length=2, choices=IDIOMA_CHOICES)
+    pagina_origen = models.CharField(max_length=300, blank=True, default='')
+    interes = models.CharField(max_length=20, choices=INTERES_CHOICES, blank=True, default='')
+    consentiment = models.BooleanField(default=False)
+    privacy_version = models.CharField(max_length=40)
+    ip = models.GenericIPAddressField(null=True, blank=True)
+    estat = models.CharField(max_length=10, choices=ESTAT_CHOICES, default=ESTAT_NOU)
+    notes = models.TextField(blank=True, default='')
+    notificat = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.nom} <{self.email}> [{self.estat}]'
