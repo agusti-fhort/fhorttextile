@@ -164,7 +164,9 @@ def vocabulari_domini_view(request):
 
     Cada element: `{codi, etiqueta}`. El `codi` és el que es desa i el que viatja a l'API;
     l'`etiqueta` és la del `choices` i és per als ulls. Dues llistes porten una marca de més
-    (`autorable`, `segellat`): v. la capçalera del mòdul.
+    (`autorable`, `segellat`): v. la capçalera del mòdul. `veredictes_fitting` porta, a més,
+    `etiqueta_llarga`/`etiqueta_curta` (ordre 23/09): l'`etiqueta` de sempre segueix sent la
+    frase explicativa (admin); les noves són el text curt de pantalla/paper.
 
     ⚠️ **`veredictes_fitting` NO porta el buit, i és a posta.** `PieceFittingLine.decisio` admet
     `''` —«sense decidir»— però `''` **no és un membre de l'enumeració**: és l'absència de
@@ -198,7 +200,16 @@ def vocabulari_domini_view(request):
         ),
         # FASE A · el veredicte de la modista (D-31.21). Codis crus: van en anglès a totes les
         # llengües perquè són el que el full imprès porta cap al fabricant.
-        'veredictes_fitting': _llista(PieceFittingLine.DECISIO_CHOICES),
+        # `etiqueta` (de `_llista`) és la frase explicativa dels `choices`, per a l'admin — mai
+        # pintada a l'usuari. `etiqueta_llarga`/`etiqueta_curta` (ordre 23/09) SÍ són per als ulls:
+        # OK · ADJUSTED · NO OK, FOLLOW SPEC / OK · ADJUSTED · NO OK. Additiu: `codi` i `etiqueta`
+        # no canvien de forma, per si algun consumidor futur els llegeix.
+        'veredictes_fitting': [
+            {**f,
+             'etiqueta_llarga': PieceFittingLine.etiqueta_decisio(f['codi']),
+             'etiqueta_curta': PieceFittingLine.etiqueta_decisio(f['codi'], curta=True)}
+            for f in _llista(PieceFittingLine.DECISIO_CHOICES)
+        ],
 
         # ══ SOBIRANIA DEL POM (22/08) · EL «COM ES MESURA» ═══════════════════════════════
         # Els sis vocabularis tancats que descriuen com es pren una mesura. Entren ara perquè

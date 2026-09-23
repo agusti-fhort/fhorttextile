@@ -479,6 +479,28 @@ class PieceFittingLine(models.Model):
         help_text="Veredicte de la cel·la (D-31.21). '' = sense decidir, que NO és ACCEPTED. "
                   "Una línia REJECTED es desa i es veu, però cap camí de sembra la llegeix.",
     )
+    # ETIQUETA DE PANTALLA/PAPER (ordre CTO, 23/09) — el CODI de dalt (ACCEPTED/ADJUSTED/REJECTED)
+    # segueix sent el VALOR de BD/API i no es toca (D-31.21). `DECISIO_CHOICES` és la frase
+    # explicativa per a l'admin de Django; això és el text CURT que es pinta a l'usuari, a
+    # pantalla i al full imprès. Mateix text als 3 idiomes —dada de domini, com LINEAR/STEP—
+    # per això és UNA sola taula i el frontend NOMÉS la consumeix via `/vocabulari/`
+    # (Llei d'Agus 08/08, `vocabulariDominiFont.js`: cap enumeració de domini es declara al
+    # frontend). `(llarga, curta)`: la curta és per a columnes estretes (taula impresa Q8, 22mm).
+    DECISIO_ETIQUETES = {
+        DECISIO_ACCEPTED: ('OK', 'OK'),
+        DECISIO_ADJUSTED: ('ADJUSTED', 'ADJUSTED'),
+        DECISIO_REJECTED: ('NO OK, FOLLOW SPEC', 'NO OK'),
+    }
+
+    @classmethod
+    def etiqueta_decisio(cls, codi, curta=False):
+        """Etiqueta de pantalla/paper per a un codi de `decisio`, o `''` si el codi no hi és
+        (p.ex. `''` = sense decidir, que mai té etiqueta pròpia — v. comentari de dalt)."""
+        parell = cls.DECISIO_ETIQUETES.get(codi)
+        if not parell:
+            return ''
+        return parell[1] if curta else parell[0]
+
     # C1 — la capa (declaració canònica a `models_app.BaseMeasurement.capa`).
     capa = models.CharField(
         max_length=20, default='exterior', db_index=True,
