@@ -17,6 +17,7 @@ import { effectiveRegime, etiquetaRegla, liniesBreaks } from '../../utils/gradin
 import { formatDelta } from '../../utils/format'
 import { clauDeFila } from '../../utils/identitatMesura'
 import { cellaEscalat } from '../../utils/cellaEscalat'
+import { InfoTraduccio } from '../EditableTable/EditableTable'
 
 // Etiqueta d'una versió: la primera (v1) és Base; les següents són Fit N amb N = version_number - 1.
 const versionLabel = (vn, idx, t) =>
@@ -59,11 +60,15 @@ export function finestraHistoric(total, from) {
 // Sense `baseLabel` (model sense base_size_label; avui: cap) no hi ha eix → cap group.
 //
 // `opts.hist` engega el paginador (fitting) i `opts.decisio`, el bloc de Decisió (Veredicte · Nota).
-// Tots dos són OPT-IN: sense ells la graella és exactament la d'abans, que és com la fan servir
-// FittingDetail en revisió i el repàs.
+// `opts.impacte` (maqueta v2) engega la columna «Impacte derivat», ENTRE Fit actual i Veredicte:
+// a diferència dels `trailCols` (nodes ja renderitzats, passius), aquesta viu com a slot propi
+// (`impacteLabel`) perquè el botó «Usar» ha d'escriure al FIT ACTUAL de la germana pel MATEIX
+// camí que l'input (`onChange`+`commitFor` de MeasureGrid) — cap trailCol té accés a aquell buffer.
+// Tots tres opts són OPT-IN: sense ells la graella és exactament la d'abans, que és com la fan
+// servir FittingDetail en revisió i el repàs.
 export function buildFittingGroups(baseLabel, versionNumbers, t, opts = {}) {
   if (!baseLabel) return []
-  const { hist = null, decisio = false } = opts
+  const { hist = null, decisio = false, impacte = false } = opts
   const total = versionNumbers.length
   const from = hist ? finestraHistoric(total, hist.from) : 0
   const visibles = hist ? versionNumbers.slice(from, from + HIST_FINESTRA) : versionNumbers
@@ -83,6 +88,9 @@ export function buildFittingGroups(baseLabel, versionNumbers, t, opts = {}) {
       key: `v${vn}`, label: versionLabel(vn, versionNumbers.indexOf(vn), t),
     })),
     activeLabel: t('fitting.grid.fit_current'),
+    impacteLabel: (decisio && impacte) ? (
+      <span>{t('fitting.grid.col_impacte')}<InfoTraduccio text={t('fitting.grid.col_impacte_help')} /></span>
+    ) : null,
     trailCols: decisio
       ? [{ key: 'veredicte', label: t('fitting.grid.col_verdict') },
          { key: 'nota', label: t('fitting.grid.col_note') }]
@@ -104,7 +112,7 @@ export function buildFittingRows(pomRows, baseLabel, versionNumbers, opts = {}) 
   // OPTIMISTA que es consulta amb `in` i no per veritat: `null` hi és un valor legítim —«s'acaba
   // de treure el veredicte»— i amb `||` es llegiria com «no hi ha res al buffer» i la cel·la
   // tornaria a pintar el que hi havia desat.
-  const { decisio = null } = opts
+  const { decisio = null, impacte = null } = opts
   return (pomRows || []).map(row => {
     const cells = {}
     if (baseLabel) {
@@ -116,6 +124,10 @@ export function buildFittingRows(pomRows, baseLabel, versionNumbers, opts = {}) 
       const veredicte = !line ? null
         : (decisio && line.id in decisio.valors) ? decisio.valors[line.id]
           : (line.decisio || null)
+      // v2 — LA PROPOSTA D'UNA GERMANA DERIVADA. `impacte` és el mapa `{bm_id: {proposat,
+      // regla_text}}` de la darrera `proposta()` (CheckMeasureEditor, debounced). Només les
+      // germanes (`origen==='DERIVAT'`) en poden tenir: la mare mai es proposa res a si mateixa.
+      const propostaG = (impacte && line && row.origen === 'DERIVAT') ? impacte[row.bm_id] : null
       cells[baseLabel] = {
         history,
         active: line ? {
@@ -125,6 +137,9 @@ export function buildFittingRows(pomRows, baseLabel, versionNumbers, opts = {}) 
             onVeredicte: (v) => decisio.onVeredicte(line.id, v),
           } : {}),
         } : null,
+        impacte: propostaG
+          ? { lineId: line.id, bmId: row.bm_id, proposat: propostaG.proposat, reglaText: propostaG.regla_text }
+          : null,
         ...(decisio ? {
           trail: {
             veredicte: line

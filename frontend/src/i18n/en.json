@@ -2429,6 +2429,10 @@
       "hist_prev": "Previous takes",
       "hist_next": "Next takes",
       "hist_range": "{{de}}-{{a}} of {{total}}",
+      "col_impacte": "Derived impact",
+      "col_impacte_help": "When you change a measure with related instances, the impact on them is proposed here. Use the proposal, keep the value, or enter your own.",
+      "impacte_use": "Use",
+      "impacte_used": "Used",
       "col_verdict": "Verdict",
       "verdicte": {
         "accepted": "Accepted — the measured value stands",

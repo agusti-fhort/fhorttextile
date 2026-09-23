@@ -2429,6 +2429,10 @@
       "hist_prev": "Preses anteriors",
       "hist_next": "Preses següents",
       "hist_range": "{{de}}-{{a}} de {{total}}",
+      "col_impacte": "Impacte derivat",
+      "col_impacte_help": "Quan canvies una mesura amb instàncies relacionades, aquí es proposa com les afectaria. Pots usar la proposta, mantenir el valor o escriure'n un altre.",
+      "impacte_use": "Usar",
+      "impacte_used": "Usada",
       "col_verdict": "Veredicte",
       "verdicte": {
         "accepted": "Acceptada — la mesura real es dona per bona",

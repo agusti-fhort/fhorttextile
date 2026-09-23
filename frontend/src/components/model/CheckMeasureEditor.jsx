@@ -4,7 +4,7 @@ import { clauDeFila, clauRegla, eixosDeLaFila, filesDeLaPeca } from '../../utils
 import { construeixFilesDePresa } from '../../utils/filesDePresa'
 import { useNavigate } from 'react-router-dom'
 import client from '../../api/client'
-import { models, sizeChecks, sizeCheckLines, baseMeasurements, pieceFittingLines } from '../../api/endpoints'
+import { models, sizeChecks, sizeCheckLines, baseMeasurements, pieceFittingLines, pieceFittings } from '../../api/endpoints'
 import { effectiveRegime, etiquetaRegla } from '../../utils/gradingRegime'
 import { aDocument, aMotor, opcionsDocument } from '../../utils/breakConvention'
 import { useEnumeracio } from '../../utils/vocabulariDominiFont'
@@ -456,6 +456,37 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
   const [veredictes, setVeredictes] = useState({})
   const [histFrom, setHistFrom] = useState(null)
   const totalPreses = raw?.versionNumbers?.length ?? 0
+
+  // v2 — IMPACTE DERIVAT (maqueta consentiment_germanes_v2, REFER COMMIT 5). `impactMap` és
+  // `{bm_id: {proposat, regla_text}}`, la darrera `proposta()` (lectura pura, mai escriu) per a
+  // aquesta peça. Es refresca DEBOUNCED quan canvia el FIT ACTUAL d'una instància MESURADA (v.
+  // `onSave`, més avall) — no a cada tecla, i mai per l'edició d'una germana (que només es mira
+  // a si mateixa). `col_impacte_help` diu a l'usuari la mateixa llei en una frase.
+  const [impactMap, setImpactMap] = useState({})
+  const impacteTimerRef = useRef(null)
+  const refreshImpacte = useCallback(() => {
+    const pieceFittingId = raw?.pieceFittingId
+    if (!pieceFittingId) return
+    pieceFittings.proposta(pieceFittingId).then(r => {
+      const map = {}
+      for (const bucket of (r.data?.poms || [])) {
+        for (const g of (bucket.germanes || [])) map[g.bm_id] = { proposat: g.proposat, regla_text: g.regla_text }
+      }
+      setImpactMap(map)
+    }).catch(() => { /* lectura pura: si peta, la columna es queda com estava */ })
+  }, [raw?.pieceFittingId])
+  useEffect(() => () => clearTimeout(impacteTimerRef.current), [])
+  const scheduleImpacte = useCallback(() => {
+    clearTimeout(impacteTimerRef.current)
+    impacteTimerRef.current = setTimeout(refreshImpacte, 600)
+  }, [refreshImpacte])
+  // Primera pintada de la sessió: si ja hi ha una diferència pendent de germanes (p.ex. una
+  // sessió represa), la columna l'ha de mostrar sense esperar que ningú toqui res.
+  useEffect(() => {
+    if (src.kind === 'fitting' && !readOnly && raw?.pieceFittingId) refreshImpacte()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [raw?.pieceFittingId])
+
   const decisio = src.kind === 'fitting' && !readOnly ? {
     valors: veredictes,
     onVeredicte: (lineId, v) => {
@@ -476,8 +507,9 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
     onMove: (dir) => setHistFrom(f => finestraHistoric(totalPreses, (f ?? Math.max(0, totalPreses - 2)) + dir)),
   } : null
 
+  const impacte = src.kind === 'fitting' && !readOnly ? impactMap : null
   const ctx = { t, model, readOnly, lockRules, onFeedback, sizeRun,
-                fittingSession: sourceCtx?.fittingSession, decisio, hist }
+                fittingSession: sourceCtx?.fittingSession, decisio, hist, impacte }
 
   // 🔴 LA CÀRREGA QUE ARRIBA TARD NO POT MANAR (05/08).
   //
@@ -554,9 +586,21 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
   // onSave el fa la font (check: PATCH size-check-line; fitting: despatx STEP/LINEAR). Depèn de raw
   // (el fitting hi llegeix el mapa de règims). onNomSave/onReorder: comuns, delegats a la font i
   // rellegint (mirall del comportament anterior). lockRules bloqueja el nom (mode sessió).
-  const onSave = useCallback((lineId, value) => (raw ? src.makeOnSave(raw, ctx)(lineId, value) : Promise.resolve()),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [raw, src])
+  //
+  // v2 — QUAN CANVIA LA MARE, LA COLUMNA D'IMPACTE ES REFRESCA. Només si el lineId escrit
+  // pertany a una fila MESURADA (`origen !== 'DERIVAT'`) de la talla base: una germana que
+  // s'edita a si mateixa (a mà o via «Usar») no proposa res a ningú, i re-consultar-hi giraria
+  // en buit. `raw.pomRows[].cells[baseLabel].id` és la línia real (v. `deriveFitting`, a dalt).
+  const onSave = useCallback((lineId, value) => {
+    if (!raw) return Promise.resolve()
+    const p = Promise.resolve(src.makeOnSave(raw, ctx)(lineId, value))
+    if (src.kind === 'fitting' && !readOnly) {
+      const row = (raw.pomRows || []).find(r => r.cells?.[raw.baseLabel]?.id === lineId)
+      if (row && row.origen !== 'DERIVAT') p.then(() => scheduleImpacte())
+    }
+    return p
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [raw, src, readOnly, scheduleImpacte])
   const onNomSave = useCallback((bmId, value) =>
     Promise.resolve(src.onNomSave?.(bmId, value))
       .then(() => load())

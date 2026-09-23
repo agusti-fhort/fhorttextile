@@ -360,6 +360,45 @@ function ActiveCell({ active, editable, value, edited, onChange, onCommit, focus
   )
 }
 
+// v2 — LA CEL·LA «IMPACTE DERIVAT» (maqueta consentiment_germanes_v2). Viu ENTRE l'activa i els
+// trailCols perquè «Usar» ha de fer EXACTAMENT el mateix que teclejar el valor a mà a la FIT
+// ACTUAL de la mateixa fila: `onChange`+`commitFor` del MATEIX lineId (v. `onUsarImpacte`, més
+// avall), no una escriptura paral·lela que la graella no sap llegir.
+//
+// MESURAT MANA (LLEI de l'ordre) — un cop la germana s'ha tocat A MÀ (`tocada`, ve de
+// `edited.has(lineId)`) i el valor ja NO és la proposta, la cel·la calla: la proposta «desapareix
+// … fins que la mare torni a canviar», que és quan arriba un `impacte` nou (o cap) des de fora.
+// Si `tocada` però el valor SÍ coincideix amb la proposta (típicament perquè s'ha clicat «Usar»,
+// que també marca `edited`), es queda i mostra «Usada».
+function ImpacteCell({ impacte, currentValue, tocada, unit, onUsar }) {
+  const { t } = useTranslation()
+  const td = { padding: '5px 8px', borderBottom: '1px solid var(--line-soft)', verticalAlign: 'middle' }
+  if (!impacte) return <td style={td} />
+  const cur = toNum(currentValue)
+  const usada = cur != null && Math.abs(cur - impacte.proposat) < 1e-6
+  if (tocada && !usada) return <td style={td} />
+  return (
+    <td style={td}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 24 }}>
+        <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums', minWidth: 40, textAlign: 'right' }}>
+          {fmtMeasure(impacte.proposat, unit) ?? '—'}
+        </span>
+        <span style={{ color: 'var(--text-soft)', fontSize: 'var(--fs-caption)', flex: 1 }}>{impacte.reglaText}</span>
+        <button type="button" disabled={usada} onClick={() => onUsar(impacte)}
+          style={{
+            font: 'inherit', fontSize: 10, lineHeight: '14px', padding: '2px 8px',
+            borderRadius: 'var(--r-ctrl)', whiteSpace: 'nowrap', cursor: usada ? 'default' : 'pointer',
+            border: `1px solid ${usada ? 'var(--ok)' : 'var(--gold-border)'}`,
+            background: usada ? 'var(--ok-bg)' : 'var(--white)',
+            color: usada ? 'var(--ok)' : 'var(--text-main)',
+          }}>
+          {usada ? t('fitting.grid.impacte_used') : t('fitting.grid.impacte_use')}
+        </button>
+      </div>
+    </td>
+  )
+}
+
 // Sprint NOMS-POM (30/07) — input inline del BATEIG: ASPECTE DE TEXT PLA en repòs, camp en
 // hover/focus (maqueta aprovada, pestanya 1). Desa on-blur i només si el text ha canviat de debò.
 // Buit no és un buit: el placeholder ensenya el que en diu el CATÀLEG, que és qui mana mentre
@@ -670,6 +709,16 @@ export default function MeasureGrid({
     })
   }, [onSave])
 
+  // v2 — «USAR» LA PROPOSTA D'IMPACTE: el MATEIX camí que l'input (`onChange` + `commitFor` del
+  // lineId de la germana), perquè la cel·la activa d'aquella fila i el buffer `vals` en surtin
+  // sincronitzats exactament com si el tècnic hi hagués teclejat el número. El valor viatja
+  // CANÒNIC (cm, punt) — `String(proposat)` — mateixa convenció que `bump()`, unes línies amunt.
+  const onUsarImpacte = useCallback((imp) => {
+    const raw = String(imp.proposat)
+    onChange(imp.lineId, raw)
+    return commitFor(imp.lineId)(raw)
+  }, [onChange, commitFor])
+
   if (!rows.length) return empty
 
   // Offsets sticky acumulats: Capa(0) · POM · Nom · leadCols… (sense mutació, per al react-compiler).
@@ -710,7 +759,7 @@ export default function MeasureGrid({
   // El `+1` de la columna activa només compta si el grup en té (v. `senseActiva`). Punt únic
   // de l'amplada d'un grup: la capçalera i el cos hi passen tots dos.
   const ampladaGrup = (g) => (g.historyCols?.length || 0) + (g.senseActiva ? 0 : 1)
-                             + (g.trailCols?.length || 0)
+                             + (g.impacteLabel ? 1 : 0) + (g.trailCols?.length || 0)
   const totalGroupCols = groups.reduce((s, g) => s + ampladaGrup(g), 0)
   const identitatHd = (left, w) => stickyHd(left, w)     // POM/Nom: mai del bloc de regla
 
@@ -791,6 +840,7 @@ export default function MeasureGrid({
               const activeSub = { ...sub(false), background: 'var(--sel)' }   // NOMÉS la columna activa destaca
               const hs = (g.historyCols || []).map((h, idx) => <th key={`${g.key}-h-${h.key}`} style={sub(idx === 0)}>{h.label}</th>)
               if (!g.senseActiva) hs.push(<th key={`${g.key}-active`} style={activeSub}>{g.activeLabel}</th>)
+              if (g.impacteLabel) hs.push(<th key={`${g.key}-impacte`} style={{ ...sub(false), textAlign: 'center' }}>{g.impacteLabel}</th>)
               for (const tcol of (g.trailCols || [])) hs.push(<th key={`${g.key}-t-${tcol.key}`} style={{ ...sub(false), textAlign: 'center' }}>{tcol.label}</th>)
               return hs
             })}
@@ -875,6 +925,14 @@ export default function MeasureGrid({
                         value={a ? (vals[a.lineId] ?? '') : ''} edited={a ? edited.has(a.lineId) : false}
                         onChange={onChange} onCommit={a ? commitFor(a.lineId) : (() => Promise.resolve())} focusRef={focusRef}
                         registerInput={registerInput} onNav={onNav} />
+                    )
+                  }
+                  if (g.impacteLabel) {
+                    out.push(
+                      <ImpacteCell key={`${g.key}-impacte`} impacte={cell.impacte}
+                        currentValue={a ? (vals[a.lineId] ?? '') : ''}
+                        tocada={a ? edited.has(a.lineId) : false}
+                        unit={unit} onUsar={onUsarImpacte} />
                     )
                   }
                   for (const tcol of (g.trailCols || [])) {

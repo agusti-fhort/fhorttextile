@@ -2429,6 +2429,10 @@
       "hist_prev": "Tomas anteriores",
       "hist_next": "Tomas siguientes",
       "hist_range": "{{de}}-{{a}} de {{total}}",
+      "col_impacte": "Impacto derivado",
+      "col_impacte_help": "Al cambiar una medida con instancias relacionadas, aquí se propone cómo les afectaría. Puedes usar la propuesta, mantener el valor o escribir otro.",
+      "impacte_use": "Usar",
+      "impacte_used": "Usada",
       "col_verdict": "Veredicto",
       "verdicte": {
         "accepted": "Aceptada — la medida real se da por buena",

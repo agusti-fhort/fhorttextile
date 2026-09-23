@@ -99,11 +99,12 @@ export const fittingSource = {
     return buildFittingGroups(raw.baseLabel, raw.versionNumbers, ctx.t, {
       hist: ctx.hist || null,
       decisio: !!ctx.decisio,
+      impacte: !!ctx.impacte,
     })
   },
 
   buildRows(raw, ctx) {
-    return buildFittingRows(raw.pomRows, raw.baseLabel, raw.versionNumbers, { decisio: ctx.decisio })
+    return buildFittingRows(raw.pomRows, raw.baseLabel, raw.versionNumbers, { decisio: ctx.decisio, impacte: ctx.impacte })
   },
 
   // onSave despatxa per règim (STEP desa; LINEAR propaga), com el fitting històric. Només les línies

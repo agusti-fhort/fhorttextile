@@ -8,6 +8,15 @@ import { boto } from '../ui/buttons'
 // XC) + tasca a Done + retorn (Y6). Si el close torna 400 code=grading_sealed, modal de reobertura
 // explícita → repeteix amb allow_reopen_sealed. Descartar canvis reverteix les preses i deixa la
 // tasca Paused (no Done). MOTOR intacte: close/seal/discard/transition_task es criden, no es toquen.
+//
+// v2 (REFER COMMIT 5, maqueta consentiment_germanes_v2) — CAP MODAL DE CONSENTIMENT. El «què fem
+// amb cada germana» ja no es decideix en una pantalla a part: es decideix INLINE a la graella
+// (columna «Impacte derivat», `MeasureGrid`/`fittingGridAdapter`), on cada FIT ACTUAL de germana
+// s'autodesa pel seu propi camí en editar-se (a mà o amb «Usar»). «Gravar i tornar» només
+// consulta `GET …/proposta/` (pura) UN COP MÉS per saber «el que hi ha a la graella» de cada
+// germana (`g.actual`, ja reflecteix qualsevol desat previ) i l'envia com a `decisions` perquè el
+// backend hi infereixi MANTINGUT/PROPOSTA/MANUAL — mateixa porta que l'antic modal obria, sense
+// cap pas intermedi.
 
 const MONO = 'IBM Plex Mono, monospace'
 // CODA · retoc 3 (Agus) — «GRAVAR I TORNAR» ÉS EL BLAU D'AQUESTA PANTALLA (§5.1): és el que
@@ -27,14 +36,18 @@ export default function SessionActions({ session, pieceFittingId, taskId, onSave
   const [sealedModal, setSealedModal] = useState(null)   // {msg} de la resposta 400
   const [discardMotiu, setDiscardMotiu] = useState(null) // string | null (obert)
 
-  // Gravar: close (amb reobertura opcional) → seal → tasca Done → retorn. Migra la seqüència de doSave.
-  const doSave = async (allowReopen = false) => {
+  // El tancament REAL (close + seal + tasca + retorn), amb o sense `decisions`. Migra la seqüència
+  // de doSave; `decisions` hi viatja de puntes a puntes (inclòs el reintent de reobertura) perquè
+  // un 400 `grading_sealed` no obligui a re-consultar la proposta ni torni a preguntar res.
+  const tanca = async (allowReopen, decisions) => {
     setBusy(true); setErr(null); setSealedModal(null)
     try {
-      await pieceFittings.close(pieceFittingId, allowReopen ? { allow_reopen_sealed: true } : {})
+      const body = allowReopen ? { allow_reopen_sealed: true } : {}
+      if (decisions) body.decisions = decisions
+      await pieceFittings.close(pieceFittingId, body)
     } catch (e) {
       const data = e?.response?.data || {}
-      if (data.code === 'grading_sealed') { setSealedModal({ msg: data.error }); setBusy(false); return }
+      if (data.code === 'grading_sealed') { setSealedModal({ msg: data.error, decisions }); setBusy(false); return }
       // XC — missatge REAL del servidor, fallback genèric.
       setErr(data.error || data.detail || t('fitting.save.save_error_generic')); setBusy(false); return
     }
@@ -48,6 +61,29 @@ export default function SessionActions({ session, pieceFittingId, taskId, onSave
     // tasca viva sense dir-ho a ningú (germà de §S-5).
     setBusy(false)
     onSaved?.()
+  }
+
+  // Gravar: consulta PRIMER `proposta/` (pura, mai escriu). `buit=true` → cap germana afectada,
+  // close directe. Si no, «el que hi ha a la graella» — `g.actual` de cada germana, que ja
+  // reflecteix el seu propi autodesat (a mà o amb «Usar» a la columna «Impacte derivat») — es
+  // reenvia com a `decisions`; el backend hi classifica MANTINGUT/PROPOSTA/MANUAL comparant-lo
+  // amb el que ja sap. Cap modal, cap pas intermedi.
+  const doSave = async () => {
+    setBusy(true); setErr(null); setSealedModal(null)
+    let decisions = null
+    try {
+      const r = await pieceFittings.proposta(pieceFittingId)
+      if (!r.data.buit) {
+        decisions = {}
+        for (const bucket of r.data.poms) {
+          for (const g of bucket.germanes) decisions[g.bm_id] = g.actual
+        }
+      }
+    } catch {
+      // La proposta és una LECTURA; si peta, no bloqueja «Gravar i tornar» — cau al camí sense
+      // consentiment (el mateix que hi havia abans que aquest endpoint existís).
+    }
+    await tanca(false, decisions)
   }
 
   // Descartar canvis: revert de les preses a l'obertura; la tasca torna a Paused (segueix viva).
@@ -75,7 +111,7 @@ export default function SessionActions({ session, pieceFittingId, taskId, onSave
     <div style={{ marginTop: 16 }}>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         <button type="button" style={btn('gold', busy)} disabled={busy}
-          onClick={() => doSave(false)}>{t('fitting.save.save_and_back')}</button>
+          onClick={doSave}>{t('fitting.save.save_and_back')}</button>
         <button type="button" style={btn('plain', busy)} disabled={busy}
           onClick={doDiscardChanges}>{t('fitting.save.discard_changes')}</button>
         <button type="button" style={btn('err', busy)} disabled={busy}
@@ -96,7 +132,7 @@ export default function SessionActions({ session, pieceFittingId, taskId, onSave
               <button type="button" style={btn('plain', busy)} disabled={busy}
                 onClick={() => setSealedModal(null)}>{t('common.cancel')}</button>
               <button type="button" style={btn('gold', busy)} disabled={busy}
-                onClick={() => doSave(true)}>{t('fitting.save.reopen_confirm')}</button>
+                onClick={() => tanca(true, sealedModal.decisions ?? null)}>{t('fitting.save.reopen_confirm')}</button>
             </div>
           </div>
         </div>
