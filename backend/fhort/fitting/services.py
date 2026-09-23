@@ -718,6 +718,17 @@ def consolidate_base_from_fitting(pf, *, auth_user=None):
 
     Reusat pel `close` (comportament idèntic al bloc inline anterior) i per la propagació
     conscient (consolidar la realitat mesurada abans que el motor llegeixi la base).
+
+    LLEI (Agus, Patró C, 23/09) — UN VALOR MESURAT MANA SOBRE UN DE DERIVAT. Dues fases, no
+    una: (1) s'escriuen PRIMER totes les línies mesurades d'aquesta sessió, cadascuna a la
+    SEVA `BaseMeasurement`; (2) NOMÉS DESPRÉS es deriva cap a les germanes, excloent-ne les
+    que ja pertanyen al conjunt mesurat al pas (1). Abans, les dues fases anaven intercalades
+    línia a línia: consolidar una instància disparava `aplica_derivacio`, que escrivia TOTES
+    les germanes vives —incloent-hi una altra instància d'aquesta MATEIXA sessió que encara
+    no havia arribat el seu torn— i el seu propi pas la tornava a sobreescriure després, però
+    amb sessions de tres instàncies del mateix POM mesurades a la vegada, l'ordre d'iteració
+    decidia quina de les tres quedava trepitjada per la propagació d'una altra abans que li
+    toqués el torn.
     """
     from fhort.fitting.models import PieceFittingLine
     from fhort.models_app.models import BaseMeasurement
@@ -733,10 +744,18 @@ def consolidate_base_from_fitting(pf, *, auth_user=None):
     # `BaseMeasurement`, la derivació a les germanes i el Welford del cridador, que menja
     # `consolidated`—: filtrant a la font cap de les tres no la pot veure, i cap refosa futura
     # del cos no la pot perdre.
-    linies = (PieceFittingLine.objects
-              .filter(piece_fitting=pf)
-              .exclude(decisio=PieceFittingLine.DECISIO_REJECTED)
-              .select_related('pom'))
+    #
+    # ORDRE DETERMINISTA (POM, capa, instància): amb el conjunt exclòs calculat al pas 1
+    # l'ordre ja no altera el resultat final —cap valor mesurat pot ser trepitjat, sigui quin
+    # sigui l'ordre de procés—, però fixar-lo fa el rastre (l'ordre dels logs de canvi)
+    # reproduïble.
+    linies = list(PieceFittingLine.objects
+                  .filter(piece_fitting=pf)
+                  .exclude(decisio=PieceFittingLine.DECISIO_REJECTED)
+                  .select_related('pom')
+                  .order_by('pom_id', 'capa', 'instancia'))
+
+    a_consolidar = []
     for line in linies:
         if line.valor_real is None:
             continue
@@ -744,6 +763,16 @@ def consolidate_base_from_fitting(pf, *, auth_user=None):
             continue  # no change on this line
         if line.size_label.strip() != base_size:
             continue  # PEÇA 4: la sessió de fitting toca NOMÉS la talla base
+        a_consolidar.append(line)
+
+    # El conjunt (pom, capa, instància) que aquesta correguda escriu com a MESURAT: cap
+    # d'aquestes files pot acabar amb un valor DERIVAT de la propagació d'una germana seva.
+    mesurades = {(line.pom_id, line.capa, line.instancia) for line in a_consolidar}
+
+    # PAS 1 — escriu TOTS els valors mesurats abans de derivar cap. Guarda (bm, valor_anterior)
+    # per a cada línia perquè el pas 2 calculi l'increment sense tornar a llegir la BD.
+    per_linia = {}
+    for line in a_consolidar:
         # FASE_3/C1-ins — la consolidació torna el valor mesurat a la SEVA mesura base. La
         # línia sap dir els dos eixos (els va heretar de l'spec, aquí a sobre); el lookup
         # els ha de dir també, o la rectificació d'una germana aterraria sobre l'altra i el
@@ -766,16 +795,22 @@ def consolidate_base_from_fitting(pf, *, auth_user=None):
         bm._fitting_ref = sf            # MeasurementChangeLog.fitting_ref (→ SizeFitting)
         bm._motiu = f'Fitting · sessió {pf.session_id} · peça {pf.pk}'
         bm.save()
-        # C3/E1 — LA DERIVACIÓ. Aquest és un dels dos únics punts d'escriptura de mesura de tot
-        # el backend que coneix els seus eixos per CÒPIA i no per literal (els hereta de la
-        # línia), i on el valor anterior, el nou i la fila hi són alhora: l'increment ja és
-        # calculable aquí, sense endevinar res. Es mou el VALOR de les germanes, mai el
-        # grading; la folgança es conserva sola.
-        # Amb les comportes de C1/C1-ins vives no hi ha cap germana i això és un no-op.
+        per_linia[line.pk] = (bm, valor_anterior)
+        consolidated.append(line)
+
+    # PAS 2 — LA DERIVACIÓ, ara que totes les mesures pròpies ja són escrites. Aquest és un
+    # dels dos únics punts d'escriptura de mesura de tot el backend que coneix els seus eixos
+    # per CÒPIA i no per literal (els hereta de la línia), i on el valor anterior, el nou i la
+    # fila hi són alhora: l'increment ja és calculable aquí, sense endevinar res. Es mou el
+    # VALOR de les germanes, mai el grading; la folgança es conserva sola.
+    # `exclou=mesurades` és la LLEI: una germana que aquesta mateixa sessió ja ha mesurat no
+    # rep la propagació d'una altra — el seu valor és seu, no una conseqüència de la del costat.
+    # Amb les comportes de C1/C1-ins vives no hi ha cap germana i això és un no-op.
+    for line in a_consolidar:
+        bm, valor_anterior = per_linia[line.pk]
         aplica_derivacio(
             bm, valor_anterior, line.valor_real, auth_user=auth_user, fitting_ref=sf,
-            motiu_origen=f'fitting sessió {pf.session_id}')
-        consolidated.append(line)
+            motiu_origen=f'fitting sessió {pf.session_id}', exclou=mesurades)
     return consolidated
 
 

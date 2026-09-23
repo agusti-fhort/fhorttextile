@@ -122,7 +122,7 @@ def _eix_de(bm, germana):
     return EIX_CAPA if germana.instancia == bm.instancia else EIX_INSTANCIA
 
 
-def deriva(bm, valor_anterior, valor_nou, *, nomes_actives=True):
+def deriva(bm, valor_anterior, valor_nou, *, nomes_actives=True, exclou=None):
     """Donada una fila que canvia de valor, retorna QUÈ els tocaria a les seves germanes.
 
     Pur: no escriu res, no toca `bm`, no dispara cap signal.
@@ -134,6 +134,11 @@ def deriva(bm, valor_anterior, valor_nou, *, nomes_actives=True):
       · no hi ha cap germana viva,
       · una germana no té valor (`base_value_cm` NULL, fila materialitzada sense mesurar):
         moure-la voldria dir inventar-li un valor de partida, i el servei no fabrica mesures.
+
+    `exclou` (opcional): conjunt de `(pom_id, capa, instancia)` que NO s'han de tocar encara
+    que siguin germanes vives amb valor — la LLEI d'un valor mesurat mana sobre un de derivat
+    (Patró C, 23/09): el cridador hi passa les instàncies que ELL MATEIX ja ha escrit com a
+    MESURADES en aquesta mateixa correguda, perquè la propagació d'una no en trepitgi una altra.
     """
     if valor_anterior is None or valor_nou is None:
         return []
@@ -143,6 +148,8 @@ def deriva(bm, valor_anterior, valor_nou, *, nomes_actives=True):
 
     fora = []
     for g in germanes_de(bm, nomes_actives=nomes_actives):
+        if exclou and (g.pom_id, g.capa, g.instancia) in exclou:
+            continue
         if g.base_value_cm is None:
             # Fila materialitzada sense valor: no hi ha res d'on partir. No se n'inventa cap.
             continue
@@ -161,7 +168,7 @@ def deriva(bm, valor_anterior, valor_nou, *, nomes_actives=True):
 
 
 def aplica(bm, valor_anterior, valor_nou, *, auth_user=None, motiu_origen='',
-           fitting_ref=None, nomes_actives=True):
+           fitting_ref=None, nomes_actives=True, exclou=None):
     """C3/E — calcula la derivació i l'ESCRIU a les germanes. Retorna el que ha aplicat.
 
     És l'única porta d'escriptura de la derivació, i hi és perquè els dos punts que la criden
@@ -173,11 +180,13 @@ def aplica(bm, valor_anterior, valor_nou, *, auth_user=None, motiu_origen='',
     El `motiu` diu de quina germana ve, perquè una entrada que digui «derivada» sense dir
     d'on obliga a endevinar.
 
+    `exclou`: v. `deriva()` — es passa tal qual, sense interpretar-lo aquí.
+
     NO obre transacció: la vol del cridador, que és qui sap si la correcció d'origen i la seva
     propagació han de caure juntes. Tots dos punts de la Fase E ja en tenen una.
     """
     aplicades = []
-    for d in deriva(bm, valor_anterior, valor_nou, nomes_actives=nomes_actives):
+    for d in deriva(bm, valor_anterior, valor_nou, nomes_actives=nomes_actives, exclou=exclou):
         from fhort.models_app.models import BaseMeasurement
         germana = BaseMeasurement.objects.get(pk=d.base_measurement_id)
         germana.base_value_cm = d.valor_proposat
