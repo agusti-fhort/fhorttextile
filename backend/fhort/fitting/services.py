@@ -708,6 +708,52 @@ def reconcilia_linies(pf) -> dict:
     return {'creades': creades, 'retirades': len(sobreres), 'congelada': False}
 
 
+def linies_mesurades_talla_base(pf):
+    """Les línies de `pf` que compten com a MESURADES a la talla base, en ordre determinista
+    (POM, capa, instància).
+
+    LLEI (Agus, DECISIONS 23/09/24/09) — «mesurada» = algú hi ha DIT alguna cosa, sense
+    mirar si difereix del teòric ni si `decisio` és buit. ⚠️ Això NO és `valor_real is not
+    None`: TOTA línia neix amb `valor_real = valor_teoric` (còpia, `create_piece_fitting`) i
+    `reconcilia_linies` reomple les germanes no tocades amb el MATEIX patró («pre-omplert
+    fantasma», comentari `models.py:441-456`) cada vegada que la presa s'obre — o sigui que
+    «porta un valor_real» és cert de TOTA línia, tocada o no, des del naixement. El predicat
+    correcte ja existeix i és el de la casa: `esdeveniments.linia_te_contingut` (marca
+    `presa_at` PRIMERA, després `decisio`/`nota`, i la desviació NOMÉS com a reserva per a
+    les files anteriors al camp) — la mateixa distinció que evita que el Repàs compti un
+    fitting que ningú no ha tocat. Reusar-lo aquí, no duplicar-lo, és el que tanca el cas
+    2578 de debò: una línia amb `presa_at` informat i `valor_real == valor_teoric` («ho he
+    mesurat i confirma el teòric») ara sí que compta, però una línia fantasma que ningú no
+    ha obert NO compta —que és exactament el que la primera versió d'aquest fix (23/09)
+    trencava: convertia CADA germana en «mesurada» només per haver-se reconciliat.
+
+    L'única exclusió addicional és D-31.21 (REJECTED: «la presa no val, NO sembra res»).
+
+    Extret de `consolidate_base_from_fitting` perquè el mateix predicat el necessita
+    `proposta_de_consolidacio` (consentiment de germanes, LLEI Agus 24/09) SENSE escriure
+    res — un sol lloc que digui «què és mesurat», no dos que puguin divergir.
+    """
+    from fhort.fitting.esdeveniments import linia_te_contingut
+    from fhort.fitting.models import PieceFittingLine
+
+    model = pf.model
+    base_size = (model.base_size_label or '').strip()
+    linies = (PieceFittingLine.objects
+              .filter(piece_fitting=pf)
+              .exclude(decisio=PieceFittingLine.DECISIO_REJECTED)
+              .select_related('pom')
+              .order_by('pom_id', 'capa', 'instancia'))
+
+    a_consolidar = []
+    for line in linies:
+        if not linia_te_contingut(line):
+            continue
+        if line.size_label.strip() != base_size:
+            continue  # PEÇA 4: la sessió de fitting toca NOMÉS la talla base
+        a_consolidar.append(line)
+    return a_consolidar
+
+
 def consolidate_base_from_fitting(pf, *, auth_user=None):
     """B3: consolida les línies de TALLA BASE d'un PieceFitting a BaseMeasurement.
 
@@ -743,39 +789,13 @@ def consolidate_base_from_fitting(pf, *, auth_user=None):
     `valor_real == valor_teoric` («ho he mesurat i confirma el teòric») compta; una fantasma
     que ningú no ha obert, no.
     """
-    from fhort.fitting.esdeveniments import linia_te_contingut
-    from fhort.fitting.models import PieceFittingLine
     from fhort.models_app.models import BaseMeasurement
     from fhort.models_app.services_derivacio import aplica as aplica_derivacio
     model = pf.model
     sf = pf.grading_version.size_fitting
-    base_size = (model.base_size_label or '').strip()
     consolidated = []
-    # D-31.21 — «la darrera mesura VÀLIDA escrita». Una línia REJECTED es desa i es veu, però
-    # NO sembra: el rebuig diu que la PRESA no val, i consolidar-la escriuria a la mesura base
-    # un número que la modista acaba de declarar dolent. L'exclusió va al queryset i no a un
-    # `continue` del cos perquè d'aquest helper en pengen TRES coses —la consolidació a
-    # `BaseMeasurement`, la derivació a les germanes i el Welford del cridador, que menja
-    # `consolidated`—: filtrant a la font cap de les tres no la pot veure, i cap refosa futura
-    # del cos no la pot perdre.
-    #
-    # ORDRE DETERMINISTA (POM, capa, instància): amb el conjunt exclòs calculat al pas 1
-    # l'ordre ja no altera el resultat final —cap valor mesurat pot ser trepitjat, sigui quin
-    # sigui l'ordre de procés—, però fixar-lo fa el rastre (l'ordre dels logs de canvi)
-    # reproduïble.
-    linies = list(PieceFittingLine.objects
-                  .filter(piece_fitting=pf)
-                  .exclude(decisio=PieceFittingLine.DECISIO_REJECTED)
-                  .select_related('pom')
-                  .order_by('pom_id', 'capa', 'instancia'))
 
-    a_consolidar = []
-    for line in linies:
-        if not linia_te_contingut(line):
-            continue
-        if line.size_label.strip() != base_size:
-            continue  # PEÇA 4: la sessió de fitting toca NOMÉS la talla base
-        a_consolidar.append(line)
+    a_consolidar = linies_mesurades_talla_base(pf)
 
     # El conjunt (pom, capa, instància) que aquesta correguda escriu com a MESURAT: cap
     # d'aquestes files pot acabar amb un valor DERIVAT de la propagació d'una germana seva.

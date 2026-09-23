@@ -550,6 +550,16 @@ class PieceFittingViewSet(mixins.RetrieveModelMixin,
             'id': pf.pk, 'gate': pf.gate, 'gate_motiu': pf.gate_motiu, 'gate_at': pf.gate_at,
         })
 
+    @action(detail=True, methods=['get'], url_path='proposta')
+    def proposta(self, request, pk=None):
+        """LLEI Agus 24/09 — CONSENTIMENT DE GERMANES. Proposta de consolidar aquesta peça a
+        la base, SENSE ESCRIURE RES (`services_consentiment.proposta_de_consolidacio`, pur).
+        El frontend la crida abans de «Gravar i tornar»: `buit=True` ⇒ cap modal, `close`
+        directe (comportament d'avui, intacte)."""
+        from fhort.fitting.services_consentiment import proposta_de_consolidacio
+        pf = self.get_object()
+        return Response(proposta_de_consolidacio(pf))
+
     @action(detail=True, methods=['post'])
     def close(self, request, pk=None):
         # XB: reobertura explícita d'un grading segellat (aprovada). Default False →
