@@ -11,6 +11,7 @@ i `fitting/services.py::consolidate_base_from_fitting` (mateix predicat de «mes
 from fhort.fitting.services import linies_mesurades_talla_base
 from fhort.models_app.models import BaseMeasurement
 from fhort.models_app.services_derivacio import deriva
+from fhort.pom.nomenclatura import codi_de, noms_de
 
 #: Únic origen que el defecte del modal tracta com «no mesurat» (LLEI Agus 24/09: «origen
 #: DERIVAT → proposta pre-usada; origen mesurat (FITTED/MANUAL/IMPORTED) → mantenir»).
@@ -82,9 +83,15 @@ def proposta_de_consolidacio(pf):
         clau = (line.pom_id, line.capa, line.instancia, line.garment)
         bm_actual = bms_actuals.get(clau)
         valor_anterior = bm_actual.base_value_cm if bm_actual else None
-        pom_codi = line.pom.codi_client
+        # ÀLIES > TENANT > GLOBAL — la mateixa cascada que `BaseMeasurementSerializer`
+        # (`models_app/serializers.py:463-472`), no `pom.codi_client`/`pom.nom_client` a
+        # seques: amb el tenant sense bateig (`nom_client=''`, sembra v5) el codi cru fallaria
+        # d'ensenyar el nom canònic. Nom EN: dada de domini (com el codi), no es tradueix.
+        pom_codi = codi_de(line.pom)
+        pom_nom = noms_de(line.pom)['nom_en']
 
-        bucket = per_pom.setdefault(pom_codi, {'pom': pom_codi, 'mesurades': [], 'germanes': []})
+        bucket = per_pom.setdefault(
+            pom_codi, {'pom': pom_codi, 'pom_nom': pom_nom, 'mesurades': [], 'germanes': []})
         germanes_bucket = germanes_per_pom.setdefault(pom_codi, {})
         bucket['mesurades'].append({
             'bm_id': bm_actual.pk if bm_actual else None,
