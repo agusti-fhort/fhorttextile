@@ -1185,6 +1185,72 @@ class ModelGradingOverride(models.Model):
         return f'{self.model} · {self.pom.codi_client} @ {self.size_label} = {self.value_cm}cm'
 
 
+class ModelInstanceOffset(models.Model):
+    """LLEI Agus 24/09 — la relació d'INSTÀNCIA (folgança) confirmada per a AQUEST model,
+    entre dues germanes del mateix (model, pom, capa) que difereixen d'INSTÀNCIA.
+
+    ⚠️ NO ÉS `ModelGradingRule` NI `ModelGradingOverride`. `ModelGradingRule` és, per
+    decisió de domini deliberada (Montse, comporta C1-ins, v. el seu propi docstring més
+    avall), SENSE `capa` ni `instancia` — la sisa dreta i l'esquerra GRADÚEN igual, i
+    aquesta taula no ho toca ni ho substitueix. `ModelGradingOverride` és un valor ABSOLUT
+    per a UNA TALLA NO-BASE; això és un DELTA a la BASE entre dues instàncies germanes.
+    Tres coses diferents, tres taules.
+
+    `delta` és SEMPRE `instancia_desti.valor - instancia_origen.valor` en el moment de la
+    confirmació (additiu, la mateixa forma que `services_derivacio.Derivacio.increment` —
+    es mou el VALOR, mai el grading). Cada parella es desa a LES DUES BANDES (origen↔destí,
+    delta i -delta) perquè la consulta sigui sempre una única igualtat directa, sense haver
+    de provar les dues direccions ni invertir signe al lector.
+
+    SOBIRANIA DEL MODEL: quan `services_derivacio.deriva` (o el seu embolcall del
+    consentiment) calcula la proposta per a una germana, consulta PRIMER aquesta taula —el
+    delta que EL MODEL ja ha confirmat una vegada guanya sempre—, i només si no n'hi ha cap
+    cau al càlcul en viu (la resta entre els valors actuals de les dues files, com fins ara).
+    Mai el catàleg ni el GTI: no hi ha (encara) cap plantilla de folgança a nivell d'item, i
+    si mai n'hi hagués, aquesta taula hi tindria prioritat igualment.
+    """
+    model = models.ForeignKey(Model, on_delete=models.CASCADE, related_name='instance_offsets')
+    pom = models.ForeignKey('pom.POMMaster', on_delete=models.PROTECT, related_name='model_instance_offsets')
+    capa = models.CharField(
+        max_length=20, default='exterior', db_index=True,
+        help_text="Capa de mesura: slug de pom.MeasurementLayer. FIXA per a la parella "
+                  "—aquesta taula és només per a l'eix d'INSTÀNCIA (mateixa capa).",
+    )
+    instancia_origen = models.CharField(max_length=60)
+    instancia_desti = models.CharField(max_length=60)
+    delta = models.FloatField(help_text='instancia_desti.valor − instancia_origen.valor, en cm.')
+    ORIGEN_FITTING = 'FITTING'
+    ORIGEN_CHOICES = [
+        (ORIGEN_FITTING, 'Confirmat en un fitting (consentiment de germanes)'),
+    ]
+    origen = models.CharField(max_length=20, choices=ORIGEN_CHOICES, default=ORIGEN_FITTING)
+    piece_fitting = models.ForeignKey(
+        'fitting.PieceFitting', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='instance_offsets_confirmats',
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='model_instance_offsets_creats',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Relació d\'instàncies del model (folgança confirmada)'
+        verbose_name_plural = 'Relacions d\'instàncies del model (folgança confirmada)'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['model', 'pom', 'capa', 'instancia_origen', 'instancia_desti'],
+                name='modelinstanceoffset_unic_per_parella_direccional',
+            ),
+        ]
+        ordering = ['model', 'pom', 'capa', 'instancia_origen', 'instancia_desti']
+
+    def __str__(self):
+        return (f'{self.model} · {self.pom.codi_client}/{self.capa} · '
+                f'{self.instancia_origen}→{self.instancia_desti} = {self.delta:+.2f}cm')
+
+
 class ModelGradingRule(models.Model):
     """PG-0 — Graduació canònica RESIDENT al model (una regla per (model, POM)).
 
