@@ -2531,22 +2531,7 @@
       "partial_close": "Se han grabado {{done}} de {{total}} piezas. La sesión no se ha cerrado: revísala antes de salir.",
       "not_sealed": "La sesión no se ha podido cerrar: quedan piezas sin resolver. Resuélvelas y vuelve a grabar.",
       "title_acta": "Ficha del fitting",
-      "acta_hint": "Sesión cerrada — acta de lo que se midió aquel día. Solo lectura.",
-      "consent_title": "Aplicar el fitting a la base",
-      "consent_subtitle": "{{count}} hermanas afectadas · {{poms}} POMs",
-      "consent_col_pom": "POM · instancia",
-      "consent_col_origen": "Origen",
-      "consent_col_actual": "Actual",
-      "consent_col_proposta": "Propuesta",
-      "consent_measured_at": "medido en el fitting",
-      "consent_era": "era {{value}}",
-      "consent_use": "Usar",
-      "consent_used": "Usada",
-      "consent_use_all": "Usar todas las propuestas",
-      "consent_reset": "Restablecer valores",
-      "consent_apply": "Aplicar",
-      "consent_badge_mesurat": "medido",
-      "consent_badge_derivat": "derivado"
+      "acta_hint": "Sesión cerrada — acta de lo que se midió aquel día. Solo lectura."
     },
     "convocatoria": "Convocatoria",
     "group": {

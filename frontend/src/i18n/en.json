@@ -2531,22 +2531,7 @@
       "partial_close": "Saved {{done}} of {{total}} pieces. The session was not closed: review it before leaving.",
       "not_sealed": "The session could not be closed: some pieces are unresolved. Resolve them and save again.",
       "title_acta": "Fitting record",
-      "acta_hint": "Session closed — a record of what was measured that day. Read only.",
-      "consent_title": "Apply the fitting to the base",
-      "consent_subtitle": "{{count}} sisters affected · {{poms}} POMs",
-      "consent_col_pom": "POM · instance",
-      "consent_col_origen": "Origin",
-      "consent_col_actual": "Actual",
-      "consent_col_proposta": "Proposal",
-      "consent_measured_at": "measured at fitting",
-      "consent_era": "was {{value}}",
-      "consent_use": "Use",
-      "consent_used": "Used",
-      "consent_use_all": "Use all proposals",
-      "consent_reset": "Reset values",
-      "consent_apply": "Apply",
-      "consent_badge_mesurat": "measured",
-      "consent_badge_derivat": "derived"
+      "acta_hint": "Session closed — a record of what was measured that day. Read only."
     },
     "convocatoria": "Fitting call",
     "group": {
