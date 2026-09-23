@@ -594,3 +594,63 @@ class FittingDurationStat(models.Model):
 
     def __str__(self):
         return f'FittingDurationStat n={self.n_mostres} mitjana={self.mitjana:.1f}min'
+
+
+class FittingSisterDecision(models.Model):
+    """LLEI Agus 24/09 — CONSENTIMENT DE GERMANES. Cap germana no mesurada s'escriu sense
+    una decisió explícita del tècnic: el sistema PROPOSA (`valor_proposat` + `regla_text`,
+    calculats per `services_derivacio.deriva`, pur) i aquesta fila en desa la TRIA.
+
+    Una per (piece_fitting, base_measurement) — «no tornar a preguntar»: si ja hi ha
+    decisió per aquesta germana en aquesta sessió, no es torna a mostrar al modal.
+
+    Per què una taula nova i no `MeasurementChangeLog`: aquell registre és append-only i
+    NOMÉS escriu quan `base_value_cm` canvia de debò (`models_app/signals.py:312-317`) — un
+    MANTINGUT no canvia cap valor i, per tant, mai hi generaria fila. Aquesta taula és
+    l'única que pot recordar «es va proposar X i es va triar mantenir».
+    """
+    DECISIO_MANTINGUT = 'MANTINGUT'
+    DECISIO_PROPOSTA = 'PROPOSTA'
+    DECISIO_MANUAL = 'MANUAL'
+    DECISIO_CHOICES = [
+        (DECISIO_MANTINGUT, 'Mantingut — es conserva el valor que ja tenia'),
+        (DECISIO_PROPOSTA, "Proposta usada — s'aplica el valor calculat per la derivació"),
+        (DECISIO_MANUAL, 'Valor manual — el tècnic ha introduït un valor propi'),
+    ]
+
+    piece_fitting = models.ForeignKey(
+        PieceFitting, on_delete=models.CASCADE, related_name='sister_decisions',
+    )
+    base_measurement = models.ForeignKey(
+        'models_app.BaseMeasurement', on_delete=models.CASCADE, related_name='sister_decisions',
+    )
+    # El valor de la germana ABANS d'aquesta decisió — el que el modal ensenyava com «era …».
+    valor_actual_abans = models.FloatField()
+    # El que `deriva()` proposava (pot ser el de `ModelInstanceOffset` si n'hi havia, o el
+    # calculat en viu com a `increment` — v. `fitting/services_consentiment.py`).
+    valor_proposat = models.FloatField()
+    # Frase humana de la proposta («waistband_seam = relaxed + 4,0»), congelada al moment de
+    # decidir: si l'usuari torna a obrir el modal d'una altra sessió, la frase d'avui no ha
+    # de canviar la que ja es va ensenyar aquí.
+    regla_text = models.CharField(max_length=255, blank=True, default='')
+    valor_final = models.FloatField()
+    decisio = models.CharField(max_length=10, choices=DECISIO_CHOICES)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='fitting_sister_decisions',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Decisió de germana (consentiment de fitting)'
+        verbose_name_plural = 'Decisions de germana (consentiment de fitting)'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['piece_fitting', 'base_measurement'],
+                name='fittingsisterdecision_unica_per_pf_i_germana',
+            ),
+        ]
+        ordering = ['piece_fitting', 'base_measurement']
+
+    def __str__(self):
+        return f'PF{self.piece_fitting_id} · BM{self.base_measurement_id} · {self.decisio}'
