@@ -5726,11 +5726,19 @@ export default function TechSheetEditor() {
             // La talla base porta la marca al MODEL: el builder hi pinta la franja de realçat, la
             // mateixa que la pantalla. El `*` es manté perquè sobreviu a l'imprès en blanc i negre.
             { key: sl, label: sl === base ? `${sl}*` : sl, width: 13, ...(sl === base ? { base: true } : {}) },
-            // M1 — «REAL» hi cap a UNA línia a 13 mm; «ACTUAL» en demanava 15,5 i partia en
-            // dues, i com que l'alçada de capçalera la mana el títol més alt de tota la taula,
-            // aquella segona línia la pagaven les catorze columnes. L'amplada es queda: el que
-            // s'ha alliberat és una línia de capçalera a la taula sencera, no un mil·límetre.
-            { key: `${sl}_act`, label: tEn('tech_sheet.q8_col_actual'), width: 13 },
+            // M1 (històric) — «REAL» cabia a 1 línia a 13mm; «ACTUAL» (6 car.) en demanava 15,5 i
+            // partia en dues, i com que l'alçada de capçalera la mana el títol més alt de tota la
+            // taula, aquella segona línia la pagaven les catorze columnes.
+            // ORDRE 23/09 — «SAMPLE» (6 car., la mateixa longitud que l'«ACTUAL» que M1 va haver
+            // de revertir) repeteix exactament aquell desbordament a 13mm: per això la columna
+            // puja a 18mm (com la seva germana `q8_fitting`, :5539), on hi caben 7 car./línia
+            // (aritmètica del renderitzador, DIAGNOSI_ETIQUETES_VEREDICTE_SAMPLE §1.5/2.2).
+            // ⚠️ NOMÉS AFECTA DOCUMENTS NOUS: aquest `width`/`label` es couen dins l'objecte quan
+            // la taula s'insereix (`inserirGrupPaginat`) i `services_ftt.pack` els desa tal qual
+            // al `.ftt` — un document ja generat es queda amb el «REAL»/13mm que tenia, per sempre
+            // (mateix comportament que ja tenien les xifres/veredictes: la fitxa és una FOTO, no
+            // una plantilla que es torna a resoldre en obrir-se).
+            { key: `${sl}_act`, label: tEn('tech_sheet.q8_col_actual'), width: 18 },
           ]),
         ],
         rows: g.files.map(f => [
