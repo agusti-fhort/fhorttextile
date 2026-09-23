@@ -177,3 +177,46 @@ class OrdreInversTest(_BaseInstanciesMultiples):
             self.assertEqual(b_rel.origen, 'FITTED')
             self.assertEqual(b_ext.origen, 'FITTED')
             self.assertEqual(b_seam.origen, 'FITTED')
+
+
+class InstanciaMesuradaSenseDesviacioTest(_BaseInstanciesMultiples):
+    """Cas 4 (LLEI Agus 24/09, cas 2578) — `seam` es mesura IGUAL al teòric (sense
+    desviació, `decisio` buida): és tan «mesurada» com `relaxed`/`extended`, i la seva
+    propagació NO l'ha de trepitjar encara que ella mateixa no escrigui res de nou."""
+
+    def test_la_no_desviada_no_es_trepitjada_per_les_altres_dues(self):
+        with comportes_alcades('models_app_basemeasurement', 'models_app_measurementchangelog',
+                               'fitting_piecefittingline'):
+            b_rel, b_ext, b_seam = self._tres_instancies()
+            pf = self._sessio()
+            self._linia(pf, RELAXED, 40.0, 44.0)   # +4, rectificada
+            self._linia(pf, EXTENDED, 42.0, 43.0)  # +1, rectificada
+            self._linia(pf, SEAM, 41.0, 41.0)      # mesurada, SENSE desviació, decisio buida
+
+            consolidate_base_from_fitting(pf, auth_user=self.user)
+
+            b_rel.refresh_from_db(); b_ext.refresh_from_db(); b_seam.refresh_from_db()
+            self.assertEqual(b_rel.base_value_cm, 44.0)
+            self.assertEqual(b_ext.base_value_cm, 43.0)
+            self.assertEqual(b_seam.base_value_cm, 41.0,
+                             'mesurada i confirmada: cap propagació de relaxed/extended la mou')
+            self.assertEqual(b_seam.origen, 'FITTED',
+                             'mesurada, no derivada — encara que el valor no hagi canviat')
+
+    def test_confirmada_repara_un_origen_derivat_previ(self):
+        """Si `seam` arribava DERIVAT (trepitjada d'una sessió anterior, abans del fix), una
+        nova confirmació mesurada l'ha de tornar a FITTED amb el valor correcte."""
+        with comportes_alcades('models_app_basemeasurement', 'models_app_measurementchangelog',
+                               'fitting_piecefittingline'):
+            b_rel, b_ext, b_seam = self._tres_instancies()
+            b_seam.base_value_cm = 45.0   # valor trepitjat, com deixaria el bug pre-a8575ec4
+            b_seam.origen = 'DERIVAT'
+            b_seam.save(update_fields=['base_value_cm', 'origen'])
+            pf = self._sessio()
+            self._linia(pf, SEAM, 41.0, 41.0)      # es torna a mesurar, SENSE desviació
+
+            consolidate_base_from_fitting(pf, auth_user=self.user)
+
+            b_seam.refresh_from_db()
+            self.assertEqual(b_seam.base_value_cm, 41.0)
+            self.assertEqual(b_seam.origen, 'FITTED')

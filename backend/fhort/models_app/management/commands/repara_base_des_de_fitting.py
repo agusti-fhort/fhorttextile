@@ -10,11 +10,12 @@ endavant; aquesta comanda repara el que ja hagi quedat trepitjat cap enrere.
 
 QUÈ TOCA, i NOMÉS AIXÒ: `BaseMeasurement` d'UN model amb `origen='DERIVAT'` per a les quals
 existeix una `PieceFittingLine` (de QUALSEVOL fitting d'aquest model) de la MATEIXA
-(pom, capa, instància, garment), a la talla base, amb veredicte informat (`decisio` ACCEPTED o
-ADJUSTED — REJECTED NO sembra, D-31.21), `valor_real` informat i diferent de `valor_teoric`
-(una rectificació real, no una confirmació). Amb més d'una línia candidata es tria la MÉS
-RECENT (data de sessió, després pk de `PieceFitting`, després pk de línia) — la mateixa noció
-d'«última mesura vàlida» que `consolidate_base_from_fitting`.
+(pom, capa, instància, garment), a la talla base, amb `valor_real` informat (REJECTED NO
+sembra, D-31.21 — és l'única exclusió; ni la desviació respecte de `valor_teoric` ni el
+`decisio` buit exclouen res més, LLEI Agus 24/09: v. `consolidate_base_from_fitting`). Amb
+més d'una línia candidata es tria la MÉS RECENT (data de sessió, després pk de
+`PieceFitting`, després pk de línia) — la mateixa noció d'«última mesura vàlida» que
+`consolidate_base_from_fitting`.
 
 Proposa: `base_value_cm := valor_real de la línia`, `origen := 'FITTED'`. Cap altra fila es
 toca — ni una BaseMeasurement que ja no sigui DERIVAT, ni una sense línia candidata.
@@ -52,12 +53,13 @@ class Command(BaseCommand):
                             help='Escriu. Sense aquest flag: dry-run (només llista).')
 
     def _linia_candidata(self, bm, base_size):
+        # LLEI Agus 24/09 — «mesurat» = valor_real present, tingui o no desviació ni decisio.
+        # L'única exclusió que queda és REJECTED (D-31.21: «la presa no val, NO sembra res»).
         return (PieceFittingLine.objects
                 .filter(piece_fitting__model_id=bm.model_id,
                         pom_id=bm.pom_id, capa=bm.capa, instancia=bm.instancia,
                         garment=bm.garment, size_label=base_size,
                         valor_real__isnull=False)
-                .exclude(decisio='')
                 .exclude(decisio=PieceFittingLine.DECISIO_REJECTED)
                 .select_related('piece_fitting__session')
                 .order_by('-piece_fitting__session__data', '-piece_fitting_id', '-id')
@@ -66,12 +68,10 @@ class Command(BaseCommand):
     def _proposta(self, bm, base_size):
         """Retorna la línia candidata i el valor a escriure, o `(None, None)` si aquesta
         `BaseMeasurement` no és una fila a reparar (llei del guard: només DERIVAT amb mesura
-        pròpia que de debò canvia el valor)."""
+        pròpia — mesurada, no necessàriament diferent del teòric)."""
         linia = self._linia_candidata(bm, base_size)
         if linia is None:
             return None, None
-        if abs(linia.valor_real - linia.valor_teoric) < 1e-6:
-            return None, None  # confirmació, no rectificació: no hi ha res a reparar
         if bm.base_value_cm is not None and abs(linia.valor_real - bm.base_value_cm) < 1e-6:
             return None, None  # ja hi és (idempotència: 2a passada = 0 canvis)
         return linia, linia.valor_real

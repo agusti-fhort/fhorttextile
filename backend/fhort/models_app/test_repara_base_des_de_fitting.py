@@ -173,3 +173,31 @@ class ReparaBaseDesDeFittingTest(TenantTestCase):
             bm.refresh_from_db()
             self.assertEqual(bm.base_value_cm, 30.0, 'STANDARD no és DERIVAT: no es toca')
             self.assertEqual(bm.origen, 'STANDARD')
+
+    def test_repara_amb_candidata_sense_desviacio_ni_decisio(self):
+        """Cas 2578 (LLEI Agus 24/09): la línia candidata pot NO tenir desviació
+        (`valor_real == valor_teoric`) ni `decisio` informat i encara ha de servir per
+        reparar una `BaseMeasurement` trepitjada — «mesurat» ja no exigeix cap de les dues."""
+        with comportes_alcades('models_app_basemeasurement', 'models_app_measurementchangelog',
+                               'fitting_piecefittingline'):
+            b_seam = BaseMeasurement.objects.create(
+                model=self.model, pom=self.pom, base_value_cm=45.0, instancia=SEAM,
+                origen='DERIVAT', ordre=1, nom_fitxa='B-SEAM')
+            sf = SizeFitting.objects.create(model=self.model, numero=1, codi='TST-SF-REP2578',
+                                            tipus='PROTO', creat_per=self.perfil)
+            gv = GradingVersion.objects.create(size_fitting=sf, is_active=True,
+                                               version_number=1, creat_per=self.perfil)
+            sessio = FittingSession.objects.create(
+                model=self.model, fase=self.model.fase_actual, estat='Tancada',
+                data=datetime.date(2026, 8, 2))
+            pf = PieceFitting.objects.create(session=sessio, model=self.model, grading_version=gv)
+            PieceFittingLine.objects.create(
+                piece_fitting=pf, pom=self.pom, size_label='M', capa='exterior',
+                instancia=SEAM, valor_teoric=41.0, valor_real=41.0)   # decisio='' (defecte)
+
+            call_command('repara_base_des_de_fitting', f'--model={self.model.pk}', '--apply',
+                        stdout=StringIO())
+
+            b_seam.refresh_from_db()
+            self.assertEqual(b_seam.base_value_cm, 41.0)
+            self.assertEqual(b_seam.origen, 'FITTED')
