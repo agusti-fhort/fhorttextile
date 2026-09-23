@@ -868,6 +868,8 @@ export const pieceFittings = {
   close: (id, data) => client.post(`/api/v1/piece-fittings/${id}/close/`, data || {}),
   // 5B.6-B3 — revert atòmic de reals a l'estat d'obertura (valor_real := valor_teoric).
   discard: (id) => client.post(`/api/v1/piece-fittings/${id}/discard/`),
+  // LLEI Agus 24/09 — CONSENTIMENT DE GERMANES. Lectura pura: mai escriu res.
+  proposta: (id) => client.get(`/api/v1/piece-fittings/${id}/proposta/`),
 }
 
 // E1/B3 — LA PRESA DE L'ESCALAT (pas 1): la xifra de la peça FÍSICA arribada, per talla.

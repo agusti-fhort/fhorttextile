@@ -2531,7 +2531,22 @@
       "partial_close": "S'han gravat {{done}} de {{total}} peces. La sessió no s'ha tancat: revisa-la abans de sortir.",
       "not_sealed": "La sessió no s'ha pogut tancar: queden peces sense resoldre. Resol-les i torna a gravar.",
       "title_acta": "Fitxa del fitting",
-      "acta_hint": "Sessió tancada — acta de què es va mesurar aquell dia. Només lectura."
+      "acta_hint": "Sessió tancada — acta de què es va mesurar aquell dia. Només lectura.",
+      "consent_title": "Aplicar el fitting a la base",
+      "consent_subtitle": "{{count}} germanes afectades · {{poms}} POMs",
+      "consent_col_pom": "POM · instància",
+      "consent_col_origen": "Origen",
+      "consent_col_actual": "Actual",
+      "consent_col_proposta": "Proposta",
+      "consent_measured_at": "mesurat al fitting",
+      "consent_era": "era {{value}}",
+      "consent_use": "Usar",
+      "consent_used": "Usada",
+      "consent_use_all": "Usar totes les propostes",
+      "consent_reset": "Restablir valors",
+      "consent_apply": "Aplicar",
+      "consent_badge_mesurat": "mesurat",
+      "consent_badge_derivat": "derivat"
     },
     "convocatoria": "Convocatòria",
     "group": {
