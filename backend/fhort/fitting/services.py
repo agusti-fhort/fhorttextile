@@ -754,6 +754,50 @@ def linies_mesurades_talla_base(pf):
     return a_consolidar
 
 
+def escriu_mesurades_talla_base(pf, a_consolidar, *, auth_user=None):
+    """Escriu cada línia de `a_consolidar` (v. `linies_mesurades_talla_base`) a la SEVA
+    `BaseMeasurement` — `origen='FITTED'`, capturant el valor d'ABANS (`None` si és una
+    creació). Retorna `{line.pk: (bm, valor_anterior)}`.
+
+    Extret perquè dos cridadors n'hi ha prou amb PAS 1 i divergeixen al que ve després:
+    `consolidate_base_from_fitting` hi encadena la derivació SENSE consentiment (camins
+    d'abans de la LLEI Agus 24/09 — propagació conscient i el `close` quan la proposta surt
+    buida); `aplica_consolidacio_amb_consentiment` (`services_consentiment.py`) hi encadena
+    les DECISIONS del modal en lloc de derivar. Cap escriptura pròpia canvia entre els dos
+    camins — només què passa amb les germanes.
+    """
+    from fhort.models_app.models import BaseMeasurement
+
+    model = pf.model
+    sf = pf.grading_version.size_fitting
+    per_linia = {}
+    for line in a_consolidar:
+        # FASE_3/C1-ins — la consolidació torna el valor mesurat a la SEVA mesura base. La
+        # línia sap dir els dos eixos (els va heretar de l'spec, aquí a sobre); el lookup
+        # els ha de dir també, o la rectificació d'una germana aterraria sobre l'altra i el
+        # `get()` intern petaria amb MultipleObjectsReturned el dia que n'hi hagi dues.
+        bm, _created = BaseMeasurement.objects.get_or_create(
+            # SET-2/T5 — el tercer eix, i la línia el sap dir com sap dir els altres dos
+            # (l'ha heretat de l'spec): la rectificació d'una peça ha d'aterrar a la SEVA
+            # mesura base, no a la de l'altra.
+            model=model, pom=line.pom, capa=line.capa, instancia=line.instancia,
+            garment=line.garment,
+            defaults={'base_value_cm': line.valor_real, 'origen': 'FITTED'},
+        )
+        # C3/E1 — el valor d'ABANS, capturat abans de trepitjar-lo: és el que fa calculable
+        # l'increment que han de rebre les germanes. En una creació és None i no es deriva
+        # (una fila nova no és conseqüència de res).
+        valor_anterior = None if _created else bm.base_value_cm
+        bm.base_value_cm = line.valor_real
+        bm.origen = 'FITTED'
+        bm._changed_by = auth_user
+        bm._fitting_ref = sf            # MeasurementChangeLog.fitting_ref (→ SizeFitting)
+        bm._motiu = f'Fitting · sessió {pf.session_id} · peça {pf.pk}'
+        bm.save()
+        per_linia[line.pk] = (bm, valor_anterior)
+    return per_linia
+
+
 def consolidate_base_from_fitting(pf, *, auth_user=None):
     """B3: consolida les línies de TALLA BASE d'un PieceFitting a BaseMeasurement.
 
@@ -789,11 +833,8 @@ def consolidate_base_from_fitting(pf, *, auth_user=None):
     `valor_real == valor_teoric` («ho he mesurat i confirma el teòric») compta; una fantasma
     que ningú no ha obert, no.
     """
-    from fhort.models_app.models import BaseMeasurement
     from fhort.models_app.services_derivacio import aplica as aplica_derivacio
-    model = pf.model
     sf = pf.grading_version.size_fitting
-    consolidated = []
 
     a_consolidar = linies_mesurades_talla_base(pf)
 
@@ -801,34 +842,9 @@ def consolidate_base_from_fitting(pf, *, auth_user=None):
     # d'aquestes files pot acabar amb un valor DERIVAT de la propagació d'una germana seva.
     mesurades = {(line.pom_id, line.capa, line.instancia) for line in a_consolidar}
 
-    # PAS 1 — escriu TOTS els valors mesurats abans de derivar cap. Guarda (bm, valor_anterior)
-    # per a cada línia perquè el pas 2 calculi l'increment sense tornar a llegir la BD.
-    per_linia = {}
-    for line in a_consolidar:
-        # FASE_3/C1-ins — la consolidació torna el valor mesurat a la SEVA mesura base. La
-        # línia sap dir els dos eixos (els va heretar de l'spec, aquí a sobre); el lookup
-        # els ha de dir també, o la rectificació d'una germana aterraria sobre l'altra i el
-        # `get()` intern petaria amb MultipleObjectsReturned el dia que n'hi hagi dues.
-        bm, _created = BaseMeasurement.objects.get_or_create(
-            # SET-2/T5 — el tercer eix, i la línia el sap dir com sap dir els altres dos
-            # (l'ha heretat de l'spec): la rectificació d'una peça ha d'aterrar a la SEVA
-            # mesura base, no a la de l'altra.
-            model=model, pom=line.pom, capa=line.capa, instancia=line.instancia,
-            garment=line.garment,
-            defaults={'base_value_cm': line.valor_real, 'origen': 'FITTED'},
-        )
-        # C3/E1 — el valor d'ABANS, capturat abans de trepitjar-lo: és el que fa calculable
-        # l'increment que han de rebre les germanes. En una creació és None i no es deriva
-        # (una fila nova no és conseqüència de res).
-        valor_anterior = None if _created else bm.base_value_cm
-        bm.base_value_cm = line.valor_real
-        bm.origen = 'FITTED'
-        bm._changed_by = auth_user
-        bm._fitting_ref = sf            # MeasurementChangeLog.fitting_ref (→ SizeFitting)
-        bm._motiu = f'Fitting · sessió {pf.session_id} · peça {pf.pk}'
-        bm.save()
-        per_linia[line.pk] = (bm, valor_anterior)
-        consolidated.append(line)
+    # PAS 1 — escriu TOTS els valors mesurats abans de derivar cap.
+    per_linia = escriu_mesurades_talla_base(pf, a_consolidar, auth_user=auth_user)
+    consolidated = list(a_consolidar)
 
     # PAS 2 — LA DERIVACIÓ, ara que totes les mesures pròpies ja són escrites. Aquest és un
     # dels dos únics punts d'escriptura de mesura de tot el backend que coneix els seus eixos
@@ -847,22 +863,29 @@ def consolidate_base_from_fitting(pf, *, auth_user=None):
 
 
 def close_piece_fitting(piece_fitting_id: int, *, user_profile_id: int | None = None,
-                        allow_reopen_sealed: bool = False) -> dict:
+                        allow_reopen_sealed: bool = False, decisions: dict | None = None) -> dict:
     """Close a PieceFitting, applying validated BASE real values with FUNCTIONAL versioning.
 
     PEÇA 4: la sessió de fitting toca NOMÉS la talla base. Per cada línia de la talla
-    BASE on valor_real difereix de valor_teoric:
+    BASE amb valor_real informat:
       - promociona a BaseMeasurement (canvi d'arrel) → el senyal F1 registra el canvi,
         measurements_version++, i el grading es regenera des de la base nova.
       - Welford s'alimenta amb el valor_real base (keyed by codi_client).
     Les talles NO-base s'IGNOREN aquí: els breaks per talla es fan a l'editor propagat
     del model (ModelGradingOverride via set-size-override, PEÇA 1/2), no en tancar la
-    sessió. Qualsevol canvi base → NOVA GradingVersion (v+1) i es desactiva l'anterior
-    (conservada); re-propaga la base a totes les talles (override→exception→regla→FIXED).
-    El brain stub es crida un cop si hi ha hagut canvi.
+    sessió. El brain stub es crida un cop si hi ha hagut canvi.
 
-    Returns: {'changed', 'base_changed', 'override_changed', 'new_version'}.
-    'override_changed' es manté per compat. de forma però SEMPRE és False (PEÇA 4).
+    LLEI Agus 24/09 — CONSENTIMENT DE GERMANES. `decisions` (`{base_measurement_id:
+    valor_final}`, o `None`) tria quin dels dos camins consolida les germanes NO mesurades:
+    `None` → `consolidate_base_from_fitting` (comportament d'avui, sense demanar res —
+    correcte quan `services_consentiment.proposta_de_consolidacio` ha sortit `buit=True` i
+    el frontend no ha mostrat cap modal); un dict (buit inclòs, si el modal no ha calgut
+    tocar cap valor) → `aplica_consolidacio_amb_consentiment`, que escriu les mesurades
+    IGUAL però NOMÉS mou una germana si `decisions` ho diu explícitament.
+
+    Returns: {'changed', 'base_changed', 'override_changed', 'new_version',
+    'germanes_decidides'}. 'override_changed' es manté per compat. de forma però SEMPRE
+    és False (PEÇA 4). 'germanes_decidides' és 0 pel camí sense consentiment.
     """
     from fhort.fitting.models import PieceFitting
 
@@ -881,6 +904,7 @@ def close_piece_fitting(piece_fitting_id: int, *, user_profile_id: int | None = 
         auth_user = profile.user if profile else None
 
     override_changed = False
+    germanes_decidides = 0
 
     # XA (sprint fonaments-de-gravat): tot el cos escriptor —consolidació a BaseMeasurement
     # (+ senyal F1), Welford, versionat funcional (guard D-1) i seal— dins UNA transacció.
@@ -898,7 +922,12 @@ def close_piece_fitting(piece_fitting_id: int, *, user_profile_id: int | None = 
         # consolidate_base_from_fitting (compartit amb la propagació conscient). Les talles
         # no-base s'ignoren (els breaks per talla van per ModelGradingOverride). Welford i el
         # versionat es fan aquí sobre les línies consolidades.
-        consolidated = consolidate_base_from_fitting(pf, auth_user=auth_user)
+        if decisions is not None:
+            from fhort.fitting.services_consentiment import aplica_consolidacio_amb_consentiment
+            consolidated, germanes_decidides = aplica_consolidacio_amb_consentiment(
+                pf, decisions, auth_user=auth_user)
+        else:
+            consolidated = consolidate_base_from_fitting(pf, auth_user=auth_user)
         changed = len(consolidated)
         base_changed = bool(consolidated)
 
@@ -956,6 +985,7 @@ def close_piece_fitting(piece_fitting_id: int, *, user_profile_id: int | None = 
         'base_changed': base_changed,
         'override_changed': override_changed,
         'new_version': new_version_number,
+        'germanes_decidides': germanes_decidides,
     }
     logger.info(f"PieceFitting {pf.pk} closed: {result}")
     return result

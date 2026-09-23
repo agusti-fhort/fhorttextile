@@ -134,3 +134,139 @@ def proposta_de_consolidacio(pf):
 
     buit = not any(p['germanes'] for p in poms)
     return {'piece_fitting_id': pf.pk, 'buit': buit, 'poms': poms}
+
+
+def _upsert_offset(*, model_id, pom_id, capa, instancia_origen, instancia_desti, delta,
+                   piece_fitting, auth_user):
+    """Confirma la parella a LES DUES BANDES (origen↔destí, delta i −delta) — la consulta
+    del consentiment (`_delta_confirmat`) és sempre una igualtat directa, mai cal provar les
+    dues direccions ni invertir signe al lector."""
+    from fhort.models_app.models import ModelInstanceOffset
+
+    for io, id_, dv in ((instancia_origen, instancia_desti, delta),
+                        (instancia_desti, instancia_origen, -delta)):
+        ModelInstanceOffset.objects.update_or_create(
+            model_id=model_id, pom_id=pom_id, capa=capa,
+            instancia_origen=io, instancia_desti=id_,
+            defaults={'delta': dv, 'piece_fitting': piece_fitting, 'created_by': auth_user},
+        )
+
+
+def aplica_consolidacio_amb_consentiment(pf, decisions, *, auth_user=None):
+    """LA PORTA D'ESCRIPTURA del consentiment. `decisions`: `{base_measurement_id: valor_final}`
+    — NOMÉS per a les germanes que `proposta_de_consolidacio` ha mostrat; qualsevol clau que
+    no correspongui a una germana AFECTADA en aquesta consolidació s'IGNORA (mai s'hi escriu
+    a cegues — ATURADA del brief: «cap escriptura de germana fora del modal»). Una germana
+    afectada SENSE entrada a `decisions` es tracta com MANTINGUT (el defecte del modal ja
+    l'hi envia explícit; aquest `.get()` és tolerància, no una porta nova).
+
+    (a) Escriu les mesurades — IDÈNTIC a `consolidate_base_from_fitting` PAS 1
+        (`escriu_mesurades_talla_base`, compartit).
+    (b) Per cada germana AFECTADA (mateix `deriva()` que la proposta, calculat ABANS
+        d'escriure la germana — `valor_anterior` ve de `escriu_mesurades_talla_base`, capturat
+        abans del PAS 1, no d'una relectura post-escriptura): infereix `decisio` comparant
+        `valor_final` amb el valor actual (MANTINGUT) i amb el proposat (PROPOSTA); qualsevol
+        altre valor és MANUAL. Escriu `BaseMeasurement` NOMÉS si `decisio != MANTINGUT`.
+        `origen`: PROPOSTA→`'DERIVAT'` (el valor segueix sent el que el sistema ha calculat —
+        ningú no l'ha mesurat amb el metre, un humà només ha consentit a fer-lo servir);
+        MANUAL→`'MANUAL'` (un humà hi ha escrit un número propi — `ORIGEN_CHOICES` ja té
+        aquest valor exactament per a això). Decisió de la casa, documentada aquí perquè el
+        brief demanava triar-ho i deixar-ho escrit.
+    (c) Per a CADA germana decidida (MANTINGUT inclòs — mantenir també confirma una folgança
+        real, sovint la dada més valuosa perquè diu que NO segueix la regla ingènua), upsert
+        de `ModelInstanceOffset` al delta REAL (`valor_final − valor mesurat de la font`).
+    (e) `FittingSisterDecision` (rastre + «no tornar a preguntar» — `update_or_create` perquè
+        una segona crida amb el mateix `pf`/germana no dupliqui la fila).
+
+    IDEMPOTÈNCIA: una segona aplicació sense canvis nous a `a_consolidar` fa que `deriva()`
+    retorni `[]` per a cada línia (l'increment ja és 0 — `services_derivacio.py:140-142`), o
+    sigui que cap germana es torna a tocar ni es torna a decidir.
+
+    Tot en una transacció (obre la seva pròpia: Django nia `atomic()` amb un savepoint, el
+    cridador —`close_piece_fitting`— ja n'obre una altra a fora).
+
+    Retorna `(consolidated, n_germanes_decidides)` — `consolidated` amb la MATEIXA forma que
+    `consolidate_base_from_fitting` (llista de `PieceFittingLine`), perquè `close_piece_fitting`
+    pugui fer-hi Welford igual, sense saber quin dels dos camins l'ha produït.
+    """
+    from django.db import transaction
+    from fhort.fitting.models import FittingSisterDecision
+    from fhort.fitting.services import escriu_mesurades_talla_base, linies_mesurades_talla_base
+    from fhort.models_app.models import BaseMeasurement
+
+    decisions = {int(k): v for k, v in (decisions or {}).items()}
+
+    with transaction.atomic():
+        model = pf.model
+        sf = pf.grading_version.size_fitting
+        a_consolidar = linies_mesurades_talla_base(pf)
+        mesurades = {(l.pom_id, l.capa, l.instancia) for l in a_consolidar}
+        per_linia = escriu_mesurades_talla_base(pf, a_consolidar, auth_user=auth_user)
+
+        germanes_tocades = set()
+        for line in a_consolidar:
+            bm, valor_anterior = per_linia[line.pk]
+            for d in deriva(bm, valor_anterior, line.valor_real, exclou=mesurades):
+                if d.base_measurement_id in germanes_tocades:
+                    # Dues fonts mesurades de la mateixa sessió apunten a la mateixa germana
+                    # NO mesurada — la FONT processada DARRERA guanya (mateix ordre determinista
+                    # que veuria el camí sense consentiment), i és la que la proposta ja havia
+                    # ensenyat (`proposta_de_consolidacio`, mateix criteri de desempat).
+                    continue
+                germanes_tocades.add(d.base_measurement_id)
+
+                germana = BaseMeasurement.objects.get(pk=d.base_measurement_id)
+                valor_actual_abans = germana.base_value_cm
+
+                delta_confirmat = _delta_confirmat(
+                    model.pk, line.pom_id, d.capa, line.instancia, d.instancia)
+                if delta_confirmat is not None:
+                    valor_proposat = round(d.valor_actual + delta_confirmat, 2)
+                    sufix = 'delta confirmat'
+                    delta_mostrat = delta_confirmat
+                else:
+                    valor_proposat = d.valor_proposat
+                    sufix = "regla d'instància"
+                    delta_mostrat = d.increment
+
+                valor_final = decisions.get(d.base_measurement_id, valor_actual_abans)
+
+                if abs(valor_final - valor_actual_abans) < 1e-6:
+                    decisio = FittingSisterDecision.DECISIO_MANTINGUT
+                elif abs(valor_final - valor_proposat) < 1e-6:
+                    decisio = FittingSisterDecision.DECISIO_PROPOSTA
+                else:
+                    decisio = FittingSisterDecision.DECISIO_MANUAL
+
+                if decisio != FittingSisterDecision.DECISIO_MANTINGUT:
+                    germana.base_value_cm = valor_final
+                    germana.origen = 'DERIVAT' if decisio == FittingSisterDecision.DECISIO_PROPOSTA else 'MANUAL'
+                    germana._changed_by = auth_user
+                    germana._fitting_ref = sf
+                    germana._motiu = (
+                        f'Consentiment de germanes · sessió {pf.session_id} · peça {pf.pk} · '
+                        f'font {line.instancia} · {decisio.lower()}'
+                    )
+                    germana.save(update_fields=['base_value_cm', 'origen', 'updated_at'])
+
+                _upsert_offset(
+                    model_id=model.pk, pom_id=line.pom_id, capa=d.capa,
+                    instancia_origen=line.instancia, instancia_desti=d.instancia,
+                    delta=round(valor_final - line.valor_real, 2),
+                    piece_fitting=pf, auth_user=auth_user,
+                )
+
+                xifra = f'{delta_mostrat:+.1f}'.replace('.', ',')
+                FittingSisterDecision.objects.update_or_create(
+                    piece_fitting=pf, base_measurement_id=d.base_measurement_id,
+                    defaults={
+                        'valor_actual_abans': valor_actual_abans,
+                        'valor_proposat': valor_proposat,
+                        'regla_text': f'{etiqueta_instancia(line.instancia)} {xifra} · {sufix}',
+                        'valor_final': valor_final,
+                        'decisio': decisio,
+                        'created_by': auth_user,
+                    },
+                )
+
+        return list(a_consolidar), len(germanes_tocades)

@@ -566,10 +566,15 @@ class PieceFittingViewSet(mixins.RetrieveModelMixin,
         # comportament actual intacte. La UI que activa el flag pertany al Sprint Y
         # (ancorada a la tasca); aquí només s'exposa el contracte.
         allow_reopen = bool(request.data.get('allow_reopen_sealed', False))
+        # LLEI Agus 24/09 — CONSENTIMENT DE GERMANES. `decisions` absent (clau NO present al
+        # body) ⇒ camí d'avui, sense demanar res (`consolidate_base_from_fitting`). Present
+        # (un dict, buit inclòs) ⇒ `aplica_consolidacio_amb_consentiment` — el frontend només
+        # l'envia després d'haver mostrat `GET …/proposta/` i que `buit` no fos `True`.
+        decisions = request.data.get('decisions', None)
         try:
             result = services.close_piece_fitting(
                 int(pk), user_profile_id=_profile_id(request),
-                allow_reopen_sealed=allow_reopen,
+                allow_reopen_sealed=allow_reopen, decisions=decisions,
             )
         except ValueError as e:
             # El guard D-1 (motor, intocable) llança ValueError nu quan la GradingVersion
