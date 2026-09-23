@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 
 import { models } from '../../api/endpoints'
 import { etiquetaCapa, etiquetaInstancia } from '../../utils/capaInstancia'
+import { useEtiquetaVeredicte } from '../../utils/etiquetaVeredicte'
 import { useEstatDiccionari } from '../../utils/diccionariMesuresFont'
 import AvisDiccionari from '../ui/AvisDiccionari'
 
@@ -132,6 +133,7 @@ export default function ComprovacioPanel({ model, onVeureFila = null }) {
   // fallback): els punts de la comprovació segueixen sent correctes, però dues germanes del
   // mateix POM es llegeixen igual. Es demana l'ESTAT, no només el diccionari, per poder-ho DIR.
   const { dicc, error: diccError, reintenta: reintentaDicc } = useEstatDiccionari()
+  const etiquetaVeredicte = useEtiquetaVeredicte()
   const [dades, setDades] = useState(null)
   const [error, setError] = useState('')
   const [tancades, setTancades] = useState(() => new Set())
@@ -246,13 +248,13 @@ export default function ComprovacioPanel({ model, onVeureFila = null }) {
                 {p.desviacio > 0 ? '+' : '−'}{fmt(Math.abs(p.desviacio))}
                 {' · '}{t('comprovacio.tolerancia_banda', { minus: p.tol_minus, plus: p.tol_plus })}
               </td>
-              {/* El veredicte de la modista és DADA DE DOMINI i no es tradueix (D-31.21), com
-                  LINEAR/STEP: és el que va cap al fabricant al full imprès. El color és el de
-                  sempre (`VERDICTE_COL` de MeasureGrid), perquè el mateix fet es llegeixi
-                  igual a les dues superfícies. */}
+              {/* El CODI del veredicte de la modista és DADA DE DOMINI i no es toca (D-31.21),
+                  com LINEAR/STEP — el color és el de sempre (`VERDICTE_COL` de MeasureGrid),
+                  perquè el mateix fet es llegeixi igual a les dues superfícies. El TEXT (ordre
+                  23/09) ja no és el codi cru: és l'etiqueta llarga del vocabulari. */}
               <td style={{ ...tdS, ...perqueS, color: VERDICTE_COL[p.veredicte] || 'var(--text-soft)',
                            fontWeight: p.veredicte ? 600 : 400 }}>
-                {p.veredicte || '—'}
+                {p.veredicte ? etiquetaVeredicte(p.veredicte) : '—'}
               </td>
             </tr>
           ))}

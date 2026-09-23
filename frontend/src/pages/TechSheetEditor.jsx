@@ -13,6 +13,7 @@ import ModalAcabarTasca from '../components/model/ModalAcabarTasca'
 import { modelTasks } from '../api/endpoints'
 import { minutsDeSessio } from '../utils/sessioActiva'
 import AssetNavigator from '../components/assets/AssetNavigator'
+import { useEtiquetaVeredicte } from '../utils/etiquetaVeredicte'
 import Contenidor from '../components/ui/Contenidor'
 import PageMenu from '../components/ui/PageMenu'
 import { botoSec, apagat } from '../components/ui/buttons'
@@ -5245,9 +5246,12 @@ export default function TechSheetEditor() {
   // una `t` fixada a `en`— que el full de fitting descarregable ja aplica a les capes (D-31.22):
   // el paper viatja cap al fabricant i el fabricant llegeix anglès. Les claus existeixen igualment
   // als tres idiomes (paritat de l'i18n-gate); el que està fixat és a quin se li demanen.
-  // El CONTINGUT segueix la seva pròpia llei: les talles, els règims i els veredictes són dades de
-  // domini i no es tradueixen mai; el nom local del POM segueix l'idioma del document.
+  // El CONTINGUT segueix la seva pròpia llei: les talles i els règims són dades de domini i no es
+  // tradueixen mai; el nom local del POM segueix l'idioma del document. El veredicte (ordre 23/09)
+  // ja no imprimeix el codi cru: imprimeix l'etiqueta curta del vocabulari (`etiquetaVeredicte`,
+  // més avall) — mateix text als 3 idiomes, igual que abans, però llegible sense saber anglès.
   const tEn = useMemo(() => i18n.getFixedT('en'), [])
+  const etiquetaVeredicte = useEtiquetaVeredicte()
   // LA UNITAT LA DECLARA LA TAULA. `useUnit` és la llei d'unitat del TENANT (no hi ha cap toggle
   // per document), i és la mateixa que `fmtMeasure` ja aplica a totes les xifres d'aquí.
   const unitatDeclarada = tEn(unit === 'INCH' ? 'tech_sheet.q8_unit_in' : 'tech_sheet.q8_unit_cm')
@@ -5544,9 +5548,10 @@ export default function TechSheetEditor() {
         rows: g.files.map(f => [
           capaQ8(f), cellaCodi(f), cellaPom(f), xifra(f.aprovada),
           cellaActual(f.actual, f.aprovada), cellaDif(f.dif),
-          // Els veredictes són DADA DE DOMINI (el que va imprès cap al fabricant): no es
-          // tradueixen ni s'abrevien aquí — la casa els escriu sencers a la fitxa.
-          f.veredicte || '', f.nota || '',
+          // Ordre 23/09 — la columna «Veredicte» (22mm) imprimeix la forma CURTA (OK/ADJUSTED/
+          // NO OK): «NO OK, FOLLOW SPEC» sencer no hi cap en 1 línia (mesurat, DIAGNOSI
+          // ETIQUETES_VEREDICTE_SAMPLE §1.5). La llegenda del peu (més avall) el desplega.
+          f.veredicte ? etiquetaVeredicte(f.veredicte, true) : '', f.nota || '',
         ]),
         style: { fontSize: 9, capcaleraFina: true, zebra: true },
         snapshot: { ...snapshotComu, garment: g.garment },
@@ -5562,6 +5567,10 @@ export default function TechSheetEditor() {
       const nom = nomDeLaPeca(p, tEn('resum_wizard.model_base'))
       entrades.push({ nota: `${nom} — ${tEn('tech_sheet.q8_no_session')}` })
     }
+    // Ordre 23/09 — LA LLEGENDA DE LA FORMA CURTA, un cop per grup i NOMÉS si hi ha taula (una
+    // peça sense sessió no en porta cap i la llegenda sola no diria res). Mateix mecanisme que
+    // «peça sense sessió», de dalt: una línia solta, no una taula.
+    if (grups.length) entrades.push({ nota: tEn('tech_sheet.q8_nota_no_ok') })
     const n = inserirGrupPaginat(entrades)
     if (n) flash(t('tech_sheet.q8_flash_inserted', { count: n }))
     setTablePicker(null)

@@ -8,6 +8,7 @@ import { models, sizeChecks, sizeCheckLines, baseMeasurements, pieceFittingLines
 import { effectiveRegime, etiquetaRegla } from '../../utils/gradingRegime'
 import { aDocument, aMotor, opcionsDocument } from '../../utils/breakConvention'
 import { useEnumeracio } from '../../utils/vocabulariDominiFont'
+import { useEtiquetaVeredicte } from '../../utils/etiquetaVeredicte'
 import { finestraHistoric } from './fittingGridAdapter'
 import MeasureGrid from './MeasureGrid'
 import EditableTable from '../EditableTable/EditableTable'
@@ -392,6 +393,7 @@ const RECOMPTE_COL = { ACCEPTED: 'var(--ok)', ADJUSTED: 'var(--warn)', REJECTED:
 function RecomptesFitting({ lines, baseLabel, buffer }) {
   const { t } = useTranslation()
   const { codis: verdictes } = useEnumeracio('veredictes_fitting')
+  const etiquetaVeredicte = useEtiquetaVeredicte()
   const base = lines.filter(l => !baseLabel || l.size_label === baseLabel)
   const veredicteDe = (l) => (l.id in (buffer || {}) ? buffer[l.id] : (l.decisio || null))
   // ⚠️ SENSE VOCABULARI, TOT SÓN PENDENTS I NO ZERO ACCEPTADES. El recompte es construeix a
@@ -413,7 +415,7 @@ function RecomptesFitting({ lines, baseLabel, buffer }) {
           <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: '50%',
                                             display: 'inline-block', marginRight: 5,
                                             background: RECOMPTE_COL[clau] || 'var(--text-soft)' }} />
-          {clau} <b style={{ color: 'var(--text-main)', fontWeight: 600 }}>{n[clau]}</b>
+          {etiquetaVeredicte(clau)} <b style={{ color: 'var(--text-main)', fontWeight: 600 }}>{n[clau]}</b>
         </span>
       ))}
       <span>

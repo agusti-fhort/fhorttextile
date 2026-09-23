@@ -10,6 +10,7 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useEnumeracio } from '../../utils/vocabulariDominiFont'
+import { useEtiquetaVeredicte } from '../../utils/etiquetaVeredicte'
 
 import { pieceFittingLines } from '../../api/endpoints'
 import { effectiveRegime, etiquetaRegla, liniesBreaks } from '../../utils/gradingRegime'
@@ -203,6 +204,9 @@ export function VerdicteCell({ valor, onTria }) {
   // vol dir ADJUSTED ho ha de poder llegir en la seva llengua sense sortir de la graella.
   // Va a `title` i a `aria-label`, o sigui que el que viatja al paper segueix sent el codi.
   const { t } = useTranslation()
+  // Ordre 23/09 — el TEXT del botó ja no és el codi cru: és l'etiqueta curta del vocabulari
+  // (OK/ADJUSTED/NO OK), perquè els tres càpiguen en 1 línia sense eixamplar el control (§7).
+  const etiquetaVeredicte = useEtiquetaVeredicte()
   return (
     /* §7 · CONTROLS DE VEREDICTE: botons NEUTRES en repòs; el triat, `--sel` + SUBRATLLAT del
        color del veredicte. El color PLE no és seu — és del RESULTAT (el número, que ja el porta
@@ -233,7 +237,7 @@ export function VerdicteCell({ valor, onTria }) {
               boxShadow: on ? `inset 0 -2px 0 ${to.marca || 'var(--text-main)'}` : undefined,
               fontWeight: on ? 600 : 400, fontFamily: 'inherit', fontSize: 'var(--fs-label)',
               letterSpacing: '0.04em', padding: '4px 9px', cursor: 'pointer',
-            }}>{v}</button>
+            }}>{etiquetaVeredicte(v, true)}</button>
         )
       })}
     </span>
