@@ -464,10 +464,20 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
   // a si mateixa). `col_impacte_help` diu a l'usuari la mateixa llei en una frase.
   const [impactMap, setImpactMap] = useState({})
   const impacteTimerRef = useRef(null)
+  // `torn`, dues línies més avall que `refreshImpacte`, ja resol exactament aquest problema per a
+  // `load()` («no cal AbortController — les respostes velles poden arribar, només han de callar»):
+  // aquí el mateix, amb un flag en lloc de comptador perquè no hi ha una segona càrrega que hagi
+  // de guanyar, només una que hagi de callar si el component ja no hi és.
+  const impacteAliveRef = useRef(true)
+  useEffect(() => {
+    impacteAliveRef.current = true
+    return () => { impacteAliveRef.current = false; clearTimeout(impacteTimerRef.current) }
+  }, [])
   const refreshImpacte = useCallback(() => {
     const pieceFittingId = raw?.pieceFittingId
     if (!pieceFittingId) return
     pieceFittings.proposta(pieceFittingId).then(r => {
+      if (!impacteAliveRef.current) return
       const map = {}
       for (const bucket of (r.data?.poms || [])) {
         for (const g of (bucket.germanes || [])) map[g.bm_id] = { proposat: g.proposat, regla_text: g.regla_text }
@@ -475,7 +485,6 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
       setImpactMap(map)
     }).catch(() => { /* lectura pura: si peta, la columna es queda com estava */ })
   }, [raw?.pieceFittingId])
-  useEffect(() => () => clearTimeout(impacteTimerRef.current), [])
   const scheduleImpacte = useCallback(() => {
     clearTimeout(impacteTimerRef.current)
     impacteTimerRef.current = setTimeout(refreshImpacte, 600)
@@ -596,7 +605,7 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
     const p = Promise.resolve(src.makeOnSave(raw, ctx)(lineId, value))
     if (src.kind === 'fitting' && !readOnly) {
       const row = (raw.pomRows || []).find(r => r.cells?.[raw.baseLabel]?.id === lineId)
-      if (row && row.origen !== 'DERIVAT') p.then(() => scheduleImpacte())
+      if (row && row.origen !== 'DERIVAT') p.then(() => scheduleImpacte()).catch(() => { /* el rebuig arriba intacte a qui crida `onSave` */ })
     }
     return p
   // eslint-disable-next-line react-hooks/exhaustive-deps

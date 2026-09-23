@@ -386,7 +386,7 @@ function ImpacteCell({ impacte, currentValue, tocada, unit, onUsar }) {
         <span style={{ color: 'var(--text-soft)', fontSize: 'var(--fs-caption)', flex: 1 }}>{impacte.reglaText}</span>
         <button type="button" disabled={usada} onClick={() => onUsar(impacte)}
           style={{
-            font: 'inherit', fontSize: 10, lineHeight: '14px', padding: '2px 8px',
+            font: 'inherit', fontSize: 'var(--fs-caption)', lineHeight: '14px', padding: '2px 8px',
             borderRadius: 'var(--r-ctrl)', whiteSpace: 'nowrap', cursor: usada ? 'default' : 'pointer',
             border: `1px solid ${usada ? 'var(--ok)' : 'var(--gold-border)'}`,
             background: usada ? 'var(--ok-bg)' : 'var(--white)',
