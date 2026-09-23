@@ -711,11 +711,11 @@ def reconcilia_linies(pf) -> dict:
 def consolidate_base_from_fitting(pf, *, auth_user=None):
     """B3: consolida les línies de TALLA BASE d'un PieceFitting a BaseMeasurement.
 
-    Per cada línia de la talla base amb valor_real informat (24/09: tingui o no desviació
-    respecte de valor_teoric — v. LLEI de sota), escriu BaseMeasurement(model, pom)
-    .base_value_cm = valor_real, origen='FITTED' (el senyal F1 registra el canvi si el valor
-    canvia de debò). Retorna la llista de línies base consolidades — el cridador hi fa
-    Welford/versionat si cal.
+    Per cada línia de la talla base «amb contingut» (24/09: `esdeveniments.linia_te_contingut`
+    — v. LLEI de sota, i `linies_mesurades_talla_base` pel perquè NO és «valor_real informat»
+    a seques), escriu BaseMeasurement(model, pom).base_value_cm = valor_real, origen='FITTED'
+    (el senyal F1 registra el canvi si el valor canvia de debò). Retorna la llista de línies
+    base consolidades — el cridador hi fa Welford/versionat si cal.
 
     Reusat pel `close` (comportament idèntic al bloc inline anterior) i per la propagació
     conscient (consolidar la realitat mesurada abans que el motor llegeixi la base).
@@ -731,17 +731,19 @@ def consolidate_base_from_fitting(pf, *, auth_user=None):
     decidia quina de les tres quedava trepitjada per la propagació d'una altra abans que li
     toqués el torn.
 
-    LLEI (Agus, DECISIONS 23/09) — CRITERI ÚNIC DE «MESURAT», SENSE MIRAR DESVIACIÓ NI
-    DECISIO. Fins ara una línia amb `valor_real == valor_teoric` («mesurat, confirma el
-    teòric, sense desviació») NO entrava al conjunt `mesurades`: el forat del cas 2578
-    (`DIAGNOSI_CONSENTIMENT_GERMANES.md` BLOC Q6) — una instància EFECTIVAMENT mesurada
-    podia ser trepitjada per la propagació d'una germana perquè el seu propi «no ha canviat
-    res» la deixava fora de l'exclusió. «Mesurada» ja NO vol dir «mesurada i diferent»: vol
-    dir que la línia porta un `valor_real`, punt. Això la fa entrar a `mesurades` (mai
-    trepitjada) I a l'escriptura pròpia (PAS 1) — encara que el valor escrit sigui el mateix
-    que ja hi havia, perquè si la fila venia `DERIVAT` d'una trepitjada anterior, aquesta
-    confirmació l'ha de tornar a `FITTED` amb el valor correcte.
+    LLEI (Agus, DECISIONS 23/09/24/09) — CRITERI ÚNIC DE «MESURAT»: `linia_te_contingut`
+    (`esdeveniments.py`), NO «valor_real informat». La primera versió d'aquest fix (23/09)
+    deia «porta un valor_real, punt» — i és FALS: TOTA línia neix amb `valor_real =
+    valor_teoric` i `reconcilia_linies` reomple les germanes no tocades amb el mateix patró
+    cada vegada que la presa s'obre, o sigui que «porta un valor_real» ho compleix qualsevol
+    línia, tocada o no. Amb aquell criteri, OBRIR una presa ja convertia totes les germanes en
+    «mesurades» i la derivació moria de facto. El correcte —i el que tanca el cas 2578 de
+    debò— és el predicat de la casa (`presa_at`, després `decisio`/`nota`, la desviació NOMÉS
+    de reserva per a files anteriors al camp): una línia amb `presa_at` informat i
+    `valor_real == valor_teoric` («ho he mesurat i confirma el teòric») compta; una fantasma
+    que ningú no ha obert, no.
     """
+    from fhort.fitting.esdeveniments import linia_te_contingut
     from fhort.fitting.models import PieceFittingLine
     from fhort.models_app.models import BaseMeasurement
     from fhort.models_app.services_derivacio import aplica as aplica_derivacio
@@ -769,7 +771,7 @@ def consolidate_base_from_fitting(pf, *, auth_user=None):
 
     a_consolidar = []
     for line in linies:
-        if line.valor_real is None:
+        if not linia_te_contingut(line):
             continue
         if line.size_label.strip() != base_size:
             continue  # PEÇA 4: la sessió de fitting toca NOMÉS la talla base

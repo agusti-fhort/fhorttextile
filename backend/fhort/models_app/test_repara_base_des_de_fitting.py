@@ -17,6 +17,7 @@ from io import StringIO
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.db import connection, transaction
+from django.utils import timezone
 from django_tenants.test.cases import TenantTestCase
 
 from fhort.accounts.models import UserProfile
@@ -177,7 +178,8 @@ class ReparaBaseDesDeFittingTest(TenantTestCase):
     def test_repara_amb_candidata_sense_desviacio_ni_decisio(self):
         """Cas 2578 (LLEI Agus 24/09): la línia candidata pot NO tenir desviació
         (`valor_real == valor_teoric`) ni `decisio` informat i encara ha de servir per
-        reparar una `BaseMeasurement` trepitjada — «mesurat» ja no exigeix cap de les dues."""
+        reparar una `BaseMeasurement` trepitjada — el que la fa «mesurada» és `presa_at`
+        (`linia_te_contingut`), no una desviació ni un `decisio`."""
         with comportes_alcades('models_app_basemeasurement', 'models_app_measurementchangelog',
                                'fitting_piecefittingline'):
             b_seam = BaseMeasurement.objects.create(
@@ -193,7 +195,8 @@ class ReparaBaseDesDeFittingTest(TenantTestCase):
             pf = PieceFitting.objects.create(session=sessio, model=self.model, grading_version=gv)
             PieceFittingLine.objects.create(
                 piece_fitting=pf, pom=self.pom, size_label='M', capa='exterior',
-                instancia=SEAM, valor_teoric=41.0, valor_real=41.0)   # decisio='' (defecte)
+                instancia=SEAM, valor_teoric=41.0, valor_real=41.0,   # decisio='' (defecte)
+                presa_at=timezone.now())
 
             call_command('repara_base_des_de_fitting', f'--model={self.model.pk}', '--apply',
                         stdout=StringIO())

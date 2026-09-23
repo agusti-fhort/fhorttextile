@@ -10,12 +10,13 @@ endavant; aquesta comanda repara el que ja hagi quedat trepitjat cap enrere.
 
 QUÈ TOCA, i NOMÉS AIXÒ: `BaseMeasurement` d'UN model amb `origen='DERIVAT'` per a les quals
 existeix una `PieceFittingLine` (de QUALSEVOL fitting d'aquest model) de la MATEIXA
-(pom, capa, instància, garment), a la talla base, amb `valor_real` informat (REJECTED NO
-sembra, D-31.21 — és l'única exclusió; ni la desviació respecte de `valor_teoric` ni el
-`decisio` buit exclouen res més, LLEI Agus 24/09: v. `consolidate_base_from_fitting`). Amb
-més d'una línia candidata es tria la MÉS RECENT (data de sessió, després pk de
-`PieceFitting`, després pk de línia) — la mateixa noció d'«última mesura vàlida» que
-`consolidate_base_from_fitting`.
+(pom, capa, instància, garment), a la talla base, amb CONTINGUT
+(`fitting.esdeveniments.linia_te_contingut` — `presa_at`, `decisio`, `nota` o desviació de
+`valor_teoric`; NO n'hi ha prou amb `valor_real` informat: TOTA línia en porta un des del
+naixement, mesurada o no, LLEI Agus 24/09 — v. `consolidate_base_from_fitting`). REJECTED NO
+sembra (D-31.21) — és l'única exclusió addicional. Amb més d'una línia candidata es tria la
+MÉS RECENT (data de sessió, després pk de `PieceFitting`, després pk de línia) — la mateixa
+noció d'«última mesura vàlida» que `consolidate_base_from_fitting`.
 
 Proposa: `base_value_cm := valor_real de la línia`, `origen := 'FITTED'`. Cap altra fila es
 toca — ni una BaseMeasurement que ja no sigui DERIVAT, ni una sense línia candidata.
@@ -35,6 +36,7 @@ reparar (la fila ja no és DERIVAT) i no proposa cap canvi.
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
+from fhort.fitting.esdeveniments import linia_te_contingut
 from fhort.fitting.models import PieceFittingLine
 from fhort.models_app.models import BaseMeasurement, Model
 
@@ -53,17 +55,24 @@ class Command(BaseCommand):
                             help='Escriu. Sense aquest flag: dry-run (només llista).')
 
     def _linia_candidata(self, bm, base_size):
-        # LLEI Agus 24/09 — «mesurat» = valor_real present, tingui o no desviació ni decisio.
-        # L'única exclusió que queda és REJECTED (D-31.21: «la presa no val, NO sembra res»).
-        return (PieceFittingLine.objects
-                .filter(piece_fitting__model_id=bm.model_id,
-                        pom_id=bm.pom_id, capa=bm.capa, instancia=bm.instancia,
-                        garment=bm.garment, size_label=base_size,
-                        valor_real__isnull=False)
-                .exclude(decisio=PieceFittingLine.DECISIO_REJECTED)
-                .select_related('piece_fitting__session')
-                .order_by('-piece_fitting__session__data', '-piece_fitting_id', '-id')
-                .first())
+        # LLEI Agus 24/09 — «mesurat» = `linia_te_contingut` (presa_at/decisio/nota/desviació),
+        # NO `valor_real` present a seques: TOTA línia en porta un des del naixement (còpia
+        # del teòric), tocada o no — v. `consolidate_base_from_fitting`. REJECTED és l'única
+        # exclusió addicional (D-31.21: «la presa no val, NO sembra res»). El predicat no és
+        # expressable en un sol `.filter()` (compara dos camps i mira tres més): es filtra en
+        # Python sobre el conjunt ja ordenat, que per a una (pom, capa, instància, garment) és
+        # sempre petit.
+        candidates = (PieceFittingLine.objects
+                     .filter(piece_fitting__model_id=bm.model_id,
+                             pom_id=bm.pom_id, capa=bm.capa, instancia=bm.instancia,
+                             garment=bm.garment, size_label=base_size)
+                     .exclude(decisio=PieceFittingLine.DECISIO_REJECTED)
+                     .select_related('piece_fitting__session')
+                     .order_by('-piece_fitting__session__data', '-piece_fitting_id', '-id'))
+        for linia in candidates:
+            if linia_te_contingut(linia):
+                return linia
+        return None
 
     def _proposta(self, bm, base_size):
         """Retorna la línia candidata i el valor a escriure, o `(None, None)` si aquesta

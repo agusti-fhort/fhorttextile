@@ -21,6 +21,7 @@ import datetime
 
 from django.contrib.auth import get_user_model
 from django.db import connection, transaction
+from django.utils import timezone
 from django_tenants.test.cases import TenantTestCase
 
 from fhort.accounts.models import UserProfile
@@ -99,10 +100,10 @@ class _BaseInstanciesMultiples(TenantTestCase):
             model=self.model, fase=self.model.fase_actual, data=datetime.date(2026, 9, 23))
         return PieceFitting.objects.create(session=sessio, model=self.model, grading_version=gv)
 
-    def _linia(self, pf, instancia, teoric, real):
+    def _linia(self, pf, instancia, teoric, real, presa_at=None):
         return PieceFittingLine.objects.create(
             piece_fitting=pf, pom=self.pom, size_label='M', capa='exterior',
-            instancia=instancia, valor_teoric=teoric, valor_real=real)
+            instancia=instancia, valor_teoric=teoric, valor_real=real, presa_at=presa_at)
 
 
 class TresInstanciesMesuradesTest(_BaseInstanciesMultiples):
@@ -181,8 +182,9 @@ class OrdreInversTest(_BaseInstanciesMultiples):
 
 class InstanciaMesuradaSenseDesviacioTest(_BaseInstanciesMultiples):
     """Cas 4 (LLEI Agus 24/09, cas 2578) — `seam` es mesura IGUAL al teòric (sense
-    desviació, `decisio` buida): és tan «mesurada» com `relaxed`/`extended`, i la seva
-    propagació NO l'ha de trepitjar encara que ella mateixa no escrigui res de nou."""
+    desviació, `decisio` buida, però `presa_at` informat: el gest de confirmar-la és seu):
+    és tan «mesurada» com `relaxed`/`extended`, i la seva propagació NO l'ha de trepitjar
+    encara que ella mateixa no escrigui res de nou."""
 
     def test_la_no_desviada_no_es_trepitjada_per_les_altres_dues(self):
         with comportes_alcades('models_app_basemeasurement', 'models_app_measurementchangelog',
@@ -191,7 +193,9 @@ class InstanciaMesuradaSenseDesviacioTest(_BaseInstanciesMultiples):
             pf = self._sessio()
             self._linia(pf, RELAXED, 40.0, 44.0)   # +4, rectificada
             self._linia(pf, EXTENDED, 42.0, 43.0)  # +1, rectificada
-            self._linia(pf, SEAM, 41.0, 41.0)      # mesurada, SENSE desviació, decisio buida
+            # mesurada i CONFIRMADA (presa_at informat), SENSE desviació, decisio buida —
+            # `linia_te_contingut` la compta per `presa_at`, no per un valor que no canvia.
+            self._linia(pf, SEAM, 41.0, 41.0, presa_at=timezone.now())
 
             consolidate_base_from_fitting(pf, auth_user=self.user)
 
@@ -213,7 +217,7 @@ class InstanciaMesuradaSenseDesviacioTest(_BaseInstanciesMultiples):
             b_seam.origen = 'DERIVAT'
             b_seam.save(update_fields=['base_value_cm', 'origen'])
             pf = self._sessio()
-            self._linia(pf, SEAM, 41.0, 41.0)      # es torna a mesurar, SENSE desviació
+            self._linia(pf, SEAM, 41.0, 41.0, presa_at=timezone.now())  # confirmada de nou
 
             consolidate_base_from_fitting(pf, auth_user=self.user)
 
