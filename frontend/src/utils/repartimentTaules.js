@@ -36,16 +36,20 @@
  * @param {Array<{hTitol: number, hCapcalera: number, hFiles?: number[], hFila?: number,
  *                nFiles?: number}>} mesures
  *        geometria ja resolta de cada taula (el builder és qui la sap; aquí no es calcula).
- * @param {{yInici: number, yFinal: number, separacio?: number}} pagina
- *        `yInici` = on comença el cos útil · `yFinal` = on s'acaba · `separacio` = aire entre
- *        taules consecutives de la mateixa pàgina.
+ * @param {{yInici: number|((pagina: number) => number), yFinal: number, separacio?: number}} pagina
+ *        `yInici` = on comença el cos útil de CADA pàgina (índex 0-based dins d'aquest
+ *        repartiment) · `yFinal` = on s'acaba · `separacio` = aire entre taules consecutives de
+ *        la mateixa pàgina. `yInici` accepta un número (mateix valor a totes les pàgines,
+ *        comportament d'abans) o una funció `pagina => y` quan cada pàgina en pot necessitar un
+ *        (S1.3-bis: una pàgina amb capçalera pròpia arrenca més avall que una sense).
  * @returns {Array<{taula: number, ini: number, fi: number, pagina: number, y: number}>}
  *          un tros per objecte a inserir: `[ini, fi)` són índexs de fila de la taula `taula`.
  */
 export function repartimentEnPagines(mesures, { yInici, yFinal, separacio = 6 }) {
   const trossos = []
   let pagina = 0
-  let y = yInici
+  const yDeInici = (pi) => (typeof yInici === 'function' ? yInici(pi) : yInici)
+  let y = yDeInici(pagina)
 
   ;(mesures || []).forEach((m, taula) => {
     const hTitol = Math.max(0, m?.hTitol || 0)
@@ -69,7 +73,7 @@ export function repartimentEnPagines(mesures, { yInici, yFinal, separacio = 6 })
     // pena inserir-la és de qui crida (l'espec de Q8a diu que una peça sense sessió no porta
     // taula), i barrejar-la aquí faria que aquest mòdul opinés sobre el domini.
     if (nFiles === 0) {
-      if (y + fixa > yFinal && y > yInici) { pagina += 1; y = yInici }
+      if (y + fixa > yFinal && y > yDeInici(pagina)) { pagina += 1; y = yDeInici(pagina) }
       trossos.push({ taula, ini: 0, fi: 0, pagina, y })
       y += fixa + separacio
       return
@@ -87,9 +91,9 @@ export function repartimentEnPagines(mesures, { yInici, yFinal, separacio = 6 })
       let n = capenDes(ini, yFinal - y)
       // No hi cap ni una fila: pàgina nova. Només val la pena si NO estem ja al principi d'una
       // pàgina buida —si hi som, saltar-ne una altra no guanyaria ni un mil·límetre.
-      if (n < 1 && y > yInici) {
+      if (n < 1 && y > yDeInici(pagina)) {
         pagina += 1
-        y = yInici
+        y = yDeInici(pagina)
         n = capenDes(ini, yFinal - y)
       }
       if (n < 1) n = 1                        // v. l'acta del bloc mínim, aquí sobre

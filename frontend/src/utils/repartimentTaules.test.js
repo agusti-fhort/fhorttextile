@@ -196,3 +196,54 @@ test('T3 · una talla més ampla que el full surt sola i sobresurt: mai un bucle
 test('T3 · sense talles no hi ha trossos', () => {
   assert.deepEqual(trossosDeTalles(0, 50, 26, 270), [])
 })
+
+// ── S1.3-bis — `yInici` per pàgina (ORDRE_SPRINT1_FITXA_0924.md §S1.3, BANDERA del
+// revisor-diff) ──────────────────────────────────────────────────────────────────────────────
+// Abans `yInici` era un número únic per a tot el repartiment: una pàgina amb capçalera pròpia i
+// una sense en compartien el mateix punt d'arrencada, i la que en tenia es xafava. Ara accepta
+// també una funció `pagina => y`; un número segueix fent EXACTAMENT el mateix que fins ara.
+
+test('S1.3-bis · yInici escalar dona el mateix resultat que abans (compatibilitat)', () => {
+  const rNumero = repartimentEnPagines([geo(200)], PAGINA)
+  const rFuncio = repartimentEnPagines([geo(200)], { ...PAGINA, yInici: () => PAGINA.yInici })
+  assert.deepEqual(rFuncio, rNumero)
+})
+
+test('S1.3-bis · yInici com a funció: pàgina 0 a 14, pàgines següents a 44.6 (capçalera)', () => {
+  const yInici = (pagina) => (pagina === 0 ? 14 : 44.6)
+  const r = repartimentEnPagines([geo(200)], { ...PAGINA, yInici })
+  // Pàgina 0: mateixa capacitat que sempre, (283−14−14)/5 = 51.
+  assert.equal(r[0].pagina, 0)
+  assert.equal(r[0].y, 14)
+  assert.equal(r[0].fi - r[0].ini, 51)
+  // Pàgina 1: arrenca a 44.6 (sota la capçalera), capacitat menor perquè yFinal no canvia:
+  // (283−44.6−14)/5 = floor(44.88) = 44.
+  const primerDe1 = r.find(t => t.pagina === 1)
+  assert.equal(primerDe1.y, 44.6)
+  assert.equal(primerDe1.fi - primerDe1.ini, 44)
+  // Cap fila perduda ni repetida al llarg de tot el repartiment (mateixa llei que el bloc CAP
+  // FILA PARTIDA de dalt).
+  assert.equal(r[0].ini, 0)
+  assert.equal(r[r.length - 1].fi, 200)
+  r.slice(1).forEach((t, i) => assert.equal(t.ini, r[i].fi))
+})
+
+test('S1.3-bis · repro del revisor-diff: capçalera només a la pàgina de desbordament, no a la primera', () => {
+  // Escenari real: `currentPage` (pàgina 0 del grup) NO porta capçalera pròpia, però el
+  // document sí en té una altra banda (`hdrProto`) — `novaPagina` li'n posa una a QUALSEVOL
+  // pàgina nova. Abans (yInici escalar=14) la pàgina nova també arrencava a 14 i el cos hi
+  // quedava sota la capçalera real (que ocupa fins a ~44.6mm): xoc visual.
+  const yInici = (pagina) => (pagina === 0 ? 14 : 44.6)
+  // Prou files per no cabre en una sola pàgina: capacitat pàgina 0 = 51 (com el test de dalt).
+  const r = repartimentEnPagines([geo(60)], { ...PAGINA, yInici })
+  const p0 = r.filter(t => t.pagina === 0)
+  const p1 = r.filter(t => t.pagina === 1)
+  assert.ok(p0.length > 0 && p1.length > 0, 'el grup ha de desbordar a una segona pàgina')
+  assert.equal(p0[0].y, 14)
+  // LA CORRECCIÓ: el tros de la pàgina de desbordament comença SOTA la capçalera (44.6), no a
+  // 14 — abans d'aquesta peça hauria estat 14 i s'hauria solapat amb la capçalera real.
+  assert.equal(p1[0].y, 44.6)
+  // 38.6 = header.y(13.76) + header.height(24.84) a A4 apaïsat (TechSheetEditor.jsx,
+  // MASTER_HEADER_GEOM/masterHeaderGeomFor): el cos ha de començar per sota d'on acaba.
+  assert.ok(p1[0].y > 38.6, 'el cos ha de començar per sota d\'on acaba la capçalera')
+})

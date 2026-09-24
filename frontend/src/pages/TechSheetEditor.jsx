@@ -5163,17 +5163,22 @@ export default function TechSheetEditor() {
     const primeraPaginaTeCapcalera = fmtKeyGrup
       ? !!hdrProto
       : objectsOf(currentPage).some(o => o.type === 'data_block' && o.kind === 'header')
-    // TOTES les pàgines NOVES d'aquest grup hereten el mateix `hdrProto` (novaPagina): la
-    // capçalera hi és o no hi és per igual a tot el repartiment, i per això un ÚNIC `yInici` val
-    // per a totes — no cobreix el cas (fora d'abast d'aquesta peça) d'un grup que continuï dins
-    // de pàgines JA EXISTENTS més endavant al document amb un estat de capçalera diferent del
-    // de la primera: `repartimentEnPagines` pren un `yInici` escalar per a tota la crida.
-    const Y_INICI = primeraPaginaTeCapcalera
-      ? (() => {
-          const h = masterHeaderGeomFor(fmtKeyPag || pageFormat)
-          return h.y + h.height + 6   // 6 = `separacio` per defecte de `repartimentEnPagines` — el mateix aire que ja separa dos blocs
-        })()
-      : 14                            // pàgina sense capçalera: on arrencava sempre el cos útil
+    // S1.3-bis (BANDERA del revisor-diff, ORDRE_SPRINT1_FITXA_0924.md §S1.3) — LA PÀGINA 0 no és
+    // la mateixa regla que les pàgines 1, 2… que la PAGINACIÓ crea dins d'aquesta mateixa crida.
+    // La 0 és la que ja hem mirat (capçalera pròpia si el full ja existeix, `hdrProto` si el
+    // grup n'obre un de nou). Les següents NOMÉS poden néixer via `novaPagina` (més avall), que
+    // decideix la seva capçalera EXCLUSIVAMENT amb `hdrProto` — mai mirant `currentPage`. Amb un
+    // `yInici` escalar (Sprint 1) totes queien sota la mateixa regla que la 0 encara que
+    // `novaPagina` els donés una capçalera diferent; ara `repartimentEnPagines` accepta una
+    // FUNCIÓ `pagina => y` (v. `repartimentTaules.js`) i cada pàgina hi surt d'acord amb la
+    // capçalera que REALMENT tindrà.
+    const yAmbCapcalera = () => {
+      const h = masterHeaderGeomFor(fmtKeyPag || pageFormat)
+      return h.y + h.height + 6   // 6 = `separacio` per defecte de `repartimentEnPagines` — el mateix aire que ja separa dos blocs
+    }
+    const Y_INICI = (pagina) => (
+      (pagina === 0 ? primeraPaginaTeCapcalera : !!hdrProto) ? yAmbCapcalera() : 14
+    )
 
     // La geometria la diu el BUILDER, que és qui la sap. Aquí només es passa a mm i s'hi aplica
     // l'escala d'amplada, perquè el repartiment ha de comptar en la mida en què es dibuixarà.
