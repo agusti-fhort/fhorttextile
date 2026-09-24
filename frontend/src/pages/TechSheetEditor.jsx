@@ -5542,16 +5542,19 @@ export default function TechSheetEditor() {
           { key: 'base', label: base || tEn('tech_sheet.q8_col_base'), width: 18 },
           { key: 'actual', label: tEn('tech_sheet.q8_col_actual'), width: 18 },
           { key: 'dif', label: tEn('tech_sheet.q8_col_diff'), width: 16 },
-          { key: 'verdict', label: tEn('tech_sheet.q8_col_verdict'), width: 22 },
+          { key: 'verdict', label: tEn('tech_sheet.q8_col_verdict'), width: 26 },
           { key: 'notes', label: tEn('tech_sheet.q8_col_notes'), width: 52 },
         ],
         rows: g.files.map(f => [
           capaQ8(f), cellaCodi(f), cellaPom(f), xifra(f.aprovada),
           cellaActual(f.actual, f.aprovada), cellaDif(f.dif),
-          // Ordre 23/09 — la columna «Veredicte» (22mm) imprimeix la forma CURTA (OK/ADJUSTED/
-          // NO OK): «NO OK, FOLLOW SPEC» sencer no hi cap en 1 línia (mesurat, DIAGNOSI
-          // ETIQUETES_VEREDICTE_SAMPLE §1.5). La llegenda del peu (més avall) el desplega.
-          f.veredicte ? etiquetaVeredicte(f.veredicte, true) : '', f.nota || '',
+          // Ordre Agus 24/09 — la columna «Veredicte» (26mm) imprimeix la forma LLARGA
+          // SENCERA («NO OK, FOLLOW SPEC»), igual que ADJUSTED: mateix mecanisme `wrap:true`
+          // que NAME (cellaPom/cellaCodi, :5331/:5338) perquè hi càpiga en ≤2 línies —
+          // mesurat amb word-wrap real, no amb la fórmula de recompte de `liniesQueOcupa`
+          // (a 22mm el word-wrap real en necessitava 3, no 2; per això l'ample puja a 26mm).
+          f.veredicte ? { text: etiquetaVeredicte(f.veredicte, false), wrap: true } : '',
+          f.nota || '',
         ]),
         style: { fontSize: 9, capcaleraFina: true, zebra: true },
         snapshot: { ...snapshotComu, garment: g.garment },
@@ -5567,10 +5570,6 @@ export default function TechSheetEditor() {
       const nom = nomDeLaPeca(p, tEn('resum_wizard.model_base'))
       entrades.push({ nota: `${nom} — ${tEn('tech_sheet.q8_no_session')}` })
     }
-    // Ordre 23/09 — LA LLEGENDA DE LA FORMA CURTA, un cop per grup i NOMÉS si hi ha taula (una
-    // peça sense sessió no en porta cap i la llegenda sola no diria res). Mateix mecanisme que
-    // «peça sense sessió», de dalt: una línia solta, no una taula.
-    if (grups.length) entrades.push({ nota: tEn('tech_sheet.q8_nota_no_ok') })
     const n = inserirGrupPaginat(entrades)
     if (n) flash(t('tech_sheet.q8_flash_inserted', { count: n }))
     setTablePicker(null)
