@@ -5138,7 +5138,6 @@ export default function TechSheetEditor() {
   const inserirGrupPaginat = (entrades) => {
     if (!locked || !entrades.length) return 0
     const MARGE = MARGE_GRUP
-    const Y_INICI = 14                            // on arrenca el cos útil, com totes les taules d'aquí
 
     // ── C4 · QUIN FULL DEMANA AQUEST GRUP ─────────────────────────────────────────────────
     // Es mesura tot a escala 1 i es mira si la taula MÉS AMPLA cap al format on som. Si no hi cap,
@@ -5152,6 +5151,29 @@ export default function TechSheetEditor() {
     // Ni el full més gran no hi arriba: s'escala, però MAI per sota del sòl. El que passa llavors
     // és que la taula sobresurt, i una taula que sobresurt es veu; una de 6pt, no.
     const escalaGrup = Math.min(1, Math.max(ESCALA_MINIMA, (fmtGrup.w - 2 * MARGE) / (wMax || 1)))
+
+    // S1.3 (ordre Agus 24/09) — LA CAPÇALERA MESTRA ES RESOL ABANS DEL REPARTIMENT, no només
+    // abans de l'updater (com feia `hdrProto` fins ara): `Y_INICI` en depèn. `fmtKeyGrup` diu si
+    // el grup arrenca a un full NOU (encara no existeix, `pagBase` més avall) o al full ON SOM.
+    const fmtKeyPag = fmtKeyGrup || pages[currentPage]?.format
+    const hdrProto = masterHeaderInstance()
+    // Un full nou neix amb capçalera SI I NOMÉS SI `hdrProto` n'hi ha (mateix predicat que
+    // `novaPagina`, més avall — és la MATEIXA capçalera que hi copiarà). Un full que ja existeix
+    // (el grup arrenca on som) es mira directament: pot no portar-ne encara que el document sí.
+    const primeraPaginaTeCapcalera = fmtKeyGrup
+      ? !!hdrProto
+      : objectsOf(currentPage).some(o => o.type === 'data_block' && o.kind === 'header')
+    // TOTES les pàgines NOVES d'aquest grup hereten el mateix `hdrProto` (novaPagina): la
+    // capçalera hi és o no hi és per igual a tot el repartiment, i per això un ÚNIC `yInici` val
+    // per a totes — no cobreix el cas (fora d'abast d'aquesta peça) d'un grup que continuï dins
+    // de pàgines JA EXISTENTS més endavant al document amb un estat de capçalera diferent del
+    // de la primera: `repartimentEnPagines` pren un `yInici` escalar per a tota la crida.
+    const Y_INICI = primeraPaginaTeCapcalera
+      ? (() => {
+          const h = masterHeaderGeomFor(fmtKeyPag || pageFormat)
+          return h.y + h.height + 6   // 6 = `separacio` per defecte de `repartimentEnPagines` — el mateix aire que ja separa dos blocs
+        })()
+      : 14                            // pàgina sense capçalera: on arrencava sempre el cos útil
 
     // La geometria la diu el BUILDER, que és qui la sap. Aquí només es passa a mm i s'hi aplica
     // l'escala d'amplada, perquè el repartiment ha de comptar en la mida en què es dibuixarà.
@@ -5181,13 +5203,12 @@ export default function TechSheetEditor() {
     const trossos = repartimentEnPagines(mesurades, { yInici: Y_INICI, yFinal: fmtGrup.h - MARGE })
     const nPagines = paginesDelRepartiment(trossos)
 
-    // La capçalera mestra de les pàgines noves es resol ABANS d'entrar a l'updater: `setPages`
-    // ha de ser una funció pura del seu argument, i `masterHeaderInstance` llegeix l'estat.
+    // `fmtKeyPag`/`hdrProto` ja s'han resolt més amunt (calen per a `Y_INICI` abans del
+    // repartiment). `setPages` segueix sent una funció pura del seu argument: cap dels dos es
+    // torna a llegir de l'estat aquí dins.
     // C4 — quan el grup demana un altre full, les pàgines noves neixen amb el SEU format (la clau
     // `format` per pàgina ja existeix des de F4 i sobreviu al round-trip) i la capçalera mestra
     // se'ls hi torna a derivar, que en apaïsat té una altra caixa.
-    const fmtKeyPag = fmtKeyGrup || pages[currentPage]?.format
-    const hdrProto = masterHeaderInstance()
     const novaPagina = () => ({
       id: uid(),
       objects: hdrProto ? [{ ...hdrProto, id: uid(), ...masterHeaderGeomFor(fmtKeyPag || pageFormat) }] : [],
