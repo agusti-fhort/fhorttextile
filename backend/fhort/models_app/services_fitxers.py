@@ -282,6 +282,13 @@ def _guess_mimetype(file, nom):
     return mimetypes.guess_type(nom)[0] or ''
 
 
+def _es_svg(nom_fitxer, mimetype):
+    """Un `.svg` és sempre un croquis (S1.1, ordre Agus 24/09): és l'únic vectorial per
+    situar POMs. Extensió O mimetype: el Finder no en fixa cap dels dos amb fiabilitat."""
+    ext = os.path.splitext(nom_fitxer or '')[1].lower()
+    return ext == '.svg' or mimetype == 'image/svg+xml'
+
+
 def _redueix_si_es_raster(file, nom_fitxer):
     """Endolla l'embut únic (`redueix_imatge`) al coll de la cadena de versions.
 
@@ -347,6 +354,12 @@ def save_model_file(model, file, *, versio_anterior=None,
             tipus = versio_anterior.tipus
     else:
         versio = 1
+
+    # S1.1 (ordre Agus 24/09): sense `tipus` explícit ni herència de cadena, un .svg ÉS un
+    # croquis. Només quan `tipus` segueix sense determinar — mai trepitja un tipus explícit
+    # ni el d'una versió anterior. Els ràsters no es toquen.
+    if tipus is None and _es_svg(nom_fitxer, mimetype):
+        tipus = 'SKETCH_SVG'
 
     fitxer = ModelFitxer(
         model=model,
