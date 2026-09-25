@@ -69,6 +69,16 @@
   la regla de "fitxers d'estat fora de git": `ESTAT_*.md` i `DECISIONS.md` segueixen
   SENSE commitar; només `docs/diagnosis/` entra a git.
 
+## Veritat i execució (lleis de mètode nascudes a DECISIONS.md)
+- **Cap implementació és real fins que es verifica contra el repo** (regla 2026-09-01). Un informe
+  de commits que no ve de l'Agus o d'una eina que ha tocat el repo no és un fet: comprovar SHA
+  (`git cat-file -t`, `git log`, `fetch`) abans de registrar-ho al vault, muntar un brief de
+  desplegament o donar res per clos. Coherència ≠ veritat.
+- **Un bloc executable només porta comandes que s'han d'executar** (regla 2026-09-09). Cap
+  recordatori, cap exemple de "el que NO fem", cap comanda comentada amb text darrere d'un `&&`.
+  Comentaris → línies `#` soles o fora del bloc. A PROD, cap bloc de lectura pot contenir res que
+  escrigui, ni "desactivat".
+
 ## Zones intocables
 - No tocar POMs / grading engine (`generate_graded_specs`) / motor de patrons, tret
   que la peça ho demani explícitament. Problemes vistos en aquestes zones s'anoten.
