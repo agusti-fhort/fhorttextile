@@ -54,10 +54,13 @@
   després de migrar (django-tenants pot donar un OK enganyós).
 - `migrate_schemas --list` NO és read-only en aquesta versió — no usar-lo en diagnosi.
 
-## Fitxers d'estat (fora de git)
-- **NO es commiten mai:** `ESTAT_PROJECTE.md`, `ESTAT_BACKOFFICE.md`, `DECISIONS.md`,
-  `MAPA_SISTEMA.md`, `*_MODEL_VIU.md`, `MOTOR_*.md`. Viuen al servidor com a memòria
-  de treball, no com a codi.
+## Fitxers d'estat i registres (llei esmenada 2026-09-25)
+- **Es versionen (entren a git):** `CLAUDE.md`, `DECISIONS.md` (registre de lleis de domini i
+  disseny), `docs/diagnosis/` (arrel = vigents · `arxiu/` = històric segellat), `docs/ordres/`.
+- **NO es commiten mai:** `ESTAT_PROJECTE.md`, `ESTAT_BACKOFFICE.md`, `MAPA_SISTEMA.md`,
+  `*_MODEL_VIU.md`, `MOTOR_*.md`. Viuen al servidor com a memòria de treball, no com a codi.
+- **Ignorats:** `backend/scripts_tmp/`, `backups/`, `ops/backups/`, `ops/qa/logs/`,
+  `frontend/dist-tenants/`.
 
 ## Diagnosis (`docs/diagnosis/`)
 - **Els agents només consulten l'arrel de `docs/diagnosis/` (vigents).**
@@ -65,9 +68,6 @@
 - Quan un sprint implementa o supera una diagnosi, **el mateix sprint la segella**
   (capçalera `> ⚠️ SUPERADA <data> — <motiu>. Consulta només com a històric.`) **i la
   mou a `arxiu/`**.
-- Les diagnosis SÍ es commiten (arrel = vigents · arxiu = històric segellat). Excepció a
-  la regla de "fitxers d'estat fora de git": `ESTAT_*.md` i `DECISIONS.md` segueixen
-  SENSE commitar; només `docs/diagnosis/` entra a git.
 
 ## Veritat i execució (lleis de mètode nascudes a DECISIONS.md)
 - **Cap implementació és real fins que es verifica contra el repo** (regla 2026-09-01). Un informe

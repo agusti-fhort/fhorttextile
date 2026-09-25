@@ -35,3 +35,10 @@ frontend-backoffice/.env.*
 # Q8/QA — bolcat de payloads del banc (el genera el test; no és codi)
 ops/qa/_out/
 backend/var/
+
+# higiene 2026-09-25
+backend/scripts_tmp/
+backups/
+ops/backups/
+ops/qa/logs/
+frontend/dist-tenants/
